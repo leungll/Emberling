@@ -3,3 +3,5 @@
 # Internal design docs — keep private, do not publish to GitHub.
 # Only the root README.md is public.
 docs/
+
+CLAUDE.md
