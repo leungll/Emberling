@@ -1,57 +1,163 @@
 # Emberling
 
-A visual workflow engine for AI applications, built around durable async execution and first-class observability.
+### The execution layer for long-running AI applications
 
-**Status:** Design phase, implementation not started · **Stack:** React, TypeScript, React Flow, Go, PostgreSQL
+Emberling is an **Agent Runtime Platform** for stateful, side-effecting, long-running AI applications. It turns an application definition into a durable Execution, persists every state transition, coordinates asynchronous work, and emits an immutable event stream for Trace and future Evaluation.
 
-[中文](./README.zh-CN.md)
+> **Build the execution layer that long-running AI applications are missing.**
 
-## Overview
+**Project stage:** core design complete through the Runtime specification; implementation is next.  
+**Target stack:** Go · PostgreSQL · React · TypeScript · React Flow  
+**Language:** [中文](./README.zh-CN.md)
 
-Emberling lets you build AI workflows as a directed graph — LLM calls, prompts, tools, conditions, and long-running external tasks — then run, inspect, and evaluate them. Workflows are authored on a canvas and compiled to a DSL that the runtime executes independently of how it was produced (UI, JSON import, or API).
+![Emberling Studio and execution trace](./docs/assets/studio-layout.svg)
 
-The project's focus is the execution and observability layer, not the editor. Calling a model is easy; running a multi-step AI pipeline reliably — with suspend/resume, retries, durable state, and a complete execution trace — is where most of the engineering effort goes.
+## Why Emberling
 
-## Design goals
+Calling a model is an API integration problem. Operating a multi-step AI application is a systems problem.
 
-- **Durable async execution.** Nodes can dispatch a long-running external task, suspend the run to persistent storage, and resume from the checkpoint when the task calls back. A run in flight survives a backend restart; a reconciler backstops missed callbacks.
-- **Observability by default.** Every run emits an immutable event sequence, streamed over SSE. Node state, inputs, outputs, latency, token usage, and errors are recorded as the run executes, not reconstructed afterward.
-- **Extensible node model.** New node types register against a common interface; adding one does not require changes to the runtime core.
-- **Design-time / run-time separation.** The editor produces a versioned workflow DSL; the runtime consumes it. The two evolve independently through that contract.
-- **Evaluation as a first-class concern** *(roadmap).* Datasets, batch runs, evaluators (including LLM-as-judge), comparison reports, and regression detection, built on the same execution engine and event trace.
+Long-running AI workloads cross process boundaries, wait for external callbacks, retry expensive operations, produce business side effects, and must remain explainable after failures. Most prototypes solve this with in-memory orchestration and logs. That breaks as soon as a process restarts or an external task completes out of order.
 
-## Execution model
+Emberling is designed as an **execution substrate**, not another node canvas:
 
-The runtime compiles a workflow into a DAG and executes it topologically. Nodes run in one of two modes:
+- **Durable control plane** — Run, NodeRun, Attempt and Event state live in PostgreSQL, not worker memory.
+- **Reconciliation-driven liveness** — persisted `READY` work is rediscovered after restart; callback recovery is not the only recovery path.
+- **Side-effect-aware execution** — retry decisions respect idempotency and ambiguous external outcomes.
+- **Execution-native observability** — Trace is derived from the same immutable event ledger that drives the Runtime.
+- **Evaluation on real runs** — future Evaluation consumes ordinary Executions instead of maintaining a second test executor.
 
-- **Synchronous** — the node computes a result and returns (prompt rendering, LLM calls, transforms).
-- **Asynchronous** — the node dispatches work to an external system and returns immediately. The run's state is persisted and the run enters `PAUSED` / `WAITING_CALLBACK`. When the external system reports completion via an idempotent callback endpoint, the run is rebuilt from persisted state and downstream scheduling resumes.
+## Product position
 
-Callback handling is idempotent (a given external task advances a run at most once), and durability is verified by restarting the backend mid-run and confirming the suspended run still completes.
+Emberling is a Runtime, not a Workflow Builder. Workflow Studio, DSL, SDK and API are authoring surfaces over the same Execution model.
 
-## Example workflows
+It also does not attempt to replace Temporal. Temporal provides general-purpose durable execution. Emberling focuses on AI-native semantics and developer experience: `LLM Call`, `Tool Call`, `Agent Step`, Token, Cost, Evaluation, Human Review, execution Trace and behavior-level debugging.
 
-The same engine drives structurally different flows:
+The long-term system is a runtime for AI applications. Static DAGs are the MVP proving ground, not the final abstraction.
 
-| Workflow | Exercises |
+## Runtime architecture
+
+```mermaid
+flowchart LR
+    DEF["Versioned Definition"] --> COMP["Compiler"]
+    COMP --> READY["READY"]
+    READY --> RUN["RUNNING"]
+    RUN -->|sync result| DONE["SUCCEEDED"]
+    RUN -->|async dispatch| WAIT["WAITING_CALLBACK"]
+    WAIT -->|callback / optional poll| RESUME["Idempotent Resume"]
+    RESUME --> DONE
+    DONE -->|downstream exists| NEXT["Persist next READY"]
+    NEXT --> READY
+    DONE -->|graph complete| COMPLETE["Run COMPLETED"]
+
+    RUN -. state transition .-> EVENT[("Immutable Event Stream")]
+    WAIT -. state transition .-> EVENT
+    RESUME -. state transition .-> EVENT
+    COMPLETE -. state transition .-> EVENT
+    EVENT --> TRACE["Trace"]
+    EVENT -. Phase 2 .-> EVAL["Evaluation"]
+```
+
+Every transition follows the same contract:
+
+1. Persist state and the corresponding Event in one PostgreSQL transaction.
+2. Commit.
+3. Publish SSE and perform node or Provider work outside the transaction.
+
+This boundary keeps the database transaction free of irreversible network side effects.
+
+## Core engineering contracts
+
+| Property | Contract |
 |---|---|
-| Document processing | Chained synchronous LLM nodes, context passing, trace |
-| Research | Tool nodes, external API calls, error handling |
-| Content review | Conditions, human-in-the-loop, pause/resume |
-| AIGC media generation | Async dispatch, suspend/resume, durability, mixed media/text pipeline |
+| Execution source of truth | PostgreSQL owns Definition, Run, NodeRun, Attempt and Event facts |
+| Immutable execution input | Every Run binds a Definition version or snapshot |
+| Aggregated Run state | A NodeRun cannot directly force the Run into `PAUSED` |
+| Idempotent recovery | Callback and optional Provider reconciliation converge on one `resume` use case |
+| Recoverable progress | Immediate post-COMMIT execution is a fast path; reconciliation can rediscover persisted `READY` work |
+| Event-backed Trace | State and Event commit atomically; SSE publishes committed Events only |
+| Extensible core | Nodes and Model Providers implement ports; Runtime scheduling does not contain vendor branches |
 
-AIGC media generation is the primary MVP scenario: rewrite a user prompt into a render prompt (sync) → dispatch an image render and suspend (async) → resume on callback → generate a caption (sync) → output. The async node can target any image-generation API, or a mock render service for closing the suspend/resume loop end to end.
+### Honest durability boundary
 
-## Roadmap
+The MVP proves **waiting recovery**:
 
-| Phase | Scope |
+- `WAITING_CALLBACK` survives a Backend restart.
+- callback or optional Provider polling resumes the same persisted NodeRun.
+- downstream `READY` work is rediscovered if the Backend crashes after COMMIT.
+
+The MVP does **not** claim general durable execution. Recovery of an in-flight `RUNNING` call, strict dispatch consistency, distributed leasing and exactly-once external side effects remain roadmap work.
+
+## MVP
+
+The MVP is deliberately narrow. If a feature does not strengthen or validate the execution layer, it does not belong.
+
+### Runtime
+
+- Static DAG compilation and validation
+- Deterministic sequential scheduling
+- Run, NodeRun and Attempt persistence
+- Timeout, retry and failure propagation
+- Asynchronous dispatch, suspend and idempotent resume
+- Required local `READY` reconciliation
+- Immutable Event stream and SSE Trace
+
+### Studio
+
+- Five nodes: `Input`, `Prompt Template`, `LLM`, `Async Task`, `Output`
+- Definition editing, validation and Run creation
+- Live Run and NodeRun state
+- Event timeline, Node detail, input/output, latency, Token usage and errors
+
+### Proof scenarios
+
+| Scenario | What it proves |
 |---|---|
-| 1 — Durable foundation | End-to-end MVP that proves durable async execution: editor, DAG validation, sequential execution, retries/timeouts, async suspend/resume, SSE trace, PostgreSQL persistence |
-| 2 — Runtime maturity | HTTP/condition nodes, parallel execution, cancellation, provider abstraction, streaming output, cost/token tracking, versioning |
-| 3 — Extensibility | Node registry, dynamic node metadata, node SDK, import/export DSL, MCP client, hosted demo |
-| 4 — Evaluation & memory | Session memory, datasets, batch runs, evaluators, comparison and regression reports |
-| 5 — Distributed execution | Worker pool, queue-based scheduling, distributed locking, human-approval state, deployment API, OpenTelemetry |
+| Document Processing | synchronous baseline, data flow, state transitions and Trace |
+| AIGC Media Generation | external dispatch, persistent suspend, callback recovery, idempotency and restart recovery |
+
+The AIGC flow is the signature demo:
+
+```text
+Input → Prompt Rewrite → Image Task
+                          ↓ callback
+        Output ← Caption ← Resume
+```
+
+The first integration can use a delayed callback simulator. A real image API is optional; the Runtime contract must remain identical.
+
+## Evolution path
+
+| Stage | Direction |
+|---|---|
+| MVP | durable waiting recovery, state recovery, side-effect boundary, execution Trace |
+| Phase 2 | parallel execution, Tool/HTTP/Condition/Human Review, cancellation, streaming, Evaluation |
+| Roadmap | dynamic Agent steps, Replay, Session/Long-term Memory, distributed Workers, stronger dispatch guarantees |
+
+Evaluation remains attached to the Runtime:
+
+```text
+Dataset → ordinary Execution → Event-backed Trace → Evaluator → Compare / Regression
+```
+
+No separate evaluation executor. No synthetic trace reconstructed after the fact.
+
+## Design documentation
+
+| Document | Responsibility |
+|---|---|
+| [Vision](./docs/00-vision.md) | product position and long-term principles |
+| [Scenarios](./docs/01-scenarios.md) | MVP validation scenarios |
+| [Scope](./docs/02-scope.md) | MVP source of truth |
+| [Architecture](./docs/03-architecture.md) | system boundaries and global invariants |
+| [Studio & Trace UX](./docs/04-ux.md) | external product experience |
+| [Data & Event Model](./docs/05-data-model.md) | persistent facts and execution ledger |
+| [Execution Model](./docs/06-execution-model.md) | scheduling, suspend/resume and reconciliation |
+| [Extensibility & Evaluation](./docs/07-extensibility.md) | extension ports and post-MVP consumers |
 
 ## Status
 
-This repository currently contains the project design. No implementation has started. This README describes the intended system; code and demos will follow.
+Emberling is currently a design-first engineering project. The Runtime contracts, MVP boundary and core execution model are specified; production code and demos have not started.
+
+The first implementation milestone is not “draw and run a graph.” It is:
+
+> suspend an external task, restart the Backend, accept the callback, recover the Execution, and finish the downstream graph without duplicating progress.

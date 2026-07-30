@@ -1,57 +1,163 @@
 # Emberling
 
-面向 AI 应用的可视化工作流引擎，围绕 durable 异步执行与一等公民的可观测性构建。
+### 面向长时间运行 AI 应用的执行层
 
-**状态：** 设计阶段，尚未开始实现 · **技术栈：** React、TypeScript、React Flow、Go、PostgreSQL
+Emberling 是一个 **Agent Runtime Platform**，用于承载有状态、有副作用、长时间运行的 AI 应用。它将应用定义转换为持久化 Execution，保存每次状态变化，协调异步任务，并生成不可变 Event Stream，供 Trace 和后续 Evaluation 使用。
 
-[English](./README.md)
+> **Build the execution layer that long-running AI applications are missing.**
 
-## 概述
+**项目阶段：** Runtime 核心设计已经完成，下一步进入实现。  
+**目标技术栈：** Go · PostgreSQL · React · TypeScript · React Flow  
+**Language:** [English](./README.md)
 
-Emberling 把 AI 工作流表达为有向图 —— LLM 调用、prompt、工具、条件判断、长耗时外部任务 —— 并对其运行、观测与评估。工作流在画布上编排，编译为一份 DSL；运行时消费该 DSL，与它由何种方式产生（UI、JSON 导入或 API）无关。
+![Emberling Studio 与 Execution Trace](./docs/assets/studio-layout.svg)
 
-项目的重心是执行与可观测层，而非编辑器。调用模型是容易的；可靠地运行一条多步 AI 流水线 —— 支持挂起/恢复、重试、durable 状态、以及完整的执行 trace —— 才是主要的工程投入所在。
+## 为什么是 Emberling
 
-## 设计目标
+调用模型是 API 集成问题。运行多步骤 AI 应用是系统工程问题。
 
-- **Durable 异步执行。** 节点可派发一个长耗时外部任务，将 Run 挂起并落库，待任务回调时从断点恢复。进行中的 Run 能在后端重启后存活；reconciler 兜底处理丢失的回调。
-- **默认可观测。** 每次 Run 产出不可变的事件序列，通过 SSE 实时推送。节点状态、输入、输出、耗时、token 用量与错误在执行过程中即时记录，而非事后重建。
-- **可扩展节点模型。** 新节点类型基于统一接口注册；新增节点无需改动运行时核心。
-- **设计期 / 运行期分离。** 编辑器产出带版本的工作流 DSL，运行时消费之。二者通过该契约独立演进。
-- **评估作为一等能力** *(roadmap)。* dataset、批量运行、evaluator（含 LLM-as-judge）、对比报告与回归检测，构建于同一套执行引擎与事件 trace 之上。
+长时间运行的 AI 任务会跨越进程边界，等待外部 callback，重试昂贵操作，产生业务副作用，并且需要在故障后解释真实执行过程。大量原型仍依赖内存编排和日志；一旦进程重启、callback 乱序或外部调用结果不确定，执行链就会失去可靠状态。
 
-## 执行模型
+Emberling 的目标是构建 AI 应用的 **Execution Substrate**，而不是再做一个节点画布：
 
-运行时将工作流编译为 DAG 并按拓扑序执行。节点以两种模式之一运行：
+- **持久化控制面**：Run、NodeRun、Attempt 和 Event 存在 PostgreSQL 中，不依赖 Worker 内存。
+- **协调驱动的执行活性**：Backend 重启后重新发现持久化 `READY` 工作；恢复能力不只依赖 callback。
+- **副作用感知执行**：重试策略必须理解幂等性和外部调用的模糊结果。
+- **执行原生可观测性**：Trace 来自 Runtime 使用的同一份不可变事件账本。
+- **基于真实运行的评估**：后续 Evaluation 消费普通 Execution，不维护第二套测试执行器。
 
-- **同步** —— 节点计算出结果并返回（prompt 渲染、LLM 调用、数据变换）。
-- **异步** —— 节点将工作派发给外部系统后立即返回。Run 的状态被持久化，Run 进入 `PAUSED` / `WAITING_CALLBACK`。当外部系统通过幂等的回调端点上报完成时，Run 从持久化状态重建，下游调度恢复。
+## 产品定位
 
-回调处理是幂等的（同一外部任务对一个 Run 至多推进一次）；durable 性通过在 Run 执行中途重启后端、确认挂起的 Run 仍能跑完来验证。
+Emberling 是 Runtime，不是 Workflow Builder。Workflow Studio、DSL、SDK 和 API 只是同一种 Execution Model 的不同开发入口。
 
-## 示例工作流
+Emberling 也不试图替代 Temporal。Temporal 提供通用 durable execution；Emberling 关注 AI 原生执行语义和开发体验，包括 `LLM Call`、`Tool Call`、`Agent Step`、Token、Cost、Evaluation、Human Review、Execution Trace 和行为级调试。
 
-同一个引擎驱动结构差异很大的流程：
+长期产品是 AI Application Runtime。静态 DAG 是 MVP 的验证载体，不是最终抽象。
 
-| 工作流 | 验证能力 |
+## Runtime 架构
+
+```mermaid
+flowchart LR
+    DEF["版本化 Definition"] --> COMP["Compiler"]
+    COMP --> READY["READY"]
+    READY --> RUN["RUNNING"]
+    RUN -->|同步结果| DONE["SUCCEEDED"]
+    RUN -->|异步派发| WAIT["WAITING_CALLBACK"]
+    WAIT -->|callback / optional poll| RESUME["幂等 Resume"]
+    RESUME --> DONE
+    DONE -->|存在下游| NEXT["持久化后续 READY"]
+    NEXT --> READY
+    DONE -->|图执行完成| COMPLETE["Run COMPLETED"]
+
+    RUN -. 状态变化 .-> EVENT[("不可变 Event Stream")]
+    WAIT -. 状态变化 .-> EVENT
+    RESUME -. 状态变化 .-> EVENT
+    COMPLETE -. 状态变化 .-> EVENT
+    EVENT --> TRACE["Trace"]
+    EVENT -. Phase 2 .-> EVAL["Evaluation"]
+```
+
+每次状态推进遵循同一条事务契约：
+
+1. 在一个 PostgreSQL 事务中保存状态和对应 Event。
+2. COMMIT。
+3. 在事务外发布 SSE、执行节点或调用 Provider。
+
+这个边界避免在数据库事务中执行不可回滚的网络副作用。
+
+## 核心工程契约
+
+| 能力 | 契约 |
 |---|---|
-| 文档处理 | 串行同步 LLM 节点、上下文传递、trace |
-| Research | 工具节点、外部 API 调用、错误处理 |
-| 内容审核 | 条件、human-in-the-loop、挂起/恢复 |
-| AIGC 媒体生成 | 异步派发、挂起/恢复、durable、媒体/文本混合流水线 |
+| Execution 事实源 | PostgreSQL 保存 Definition、Run、NodeRun、Attempt 和 Event |
+| 不可变执行输入 | 每个 Run 绑定 Definition 版本或快照 |
+| Run 状态聚合 | 单个 NodeRun 不能直接把 Run 置为 `PAUSED` |
+| 幂等恢复 | callback 与 optional Provider reconciliation 汇入同一个 `resume` 用例 |
+| 可恢复推进 | COMMIT 后即时执行只是快速路径；Reconciler 可以重新发现持久化 `READY` 工作 |
+| Event 驱动 Trace | 状态和 Event 同事务提交；SSE 只发布已提交 Event |
+| 可扩展内核 | Node 和 Model Provider 实现扩展端口；调度核心不包含厂商分支 |
 
-AIGC 媒体生成是 MVP 的主要场景：把用户 prompt 改写为绘图 prompt（同步）→ 派发图像渲染并挂起（异步）→ 回调后恢复 → 生成文案（同步）→ 输出。异步节点可对接任意图像生成 API，也可先用一个 mock 渲染服务把挂起/恢复闭环端到端打通。
+### 诚实的 durable 边界
 
-## 路线图
+MVP 证明的是 **waiting recovery**：
 
-| 阶段 | 范围 |
+- `WAITING_CALLBACK` 可以跨 Backend 重启保留。
+- callback 或 optional Provider poll 恢复同一个持久化 NodeRun。
+- Backend 在 COMMIT 后崩溃时，下游 `READY` 工作仍能被重新发现。
+
+MVP 不宣称完整的通用 durable execution。执行中的 `RUNNING` 调用恢复、严格 dispatch 一致性、分布式 lease 和 exactly-once 外部副作用仍属于 roadmap。
+
+## MVP
+
+MVP 刻意保持狭窄。不能强化或验证执行层的能力，不进入 MVP。
+
+### Runtime
+
+- 静态 DAG 编译和校验
+- 确定性的顺序调度
+- Run、NodeRun 和 Attempt 持久化
+- Timeout、retry 和失败传播
+- 异步派发、挂起与幂等恢复
+- 必需的本地 `READY` reconciliation
+- 不可变 Event Stream 与 SSE Trace
+
+### Studio
+
+- 五个节点：`Input`、`Prompt Template`、`LLM`、`Async Task`、`Output`
+- Definition 编辑、校验和 Run 创建
+- 实时 Run 与 NodeRun 状态
+- Event 时间线、Node Detail、输入输出、耗时、Token usage 和错误
+
+### 验证场景
+
+| 场景 | 验证能力 |
 |---|---|
-| 1 — Durable 基座 | 端到端 MVP，证明 durable 异步执行：编辑器、DAG 校验、顺序执行、重试/超时、异步挂起/恢复、SSE trace、PostgreSQL 持久化 |
-| 2 — 运行时成熟 | HTTP/条件节点、并行执行、取消、provider 抽象、流式输出、成本/token 统计、版本化 |
-| 3 — 可扩展 | 节点注册表、动态节点元数据、节点 SDK、DSL 导入/导出、MCP client、hosted demo |
-| 4 — 评估与 Memory | 会话 Memory、dataset、批量运行、evaluator、对比与回归报告 |
-| 5 — 分布式执行 | worker pool、基于队列的调度、分布式锁、人工审批状态、部署 API、OpenTelemetry |
+| Document Processing | 同步基线、数据传递、状态流转和 Trace |
+| AIGC Media Generation | 外部派发、持久化挂起、callback 恢复、幂等和重启恢复 |
 
-## 状态
+AIGC 流程是 MVP 的标志性演示：
 
-本仓库当前只包含项目设计。尚未开始任何实现。这份 README 描述的是目标系统；代码与 demo 随后跟进。
+```text
+Input → Prompt Rewrite → Image Task
+                          ↓ callback
+        Output ← Caption ← Resume
+```
+
+首个集成可以使用延迟 callback 模拟服务。真实图像 API 为 optional；Runtime 契约不能因此改变。
+
+## 演进方向
+
+| 阶段 | 方向 |
+|---|---|
+| MVP | waiting recovery、状态恢复、副作用边界、Execution Trace |
+| Phase 2 | 并行执行、Tool/HTTP/Condition/Human Review、取消、流式输出、Evaluation |
+| Roadmap | 动态 Agent Step、Replay、Session/Long-term Memory、分布式 Worker、更强 dispatch 保证 |
+
+Evaluation 必须依附 Runtime：
+
+```text
+Dataset → 普通 Execution → Event-backed Trace → Evaluator → Compare / Regression
+```
+
+不建设独立评估执行器，也不在执行结束后伪造 Trace。
+
+## 设计文档
+
+| 文档 | 职责 |
+|---|---|
+| [产品愿景](./docs/00-vision.md) | 产品定位与长期原则 |
+| [验证场景](./docs/01-scenarios.md) | MVP 验证场景 |
+| [项目范围](./docs/02-scope.md) | MVP 单一事实来源 |
+| [系统架构](./docs/03-architecture.md) | 系统边界与全局不变量 |
+| [Studio 与 Trace UX](./docs/04-ux.md) | 对外产品体验 |
+| [数据与事件模型](./docs/05-data-model.md) | 持久化事实与执行账本 |
+| [执行模型](./docs/06-execution-model.md) | 调度、挂起恢复与 reconciliation |
+| [扩展与 Evaluation](./docs/07-extensibility.md) | 扩展端口与后续消费者 |
+
+## 当前状态
+
+Emberling 当前是一个设计先行的工程项目。Runtime 契约、MVP 边界和核心执行模型已经明确；生产代码和 Demo 尚未开始。
+
+第一个实现里程碑不是“画一张图并运行”，而是：
+
+> 派发外部任务并挂起，重启 Backend，接收 callback，恢复 Execution，并在不重复推进的情况下完成后续 DAG。
