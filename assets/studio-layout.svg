@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+  <rect width="1200" height="760" fill="#ffffff"/>
+
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.1" fill="#e2e8f0"/>
+    </pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Application frame -->
+  <rect x="24" y="20" width="1152" height="716" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <path d="M36 20 H1164 A12 12 0 0 1 1176 32 V78 H24 V32 A12 12 0 0 1 36 20 Z" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="48" y="47" font-size="14" font-weight="700" fill="#1e293b">AIGC Media Generation</text>
+  <text x="48" y="65" font-size="11" fill="#64748b">Definition v4 · Run run_123</text>
+
+  <g font-size="11" font-weight="600">
+    <rect x="650" y="36" width="162" height="28" rx="14" fill="#fef3c7" stroke="#f59e0b"/>
+    <circle cx="668" cy="50" r="4" fill="#f59e0b"/>
+    <text x="731" y="54" text-anchor="middle" fill="#92400e">PAUSED · 等待外部结果</text>
+
+    <rect x="840" y="36" width="68" height="28" rx="6" fill="#ffffff" stroke="#94a3b8"/>
+    <text x="874" y="54" text-anchor="middle" fill="#334155">Save</text>
+
+    <rect x="918" y="36" width="82" height="28" rx="6" fill="#ffffff" stroke="#94a3b8"/>
+    <text x="959" y="54" text-anchor="middle" fill="#334155">Validate</text>
+
+    <rect x="1010" y="36" width="70" height="28" rx="6" fill="#eef2ff" stroke="#6366f1"/>
+    <text x="1045" y="54" text-anchor="middle" fill="#3730a3">Run</text>
+
+    <rect x="1090" y="36" width="62" height="28" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="1121" y="54" text-anchor="middle" fill="#64748b">v4</text>
+  </g>
+
+  <!-- Node palette -->
+  <rect x="40" y="94" width="174" height="358" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="56" y="119" font-size="13" font-weight="700" fill="#334155">Node Palette</text>
+  <text x="56" y="137" font-size="10" fill="#94a3b8">MVP nodes</text>
+  <line x1="52" y1="148" x2="202" y2="148" stroke="#e2e8f0"/>
+
+  <g font-size="11.5" fill="#334155">
+    <rect x="54" y="164" width="146" height="38" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+    <circle cx="70" cy="183" r="5" fill="#94a3b8"/>
+    <text x="84" y="187">Input</text>
+
+    <rect x="54" y="210" width="146" height="38" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+    <circle cx="70" cy="229" r="5" fill="#94a3b8"/>
+    <text x="84" y="233">Prompt Template</text>
+
+    <rect x="54" y="256" width="146" height="38" rx="6" fill="#eef2ff" stroke="#a5b4fc"/>
+    <circle cx="70" cy="275" r="5" fill="#6366f1"/>
+    <text x="84" y="279">LLM</text>
+
+    <rect x="54" y="302" width="146" height="38" rx="6" fill="#fffbeb" stroke="#fbbf24"/>
+    <circle cx="70" cy="321" r="5" fill="#f59e0b"/>
+    <text x="84" y="325">Async Task</text>
+
+    <rect x="54" y="348" width="146" height="38" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+    <circle cx="70" cy="367" r="5" fill="#94a3b8"/>
+    <text x="84" y="371">Output</text>
+  </g>
+
+  <!-- Workflow canvas -->
+  <rect x="228" y="94" width="588" height="358" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="229" y="95" width="586" height="356" rx="7" fill="url(#grid)"/>
+  <text x="246" y="119" font-size="12" font-weight="700" fill="#64748b">Workflow Canvas</text>
+  <text x="790" y="119" text-anchor="end" font-size="10" fill="#94a3b8">Definition v4</text>
+
+  <!-- Canvas connections -->
+  <g fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)">
+    <path d="M348 190 H382"/>
+    <path d="M492 190 H526"/>
+    <path d="M636 190 H670"/>
+    <path d="M725 216 V268"/>
+    <path d="M670 294 H636"/>
+  </g>
+
+  <!-- Canvas nodes -->
+  <g>
+    <rect x="256" y="164" width="92" height="52" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+    <circle cx="269" cy="177" r="4" fill="#10b981"/>
+    <text x="302" y="189" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Input</text>
+    <text x="302" y="204" text-anchor="middle" font-size="9" fill="#16a34a">SUCCEEDED</text>
+
+    <rect x="382" y="164" width="110" height="52" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+    <circle cx="395" cy="177" r="4" fill="#10b981"/>
+    <text x="437" y="189" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Prompt</text>
+    <text x="437" y="204" text-anchor="middle" font-size="9" fill="#16a34a">SUCCEEDED</text>
+
+    <rect x="526" y="164" width="110" height="52" rx="8" fill="#eef2ff" stroke="#818cf8" stroke-width="1.5"/>
+    <circle cx="539" cy="177" r="4" fill="#10b981"/>
+    <text x="581" y="189" text-anchor="middle" font-size="11" font-weight="700" fill="#3730a3">LLM Rewrite</text>
+    <text x="581" y="204" text-anchor="middle" font-size="9" fill="#16a34a">SUCCEEDED</text>
+
+    <rect x="670" y="160" width="110" height="60" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="2.5"/>
+    <circle cx="684" cy="174" r="4" fill="#f59e0b"/>
+    <text x="725" y="185" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">Image Task</text>
+    <text x="725" y="201" text-anchor="middle" font-size="9" font-weight="600" fill="#b45309">WAITING_CALLBACK</text>
+    <text x="725" y="213" text-anchor="middle" font-size="8.5" fill="#a16207">waiting 00:42</text>
+
+    <rect x="670" y="268" width="110" height="52" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+    <circle cx="684" cy="281" r="4" fill="#cbd5e1"/>
+    <text x="725" y="294" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b">LLM Caption</text>
+    <text x="725" y="309" text-anchor="middle" font-size="9" fill="#94a3b8">idle</text>
+
+    <rect x="526" y="268" width="110" height="52" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+    <circle cx="539" cy="281" r="4" fill="#cbd5e1"/>
+    <text x="581" y="294" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b">Output</text>
+    <text x="581" y="309" text-anchor="middle" font-size="9" fill="#94a3b8">idle</text>
+  </g>
+
+  <!-- Properties -->
+  <rect x="830" y="94" width="330" height="358" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="848" y="119" font-size="13" font-weight="700" fill="#334155">Properties</text>
+  <rect x="1068" y="105" width="72" height="22" rx="11" fill="#fef3c7"/>
+  <text x="1104" y="120" text-anchor="middle" font-size="9.5" font-weight="600" fill="#92400e">Async Task</text>
+  <line x1="844" y1="139" x2="1146" y2="139" stroke="#e2e8f0"/>
+
+  <text x="848" y="165" font-size="10" font-weight="600" fill="#64748b">NODE NAME</text>
+  <rect x="848" y="174" width="294" height="34" rx="5" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="860" y="195" font-size="11" fill="#334155">Generate Image</text>
+
+  <text x="848" y="232" font-size="10" font-weight="600" fill="#64748b">TASK TYPE</text>
+  <rect x="848" y="241" width="294" height="34" rx="5" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="860" y="262" font-size="11" fill="#334155">image_generation</text>
+
+  <text x="848" y="299" font-size="10" font-weight="600" fill="#64748b">INPUT</text>
+  <rect x="848" y="308" width="294" height="74" rx="5" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="860" y="328" font-size="10" fill="#64748b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{</text>
+  <text x="872" y="346" font-size="10" fill="#64748b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">"prompt": "{{rewrite.text}}"</text>
+  <text x="860" y="364" font-size="10" fill="#64748b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">}</text>
+
+  <rect x="848" y="398" width="142" height="30" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="919" y="417" text-anchor="middle" font-size="10.5" font-weight="600" fill="#475569">Validate Node</text>
+
+  <!-- Execution panel -->
+  <rect x="40" y="468" width="1120" height="250" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <rect x="40" y="468" width="1120" height="38" rx="8" fill="#f1f5f9"/>
+  <rect x="40" y="496" width="1120" height="10" fill="#f1f5f9"/>
+  <text x="58" y="492" font-size="13" font-weight="700" fill="#1e293b">Execution</text>
+  <text x="148" y="492" font-size="11" font-weight="600" fill="#3730a3">Trace</text>
+  <text x="203" y="492" font-size="11" fill="#94a3b8">Output</text>
+  <text x="1138" y="492" text-anchor="end" font-size="10" fill="#64748b">Live · seq 8</text>
+
+  <!-- Timeline -->
+  <rect x="52" y="518" width="526" height="184" rx="6" fill="#fbfdff" stroke="#e2e8f0"/>
+  <text x="68" y="542" font-size="10" font-weight="700" fill="#64748b">EVENT TIMELINE</text>
+  <line x1="82" y1="558" x2="82" y2="680" stroke="#cbd5e1" stroke-width="2"/>
+
+  <g font-size="10.5">
+    <circle cx="82" cy="568" r="5" fill="#10b981"/>
+    <text x="100" y="572" font-weight="600" fill="#334155">NODE_COMPLETED</text>
+    <text x="250" y="572" fill="#64748b">LLM Rewrite</text>
+    <text x="548" y="572" text-anchor="end" fill="#94a3b8">seq 5</text>
+
+    <circle cx="82" cy="604" r="5" fill="#6366f1"/>
+    <text x="100" y="608" font-weight="600" fill="#334155">NODE_STARTED</text>
+    <text x="250" y="608" fill="#64748b">Image Task · attempt 1</text>
+    <text x="548" y="608" text-anchor="end" fill="#94a3b8">seq 6</text>
+
+    <rect x="66" y="624" width="494" height="38" rx="6" fill="#fffbeb" stroke="#fbbf24"/>
+    <circle cx="82" cy="643" r="5" fill="#f59e0b"/>
+    <text x="100" y="647" font-weight="700" fill="#92400e">NODE_DISPATCHED</text>
+    <text x="250" y="647" fill="#a16207">WAITING_CALLBACK</text>
+    <text x="548" y="647" text-anchor="end" fill="#a16207">seq 7</text>
+
+    <circle cx="82" cy="680" r="5" fill="#f59e0b"/>
+    <text x="100" y="684" font-weight="700" fill="#92400e">RUN_PAUSED</text>
+    <text x="250" y="684" fill="#a16207">No ready work · waiting external result</text>
+    <text x="548" y="684" text-anchor="end" fill="#a16207">seq 8</text>
+  </g>
+
+  <!-- Node detail -->
+  <rect x="592" y="518" width="556" height="184" rx="6" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="610" y="542" font-size="10" font-weight="700" fill="#64748b">NODE DETAIL</text>
+  <text x="610" y="566" font-size="13" font-weight="700" fill="#1e293b">Image Task</text>
+  <rect x="1015" y="550" width="112" height="24" rx="12" fill="#fef3c7" stroke="#fbbf24"/>
+  <text x="1071" y="566" text-anchor="middle" font-size="9.5" font-weight="700" fill="#92400e">WAITING_CALLBACK</text>
+
+  <line x1="610" y1="584" x2="1128" y2="584" stroke="#e2e8f0"/>
+
+  <g font-size="10.5">
+    <text x="610" y="608" fill="#64748b">Attempt</text>
+    <text x="730" y="608" font-weight="600" fill="#334155">1</text>
+
+    <text x="610" y="632" fill="#64748b">External task</text>
+    <text x="730" y="632" font-weight="600" fill="#334155" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">provider_task_789</text>
+
+    <text x="610" y="656" fill="#64748b">Waiting since</text>
+    <text x="730" y="656" font-weight="600" fill="#334155">12:00:03 · 42s</text>
+
+    <text x="610" y="680" fill="#64748b">Runtime state</text>
+    <text x="730" y="680" font-weight="600" fill="#92400e">Persisted · worker released</text>
+  </g>
+</svg>

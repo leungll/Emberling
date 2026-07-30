@@ -10,7 +10,7 @@ Emberling 是一个 **Agent Runtime Platform**，用于承载有状态、有副�
 **目标技术栈：** Go · PostgreSQL · React · TypeScript · React Flow  
 **Language:** [English](./README.md)
 
-![Emberling Studio 与 Execution Trace](./docs/assets/studio-layout.svg)
+![Emberling Studio 与 Execution Trace](./assets/studio-layout.svg)
 
 ## 为什么是 Emberling
 

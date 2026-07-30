@@ -10,7 +10,7 @@ Emberling is an **Agent Runtime Platform** for stateful, side-effecting, long-ru
 **Target stack:** Go · PostgreSQL · React · TypeScript · React Flow  
 **Language:** [中文](./README.zh-CN.md)
 
-![Emberling Studio and execution trace](./docs/assets/studio-layout.svg)
+![Emberling Studio and execution trace](./assets/studio-layout.svg)
 
 ## Why Emberling
 
