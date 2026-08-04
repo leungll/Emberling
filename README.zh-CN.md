@@ -10,7 +10,7 @@ Emberling 是一个 **Agent Runtime Platform**，用于承载有状态、有副�
 **目标技术栈：** Go · PostgreSQL · React · TypeScript · React Flow  
 **Language:** [English](./README.md)
 
-![Emberling Studio 与 Execution Trace](./assets/studio-layout.svg)
+![Emberling Studio 与 Execution Trace](./assets/ux-studio-observe.svg)
 
 ## 为什么是 Emberling
 
@@ -28,11 +28,11 @@ Emberling 的目标是构建 AI 应用的 **Execution Substrate**，而不是再
 
 ## 产品定位
 
-Emberling 是 Runtime，不是 Workflow Builder。Workflow Studio、DSL、SDK 和 API 只是同一种 Execution Model 的不同开发入口。
+Emberling 是 Runtime，不是 Workflow Builder。长期来看，Workflow Studio、DSL、SDK 和 API 是同一种 Execution Model 的平等开发入口。MVP 只交付最小 Studio 及其使用的 Backend API；独立 SDK 属于 Phase 2。
 
 Emberling 也不试图替代 Temporal。Temporal 提供通用 durable execution；Emberling 关注 AI 原生执行语义和开发体验，包括 `LLM Call`、`Tool Call`、`Agent Step`、Token、Cost、Evaluation、Human Review、Execution Trace 和行为级调试。
 
-长期产品是 AI Application Runtime。静态 DAG 是 MVP 的验证载体，不是最终抽象。
+MVP 组合人工定义的静态 DAG，以及 `Agent` NodeRun 内由 Runtime 管理的持久化 Agent Loop。Agent 可以选择 Tool，但不能重写 Workflow 图。
 
 ## Runtime 架构
 
@@ -48,6 +48,11 @@ flowchart LR
     DONE -->|存在下游| NEXT["持久化后续 READY"]
     NEXT --> READY
     DONE -->|图执行完成| COMPLETE["Run COMPLETED"]
+
+    RUN -->|Agent 节点| TURN["持久化 Turn + Decision + Action"]
+    TURN -->|COMMIT| TOOL["执行同步 / 异步 Tool"]
+    TOOL -->|结果| TURN
+    TURN -->|FINAL| DONE
 
     RUN -. 状态变化 .-> EVENT[("不可变 Event Stream")]
     WAIT -. 状态变化 .-> EVENT
@@ -69,11 +74,12 @@ flowchart LR
 
 | 能力 | 契约 |
 |---|---|
-| Execution 事实源 | PostgreSQL 保存 Definition、Run、NodeRun、Attempt 和 Event |
+| Execution 事实源 | PostgreSQL 保存 Definition、Asset Metadata、Workflow 与 Agent 执行事实、callback binding 和 Event |
 | 不可变执行输入 | 每个 Run 绑定 Definition 版本或快照 |
 | Run 状态聚合 | 单个 NodeRun 不能直接把 Run 置为 `PAUSED` |
 | 幂等恢复 | callback 与 optional Provider reconciliation 汇入同一个 `resume` 用例 |
 | 可恢复推进 | COMMIT 后即时执行只是快速路径；Reconciler 可以重新发现持久化 `READY` 工作 |
+| 可恢复 Agent Action | 已提交 Decision 不会重新生成；Reconciler 可以重新发现对应的 `READY` Action |
 | Event 驱动 Trace | 状态和 Event 同事务提交；SSE 只发布已提交 Event |
 | 可扩展内核 | Node 和 Model Provider 实现扩展端口；调度核心不包含厂商分支 |
 
@@ -84,8 +90,9 @@ MVP 证明的是 **waiting recovery**：
 - `WAITING_CALLBACK` 可以跨 Backend 重启保留。
 - callback 或 optional Provider poll 恢复同一个持久化 NodeRun。
 - Backend 在 COMMIT 后崩溃时，下游 `READY` 工作仍能被重新发现。
+- 已提交的 Agent Action 在重启后重新发现，不产生第二条 Decision。
 
-MVP 不宣称完整的通用 durable execution。执行中的 `RUNNING` 调用恢复、严格 dispatch 一致性、分布式 lease 和 exactly-once 外部副作用仍属于 roadmap。
+MVP 不宣称完整的通用 durable execution。执行中的 `RUNNING` 调用恢复、严格 dispatch 一致性、分布式 lease、exactly-once 外部副作用，以及跨不兼容 Runtime 实现版本恢复仍属于 roadmap。
 
 ## MVP
 
@@ -100,11 +107,17 @@ MVP 刻意保持狭窄。不能强化或验证执行层的能力，不进入 MVP
 - 异步派发、挂起与幂等恢复
 - 必需的本地 `READY` reconciliation
 - 不可变 Event Stream 与 SSE Trace
+- managed Agent Run、Turn、Decision 和 Action 事实
+- 一个确定性只读 Tool 和一个基于 callback 的异步 Tool
+- 已提交 Agent Action 与等待中 Tool Attempt 的恢复
 
 ### Studio
 
-- 五个节点：`Input`、`Prompt Template`、`LLM`、`Async Task`、`Output`
+- Input、Prompt & Model、Agent 和 Output 四类共 8 个注册节点
+- Handler 驱动注册：sync/async Executor 加 managed Agent Runtime
+- 类型化端口、Schema-driven 配置、媒体预览和 Runtime Contract
 - Definition 编辑、校验和 Run 创建
+- optional Reference Image 使用不可变 `AssetRef`
 - 实时 Run 与 NodeRun 状态
 - Event 时间线、Node Detail、输入输出、耗时、Token usage 和错误
 
@@ -114,13 +127,15 @@ MVP 刻意保持狭窄。不能强化或验证执行层的能力，不进入 MVP
 |---|---|
 | Document Processing | 同步基线、数据传递、状态流转和 Trace |
 | AIGC Media Generation | 外部派发、持久化挂起、callback 恢复、幂等和重启恢复 |
+| Agent Tool Loop | 持久化 Decision/Action、同步和异步 Tool、Context/State 与逐轮恢复 |
 
 AIGC 流程是 MVP 的标志性演示：
 
 ```text
-Input → Prompt Rewrite → Image Task
-                          ↓ callback
-        Output ← Caption ← Resume
+Text Input → Prompt Template → Prompt Rewrite ─┬→ Image Generation ─┐
+                                               │         ↑           │ image
+                                               │  Image Input        ↓
+                                               └→ Caption ─────→ Media Output
 ```
 
 首个集成可以使用延迟 callback 模拟服务。真实图像 API 为 optional；Runtime 契约不能因此改变。
@@ -129,9 +144,9 @@ Input → Prompt Rewrite → Image Task
 
 | 阶段 | 方向 |
 |---|---|
-| MVP | waiting recovery、状态恢复、副作用边界、Execution Trace |
+| MVP | waiting recovery、持久化 Agent Action、副作用边界、Execution Trace |
 | Phase 2 | 并行执行、Tool/HTTP/Condition/Human Review、取消、流式输出、Evaluation |
-| Roadmap | 动态 Agent Step、Replay、Session/Long-term Memory、分布式 Worker、更强 dispatch 保证 |
+| Roadmap | 动态 DAG、Planner/Multi-Agent、Replay、Session/Long-term Memory、分布式 Worker、更强 dispatch 保证 |
 
 Evaluation 必须依附 Runtime：
 
@@ -153,11 +168,18 @@ Dataset → 普通 Execution → Event-backed Trace → Evaluator → Compare / 
 | [数据与事件模型](./docs/05-data-model.md) | 持久化事实与执行账本 |
 | [执行模型](./docs/06-execution-model.md) | 调度、挂起恢复与 reconciliation |
 | [扩展与 Evaluation](./docs/07-extensibility.md) | 扩展端口与后续消费者 |
+| [接口合同](./docs/08-interface-spec.md) | Definition、REST、callback、SSE 和错误边界 |
+| [测试与验收](./docs/09-testing-and-acceptance.md) | 不变量测试、故障矩阵和 MVP DoD |
+| [运维与安全](./docs/10-ops.md) | 部署、Secret、Asset 存储和恢复运维 |
+| [架构决策](./docs/11-decisions.md) | 当前决策与后果 |
+| [路线图](./docs/12-roadmap.md) | MVP 后续阶段和成功指标 |
 
 ## 当前状态
 
 Emberling 当前是一个设计先行的工程项目。Runtime 契约、MVP 边界和核心执行模型已经明确；生产代码和 Demo 尚未开始。
 
-第一个实现里程碑不是“画一张图并运行”，而是：
+第一个困难实现里程碑不是“画一张图并运行”，而是：
 
 > 派发外部任务并挂起，重启 Backend，接收 callback，恢复 Execution，并在不重复推进的情况下完成后续 DAG。
+
+下一个里程碑把同一纪律应用到 Agent Loop：提交 Decision 和 Action 后重启，再执行原 Action，不能重新询问模型生成第二条 Decision。
