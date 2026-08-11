@@ -140,31 +140,31 @@ This is waiting recovery with explicit side-effect boundaries—not a claim of g
 
 ---
 
-## Where Emberling is going
+## Evolution roadmap
 
-Execution remains the foundation at every stage. Learning happens between Executions and never rewrites a running Run.
+Later capabilities continue to build on the same Execution Runtime. The system may use completed Runs to produce candidate Definitions, but a Run remains bound to the version selected when it was created.
 
 ```mermaid
 timeline
-    title Execution-grounded evolution
+    title Emberling Runtime evolution
     MVP : Execution Foundation
         : Waiting recovery
         : Persisted Agent Actions
         : Event-backed Trace
     Phase 2 : Runtime Maturity
-            : Evaluation on real Executions
+            : Evaluation from Execution records
             : Human Review and cancellation
-    Phase 3 : Reflection and Optimization
-            : Optimization Signals
-            : Candidate Definitions
-            : Isolated regression validation
-    Phase 4 : Controlled RSI
-            : Budgets and safety gates
-            : Audit and rollback
-            : Human takeover
+    Phase 3 : Evaluation and Optimization
+            : Generate optimization proposals
+            : Create candidate Definitions
+            : Run regression tests in isolation
+    Phase 4 : Controlled Recursive Self-Improvement (RSI)
+            : Quota and policy checks
+            : Versioned Definition releases
+            : Automatic rollback on failure
 ```
 
-Recursive self-improvement is a bounded capability level, not a slogan. A change only advances when ordinary Executions provide evidence that it improves quality without violating safety, cost or side-effect constraints.
+Recursive Self-Improvement (RSI) follows the same versioned release process: each optimization produces a new Definition, validates it through isolated Executions and regression tests, and applies it only to newly created Runs after it passes. Runs already in progress remain on their original version.
 
 ---
 

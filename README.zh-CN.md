@@ -140,31 +140,31 @@ MVP 的标志性里程碑很容易描述，却很难伪造：
 
 ---
 
-## Emberling 将走向哪里
+## 演进路线
 
-每个阶段都以 Execution 为基础。学习发生在两次 Execution 之间，不能改写正在运行的 Run。
+后续能力继续复用同一套 Execution Runtime。系统可以根据已完成的 Run 生成新的候选 Definition，但已经启动的 Run 始终使用创建时绑定的版本，不受后续配置变更影响。
 
 ```mermaid
 timeline
-    title 以真实执行为基础的演进路径
+    title Emberling Runtime 演进路线
     MVP : Execution Foundation
         : Waiting recovery
         : 持久化 Agent Action
         : Event-backed Trace
     Phase 2 : Runtime Maturity
-            : 基于真实 Execution 的 Evaluation
+            : 基于 Execution 记录的 Evaluation
             : Human Review 与 cancellation
-    Phase 3 : Reflection and Optimization
-            : Optimization Signal
-            : Candidate Definition
-            : 隔离回归验证
-    Phase 4 : Controlled RSI
-            : 预算与安全门槛
-            : 审计与回滚
-            : 人工接管
+    Phase 3 : Evaluation and Optimization
+            : 从评估结果生成优化建议
+            : 创建候选 Definition
+            : 在隔离环境运行回归测试
+    Phase 4 : Controlled Recursive Self-Improvement (RSI)
+            : 配额与策略校验
+            : Definition 版本化发布
+            : 失败时自动切回上一版本
 ```
 
-递归自我改进是一种受约束的能力等级，不是一句口号。只有普通 Execution 提供证据，证明候选版本提升质量且没有突破安全、成本和副作用边界时，变更才可以继续推进。
+Recursive Self-Improvement（RSI）仍然走标准的版本化发布流程：每轮优化生成一个新的 Definition，使用独立 Execution 完成评估和回归测试，达标后只对新建 Run 生效；正在执行的 Run 继续使用原版本。
 
 ---
 
