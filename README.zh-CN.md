@@ -1,185 +1,181 @@
 # Emberling
 
-### 面向长时间运行 AI 应用的执行层
+> **每次执行都会留下一点火种。**  
+> Emberling 将它们沉淀为持久化执行事实——为故障恢复保留现场，也为系统演进积累证据。
 
-Emberling 是一个 **Agent Runtime Platform**，用于承载有状态、有副作用、长时间运行的 AI 应用。它将应用定义转换为持久化 Execution，保存每次状态变化，协调异步任务，并生成不可变 Event Stream，供 Trace 和后续 Evaluation 使用。
+**面向长时间运行 AI 应用的 AI-native Execution Runtime。**
 
-> **Build the execution layer that long-running AI applications are missing.**
+Emberling 负责跨模型调用、Tool Action、异步 callback 和进程重启运行有状态 AI 应用。它不是 AI Workflow 工具；Studio 只是 Runtime 之上的轻量开发界面。
 
-**项目阶段：** Runtime 核心设计已经完成，下一步进入实现。  
-**目标技术栈：** Go · PostgreSQL · React · TypeScript · React Flow  
-**Language:** [English](./README.md)
+[English](./README.md) · [产品愿景](./docs/00-vision.md) · [系统架构](./docs/03-architecture.md) · [执行模型](./docs/06-execution-model.md) · [路线图](./docs/12-roadmap.md)
 
 ![Emberling Studio 与 Execution Trace](./assets/ux-studio-observe.svg)
 
-## 为什么是 Emberling
+---
 
-调用模型是 API 集成问题。运行多步骤 AI 应用是系统工程问题。
+## Execution Facts 就是产品核心
 
-长时间运行的 AI 任务会跨越进程边界，等待外部 callback，重试昂贵操作，产生业务副作用，并且需要在故障后解释真实执行过程。大量原型仍依赖内存编排和日志；一旦进程重启、callback 乱序或外部调用结果不确定，执行链就会失去可靠状态。
-
-Emberling 的目标是构建 AI 应用的 **Execution Substrate**，而不是再做一个节点画布：
-
-- **持久化控制面**：Run、NodeRun、Attempt 和 Event 存在 PostgreSQL 中，不依赖 Worker 内存。
-- **协调驱动的执行活性**：Backend 重启后重新发现持久化 `READY` 工作；恢复能力不只依赖 callback。
-- **副作用感知执行**：重试策略必须理解幂等性和外部调用的模糊结果。
-- **执行原生可观测性**：Trace 来自 Runtime 使用的同一份不可变事件账本。
-- **基于真实运行的评估**：后续 Evaluation 消费普通 Execution，不维护第二套测试执行器。
-
-## 产品定位
-
-Emberling 是 Runtime，不是 Workflow Builder。长期来看，Workflow Studio、DSL、SDK 和 API 是同一种 Execution Model 的平等开发入口。MVP 只交付最小 Studio 及其使用的 Backend API；独立 SDK 属于 Phase 2。
-
-Emberling 也不试图替代 Temporal。Temporal 提供通用 durable execution；Emberling 关注 AI 原生执行语义和开发体验，包括 `LLM Call`、`Tool Call`、`Agent Step`、Token、Cost、Evaluation、Human Review、Execution Trace 和行为级调试。
-
-MVP 组合人工定义的静态 DAG，以及 `Agent` NodeRun 内由 Runtime 管理的持久化 Agent Loop。Agent 可以选择 Tool，但不能重写 Workflow 图。
-
-## Runtime 架构
+Emberling 记录真实发生的执行过程，而不是事后从日志中推测。Definition 版本、状态变化、Attempt、模型 Decision、Tool Action 和 Event 共同构成一份持久化执行账本。
 
 ```mermaid
 flowchart LR
-    DEF["版本化 Definition"] --> COMP["Compiler"]
-    COMP --> READY["READY"]
-    READY --> RUN["RUNNING"]
-    RUN -->|同步结果| DONE["SUCCEEDED"]
-    RUN -->|异步派发| WAIT["WAITING_CALLBACK"]
-    WAIT -->|callback / optional poll| RESUME["幂等 Resume"]
-    RESUME --> DONE
-    DONE -->|存在下游| NEXT["持久化后续 READY"]
-    NEXT --> READY
-    DONE -->|图执行完成| COMPLETE["Run COMPLETED"]
+    APP["AI 应用"] --> RT["Emberling Runtime"]
+    RT --> FACTS[("Execution Facts")]
 
-    RUN -->|Agent 节点| TURN["持久化 Turn + Decision + Action"]
-    TURN -->|COMMIT| TOOL["执行同步 / 异步 Tool"]
-    TOOL -->|结果| TURN
-    TURN -->|FINAL| DONE
-
-    RUN -. 状态变化 .-> EVENT[("不可变 Event Stream")]
-    WAIT -. 状态变化 .-> EVENT
-    RESUME -. 状态变化 .-> EVENT
-    COMPLETE -. 状态变化 .-> EVENT
-    EVENT --> TRACE["Trace"]
-    EVENT -. Phase 2 .-> EVAL["Evaluation"]
+    FACTS --> RECOVERY["故障恢复"]
+    FACTS --> TRACE["Trace"]
+    FACTS -. "Phase 2" .-> EVAL["Evaluation"]
+    FACTS -. "roadmap" .-> LEARN["Learning Runtime"]
 ```
 
-每次状态推进遵循同一条事务契约：
+| 恢复执行 | 理解执行 | 改进系统 |
+|---|---|---|
+| callback 或重启后从持久化状态继续 | 查看 Runtime 推进时使用的同一份事实 | 用普通 Execution 验证候选版本 |
 
-1. 在一个 PostgreSQL 事务中保存状态和对应 Event。
-2. COMMIT。
-3. 在事务外发布 SSE、执行节点或调用 Provider。
+---
 
-这个边界避免在数据库事务中执行不可回滚的网络副作用。
+## 为什么需要 Emberling
 
-## 核心工程契约
+调用模型是 API 集成问题。可靠运行长时间 AI 应用是系统工程问题。
 
-| 能力 | 契约 |
+| 真实负载 | 执行层问题 |
 |---|---|
-| Execution 事实源 | PostgreSQL 保存 Definition、Asset Metadata、Workflow 与 Agent 执行事实、callback binding 和 Event |
-| 不可变执行输入 | 每个 Run 绑定 Definition 版本或快照 |
-| Run 状态聚合 | 单个 NodeRun 不能直接把 Run 置为 `PAUSED` |
-| 幂等恢复 | callback 与 optional Provider reconciliation 汇入同一个 `resume` 用例 |
-| 可恢复推进 | COMMIT 后即时执行只是快速路径；Reconciler 可以重新发现持久化 `READY` 工作 |
-| 可恢复 Agent Action | 已提交 Decision 不会重新生成；Reconciler 可以重新发现对应的 `READY` Action |
-| Event 驱动 Trace | 状态和 Event 同事务提交；SSE 只发布已提交 Event |
-| 可扩展内核 | Node 和 Model Provider 实现扩展端口；调度核心不包含厂商分支 |
+| 模型与 Tool 调用 | timeout、retry、成本和结果不确定性 |
+| 外部生成任务 | 挂起、callback、恢复和进程重启 |
+| Agent 动态决策 | 执行 Action 前必须先持久化 Decision |
+| 业务副作用 | 幂等、审计和明确的失败边界 |
+| 持续改进 | 依据真实执行证据评估，而不是依赖合成 Trace |
 
-### 诚实的 durable 边界
+内存编排和应用日志在最需要可靠性的时刻失去权威：进程突然重启、callback 重复到达，或者外部请求结果无法确认。
 
-MVP 证明的是 **waiting recovery**：
+---
 
-- `WAITING_CALLBACK` 可以跨 Backend 重启保留。
-- callback 或 optional Provider poll 恢复同一个持久化 NodeRun。
-- Backend 在 COMMIT 后崩溃时，下游 `READY` 工作仍能被重新发现。
-- 已提交的 Agent Action 在重启后重新发现，不产生第二条 Decision。
+## Emberling 所在的层
 
-MVP 不宣称完整的通用 durable execution。执行中的 `RUNNING` 调用恢复、严格 dispatch 一致性、分布式 lease、exactly-once 外部副作用，以及跨不兼容 Runtime 实现版本恢复仍属于 roadmap。
+Emberling 位于 AI Framework 与底层通用执行基础设施之间。
 
-## MVP
+| | AI Workflow / Agent Framework | 通用 Durable Engine | Emberling |
+|---|---|---|---|
+| 首要目标 | 组合模型和 Tool 调用 | 持久化执行任意程序 | 运行长时间 AI 应用 |
+| 原生事实 | 消息、Step 或 Graph State | Workflow History | Run、NodeRun、Attempt、Decision、Action 和 Event |
+| Agent 恢复 | 通常依赖进程内状态 | 由应用自行定义 | Turn、Decision 和 Action 均有持久化边界 |
+| AI 可观测性 | 通过额外 Trace 接入 | 不理解业务语义 | 直接来自执行账本 |
+| 学习路径 | 通常独立建设 | 不属于产品范围 | Evaluation 与 Learning 消费普通 Execution |
 
-MVP 刻意保持狭窄。不能强化或验证执行层的能力，不进入 MVP。
+Emberling 不替代 Temporal，也不靠节点数量竞争。它专注于应用定义与外部系统之间缺失的 AI 原生执行层。
 
-### Runtime
+---
 
-- 静态 DAG 编译和校验
-- 确定性的顺序调度
-- Run、NodeRun 和 Attempt 持久化
-- Timeout、retry 和失败传播
-- 异步派发、挂起与幂等恢复
-- 必需的本地 `READY` reconciliation
-- 不可变 Event Stream 与 SSE Trace
-- managed Agent Run、Turn、Decision 和 Action 事实
-- 一个确定性只读 Tool 和一个基于 callback 的异步 Tool
-- 已提交 Agent Action 与等待中 Tool Attempt 的恢复
+## 它怎样运行
 
-### Studio
+Workflow 与 Agent 语义共用同一个执行内核。
 
-- Input、Prompt & Model、Agent 和 Output 四类共 8 个注册节点
-- Handler 驱动注册：sync/async Executor 加 managed Agent Runtime
-- 类型化端口、Schema-driven 配置、媒体预览和 Runtime Contract
-- Definition 编辑、校验和 Run 创建
-- optional Reference Image 使用不可变 `AssetRef`
-- 实时 Run 与 NodeRun 状态
-- Event 时间线、Node Detail、输入输出、耗时、Token usage 和错误
+```mermaid
+flowchart LR
+    DEF["不可变 Definition"] --> COMPILE["编译与校验"]
+    COMPILE --> READY["READY"]
+    READY --> RUNNING["RUNNING"]
 
-### 验证场景
+    RUNNING -->|"同步结果"| SUCCEEDED["SUCCEEDED"]
+    RUNNING -->|"异步派发"| WAITING["WAITING_CALLBACK"]
+    WAITING -->|"callback / reconciliation"| SUCCEEDED
 
-| 场景 | 验证能力 |
-|---|---|
-| Document Processing | 同步基线、数据传递、状态流转和 Trace |
-| AIGC Media Generation | 外部派发、持久化挂起、callback 恢复、幂等和重启恢复 |
-| Agent Tool Loop | 持久化 Decision/Action、同步和异步 Tool、Context/State 与逐轮恢复 |
+    RUNNING -->|"Agent NodeRun"| DECIDE["持久化 Turn + Decision + Action"]
+    DECIDE -->|"COMMIT"| ACT["执行 Tool 或 FINAL"]
+    ACT -->|"Tool result"| DECIDE
+    ACT -->|"FINAL"| SUCCEEDED
 
-AIGC 流程是 MVP 的标志性演示：
+    SUCCEEDED --> NEXT{"存在下游？"}
+    NEXT -->|"是"| READY
+    NEXT -->|"否"| COMPLETE["Run COMPLETED"]
+```
+
+所有状态推进遵循同一条边界：
 
 ```text
-Text Input → Prompt Template → Prompt Rewrite ─┬→ Image Generation ─┐
-                                               │         ↑           │ image
-                                               │  Image Input        ↓
-                                               └→ Caption ─────→ Media Output
+持久化状态与 Event  →  COMMIT  →  执行外部工作 / 发布 SSE
 ```
 
-首个集成可以使用延迟 callback 模拟服务。真实图像 API 为 optional；Runtime 契约不能因此改变。
+PostgreSQL 是 Emberling 自有执行事实的持久化来源。Reconciler 负责重新发现已经提交的 `READY` 工作；COMMIT 后立即推进只是快速路径。
 
-## 演进方向
+---
 
-| 阶段 | 方向 |
-|---|---|
-| MVP | waiting recovery、持久化 Agent Action、副作用边界、Execution Trace |
-| Phase 2 | 并行执行、Tool/HTTP/Condition/Human Review、取消、流式输出、Evaluation |
-| Roadmap | 动态 DAG、Planner/Multi-Agent、Replay、Session/Long-term Memory、分布式 Worker、更强 dispatch 保证 |
+## MVP 要证明什么
 
-Evaluation 必须依附 Runtime：
+MVP 刻意保持狭窄。不能强化或验证执行层的能力，不进入当前交付范围。
 
-```text
-Dataset → 普通 Execution → Event-backed Trace → Evaluator → Compare / Regression
+| 同步基线 | 异步恢复 | 持久化 Agent Loop |
+|---|---|---|
+| **Document Processing** | **AIGC Media Generation** | **Agent Tool Loop** |
+| 确定性调度、数据传递和 Event-backed Trace | 派发、挂起、callback 幂等和 Backend 重启恢复 | Decision/Action 持久化、同步与异步 Tool、Context/State 和逐轮恢复 |
+
+```mermaid
+flowchart LR
+    INPUT["Text Input"] --> PROMPT["Prompt Rewrite"]
+    PROMPT --> IMAGE["Image Generation"]
+    PROMPT --> CAPTION["Caption"]
+    IMAGE --> OUTPUT["Media Output"]
+    CAPTION --> OUTPUT
+
+    IMAGE -. "WAITING_CALLBACK" .-> CALLBACK["延迟 callback"]
+    CALLBACK -. "幂等恢复" .-> IMAGE
 ```
 
-不建设独立评估执行器，也不在执行结束后伪造 Trace。
+MVP 的标志性里程碑很容易描述，却很难伪造：
 
-## 设计文档
+> 派发外部任务并挂起，重启 Backend，接收 callback，恢复同一个 Execution，并在不重复推进的情况下完成后续执行。
 
-| 文档 | 职责 |
+---
+
+## 不夸大的可靠性边界
+
+| MVP 保证 | MVP 不承诺 |
 |---|---|
-| [产品愿景](./docs/00-vision.md) | 产品定位与长期原则 |
-| [验证场景](./docs/01-scenarios.md) | MVP 验证场景 |
-| [项目范围](./docs/02-scope.md) | MVP 单一事实来源 |
-| [系统架构](./docs/03-architecture.md) | 系统边界与全局不变量 |
-| [Studio 与 Trace UX](./docs/04-ux.md) | 对外产品体验 |
-| [数据与事件模型](./docs/05-data-model.md) | 持久化事实与执行账本 |
-| [执行模型](./docs/06-execution-model.md) | 调度、挂起恢复与 reconciliation |
-| [扩展与 Evaluation](./docs/07-extensibility.md) | 扩展端口与后续消费者 |
-| [接口合同](./docs/08-interface-spec.md) | Definition、REST、callback、SSE 和错误边界 |
-| [测试与验收](./docs/09-testing-and-acceptance.md) | 不变量测试、故障矩阵和 MVP DoD |
-| [运维与安全](./docs/10-ops.md) | 部署、Secret、Asset 存储和恢复运维 |
-| [架构决策](./docs/11-decisions.md) | 当前决策与后果 |
-| [路线图](./docs/12-roadmap.md) | MVP 后续阶段和成功指标 |
+| `WAITING_CALLBACK` 可以跨 Backend 重启保留 | 恢复执行中的同步调用 |
+| 持久化 `READY` 工作一定会被重新发现 | exactly-once 外部副作用 |
+| 重复和过期 callback 不能推进两次 | 数据库与 Provider 之间的严格 dispatch 一致性 |
+| 已提交的 Agent Decision 不会重新生成 | 跨不兼容 Runtime 实现恢复 |
 
-## 当前状态
+这是具有明确副作用边界的 waiting recovery，不是对通用 durable execution 的过度承诺。
 
-Emberling 当前是一个设计先行的工程项目。Runtime 契约、MVP 边界和核心执行模型已经明确；生产代码和 Demo 尚未开始。
+---
 
-第一个困难实现里程碑不是“画一张图并运行”，而是：
+## Emberling 将走向哪里
 
-> 派发外部任务并挂起，重启 Backend，接收 callback，恢复 Execution，并在不重复推进的情况下完成后续 DAG。
+每个阶段都以 Execution 为基础。学习发生在两次 Execution 之间，不能改写正在运行的 Run。
 
-下一个里程碑把同一纪律应用到 Agent Loop：提交 Decision 和 Action 后重启，再执行原 Action，不能重新询问模型生成第二条 Decision。
+```mermaid
+timeline
+    title 以真实执行为基础的演进路径
+    MVP : Execution Foundation
+        : Waiting recovery
+        : 持久化 Agent Action
+        : Event-backed Trace
+    Phase 2 : Runtime Maturity
+            : 基于真实 Execution 的 Evaluation
+            : Human Review 与 cancellation
+    Phase 3 : Reflection and Optimization
+            : Optimization Signal
+            : Candidate Definition
+            : 隔离回归验证
+    Phase 4 : Controlled RSI
+            : 预算与安全门槛
+            : 审计与回滚
+            : 人工接管
+```
+
+递归自我改进是一种受约束的能力等级，不是一句口号。只有普通 Execution 提供证据，证明候选版本提升质量且没有突破安全、成本和副作用边界时，变更才可以继续推进。
+
+---
+
+## 阅读设计
+
+| 从这里开始 | 深入执行内核 |
+|---|---|
+| [产品愿景](./docs/00-vision.md) | [持久化数据与 Event 模型](./docs/05-data-model.md) |
+| [MVP 范围](./docs/02-scope.md) | [执行、挂起与恢复](./docs/06-execution-model.md) |
+| [系统架构](./docs/03-architecture.md) | [测试与验收](./docs/09-testing-and-acceptance.md) |
+| [路线图](./docs/12-roadmap.md) | [架构决策](./docs/11-decisions.md) |
+
+**项目阶段：** Runtime 设计合同已经完成，下一步进入实现。  
+**目标技术栈：** Go · PostgreSQL · React · TypeScript · React Flow

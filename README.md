@@ -1,185 +1,181 @@
 # Emberling
 
-### The execution layer for long-running AI applications
+> **Every execution leaves an ember.**  
+> Emberling preserves those embers as durable execution facts—so interrupted work can recover and every run can become evidence for what comes next.
 
-Emberling is an **Agent Runtime Platform** for stateful, side-effecting, long-running AI applications. It turns an application definition into a durable Execution, persists every state transition, coordinates asynchronous work, and emits an immutable event stream for Trace and future Evaluation.
+**An AI-native Execution Runtime for long-running applications.**
 
-> **Build the execution layer that long-running AI applications are missing.**
+Emberling runs stateful AI applications across model calls, Tool actions, external callbacks and process restarts. It is not an AI workflow tool: the Studio is only a thin development surface over the Runtime.
 
-**Project stage:** core design complete through the Runtime specification; implementation is next.  
-**Target stack:** Go · PostgreSQL · React · TypeScript · React Flow  
-**Language:** [中文](./README.zh-CN.md)
+[中文](./README.zh-CN.md) · [Vision](./docs/00-vision.md) · [Architecture](./docs/03-architecture.md) · [Execution model](./docs/06-execution-model.md) · [Roadmap](./docs/12-roadmap.md)
 
 ![Emberling Studio and execution trace](./assets/ux-studio-observe.svg)
 
-## Why Emberling
+---
 
-Calling a model is an API integration problem. Operating a multi-step AI application is a systems problem.
+## Execution facts are the product
 
-Long-running AI workloads cross process boundaries, wait for external callbacks, retry expensive operations, produce business side effects, and must remain explainable after failures. Most prototypes solve this with in-memory orchestration and logs. That breaks as soon as a process restarts or an external task completes out of order.
-
-Emberling is designed as an **execution substrate**, not another node canvas:
-
-- **Durable control plane** — Run, NodeRun, Attempt and Event state live in PostgreSQL, not worker memory.
-- **Reconciliation-driven liveness** — persisted `READY` work is rediscovered after restart; callback recovery is not the only recovery path.
-- **Side-effect-aware execution** — retry decisions respect idempotency and ambiguous external outcomes.
-- **Execution-native observability** — Trace is derived from the same immutable event ledger that drives the Runtime.
-- **Evaluation on real runs** — future Evaluation consumes ordinary Executions instead of maintaining a second test executor.
-
-## Product position
-
-Emberling is a Runtime, not a Workflow Builder. In the long term, Workflow Studio, DSL, SDK and API are equal authoring surfaces over the same Execution model. The MVP ships the minimal Studio and its Backend API; a standalone SDK is Phase 2.
-
-It also does not attempt to replace Temporal. Temporal provides general-purpose durable execution. Emberling focuses on AI-native semantics and developer experience: `LLM Call`, `Tool Call`, `Agent Step`, Token, Cost, Evaluation, Human Review, execution Trace and behavior-level debugging.
-
-The MVP combines a human-authored static DAG with a managed, persisted Agent Loop inside an `Agent` NodeRun. The Agent may choose a Tool but cannot rewrite the Workflow graph.
-
-## Runtime architecture
+Emberling records what actually happened—not a reconstruction from logs. Definition versions, state transitions, Attempts, model Decisions, Tool Actions and Events form one durable execution ledger.
 
 ```mermaid
 flowchart LR
-    DEF["Versioned Definition"] --> COMP["Compiler"]
-    COMP --> READY["READY"]
-    READY --> RUN["RUNNING"]
-    RUN -->|sync result| DONE["SUCCEEDED"]
-    RUN -->|async dispatch| WAIT["WAITING_CALLBACK"]
-    WAIT -->|callback / optional poll| RESUME["Idempotent Resume"]
-    RESUME --> DONE
-    DONE -->|downstream exists| NEXT["Persist next READY"]
-    NEXT --> READY
-    DONE -->|graph complete| COMPLETE["Run COMPLETED"]
+    APP["AI Application"] --> RT["Emberling Runtime"]
+    RT --> FACTS[("Execution Facts")]
 
-    RUN -->|Agent node| TURN["Persist Turn + Decision + Action"]
-    TURN -->|COMMIT| TOOL["Execute sync / async Tool"]
-    TOOL -->|result| TURN
-    TURN -->|FINAL| DONE
-
-    RUN -. state transition .-> EVENT[("Immutable Event Stream")]
-    WAIT -. state transition .-> EVENT
-    RESUME -. state transition .-> EVENT
-    COMPLETE -. state transition .-> EVENT
-    EVENT --> TRACE["Trace"]
-    EVENT -. Phase 2 .-> EVAL["Evaluation"]
+    FACTS --> RECOVERY["Recovery"]
+    FACTS --> TRACE["Trace"]
+    FACTS -. "Phase 2" .-> EVAL["Evaluation"]
+    FACTS -. "Roadmap" .-> LEARN["Learning Runtime"]
 ```
 
-Every transition follows the same contract:
+| Recover now | Understand now | Improve later |
+|---|---|---|
+| Resume persisted work after callbacks and restarts | Inspect the same facts that drive the Runtime | Evaluate candidate versions on ordinary Executions |
 
-1. Persist state and the corresponding Event in one PostgreSQL transaction.
-2. Commit.
-3. Publish SSE and perform node or Provider work outside the transaction.
+---
 
-This boundary keeps the database transaction free of irreversible network side effects.
+## Why Emberling exists
 
-## Core engineering contracts
+Calling a model is an API problem. Operating a long-running AI application is a systems problem.
 
-| Property | Contract |
+| The workload | The execution problem |
 |---|---|
-| Execution source of truth | PostgreSQL owns Definition, Asset metadata, Workflow and Agent execution facts, callback bindings and Events |
-| Immutable execution input | Every Run binds a Definition version or snapshot |
-| Aggregated Run state | A NodeRun cannot directly force the Run into `PAUSED` |
-| Idempotent recovery | Callback and optional Provider reconciliation converge on one `resume` use case |
-| Recoverable progress | Immediate post-COMMIT execution is a fast path; reconciliation can rediscover persisted `READY` work |
-| Recoverable Agent actions | A committed Decision is never regenerated; reconciliation can rediscover its persisted `READY` Action |
-| Event-backed Trace | State and Event commit atomically; SSE publishes committed Events only |
-| Extensible core | Nodes and Model Providers implement ports; Runtime scheduling does not contain vendor branches |
+| Model and Tool calls | Timeouts, retries, cost and uncertain outcomes |
+| External generation jobs | Suspend, callback, resume and restart recovery |
+| Agent decisions | Persist the Decision before performing the Action |
+| Business side effects | Idempotency, auditability and explicit failure boundaries |
+| Continuous improvement | Evaluate from real execution evidence, not synthetic traces |
 
-### Honest durability boundary
+In-memory orchestration and application logs lose authority at exactly the moment reliability matters: a process restarts, a callback arrives twice, or an external request has an ambiguous result.
 
-The MVP proves **waiting recovery**:
+---
 
-- `WAITING_CALLBACK` survives a Backend restart.
-- callback or optional Provider polling resumes the same persisted NodeRun.
-- downstream `READY` work is rediscovered if the Backend crashes after COMMIT.
-- a committed Agent Action is rediscovered after restart without generating a second Decision.
+## A different layer
 
-The MVP does **not** claim general durable execution. Recovery of an in-flight `RUNNING` call, strict dispatch consistency, distributed leasing, exactly-once external side effects and recovery across incompatible Runtime implementation versions remain roadmap work.
+Emberling sits between AI frameworks and infrastructure primitives.
 
-## MVP
+| | AI workflow / agent framework | General durable engine | Emberling |
+|---|---|---|---|
+| Primary concern | Compose model and Tool calls | Execute arbitrary durable programs | Execute long-running AI applications |
+| Native facts | Messages, steps or graph state | Workflow history | Run, NodeRun, Attempt, Decision, Action and Event |
+| Agent recovery | Often process-local | Application-defined | Persisted Turn, Decision and Action boundaries |
+| AI observability | Added through tracing | Domain-agnostic | Derived from the execution ledger |
+| Learning path | Usually separate | Outside product scope | Evaluation and learning consume ordinary Executions |
+
+Emberling does not replace Temporal, and it does not compete on node catalogs. Its focus is the AI-native execution layer between application definitions and external systems.
+
+---
+
+## How it works
+
+Workflow and Agent semantics share one execution core.
+
+```mermaid
+flowchart LR
+    DEF["Immutable Definition"] --> COMPILE["Compile + Validate"]
+    COMPILE --> READY["READY"]
+    READY --> RUNNING["RUNNING"]
+
+    RUNNING -->|"sync result"| SUCCEEDED["SUCCEEDED"]
+    RUNNING -->|"async dispatch"| WAITING["WAITING_CALLBACK"]
+    WAITING -->|"callback / reconciliation"| SUCCEEDED
+
+    RUNNING -->|"Agent NodeRun"| DECIDE["Persist Turn + Decision + Action"]
+    DECIDE -->|"COMMIT"| ACT["Execute Tool or FINAL"]
+    ACT -->|"Tool result"| DECIDE
+    ACT -->|"FINAL"| SUCCEEDED
+
+    SUCCEEDED --> NEXT{"Downstream?"}
+    NEXT -->|"yes"| READY
+    NEXT -->|"no"| COMPLETE["Run COMPLETED"]
+```
+
+Every transition follows one boundary:
+
+```text
+persist state + Event  →  COMMIT  →  execute external work / publish SSE
+```
+
+PostgreSQL is the source of Emberling-owned execution facts. Reconciliation rediscovers persisted `READY` work; immediate post-COMMIT execution is only the fast path.
+
+---
+
+## What the MVP proves
 
 The MVP is deliberately narrow. If a feature does not strengthen or validate the execution layer, it does not belong.
 
-### Runtime
+| Synchronous baseline | Async recovery | Persisted Agent loop |
+|---|---|---|
+| **Document Processing** | **AIGC Media Generation** | **Agent Tool Loop** |
+| Deterministic scheduling, data flow and Event-backed Trace | Dispatch, suspend, callback idempotency and Backend restart recovery | Persisted Decision/Action, sync and async Tools, Context/State and per-turn recovery |
 
-- Static DAG compilation and validation
-- Deterministic sequential scheduling
-- Run, NodeRun and Attempt persistence
-- Timeout, retry and failure propagation
-- Asynchronous dispatch, suspend and idempotent resume
-- Required local `READY` reconciliation
-- Immutable Event stream and SSE Trace
-- Managed Agent Run, Turn, Decision and Action facts
-- One deterministic read-only Tool and one callback-based async Tool
-- Recovery of committed Agent Actions and waiting Tool Attempts
+```mermaid
+flowchart LR
+    INPUT["Text Input"] --> PROMPT["Prompt Rewrite"]
+    PROMPT --> IMAGE["Image Generation"]
+    PROMPT --> CAPTION["Caption"]
+    IMAGE --> OUTPUT["Media Output"]
+    CAPTION --> OUTPUT
 
-### Studio
-
-- Eight registered nodes across Input, Prompt & Model, Agent and Output categories
-- Handler-driven registration: sync/async Executors plus a managed Agent Runtime
-- Typed ports, schema-driven configuration, media previews and runtime contract visibility
-- Definition editing, validation and Run creation
-- Immutable `AssetRef` for the optional Reference Image
-- Live Run and NodeRun state
-- Event timeline, Node detail, input/output, latency, Token usage and errors
-
-### Proof scenarios
-
-| Scenario | What it proves |
-|---|---|
-| Document Processing | synchronous baseline, data flow, state transitions and Trace |
-| AIGC Media Generation | external dispatch, persistent suspend, callback recovery, idempotency and restart recovery |
-| Agent Tool Loop | persisted Decision/Action, sync and async Tools, Context/State and per-turn recovery |
-
-The AIGC flow is the signature demo:
-
-```text
-Text Input → Prompt Template → Prompt Rewrite ─┬→ Image Generation ─┐
-                                               │         ↑           │ image
-                                               │  Image Input        ↓
-                                               └→ Caption ─────→ Media Output
+    IMAGE -. "WAITING_CALLBACK" .-> CALLBACK["Delayed callback"]
+    CALLBACK -. "idempotent resume" .-> IMAGE
 ```
 
-The first integration can use a delayed callback simulator. A real image API is optional; the Runtime contract must remain identical.
+The signature milestone is simple to state and hard to fake:
 
-## Evolution path
+> Suspend an external task, restart the Backend, accept the callback, resume the same Execution, and finish the graph without duplicating progress.
 
-| Stage | Direction |
+---
+
+## An honest durability boundary
+
+| The MVP guarantees | The MVP does not claim |
 |---|---|
-| MVP | waiting recovery, persisted Agent actions, side-effect boundary, execution Trace |
-| Phase 2 | parallel execution, Tool/HTTP/Condition/Human Review, cancellation, streaming, Evaluation |
-| Roadmap | dynamic DAGs, Planner/Multi-Agent, Replay, Session/Long-term Memory, distributed Workers, stronger dispatch guarantees |
+| `WAITING_CALLBACK` survives Backend restart | Recovery of an in-flight synchronous call |
+| Persisted `READY` work is rediscovered | Exactly-once external side effects |
+| Repeated and stale callbacks cannot advance twice | Strict dispatch consistency across database and Provider |
+| A committed Agent Decision is never regenerated | Recovery across incompatible Runtime implementations |
 
-Evaluation remains attached to the Runtime:
+This is waiting recovery with explicit side-effect boundaries—not a claim of general durable execution.
 
-```text
-Dataset → ordinary Execution → Event-backed Trace → Evaluator → Compare / Regression
+---
+
+## Where Emberling is going
+
+Execution remains the foundation at every stage. Learning happens between Executions and never rewrites a running Run.
+
+```mermaid
+timeline
+    title Execution-grounded evolution
+    MVP : Execution Foundation
+        : Waiting recovery
+        : Persisted Agent Actions
+        : Event-backed Trace
+    Phase 2 : Runtime Maturity
+            : Evaluation on real Executions
+            : Human Review and cancellation
+    Phase 3 : Reflection and Optimization
+            : Optimization Signals
+            : Candidate Definitions
+            : Isolated regression validation
+    Phase 4 : Controlled RSI
+            : Budgets and safety gates
+            : Audit and rollback
+            : Human takeover
 ```
 
-No separate evaluation executor. No synthetic trace reconstructed after the fact.
+Recursive self-improvement is a bounded capability level, not a slogan. A change only advances when ordinary Executions provide evidence that it improves quality without violating safety, cost or side-effect constraints.
 
-## Design documentation
+---
 
-| Document | Responsibility |
+## Explore the design
+
+| Start here | Go deeper |
 |---|---|
-| [Vision](./docs/00-vision.md) | product position and long-term principles |
-| [Scenarios](./docs/01-scenarios.md) | MVP validation scenarios |
-| [Scope](./docs/02-scope.md) | MVP source of truth |
-| [Architecture](./docs/03-architecture.md) | system boundaries and global invariants |
-| [Studio & Trace UX](./docs/04-ux.md) | external product experience |
-| [Data & Event Model](./docs/05-data-model.md) | persistent facts and execution ledger |
-| [Execution Model](./docs/06-execution-model.md) | scheduling, suspend/resume and reconciliation |
-| [Extensibility & Evaluation](./docs/07-extensibility.md) | extension ports and post-MVP consumers |
-| [Interface contracts](./docs/08-interface-spec.md) | Definition, REST, callback, SSE and error boundaries |
-| [Testing & acceptance](./docs/09-testing-and-acceptance.md) | invariant tests, failure matrix and MVP DoD |
-| [Operations & security](./docs/10-ops.md) | deployment, Secrets, Asset storage and recovery operations |
-| [Architecture decisions](./docs/11-decisions.md) | current decisions and consequences |
-| [Roadmap](./docs/12-roadmap.md) | post-MVP stages and success metrics |
+| [Product vision](./docs/00-vision.md) | [Persistent data and Event model](./docs/05-data-model.md) |
+| [MVP scope](./docs/02-scope.md) | [Execution, suspend and resume](./docs/06-execution-model.md) |
+| [System architecture](./docs/03-architecture.md) | [Testing and acceptance](./docs/09-testing-and-acceptance.md) |
+| [Roadmap](./docs/12-roadmap.md) | [Architecture decisions](./docs/11-decisions.md) |
 
-## Status
-
-Emberling is currently a design-first engineering project. The Runtime contracts, MVP boundary and core execution model are specified; production code and demos have not started.
-
-The first hard implementation milestone is not “draw and run a graph.” It is:
-
-> suspend an external task, restart the Backend, accept the callback, recover the Execution, and finish the downstream graph without duplicating progress.
-
-The next milestone applies the same discipline inside the Agent Loop: commit a Decision and Action, restart, then execute the original Action without asking the model for a second Decision.
+**Project stage:** Runtime design contracts are complete; implementation is next.  
+**Target stack:** Go · PostgreSQL · React · TypeScript · React Flow
