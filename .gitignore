@@ -1,8 +1,4 @@
 .DS_Store
 
-# Internal design docs — keep private, do not publish to GitHub.
-# Only the root README.md is public.
+# Internal design and engineering contracts — do not publish to GitHub.
 docs/
-
-CLAUDE.md
-AGENTS.md

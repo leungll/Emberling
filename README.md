@@ -3,11 +3,11 @@
 > **Every execution leaves an ember.**  
 > Emberling preserves those embers as durable execution facts—so interrupted work can recover and every run can become evidence for what comes next.
 
-**An AI-native Execution Runtime for long-running applications.**
+**An Agent Runtime Platform built around an AI-native Execution Runtime.**
 
 Emberling runs stateful AI applications across model calls, Tool actions, external callbacks and process restarts. It is not an AI workflow tool: the Studio is only a thin development surface over the Runtime.
 
-[中文](./README.zh-CN.md) · [Vision](./docs/00-vision.md) · [Architecture](./docs/03-architecture.md) · [Execution model](./docs/06-execution-model.md) · [Roadmap](./docs/12-roadmap.md)
+[中文](./README.zh-CN.md)
 
 ![Emberling Studio and execution trace](./assets/ux-studio-observe.svg)
 
@@ -167,15 +167,6 @@ timeline
 Recursive Self-Improvement (RSI) follows the same versioned release process: each optimization produces a new Definition, validates it through isolated Executions and regression tests, and applies it only to newly created Runs after it passes. Runs already in progress remain on their original version.
 
 ---
-
-## Explore the design
-
-| Start here | Go deeper |
-|---|---|
-| [Product vision](./docs/00-vision.md) | [Persistent data and Event model](./docs/05-data-model.md) |
-| [MVP scope](./docs/02-scope.md) | [Execution, suspend and resume](./docs/06-execution-model.md) |
-| [System architecture](./docs/03-architecture.md) | [Testing and acceptance](./docs/09-testing-and-acceptance.md) |
-| [Roadmap](./docs/12-roadmap.md) | [Architecture decisions](./docs/11-decisions.md) |
 
 **Project stage:** Runtime design contracts are complete; implementation is next.  
 **Target stack:** Go · PostgreSQL · React · TypeScript · React Flow

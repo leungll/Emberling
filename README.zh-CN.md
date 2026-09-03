@@ -3,11 +3,11 @@
 > **每次执行都会留下一点火种。**  
 > Emberling 将它们沉淀为持久化执行事实——为故障恢复保留现场，也为系统演进积累证据。
 
-**面向长时间运行 AI 应用的 AI-native Execution Runtime。**
+**以 AI-native Execution Runtime 为核心的 Agent Runtime Platform。**
 
 Emberling 负责跨模型调用、Tool Action、异步 callback 和进程重启运行有状态 AI 应用。它不是 AI Workflow 工具；Studio 只是 Runtime 之上的轻量开发界面。
 
-[English](./README.md) · [产品愿景](./docs/00-vision.md) · [系统架构](./docs/03-architecture.md) · [执行模型](./docs/06-execution-model.md) · [路线图](./docs/12-roadmap.md)
+[English](./README.md)
 
 ![Emberling Studio 与 Execution Trace](./assets/ux-studio-observe.svg)
 
@@ -167,15 +167,6 @@ timeline
 Recursive Self-Improvement（RSI）仍然走标准的版本化发布流程：每轮优化生成一个新的 Definition，使用独立 Execution 完成评估和回归测试，达标后只对新建 Run 生效；正在执行的 Run 继续使用原版本。
 
 ---
-
-## 阅读设计
-
-| 从这里开始 | 深入执行内核 |
-|---|---|
-| [产品愿景](./docs/00-vision.md) | [持久化数据与 Event 模型](./docs/05-data-model.md) |
-| [MVP 范围](./docs/02-scope.md) | [执行、挂起与恢复](./docs/06-execution-model.md) |
-| [系统架构](./docs/03-architecture.md) | [测试与验收](./docs/09-testing-and-acceptance.md) |
-| [路线图](./docs/12-roadmap.md) | [架构决策](./docs/11-decisions.md) |
 
 **项目阶段：** Runtime 设计合同已经完成，下一步进入实现。  
 **目标技术栈：** Go · PostgreSQL · React · TypeScript · React Flow
