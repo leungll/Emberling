@@ -1,0 +1,48 @@
+{
+  "workflowId": "wf_document_processing",
+  "name": "Document Processing",
+  "description": "Summarise a document and translate the summary",
+  "nodes": [
+    {
+      "id": "node_input",
+      "type": "text_input",
+      "name": "Source Document",
+      "position": {"x": 0, "y": 0},
+      "config": {"inputKey": "document", "label": "Document", "required": true, "minLength": 1, "maxLength": 20000}
+    },
+    {
+      "id": "node_prompt",
+      "type": "prompt_template",
+      "name": "Summary Prompt",
+      "position": {"x": 200, "y": 0},
+      "config": {"template": "Summarise the following document:\n{{text}}"}
+    },
+    {
+      "id": "node_summary",
+      "type": "text_generation",
+      "name": "Summary",
+      "position": {"x": 400, "y": 0},
+      "config": {"modelId": "text-model-v1"}
+    },
+    {
+      "id": "node_translation",
+      "type": "text_generation",
+      "name": "Translation",
+      "position": {"x": 600, "y": 0},
+      "config": {"modelId": "text-model-v1"}
+    },
+    {
+      "id": "node_output",
+      "type": "text_output",
+      "name": "Result",
+      "position": {"x": 800, "y": 0},
+      "config": {}
+    }
+  ],
+  "edges": [
+    {"id": "edge_input_prompt", "source": "node_input", "sourceHandle": "text", "target": "node_prompt", "targetHandle": "text"},
+    {"id": "edge_prompt_summary", "source": "node_prompt", "sourceHandle": "text", "target": "node_summary", "targetHandle": "prompt"},
+    {"id": "edge_summary_translation", "source": "node_summary", "sourceHandle": "text", "target": "node_translation", "targetHandle": "prompt"},
+    {"id": "edge_translation_output", "source": "node_translation", "sourceHandle": "text", "target": "node_output", "targetHandle": "text"}
+  ]
+}

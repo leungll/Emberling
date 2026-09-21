@@ -1,0 +1,74 @@
+# CI runs the same Makefile gate as a workstation (ENGINEERING §8). It must not grow a
+# second set of commands: anything that has to pass here belongs in a make target.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: emberling
+          POSTGRES_PASSWORD: emberling
+          POSTGRES_DB: emberling_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U emberling -d emberling_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      # Integration tests use this database instead of starting a container, and fail
+      # loudly if it is unreachable. They are never skipped.
+      EMBERLING_TEST_DATABASE_URL: postgres://emberling:emberling@127.0.0.1:5432/emberling_test?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # backend/go.mod is the authority for the Go baseline.
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Enable corepack
+        # Studio is not in the repository yet; corepack is enabled only when it lands, so
+        # this step cannot fail a backend-only checkout.
+        run: |
+          if [ -d studio ]; then
+            corepack enable
+          else
+            echo "studio: not present, skipped"
+          fi
+
+      - name: Set up Node.js
+        if: ${{ hashFiles('studio/package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: studio/pnpm-lock.yaml
+
+      - name: Bootstrap
+        run: make bootstrap
+
+      - name: Check
+        run: make check

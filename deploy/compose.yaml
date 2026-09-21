@@ -1,0 +1,77 @@
+# Local development topology (10-ops §1): one Backend process, PostgreSQL 18 and a
+# persistent volume. Redis, external queues and distributed workers are not part of the
+# MVP and must not appear here.
+#
+# Studio is not in this compose file yet: studio/ does not exist in the repository. Add
+# the service in the same change that creates it.
+name: emberling
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: emberling
+      POSTGRES_DB: emberling
+      # Local development only. This value never leaves the compose network, and the
+      # deployed configuration supplies credentials through the environment instead.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - emberling-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emberling -d emberling"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  # Deterministic Provider fixture used by integration and failure tests. The service is
+  # behind a profile because backend/cmd/mockprovider is owned by another track and does
+  # not exist yet; `docker compose --profile mock up` starts it once it lands.
+  mockprovider:
+    profiles: ["mock"]
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+      args:
+        CMD: mockprovider
+    ports:
+      - "9101:9101"
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+      args:
+        CMD: emberling
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      EMBERLING_DATABASE_URL: postgres://emberling@postgres:5432/emberling?sslmode=disable
+      EMBERLING_DATABASE_MAX_CONNS: "10"
+      EMBERLING_ASSET_STORAGE_ROOT: /var/lib/emberling/assets
+      # 16 MiB: one reference image per upload; generic file upload is out of MVP scope.
+      EMBERLING_ASSET_MAX_UPLOAD_BYTES: "16777216"
+      EMBERLING_MODEL_PROVIDER_BASE_URL: ${EMBERLING_MODEL_PROVIDER_BASE_URL:-http://mockprovider:9101}
+      # Secrets are placeholders resolved from the developer's own environment. They are
+      # never committed, and they never reach a Definition, an Event or Trace.
+      EMBERLING_MODEL_PROVIDER_API_KEY: ${EMBERLING_MODEL_PROVIDER_API_KEY:?set EMBERLING_MODEL_PROVIDER_API_KEY in your shell or .env}
+      EMBERLING_CALLBACK_BASE_URL: ${EMBERLING_CALLBACK_BASE_URL:-http://localhost:8080}
+      EMBERLING_CALLBACK_SIGNING_SECRET: ${EMBERLING_CALLBACK_SIGNING_SECRET:?set EMBERLING_CALLBACK_SIGNING_SECRET in your shell or .env}
+      EMBERLING_RECONCILE_INTERVAL: 5s
+      EMBERLING_RECONCILE_BATCH_SIZE: "100"
+      EMBERLING_PENDING_CALLBACK_TTL: 24h
+      EMBERLING_PENDING_CALLBACK_MAX_PAYLOAD_BYTES: "262144"
+      EMBERLING_TRACE_MAX_FIELD_BYTES: "8192"
+      EMBERLING_TRACE_MAX_RESPONSE_BYTES: "1048576"
+      EMBERLING_HTTP_ADDR: ":8080"
+    volumes:
+      - emberling-asset-data:/var/lib/emberling/assets
+
+volumes:
+  emberling-postgres-data:
+  emberling-asset-data:

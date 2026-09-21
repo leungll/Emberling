@@ -2,3 +2,15 @@
 
 # Internal design and engineering contracts — do not publish to GitHub.
 docs/
+.idea/
+.claude/
+
+# Dependencies and build/test output.
+node_modules/
+studio/dist/
+studio/test-results/
+studio/playwright-report/
+
+# Local environment files.
+.env
+.env.*

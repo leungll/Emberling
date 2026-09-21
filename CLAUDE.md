@@ -12,6 +12,8 @@ Implement behavior established by the current code, database migrations, public 
 
 When a `docs/` directory is present in the working tree, read `docs/AGENTS.md` and `docs/ENGINEERING.md` in full before implementation, then read the numbered design documents that own the area being changed. These files are the authoritative internal contracts; do not expose or link to them from public repository content.
 
+Code comments cite these internal contracts by number and section, for example `06 §1.1` or `08 §4`, where the number maps to a file under `docs/` such as `06-execution-model.md`. The `docs/` directory is intentionally not published, so these citations will not resolve in a public checkout. Treat them as internal contract anchors: do not delete, rewrite, or "fix" them, and do not add repository links in their place. A comment that cites a section must still state the invariant or rule it relies on, so the code remains understandable without access to `docs/`.
+
 Do not infer a new product or Runtime contract from a UI mock, fixture, example, or incidental implementation detail. If two authoritative inputs conflict, stop and report the conflict before changing behavior.
 
 ## Working method
@@ -40,11 +42,11 @@ Do not add Phase 2 or roadmap concepts to current schemas, enums, APIs, UI, migr
 
 Preserve the repository's established package layout and the dependency direction below.
 
-- `api` parses transport input, calls `service`, and maps results. It does not query repositories or advance executions directly.
+- `api` parses transport input, calls `service`, and maps results. Its only direct non-Service dependencies are `runtime.ValidationError` for DTO mapping and `config/readiness` for health probes. It must not invoke Runtime decisions, query repositories, or advance executions directly.
 - `service` owns use cases, Unit of Work orchestration, and scheduling of post-COMMIT work.
 - `runtime` contains pure execution decisions: compilation, scheduling, aggregation, and Agent semantics. It does not access PostgreSQL, HTTP, Provider SDKs, or process-global queues.
 - `store` persists facts and implements conditional updates. It does not call Providers, publish SSE, or decide the next Runtime step.
-- `work` and `reconciler` call the same `service` use cases. Neither may maintain a second execution path or update business state directly.
+- `work` and `reconciler` call the same `service` use cases. `reconciler` may use `store` only to discover persisted work and perform Pending Callback TTL retention; it must not claim work, mutate Execution business state, write Events, or maintain a second execution path.
 - `registry` owns stable Node Type, Model ID, and Tool Name resolution.
 - `nodes`, `tools`, and `adapters` perform one registered operation. They do not own retry, timeout, callback routing, state transitions, or Event writes.
 - `trace` builds read-only projections. Projection filtering must never mutate or truncate authoritative Execution State.

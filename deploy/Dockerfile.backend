@@ -1,0 +1,22 @@
+# Build context is backend/. One Dockerfile builds every Backend binary: CMD selects the
+# package under cmd/, so the Backend and the Mock Provider cannot drift apart in base
+# image, Go version or build flags.
+ARG GO_VERSION=1.27.1
+
+FROM golang:${GO_VERSION} AS build
+ARG CMD=emberling
+WORKDIR /src
+
+# Dependencies are copied first so that a source-only change reuses the module layer.
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -o /out/service ./cmd/${CMD}
+
+# distroless/static has no shell and no package manager: the runtime image carries the
+# binary and nothing that could read a mounted Secret interactively.
+FROM gcr.io/distroless/static:nonroot
+COPY --from=build /out/service /usr/local/bin/service
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/service"]

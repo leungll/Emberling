@@ -1,0 +1,178 @@
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+
+import { applyEvent } from './applyEvent';
+import { DetailPanel } from './DetailPanel';
+import { EventTimeline } from './EventTimeline';
+import { ObserveHeader } from './ObserveHeader';
+import { RunRail } from './RunRail';
+import { ApiRequestError, createRun, getDefinitionVersion, getRun } from '@/api/client';
+import { subscribeRunEvents } from '@/api/sse';
+import type { JsonObject, RunEvent, RunInputSchema, RunSnapshot } from '@/api/types';
+import { RunInputDialog } from '@/features/run-input/RunInputDialog';
+import { useStudioStore } from '@/stores/studio-store';
+
+function describeError(error: unknown, fallback: string): string {
+  if (error instanceof ApiRequestError) return `${error.code}: ${error.message}`;
+  if (error instanceof Error) return `${fallback}: ${error.message}`;
+  return fallback;
+}
+
+export function ObservePage() {
+  const { runId = '' } = useParams();
+  const navigate = useNavigate();
+
+  const selectedNodeId = useStudioStore((s) => s.selectedNodeId);
+  const selectNode = useStudioStore((s) => s.selectNode);
+  const selectedEventSeq = useStudioStore((s) => s.selectedEventSeq);
+  const selectEvent = useStudioStore((s) => s.selectEvent);
+  const followLive = useStudioStore((s) => s.followLive);
+  const setFollowLive = useStudioStore((s) => s.setFollowLive);
+
+  const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  // Run Again reopens the Run Input Dialog bound to THIS Run's own workflowId and
+  // definitionVersion (never the latest), prefilled with this Run's own input. The
+  // frozen runInputSchema for that version is fetched lazily, only when the dialog opens.
+  const [runAgainOpen, setRunAgainOpen] = useState(false);
+  const [runAgainSchema, setRunAgainSchema] = useState<RunInputSchema | undefined>(undefined);
+  const [runAgainSubmitting, setRunAgainSubmitting] = useState(false);
+  const [runAgainError, setRunAgainError] = useState<string | null>(null);
+
+  // Read the Snapshot first, then stream from its lastSeq. Events committed between the
+  // two are replayed by the first `seq > cursor` query on the server.
+  useEffect(() => {
+    const controller = new AbortController();
+    let subscription: { close: () => void } | null = null;
+
+    getRun(runId, controller.signal)
+      .then((loaded) => {
+        if (controller.signal.aborted) return;
+        setSnapshot(loaded);
+        setError(null);
+
+        subscription = subscribeRunEvents(runId, {
+          afterSeq: loaded.lastSeq,
+          onEvent: (event) => {
+            setEvents((prev) => [...prev, event]);
+            // The Backend owns every status here; applyEvent only copies what the Event
+            // states, so a gap degrades to a stale view instead of a wrong one.
+            setSnapshot((prev) => (prev ? applyEvent(prev, event) : prev));
+          },
+        });
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(
+          error instanceof ApiRequestError
+            ? `${error.code}: ${error.message}`
+            : 'Could not load run',
+        );
+      });
+
+    return () => {
+      controller.abort();
+      subscription?.close();
+    };
+  }, [runId]);
+
+  const onSelectEvent = useCallback(
+    (event: RunEvent) => {
+      selectEvent(event.seq);
+      if (event.nodeRunId) selectNode(event.nodeRunId);
+    },
+    [selectEvent, selectNode],
+  );
+
+  const onRunAgain = useCallback(() => {
+    if (!snapshot) return;
+    setRunAgainError(null);
+    setRunAgainOpen(true);
+    setRunAgainSchema(undefined);
+    // The version is frozen and immutable, so this fetch is safe to key off it alone.
+    getDefinitionVersion(snapshot.run.workflowId, snapshot.run.definitionVersion)
+      .then((definition) => setRunAgainSchema(definition.runInputSchema))
+      .catch((error: unknown) => {
+        setRunAgainError(describeError(error, 'Could not load the run input schema'));
+      });
+  }, [snapshot]);
+
+  const onRunAgainSubmit = useCallback(
+    (input: JsonObject) => {
+      if (!snapshot) return;
+      setRunAgainSubmitting(true);
+      setRunAgainError(null);
+      createRun({
+        workflowId: snapshot.run.workflowId,
+        definitionVersion: snapshot.run.definitionVersion,
+        input,
+      })
+        .then((run) => {
+          setRunAgainOpen(false);
+          navigate(`/runs/${run.id}`);
+        })
+        .catch((error: unknown) => {
+          setRunAgainError(describeError(error, 'Could not create run'));
+        })
+        .finally(() => setRunAgainSubmitting(false));
+    },
+    [snapshot, navigate],
+  );
+
+  if (error) {
+    return (
+      <main className="dark flex h-screen items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
+        <p role="alert" className="text-sm text-red-500">
+          {error}
+        </p>
+      </main>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <main className="dark flex h-screen items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
+        <p className="text-sm text-[var(--muted-foreground)]">Loading run…</p>
+      </main>
+    );
+  }
+
+  const selectedNodeRun = snapshot.nodeRuns.find((n) => n.id === selectedNodeId) ?? null;
+  const selectedEvent = events.find((e) => e.seq === selectedEventSeq) ?? null;
+
+  return (
+    <div className="dark flex h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
+      <ObserveHeader run={snapshot.run} onRunAgain={onRunAgain} />
+      <div className="flex min-h-0 flex-1">
+        <RunRail snapshot={snapshot} selectedNodeRunId={selectedNodeId} onSelect={selectNode} />
+        <EventTimeline
+          events={events}
+          selectedSeq={selectedEventSeq}
+          followLive={followLive}
+          onSelect={onSelectEvent}
+          onResumeLive={() => setFollowLive(true)}
+        />
+        <DetailPanel
+          snapshot={snapshot}
+          selectedNodeRun={selectedNodeRun}
+          selectedEvent={selectedEvent}
+          events={events}
+        />
+      </div>
+
+      <RunInputDialog
+        open={runAgainOpen}
+        onClose={() => setRunAgainOpen(false)}
+        workflowId={snapshot.run.workflowId}
+        definitionVersion={snapshot.run.definitionVersion}
+        runInputSchema={runAgainSchema}
+        initialInput={snapshot.run.input}
+        submitting={runAgainSubmitting}
+        errorMessage={runAgainError}
+        onSubmit={onRunAgainSubmit}
+      />
+    </div>
+  );
+}

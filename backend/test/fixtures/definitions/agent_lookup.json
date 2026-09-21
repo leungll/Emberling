@@ -1,0 +1,38 @@
+{
+  "workflowId": "wf_agent_lookup",
+  "name": "Agent Lookup",
+  "description": "An Agent that may call the lookup Tool before producing a final text answer",
+  "nodes": [
+    {
+      "id": "node_input",
+      "type": "text_input",
+      "name": "Question",
+      "position": {"x": 0, "y": 0},
+      "config": {"inputKey": "question", "label": "Question", "required": true}
+    },
+    {
+      "id": "node_agent",
+      "type": "agent",
+      "name": "Answering Agent",
+      "position": {"x": 200, "y": 0},
+      "config": {
+        "instructions": "Answer the question. Call the lookup tool when you need a fact you do not already know.",
+        "modelId": "text-model-v1",
+        "allowedTools": ["lookup"],
+        "maxTurns": 4,
+        "timeoutMs": 120000
+      }
+    },
+    {
+      "id": "node_output",
+      "type": "text_output",
+      "name": "Answer",
+      "position": {"x": 400, "y": 0},
+      "config": {}
+    }
+  ],
+  "edges": [
+    {"id": "edge_input_agent", "source": "node_input", "sourceHandle": "text", "target": "node_agent", "targetHandle": "input"},
+    {"id": "edge_agent_output", "source": "node_agent", "sourceHandle": "text", "target": "node_output", "targetHandle": "text"}
+  ]
+}
