@@ -135,7 +135,10 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 
 	clock := opts.Clock
 	if clock == nil {
-		clock = newExecClock(fixtureTime)
+		// See execDeadlineClockStart (execution_test.go): this default clock
+		// feeds real context.WithDeadline calls for Model/Tool calls, so it
+		// must start at wall-clock time, not the fixed fixtureTime constant.
+		clock = newExecClock(execDeadlineClockStart())
 	}
 	compiler := runtime.NewCompiler(nodeRegistry, clock)
 

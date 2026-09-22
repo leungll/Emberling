@@ -51,6 +51,23 @@ func newExecClock(start time.Time) *execClock {
 	return &execClock{now: start}
 }
 
+// execDeadlineClockStart seeds an execClock that a harness feeds into
+// service.Deps.Clock, for the harnesses whose ExecutionService derives a real
+// context.WithDeadline from Clock.Now() + a policy timeout (see
+// internal/service/execution.go, agent_action.go, agent_turn.go) to bound an
+// actual Model/Tool/Provider call. context.WithDeadline is always measured
+// against real time, so a clock seeded from the fixed fixtureTime constant is
+// a time bomb: once real "now" passes fixtureTime, every deadline derived
+// from it is born already expired and the real call fails before it starts.
+// Starting from wall-clock time instead keeps derived deadlines genuinely in
+// the future no matter which day the suite runs. Harnesses that only persist
+// or assert fixed fixtureTime values (no real deadline is computed from
+// them) keep using fixtureTime directly, per CLAUDE.md's testing standard to
+// inject clocks rather than depend on when a test happens to run.
+func execDeadlineClockStart() time.Time {
+	return time.Now().UTC().Truncate(time.Second)
+}
+
 func (c *execClock) Now() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -145,7 +162,7 @@ func newExecHarness(t *testing.T) *execHarness {
 		}
 	}
 
-	clock := newExecClock(fixtureTime)
+	clock := newExecClock(execDeadlineClockStart())
 	compiler := runtime.NewCompiler(nodeRegistry, clock)
 	ids := newExecForcedIDs()
 
