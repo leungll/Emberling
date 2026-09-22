@@ -297,7 +297,10 @@ func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *R
 // resumePending replays one stored early callback through the same idempotent ResumeNode
 // use case a live callback or Provider Poll enters (invariant #5). ListConsumableForWaiting
 // only returns rows whose Binding already routes to a still-DISPATCHED Attempt of a still
-// WAITING_CALLBACK NodeRun, so service.ErrNoCallbackBinding is not an expected outcome here
+// WAITING_CALLBACK NodeRun -- a Node Attempt, or a Tool Attempt of a WAITING_CALLBACK Agent
+// Action, which ResumeNode routes by the Binding's target type (06 §2.1: the Reconciler
+// only rediscovers work and enters the existing use case; it has no Tool-specific path) --
+// so service.ErrNoCallbackBinding is not an expected outcome here
 // -- it is treated as an error rather than silently dropped. A payload the registered
 // Executor cannot interpret leaves the NodeRun untouched (06 §1.6): it is logged at warn,
 // without the payload, hash or token, and left for the next tick or for retention to

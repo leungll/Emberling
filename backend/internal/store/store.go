@@ -275,7 +275,9 @@ type PendingCallbackRepository interface {
 	ConsumeOnce(ctx context.Context, externalTaskID string, now time.Time) (domain.PendingCallback, bool, error)
 
 	// ListConsumableForWaiting returns unconsumed, unexpired records whose binding now
-	// resolves to a DISPATCHED Node Attempt of a WAITING_CALLBACK NodeRun. It is how the
+	// resolves to a DISPATCHED Node Attempt of a WAITING_CALLBACK NodeRun, or to a
+	// DISPATCHED Tool Attempt of a WAITING_CALLBACK Agent Action whose Agent NodeRun is
+	// WAITING_CALLBACK. It is how the
 	// Reconciler rediscovers an early callback whose consumption never ran, because the
 	// in-process post-commit check is a latency optimisation and not the recovery source
 	// (invariant #6). The limit bounds the scan batch.
@@ -290,7 +292,8 @@ type PendingCallbackRepository interface {
 // PendingForWaiting is one rediscovered early callback together with the route it
 // resolves to. The identifiers are carried alongside the binding because the caller needs
 // the Run to lock and the NodeRun to advance, and reading them here avoids a second
-// round-trip per row.
+// round-trip per row. For a TOOL_ATTEMPT Binding, NodeRunID is the Agent NodeRun that owns
+// the waiting Action and AttemptID is the Tool Attempt.
 type PendingForWaiting struct {
 	Pending   domain.PendingCallback
 	Binding   domain.CallbackBinding

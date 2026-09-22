@@ -79,6 +79,37 @@ func startAgentAsyncCallbackRun(t *testing.T) agentAsyncCallbackRun {
 	// Registered after the Backend, so it runs before the Pool is stopped: a held worker
 	// would otherwise keep Stop waiting.
 	t.Cleanup(workers.open)
+	runID := createAgentAsyncRun(t, env)
+
+	agentNodeRun := env.waitForNodeRunStatus(t, runID, "node_agent", "WAITING_CALLBACK", agentTraceWait)
+	agentNodeRunID, _ := agentNodeRun["id"].(string)
+
+	dispatches := fixture.tasks.dispatches()
+	if len(dispatches) != 1 {
+		t.Fatalf("provider received %d dispatches, want 1", len(dispatches))
+	}
+	var sent struct {
+		CallbackToken string `json:"callbackToken"`
+	}
+	if err := json.Unmarshal(dispatches[0], &sent); err != nil || sent.CallbackToken == "" {
+		t.Fatalf("dispatch carried no callback token: %v", err)
+	}
+	attempt := agentAsyncOnlyToolAttempt(t, env, runID, agentNodeRunID)
+	if attempt.CallbackBinding == nil || attempt.CallbackBinding.ExternalTaskID == "" {
+		t.Fatalf("dispatched tool attempt has no callback binding: %+v", attempt)
+	}
+	return agentAsyncCallbackRun{
+		fixture: fixture, env: env, runID: runID, agentNodeRunID: agentNodeRunID,
+		token: sent.CallbackToken, externalTaskID: attempt.CallbackBinding.ExternalTaskID,
+		workers: workers,
+	}
+}
+
+// createAgentAsyncRun scripts env's model to decide one remote_lookup TOOL_CALL and then
+// answer FINAL, saves the Agent fixture with remote_lookup as its only allowed Tool, and
+// starts a Run against it.
+func createAgentAsyncRun(t *testing.T, env *testEnv) string {
+	t.Helper()
 	var calls atomic.Int32
 	env.provider.Script = func(registry.ModelRequest) *mockmodel.Scenario {
 		if calls.Add(1) == 1 {
@@ -107,30 +138,7 @@ func startAgentAsyncCallbackRun(t *testing.T) agentAsyncCallbackRun {
 	created := decodeBody[map[string]any](t, raw)
 	workflowID, _ := created["workflowId"].(string)
 	version, _ := created["version"].(float64)
-	runID := createAgentRun(t, env, workflowID, int(version), "what is the answer?")
-
-	agentNodeRun := env.waitForNodeRunStatus(t, runID, "node_agent", "WAITING_CALLBACK", agentTraceWait)
-	agentNodeRunID, _ := agentNodeRun["id"].(string)
-
-	dispatches := fixture.tasks.dispatches()
-	if len(dispatches) != 1 {
-		t.Fatalf("provider received %d dispatches, want 1", len(dispatches))
-	}
-	var sent struct {
-		CallbackToken string `json:"callbackToken"`
-	}
-	if err := json.Unmarshal(dispatches[0], &sent); err != nil || sent.CallbackToken == "" {
-		t.Fatalf("dispatch carried no callback token: %v", err)
-	}
-	attempt := agentAsyncOnlyToolAttempt(t, env, runID, agentNodeRunID)
-	if attempt.CallbackBinding == nil || attempt.CallbackBinding.ExternalTaskID == "" {
-		t.Fatalf("dispatched tool attempt has no callback binding: %+v", attempt)
-	}
-	return agentAsyncCallbackRun{
-		fixture: fixture, env: env, runID: runID, agentNodeRunID: agentNodeRunID,
-		token: sent.CallbackToken, externalTaskID: attempt.CallbackBinding.ExternalTaskID,
-		workers: workers,
-	}
+	return createAgentRun(t, env, workflowID, int(version), "what is the answer?")
 }
 
 type agentAsyncTraceAttempt struct {

@@ -120,6 +120,13 @@ func newAgentAsyncHarnessWithNotifier(t *testing.T, workflowID string, tool *age
 // WorkEnqueuer taken from opts; the Tools and the Clock are always the async ones.
 func newAgentAsyncHarnessWithOptions(t *testing.T, workflowID string, tool *agentAsyncTool, opts agentHarnessOptions) (*agentHarness, domain.Run, service.AdvanceOutcome) {
 	t.Helper()
+	return newAgentAsyncHarnessMaxTurns(t, workflowID, tool, opts, agentMaxTurns)
+}
+
+// newAgentAsyncHarnessMaxTurns is newAgentAsyncHarnessWithOptions with the Agent's frozen
+// maxTurns bound chosen by the caller.
+func newAgentAsyncHarnessMaxTurns(t *testing.T, workflowID string, tool *agentAsyncTool, opts agentHarnessOptions, maxTurns int) (*agentHarness, domain.Run, service.AdvanceOutcome) {
+	t.Helper()
 	registration := remotelookup.Registration("http://mock-provider.invalid", nil)
 	registration.Executor = tool
 	// The Agent deadline also bounds the real Tool call's context, so the fake clock starts
@@ -135,7 +142,7 @@ func newAgentAsyncHarnessWithOptions(t *testing.T, workflowID string, tool *agen
 		ToolName: remotelookup.ToolName, ToolArguments: json.RawMessage(agentToolArguments),
 	})
 
-	def := agentLoopDefinition(workflowID)
+	def := agentLoopDefinitionMaxTurns(workflowID, maxTurns)
 	for i, node := range def.Nodes {
 		if node.ID == "node_agent" {
 			def.Nodes[i].Config = json.RawMessage(strings.Replace(string(node.Config),

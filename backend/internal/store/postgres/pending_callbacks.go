@@ -94,33 +94,70 @@ func (r *pendingCallbackRepository) ConsumeOnce(ctx context.Context, externalTas
 }
 
 // ListConsumableForWaiting joins a still-claimable record to the route its binding now
-// resolves to. The join conditions are the ones that make consumption legitimate: the
-// binding must exist and target a Node Attempt, that Attempt must still be DISPATCHED,
-// and its NodeRun must still be WAITING_CALLBACK. A record without a binding stays behind
-// for audit only; it never advances an Execution (06 §4).
+// resolves to. The join conditions are the ones that make consumption legitimate, one
+// branch per Binding target type:
+//
+//   - NODE_ATTEMPT: the Node Attempt is still DISPATCHED and its NodeRun still
+//     WAITING_CALLBACK.
+//   - TOOL_ATTEMPT: the Tool Attempt is still DISPATCHED, its Agent Action still
+//     WAITING_CALLBACK, and the Agent NodeRun that owns the Action still WAITING_CALLBACK.
+//     NodeRunID is that Agent NodeRun and AttemptID the Tool Attempt.
+//
+// Both branches return the same row shape, so the Reconciler replays either through the
+// one ResumeNode use case, which routes on the Binding's target type (06 §2.1, invariant
+// #5). A record without a binding stays behind for audit only; it never advances an
+// Execution (06 §4).
 //
 // Ordering by received_at keeps the oldest rediscovered callback first; external_task_id
-// breaks ties so a bounded batch is stable across scans.
+// breaks ties so a bounded batch is stable across scans. The single outer LIMIT bounds the
+// batch across both target types.
 func (r *pendingCallbackRepository) ListConsumableForWaiting(ctx context.Context, now time.Time, limit int) ([]store.PendingForWaiting, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("store/postgres pending_callbacks.ListConsumableForWaiting: limit must be positive, got %d", limit)
 	}
 
 	const query = `
-		SELECT p.external_task_id, p.payload, p.payload_hash, p.callback_token_hash,
-		       p.received_at, p.expires_at, p.consumed_at, p.duplicate_count,
-		       b.id, b.provider_id, b.external_task_id, b.target_type, b.target_id, b.created_at,
-		       nr.run_id, nr.id, a.id
-		  FROM pending_callbacks p
-		  JOIN callback_bindings b ON b.external_task_id = p.external_task_id
-		  JOIN node_attempts a ON a.id = b.target_id
-		  JOIN node_runs nr ON nr.id = a.node_run_id
-		 WHERE p.consumed_at IS NULL
-		   AND p.expires_at > $1
-		   AND b.target_type = 'NODE_ATTEMPT'
-		   AND a.status = 'DISPATCHED'
-		   AND nr.status = 'WAITING_CALLBACK'
-		 ORDER BY p.received_at ASC, p.external_task_id ASC
+		SELECT c.external_task_id, c.payload, c.payload_hash, c.callback_token_hash,
+		       c.received_at, c.expires_at, c.consumed_at, c.duplicate_count,
+		       c.binding_id, c.provider_id, c.binding_external_task_id, c.target_type,
+		       c.target_id, c.binding_created_at, c.run_id, c.node_run_id, c.attempt_id
+		  FROM (
+		        SELECT p.external_task_id, p.payload, p.payload_hash, p.callback_token_hash,
+		               p.received_at, p.expires_at, p.consumed_at, p.duplicate_count,
+		               b.id AS binding_id, b.provider_id,
+		               b.external_task_id AS binding_external_task_id, b.target_type,
+		               b.target_id, b.created_at AS binding_created_at,
+		               nr.run_id, nr.id AS node_run_id, a.id AS attempt_id
+		          FROM pending_callbacks p
+		          JOIN callback_bindings b ON b.external_task_id = p.external_task_id
+		          JOIN node_attempts a ON a.id = b.target_id
+		          JOIN node_runs nr ON nr.id = a.node_run_id
+		         WHERE p.consumed_at IS NULL
+		           AND p.expires_at > $1
+		           AND b.target_type = 'NODE_ATTEMPT'
+		           AND a.status = 'DISPATCHED'
+		           AND nr.status = 'WAITING_CALLBACK'
+		        UNION ALL
+		        SELECT p.external_task_id, p.payload, p.payload_hash, p.callback_token_hash,
+		               p.received_at, p.expires_at, p.consumed_at, p.duplicate_count,
+		               b.id, b.provider_id, b.external_task_id, b.target_type,
+		               b.target_id, b.created_at,
+		               nr.run_id, nr.id, ta.id
+		          FROM pending_callbacks p
+		          JOIN callback_bindings b ON b.external_task_id = p.external_task_id
+		          JOIN tool_attempts ta ON ta.id = b.target_id
+		          JOIN agent_actions aa ON aa.id = ta.action_id
+		          JOIN agent_turns t ON t.id = aa.turn_id
+		          JOIN agent_runs ar ON ar.id = t.agent_run_id
+		          JOIN node_runs nr ON nr.id = ar.node_run_id
+		         WHERE p.consumed_at IS NULL
+		           AND p.expires_at > $1
+		           AND b.target_type = 'TOOL_ATTEMPT'
+		           AND ta.status = 'DISPATCHED'
+		           AND aa.status = 'WAITING_CALLBACK'
+		           AND nr.status = 'WAITING_CALLBACK'
+		       ) c
+		 ORDER BY c.received_at ASC, c.external_task_id ASC
 		 LIMIT $2`
 
 	rows, err := r.conn.Query(ctx, query, now, limit)
