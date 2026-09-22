@@ -38,6 +38,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 	"github.com/leungll/Emberling/backend/internal/store/postgres"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"
+	"github.com/leungll/Emberling/backend/internal/tools/remotelookup"
 	"github.com/leungll/Emberling/backend/internal/work"
 )
 
@@ -181,6 +182,9 @@ func run(logger *slog.Logger) error {
 				}
 			}
 			if err := toolRegistry.Register(lookup.Registration()); err != nil {
+				return fmt.Errorf("register tool: %w", err)
+			}
+			if err := toolRegistry.Register(remotelookup.Registration(cfg.ModelProvider.BaseURL, taskClient)); err != nil {
 				return fmt.Errorf("register tool: %w", err)
 			}
 			return nil

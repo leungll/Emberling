@@ -152,6 +152,13 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		Clock:    clock,
 		IDs:      ids,
 		Notifier: opts.Notifier,
+		// An ASYNC Tool's claim transaction issues an Attempt-scoped callback credential,
+		// which needs a signing secret and a callback origin.
+		Callback: service.CallbackConfig{
+			BaseURL:       asyncBaseURL,
+			SigningSecret: []byte(asyncSigningSecret),
+			PendingTTL:    time.Hour,
+		},
 	})
 
 	return &agentHarness{

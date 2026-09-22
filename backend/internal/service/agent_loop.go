@@ -304,7 +304,14 @@ func (s *ExecutionService) failAgentNodeRun(
 	execError domain.ExecutionError,
 	now time.Time,
 ) error {
-	if err := tx.NodeRuns().MarkFailed(ctx, nr.ID, domain.NodeRunRunning, now, execError); err != nil {
+	// An Agent NodeRun waiting on an ASYNC Tool's callback is still inside its Agent Loop,
+	// so the Agent timeout fails it from WAITING_CALLBACK (06 §1.7); every other Agent
+	// failure fails it from RUNNING. The conditional update still decides the winner.
+	from := domain.NodeRunRunning
+	if nr.Status == domain.NodeRunWaitingCallback {
+		from = domain.NodeRunWaitingCallback
+	}
+	if err := tx.NodeRuns().MarkFailed(ctx, nr.ID, from, now, execError); err != nil {
 		return err
 	}
 	if err := s.appendEvent(ctx, tx, lock, run.ID, &nr.ID, domain.EventNodeFailed, now, nodeFailedPayload{

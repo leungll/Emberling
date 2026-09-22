@@ -94,6 +94,28 @@ func (r *agentActionRepository) ListReady(ctx context.Context, limit int) ([]dom
 	return actions, nil
 }
 
+// MarkWaiting conditionally moves a RUNNING Action to WAITING_CALLBACK once its ASYNC Tool
+// has dispatched. Requiring RUNNING ties the move to the holder of the execution right.
+func (r *agentActionRepository) MarkWaiting(ctx context.Context, actionID string, now time.Time) error {
+	const update = `
+		UPDATE agent_actions
+		   SET status = 'WAITING_CALLBACK', waiting_at = $2
+		 WHERE id = $1 AND status = 'RUNNING'`
+
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.MarkWaiting", update, actionID, now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_actions.MarkWaiting: action=%s RUNNING -> WAITING_CALLBACK: %w",
+			actionID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_actions.MarkWaiting", actionID, affected)
+	}
+	return nil
+}
+
 // MarkSucceeded conditionally moves a RUNNING Action to SUCCEEDED. Requiring RUNNING is
 // what ties completion to the caller that actually holds the execution right.
 func (r *agentActionRepository) MarkSucceeded(ctx context.Context, actionID string, now time.Time) error {

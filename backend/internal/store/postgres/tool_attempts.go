@@ -73,6 +73,28 @@ func (r *toolAttemptRepository) ListByActionID(ctx context.Context, actionID str
 	return attempts, nil
 }
 
+// MarkDispatched conditionally moves a STARTED Attempt to DISPATCHED. Requiring STARTED
+// makes the dispatch record lose to an Agent timeout that already closed the Attempt.
+func (r *toolAttemptRepository) MarkDispatched(ctx context.Context, attemptID string, now time.Time) error {
+	const update = `
+		UPDATE tool_attempts
+		   SET status = 'DISPATCHED', dispatched_at = $2
+		 WHERE id = $1 AND status = 'STARTED'`
+
+	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkDispatched", update, attemptID, now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres tool_attempts.MarkDispatched: tool_attempt=%s STARTED -> DISPATCHED: %w",
+			attemptID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("tool_attempts.MarkDispatched", attemptID, affected)
+	}
+	return nil
+}
+
 // MarkSucceeded conditionally moves a STARTED Attempt to SUCCEEDED and writes its result.
 // A duplicated Tool result transaction finds the row no longer STARTED and loses here
 // instead of overwriting the committed result.

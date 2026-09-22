@@ -48,6 +48,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 	"github.com/leungll/Emberling/backend/internal/store/postgres"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"
+	"github.com/leungll/Emberling/backend/internal/tools/remotelookup"
 	"github.com/leungll/Emberling/backend/internal/work"
 	"github.com/leungll/Emberling/backend/test/testdb"
 )
@@ -258,6 +259,9 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		if err := toolRegistry.Register(lookup.Registration()); err != nil {
 			t.Fatalf("register tool %s: %v", lookup.ToolName, err)
 		}
+	}
+	if err := toolRegistry.Register(remotelookup.Registration(mockTaskBaseURL, opts.TaskClient)); err != nil {
+		t.Fatalf("register tool %s: %v", remotelookup.ToolName, err)
 	}
 
 	compiler := runtime.NewCompiler(nodeRegistry, clock)

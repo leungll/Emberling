@@ -73,9 +73,11 @@ func (s *ExecutionService) TimeoutAgentRun(ctx context.Context, agentRunID strin
 		if agentRun.Termination != nil || now.Before(agentRun.Deadline) {
 			return nil
 		}
-		if nodeRun.Status != domain.NodeRunRunning {
-			// An Agent NodeRun that is not RUNNING has no Agent Loop left to stop, and
-			// failing it would contradict the status its own transaction committed.
+		if nodeRun.Status != domain.NodeRunRunning && nodeRun.Status != domain.NodeRunWaitingCallback {
+			// An Agent NodeRun that is neither RUNNING nor WAITING_CALLBACK (on an ASYNC
+			// Tool's callback, 05 §1.8: the deadline covers that wait too) has no Agent
+			// Loop left to stop, and failing it would contradict the status its own
+			// transaction committed.
 			return nil
 		}
 

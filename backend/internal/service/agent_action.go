@@ -104,6 +104,9 @@ type agentToolCall struct {
 	executor     registry.ToolExecutor
 	outputSchema json.RawMessage
 	action       registry.ToolAction
+	// async is the registered ExecutionKind read under the claim, never inferred from what
+	// the Executor returns (CLAUDE.md "Extensions and external calls").
+	async bool
 	// deadline is the Agent Run's single frozen deadline, which covers every Turn and
 	// every Tool call (docs/05-data-model.md §1.8).
 	deadline time.Time
@@ -174,6 +177,10 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 		})
 	}
 
+	if call.async {
+		return s.recordAgentToolDispatch(ctx, *call, result)
+	}
+
 	output, outputErr := agentToolOutput(result, call.toolName)
 	if outputErr == nil {
 		outputErr = runtime.ValidateToolResult(output, call.outputSchema)
@@ -206,6 +213,171 @@ func agentToolOutput(result registry.ToolExecutionResult, toolName string) (json
 	default:
 		return nil, fmt.Errorf("tool %q reported unknown result kind %q", toolName, result.Kind)
 	}
+}
+
+// agentActionWaitingPayload is AGENT_ACTION_WAITING (docs/05-data-model.md §2.3: turnId,
+// actionId, toolAttemptId, callbackBindingId). It names the Binding, never the external
+// task's credential.
+type agentActionWaitingPayload struct {
+	AgentRunID        string `json:"agentRunId"`
+	TurnID            string `json:"turnId"`
+	ActionID          string `json:"actionId"`
+	ToolAttemptID     string `json:"toolAttemptId"`
+	CallbackBindingID string `json:"callbackBindingId"`
+}
+
+// recordAgentToolDispatch is transaction 3 for an ASYNC Tool (06 §1.7). A dispatch that
+// names its external task commits, in one transaction under the Run aggregate lock, the
+// Tool Attempt's DISPATCHED status, the Callback Binding that routes the callback to that
+// Attempt, the Action's and the Agent NodeRun's WAITING_CALLBACK status, the Run's
+// re-aggregation and AGENT_ACTION_WAITING. Any other result fails the Action through the
+// shared Tool failure transaction and creates no Binding.
+func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call agentToolCall, result registry.ToolExecutionResult) error {
+	switch {
+	case result.Kind == registry.ToolResultCompleted:
+		// The Tool is registered ASYNC but answered synchronously. The Runtime does not
+		// repair a contradiction between registered metadata and behaviour: the result is
+		// not consumed and the Action fails with a code of its own, so the registration
+		// defect stays distinguishable in Trace from a Tool that failed.
+		return s.failAgentToolCall(ctx, call, domain.ExecutionError{
+			Code:    "TOOL_EXECUTION_KIND_MISMATCH",
+			Message: fmt.Sprintf("tool %q is registered as asynchronous but returned a completed result", call.toolName),
+		})
+	case result.Kind != registry.ToolResultDispatched:
+		return s.failAgentToolCall(ctx, call, domain.ExecutionError{
+			Code:    "TOOL_ERROR",
+			Message: fmt.Sprintf("tool %q reported unknown result kind %q", call.toolName, result.Kind),
+		})
+	case result.ExternalTask == nil || result.ExternalTask.ProviderID == "" || result.ExternalTask.ExternalTaskID == "":
+		// A dispatch no callback can be routed to must fail explicitly: waiting on it
+		// would leave the Action to the deadline and present a lost task as recoverable
+		// work (docs/09-testing-and-acceptance.md §3.7).
+		return s.failAgentToolCall(ctx, call, domain.ExecutionError{
+			Code:    "DISPATCH_WITHOUT_EXTERNAL_TASK",
+			Message: fmt.Sprintf("tool %q dispatched without a provider and external task id", call.toolName),
+		})
+	}
+	task := *result.ExternalTask
+
+	var commit agentCommit
+	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		run, err := tx.Runs().Get(ctx, call.runID)
+		if err != nil {
+			return err
+		}
+		def, err := tx.Definitions().GetVersion(ctx, run.WorkflowID, run.DefinitionVersion)
+		if err != nil {
+			return err
+		}
+		plan, err := s.compile(ctx, def)
+		if err != nil {
+			return fmt.Errorf("execution: recompile definition %s v%d for agent tool dispatch: %w", run.WorkflowID, run.DefinitionVersion, err)
+		}
+
+		lock, err := tx.Runs().LockForUpdate(ctx, call.runID)
+		if err != nil {
+			return err
+		}
+		now := s.deps.Clock.Now()
+
+		// The conditional updates decide the single winner (invariant #7): an Attempt,
+		// Action or NodeRun no longer in its pre-dispatch status means the Agent timeout
+		// already closed it while the Tool was dispatching. This caller then writes
+		// nothing; the external task is left to the Provider, since Emberling promises no
+		// cancellation.
+		if err := tx.ToolAttempts().MarkDispatched(ctx, call.attemptID, now); err != nil {
+			if errors.Is(err, domain.ErrStaleClaim) {
+				return errAgentTurnSuperseded
+			}
+			return err
+		}
+		if err := tx.AgentActions().MarkWaiting(ctx, call.actionID, now); err != nil {
+			if errors.Is(err, domain.ErrStaleClaim) {
+				return errAgentTurnSuperseded
+			}
+			return err
+		}
+		if err := tx.NodeRuns().MarkWaiting(ctx, call.nodeRunID, now); err != nil {
+			if errors.Is(err, domain.ErrStaleClaim) {
+				return errAgentTurnSuperseded
+			}
+			return err
+		}
+
+		// UNIQUE (provider_id, external_task_id) makes the database, not this process,
+		// the authority that one external task routes to exactly one callback target.
+		bindingID := s.deps.IDs.NewID(domain.IDPrefixCallbackBinding)
+		if err := tx.CallbackBindings().Create(ctx, domain.CallbackBinding{
+			ID:             bindingID,
+			ProviderID:     task.ProviderID,
+			ExternalTaskID: task.ExternalTaskID,
+			TargetType:     domain.CallbackTargetToolAttempt,
+			TargetID:       call.attemptID,
+			CreatedAt:      now,
+		}); err != nil {
+			if errors.Is(err, domain.ErrConflict) {
+				return errDispatchBindingConflict
+			}
+			return err
+		}
+
+		if err := s.appendEvent(ctx, tx, lock, call.runID, &call.nodeRunID, domain.EventAgentActionWaiting, now, agentActionWaitingPayload{
+			AgentRunID:        call.agentRunID,
+			TurnID:            call.turnID,
+			ActionID:          call.actionID,
+			ToolAttemptID:     call.attemptID,
+			CallbackBindingID: bindingID,
+		}); err != nil {
+			return err
+		}
+
+		// Run status is derived from NodeRun state (invariant #2): with the Agent NodeRun
+		// waiting, the Run becomes PAUSED once nothing else is running.
+		allNodeRuns, err := tx.NodeRuns().ListByRun(ctx, call.runID)
+		if err != nil {
+			return err
+		}
+		nodeStatuses := make(map[string]domain.NodeRunStatus, len(allNodeRuns))
+		for _, nr := range allNodeRuns {
+			nodeStatuses[nr.NodeID] = nr.Status
+		}
+		newStatus := runtime.AggregateRunStatus(runtime.RunAggregateInput{
+			NodeStatuses:   nodeStatuses,
+			AllNodeIDs:     plan.Order,
+			OutputNodeID:   plan.OutputNodeID,
+			OutputProduced: len(run.Output) > 0,
+		})
+		if ev, changed := runtime.NextRunTransitionEvent(lock.Status(), newStatus); changed {
+			if err := s.appendEvent(ctx, tx, lock, call.runID, nil, ev.Type, now, runTransitionPayload{From: lock.Status(), To: newStatus}); err != nil {
+				return err
+			}
+		}
+		if err := tx.Runs().UpdateAggregate(ctx, lock, newStatus, now); err != nil {
+			return err
+		}
+		commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq()}
+		return nil
+	})
+	switch {
+	case errors.Is(err, errAgentTurnSuperseded):
+		return nil
+	case errors.Is(err, errDispatchBindingConflict):
+		// The external task is already bound to another target, so this dispatch has no
+		// route home and the transaction above rolled back with the Attempt still STARTED.
+		// Re-dispatching would hit the same conflict, so the Action fails explicitly.
+		return s.failAgentToolCall(ctx, call, domain.ExecutionError{
+			Code:    "CALLBACK_BINDING_CONFLICT",
+			Message: fmt.Sprintf("external task id %q is already bound to another callback target", task.ExternalTaskID),
+		})
+	case err != nil:
+		return err
+	}
+	s.wake(commit)
+
+	// A callback that reached the endpoint before this Binding committed is left as a
+	// Pending Callback here; routing it to this Tool Attempt belongs to the Tool resume use
+	// case (M4 slice 4.2), and until then the Agent deadline bounds the wait.
+	return nil
 }
 
 // claimAgentAction is transaction 1. It returns nil without error when this caller may not
@@ -314,14 +486,40 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		// exists so a Tool call carries the same audit and callback target model as a Node
 		// Attempt (docs/05-data-model.md §2). A synchronous call saves no callback token.
 		attemptID := s.deps.IDs.NewID(domain.IDPrefixToolAttempt)
+
+		// An ASYNC Tool gets an Attempt-scoped callback credential issued here, before the
+		// call, so its hash is committed before any Provider can deliver a callback
+		// (06 §1.6: the credential is persisted in the claim transaction). Only the hash
+		// is stored; the plaintext token reaches the Executor through CallbackContext and
+		// nowhere else. As on the Node path, the credential outlives the Agent deadline by
+		// the Pending Callback TTL, so a callback racing the timeout transaction competes
+		// through the conditional update instead of being refused on its credential.
+		async := reg.Metadata.ExecutionKind == domain.ToolExecutionAsync
+		var tokenHash *string
+		var callbackCtx *registry.CallbackContext
+		if async {
+			var expiresAt time.Time
+			if !agentRun.Deadline.IsZero() {
+				expiresAt = agentRun.Deadline.Add(s.deps.Callback.PendingTTL)
+			}
+			token, err := issueCallbackToken(s.deps.Callback.SigningSecret, attemptID, expiresAt)
+			if err != nil {
+				return fmt.Errorf("execution: issue callback credential for tool %q of action %s: %w", toolName, action.ID, err)
+			}
+			hash := hashCallbackToken(token)
+			tokenHash = &hash
+			callbackCtx = &registry.CallbackContext{URL: s.deps.Callback.BaseURL + CallbackPath, Token: token}
+		}
+
 		if err := tx.ToolAttempts().Create(ctx, domain.ToolAttempt{
-			ID:        attemptID,
-			ActionID:  action.ID,
-			AttemptNo: 1,
-			ToolName:  toolName,
-			Status:    domain.ToolAttemptStarted,
-			Input:     decision.Arguments,
-			StartedAt: now,
+			ID:                attemptID,
+			ActionID:          action.ID,
+			AttemptNo:         1,
+			ToolName:          toolName,
+			Status:            domain.ToolAttemptStarted,
+			Input:             decision.Arguments,
+			CallbackTokenHash: tokenHash,
+			StartedAt:         now,
 		}); err != nil {
 			return err
 		}
@@ -358,7 +556,9 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 				ToolName:   toolName,
 				AttemptNo:  1,
 				Arguments:  decision.Arguments,
+				Callback:   callbackCtx,
 			},
+			async:    async,
 			deadline: agentRun.Deadline,
 		}
 		return nil

@@ -427,6 +427,11 @@ type AgentActionRepository interface {
 	// completed_at, with the same domain.ErrStaleClaim semantics.
 	MarkFailed(ctx context.Context, actionID string, now time.Time, execErr domain.ExecutionError) error
 
+	// MarkWaiting conditionally moves a RUNNING Action to WAITING_CALLBACK and stamps
+	// waiting_at, in the transaction that records an ASYNC Tool's dispatch (06 §1.7). It
+	// returns domain.ErrStaleClaim when the row is not RUNNING.
+	MarkWaiting(ctx context.Context, actionID string, now time.Time) error
+
 	// MarkTimedOut conditionally fails an Action that is still READY, RUNNING or
 	// WAITING_CALLBACK. Only the Agent timeout transaction uses it (06 §1.7): the
 	// deadline ends the current Action in whichever of those states it is, including the
@@ -451,6 +456,11 @@ type ToolAttemptRepository interface {
 	// MarkFailed conditionally moves a STARTED Attempt to FAILED and writes its error and
 	// completed_at, with the same domain.ErrStaleClaim semantics.
 	MarkFailed(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) error
+
+	// MarkDispatched conditionally moves a STARTED Attempt of an ASYNC Tool to DISPATCHED
+	// and stamps dispatched_at. It returns domain.ErrStaleClaim when the row is no longer
+	// STARTED, e.g. because the Agent timeout closed it while the Tool was dispatching.
+	MarkDispatched(ctx context.Context, attemptID string, now time.Time) error
 
 	// MarkTimedOut conditionally fails an Attempt that is still STARTED or DISPATCHED.
 	// The Agent deadline covers the synchronous call and the wait for a callback alike
