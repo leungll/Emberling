@@ -475,7 +475,12 @@ func TestAgentAsyncToolRecovery_ReconcilerTimeoutDuringOnCallback_CallbackSupers
 // is the reverse order of the same race: the deadline has passed, but the callback's resume
 // transaction commits first and ends the Agent as TIMEOUT through its own deadline check,
 // keeping the Tool result. The Reconciler pass that follows finds no unterminated expired
-// Agent Run and writes nothing.
+// Agent Run and writes nothing. This test orders the two sequentially; the interleaving in
+// which the timeout caller already listed the Agent Run as expired (a stale list) and only
+// calls TimeoutAgentRun after the callback committed is covered by
+// TestAgentAsyncToolCallback_CallbackAfterDeadlineBeforeTimeout_EndsAsTimeout, whose late
+// TimeoutAgentRun must find nothing to fail. Together they cover the 09 §3.3 row
+// "异步 Tool callback 与 timeout 竞争" in the callback-first direction.
 func TestAgentAsyncToolRecovery_CallbackCommitsBeforeReconcilerTimeout_ReconcilerWritesNothing(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-recover-race-callback-first", tool, nil)

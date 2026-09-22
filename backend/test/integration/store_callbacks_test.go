@@ -378,6 +378,105 @@ func TestPendingCallbacks_ListConsumableForWaiting_ReturnsOnlyRowsWithDispatched
 	}
 }
 
+// TestPendingCallbacks_ListConsumableForWaiting_ToolBranch_RequiresDispatchedAttemptWaitingActionAndNodeRun
+// covers the TOOL_ATTEMPT branch of the Reconciler's Pending Callback discovery (06 §2.1,
+// 05 §1.7). A stored early callback bound to a Tool Attempt may be replayed only while all
+// three facts the resume transaction conditionally updates still hold: the Tool Attempt is
+// DISPATCHED, its Agent Action is WAITING_CALLBACK and the Agent NodeRun that owns the
+// Action is WAITING_CALLBACK. A row whose dispatch transaction never committed, or whose
+// Action was already resolved, must never be handed to resume. The returned route names
+// the Agent NodeRun and the Tool Attempt.
+func TestPendingCallbacks_ListConsumableForWaiting_ToolBranch_RequiresDispatchedAttemptWaitingActionAndNodeRun(t *testing.T) {
+	ctx := context.Background()
+	uow := postgres.NewUnitOfWork(testdb.Open(t))
+
+	f := seedRun(ctx, t, uow)
+	now := fixtureTime.Add(time.Minute)
+
+	cases := []struct {
+		suffix         string
+		nodeRunWaiting bool
+		actionWaiting  bool
+		dispatched     bool
+	}{
+		{suffix: "match", nodeRunWaiting: true, actionWaiting: true, dispatched: true},
+		// The Action is still RUNNING: nothing on it is waiting for a callback.
+		{suffix: "action_running", nodeRunWaiting: true, actionWaiting: false, dispatched: true},
+		// The Agent NodeRun is not WAITING_CALLBACK: the Run is not paused on this Action.
+		{suffix: "node_run_running", nodeRunWaiting: false, actionWaiting: true, dispatched: true},
+		// The Tool Attempt is still STARTED: its external task was never confirmed.
+		{suffix: "attempt_started", nodeRunWaiting: true, actionWaiting: true, dispatched: false},
+	}
+	var matchNodeRunID, matchAttemptID string
+	for _, c := range cases {
+		nodeRunID, attemptID := seedToolAttempt(ctx, t, uow, f, c.suffix, c.nodeRunWaiting, c.actionWaiting, c.dispatched)
+		if c.suffix == "match" {
+			matchNodeRunID, matchAttemptID = nodeRunID, attemptID
+		}
+		createBinding(ctx, t, uow, newBinding("binding_"+c.suffix, "task_"+c.suffix, domain.CallbackTargetToolAttempt, attemptID))
+		if _, err := recordPending(ctx, uow, newPending("task_"+c.suffix, `{"status":"SUCCEEDED"}`, "sha256:"+c.suffix, "sha256:t")); err != nil {
+			t.Fatalf("Record pending %s: %v", c.suffix, err)
+		}
+	}
+
+	got := listConsumableForWaiting(ctx, t, uow, now, 50)
+	if len(got) != 1 {
+		t.Fatalf("ListConsumableForWaiting returned %d rows, want only task_match: %+v", len(got), got)
+	}
+	row := got[0]
+	if row.Pending.ExternalTaskID != "task_match" || row.Binding.ID != "binding_match" {
+		t.Fatalf("row = (%s, %s), want (task_match, binding_match)", row.Pending.ExternalTaskID, row.Binding.ID)
+	}
+	if row.Binding.TargetType != domain.CallbackTargetToolAttempt || row.Binding.TargetID != matchAttemptID {
+		t.Fatalf("row binding target = (%s, %s), want (TOOL_ATTEMPT, %s)", row.Binding.TargetType, row.Binding.TargetID, matchAttemptID)
+	}
+	if row.RunID != f.runID || row.NodeRunID != matchNodeRunID || row.AttemptID != matchAttemptID {
+		t.Fatalf("row routing = (%s, %s, %s), want (%s, %s, %s)",
+			row.RunID, row.NodeRunID, row.AttemptID, f.runID, matchNodeRunID, matchAttemptID)
+	}
+}
+
+// TestPendingCallbacks_ListConsumableForWaiting_MixedTargets_OrderedGloballyByReceivedAt
+// covers the bound on one Reconciler batch (06 §2.1): the Node and Tool branches form one
+// result set under a single ORDER BY received_at and LIMIT, so the oldest rediscovered
+// callback is replayed first whatever its target type, and a small batch never starves
+// Tool callbacks behind Node ones.
+func TestPendingCallbacks_ListConsumableForWaiting_MixedTargets_OrderedGloballyByReceivedAt(t *testing.T) {
+	ctx := context.Background()
+	uow := postgres.NewUnitOfWork(testdb.Open(t))
+
+	f := seedRun(ctx, t, uow)
+	now := fixtureTime.Add(time.Minute)
+
+	_, nodeAttemptID := seedAttempt(ctx, t, uow, f, "node", domain.NodeRunWaitingCallback, true)
+	createBinding(ctx, t, uow, newBinding("binding_node", "task_node", domain.CallbackTargetNodeAttempt, nodeAttemptID))
+	nodePending := newPending("task_node", `{"ok":true}`, "sha256:n", "sha256:t")
+	nodePending.ReceivedAt = fixtureTime.Add(2 * time.Second)
+	if _, err := recordPending(ctx, uow, nodePending); err != nil {
+		t.Fatalf("Record node pending: %v", err)
+	}
+
+	_, toolAttemptID := seedToolAttempt(ctx, t, uow, f, "tool", true, true, true)
+	createBinding(ctx, t, uow, newBinding("binding_tool", "task_tool", domain.CallbackTargetToolAttempt, toolAttemptID))
+	toolPending := newPending("task_tool", `{"status":"SUCCEEDED"}`, "sha256:o", "sha256:t")
+	toolPending.ReceivedAt = fixtureTime.Add(time.Second)
+	if _, err := recordPending(ctx, uow, toolPending); err != nil {
+		t.Fatalf("Record tool pending: %v", err)
+	}
+
+	first := listConsumableForWaiting(ctx, t, uow, now, 1)
+	if len(first) != 1 || first[0].Pending.ExternalTaskID != "task_tool" {
+		t.Fatalf("LIMIT 1 batch = %+v, want only the older Tool callback task_tool", first)
+	}
+	both := listConsumableForWaiting(ctx, t, uow, now, 10)
+	if len(both) != 2 || both[0].Pending.ExternalTaskID != "task_tool" || both[1].Pending.ExternalTaskID != "task_node" {
+		t.Fatalf("full batch = %+v, want [task_tool, task_node] by received_at", both)
+	}
+	if both[0].Binding.TargetType != domain.CallbackTargetToolAttempt || both[1].Binding.TargetType != domain.CallbackTargetNodeAttempt {
+		t.Fatalf("target types = (%s, %s), want (TOOL_ATTEMPT, NODE_ATTEMPT)", both[0].Binding.TargetType, both[1].Binding.TargetType)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Conditional resume (06 §3.2: UPDATE node_runs SET status='SUCCEEDED'
 // WHERE id=$1 AND status='WAITING_CALLBACK')
@@ -572,4 +671,91 @@ func getAttempt(ctx context.Context, t *testing.T, uow store.UnitOfWork, attempt
 		t.Fatalf("get attempt %s: %v", attemptID, err)
 	}
 	return attempt
+}
+
+// seedToolAttempt commits one Agent NodeRun with its own Agent Run, a decided Turn, its
+// TOOL_CALL Action claimed to RUNNING and one Tool Attempt, advancing the NodeRun and the
+// Action to WAITING_CALLBACK and the Attempt to DISPATCHED only where asked. Every
+// transition goes through the repositories, as in seedAttempt.
+func seedToolAttempt(
+	ctx context.Context,
+	t *testing.T,
+	uow store.UnitOfWork,
+	f fixture,
+	suffix string,
+	nodeRunWaiting, actionWaiting, dispatched bool,
+) (nodeRunID, attemptID string) {
+	t.Helper()
+
+	nodeRunID = "nr_agent_" + suffix
+	agentRunID := "ar_" + suffix
+	turnID := "turn_" + suffix
+	decisionID := "decision_" + suffix
+	actionID := "action_" + suffix
+	attemptID = "tool_attempt_" + suffix
+
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		nodeRun := newNodeRun(nodeRunID, f.runID, "node_agent_"+suffix)
+		nodeRun.NodeType = "agent"
+		if err := tx.NodeRuns().Create(ctx, nodeRun); err != nil {
+			return err
+		}
+		if _, err := tx.NodeRuns().ClaimReady(ctx, nodeRunID, fixtureTime); err != nil {
+			return err
+		}
+		if err := tx.AgentRuns().Create(ctx, newAgentRun(agentRunID, nodeRunID)); err != nil {
+			return err
+		}
+		if err := tx.AgentTurns().Create(ctx, newAgentTurn(turnID, agentRunID, 1)); err != nil {
+			return err
+		}
+		if _, err := tx.AgentTurns().ClaimReady(ctx, turnID, fixtureTime); err != nil {
+			return err
+		}
+		if err := tx.AgentTurns().MarkCompleted(ctx, turnID, fixtureTime, json.RawMessage(`{"kind":"TOOL_CALL"}`), nil); err != nil {
+			return err
+		}
+		if err := tx.AgentDecisions().Create(ctx, newAgentDecision(decisionID, turnID)); err != nil {
+			return err
+		}
+		if err := tx.AgentActions().Create(ctx, newAgentAction(actionID, turnID, decisionID)); err != nil {
+			return err
+		}
+		if _, err := tx.AgentActions().ClaimReady(ctx, actionID, fixtureTime); err != nil {
+			return err
+		}
+		if err := tx.ToolAttempts().Create(ctx, newToolAttempt(attemptID, actionID, 1)); err != nil {
+			return err
+		}
+		if dispatched {
+			if err := tx.ToolAttempts().MarkDispatched(ctx, attemptID, fixtureTime); err != nil {
+				return err
+			}
+		}
+		if actionWaiting {
+			if err := tx.AgentActions().MarkWaiting(ctx, actionID, fixtureTime); err != nil {
+				return err
+			}
+		}
+		if nodeRunWaiting {
+			return tx.NodeRuns().MarkWaiting(ctx, nodeRunID, fixtureTime)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed tool attempt %s: %v", suffix, err)
+	}
+	return nodeRunID, attemptID
+}
+
+func listConsumableForWaiting(ctx context.Context, t *testing.T, uow store.UnitOfWork, now time.Time, limit int) []store.PendingForWaiting {
+	t.Helper()
+	var got []store.PendingForWaiting
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		got, err = tx.PendingCallbacks().ListConsumableForWaiting(ctx, now, limit)
+		return err
+	}); err != nil {
+		t.Fatalf("ListConsumableForWaiting(limit %d): %v", limit, err)
+	}
+	return got
 }
