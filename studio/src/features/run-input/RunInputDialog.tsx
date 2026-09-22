@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import type { JsonObject, JsonSchema, RunInputSchema } from '@/api/types';
+import { API_BASE, ApiRequestError, uploadAsset } from '@/api/client';
+import type { AssetRef, JsonObject, JsonSchema, RunInputSchema } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -61,17 +62,81 @@ export function RunInputDialog({
     return seed;
   });
 
+  // Completed Asset uploads, keyed by inputKey. Only a completed upload's AssetRef is
+  // written into run input (04 §1.5): a browser-local file selection is never enough.
+  const [assets, setAssets] = useState<Record<string, AssetRef>>({});
+  const [assetUploading, setAssetUploading] = useState<Record<string, boolean>>({});
+  const [assetErrors, setAssetErrors] = useState<Record<string, string | null>>({});
+
+  const anyAssetUploading = Object.values(assetUploading).some(Boolean);
+
+  const handleFileChange = (field: RunInputField, file: File | undefined) => {
+    setAssetErrors((prev) => ({ ...prev, [field.key]: null }));
+    setAssets((prev) => {
+      const next = { ...prev };
+      delete next[field.key];
+      return next;
+    });
+    if (!file) return;
+
+    // Client pre-check for responsiveness only; the Backend re-validates and is the
+    // authority on accepted media types and size (08 §3.2).
+    const acceptedMediaTypes = field.schema.properties?.mediaType?.enum as string[] | undefined;
+    if (acceptedMediaTypes && !acceptedMediaTypes.includes(file.type)) {
+      setAssetErrors((prev) => ({
+        ...prev,
+        [field.key]: `Unsupported media type "${file.type}". Accepted: ${acceptedMediaTypes.join(', ')}.`,
+      }));
+      return;
+    }
+    const maxSizeBytes = field.schema.properties?.sizeBytes?.maximum;
+    if (typeof maxSizeBytes === 'number' && file.size > maxSizeBytes) {
+      setAssetErrors((prev) => ({
+        ...prev,
+        [field.key]: `File exceeds the maximum size of ${maxSizeBytes} bytes.`,
+      }));
+      return;
+    }
+
+    setAssetUploading((prev) => ({ ...prev, [field.key]: true }));
+    uploadAsset(file)
+      .then((ref) => {
+        setAssets((prev) => ({ ...prev, [field.key]: ref }));
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof ApiRequestError ? error.message : 'Upload failed.';
+        setAssetErrors((prev) => ({ ...prev, [field.key]: message }));
+      })
+      .finally(() => {
+        setAssetUploading((prev) => ({ ...prev, [field.key]: false }));
+      });
+  };
+
   const submit = () => {
     const input: JsonObject = {};
+    let missingRequiredImage = false;
     for (const field of fields) {
-      if (field.isAssetRef) continue;
+      if (field.isAssetRef) {
+        const ref = assets[field.key];
+        if (ref) {
+          // AssetRef's fields are all JSON-safe scalars; it satisfies JsonObject shape.
+          input[field.key] = ref as unknown as JsonObject;
+        } else if (field.required) {
+          missingRequiredImage = true;
+          setAssetErrors((prev) => ({ ...prev, [field.key]: 'Upload an image to continue.' }));
+        }
+        continue;
+      }
       const value = values[field.key];
       // Absent optional fields stay absent: the Backend injects no defaults.
       if (value === undefined || value === '') continue;
       input[field.key] = value;
     }
+    if (missingRequiredImage) return;
     onSubmit(input);
   };
+
+  const runDisabled = submitting || anyAssetUploading;
 
   return (
     <Dialog
@@ -84,7 +149,7 @@ export function RunInputDialog({
           <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button size="sm" onClick={submit} disabled={submitting}>
+          <Button size="sm" onClick={submit} disabled={runDisabled}>
             {submitting ? 'Creating run…' : 'Create run'}
           </Button>
         </>
@@ -99,6 +164,12 @@ export function RunInputDialog({
 
         {fields.map((field) => {
           const id = `run-input-${field.key}`;
+          const acceptedMediaTypes = field.schema.properties?.mediaType?.enum as
+            string[] | undefined;
+          const ref = assets[field.key];
+          const uploading = assetUploading[field.key] ?? false;
+          const assetError = assetErrors[field.key];
+
           return (
             <div key={field.key} className="space-y-1">
               <Label htmlFor={id}>
@@ -112,11 +183,34 @@ export function RunInputDialog({
 
               {field.isAssetRef ? (
                 <>
-                  <Input id={id} disabled placeholder="Image upload" />
-                  <p className="text-[10px] text-[var(--muted-foreground)]">
-                    Asset upload lands in M2. Run input must reference a completed Asset, so this
-                    field cannot be filled yet.
-                  </p>
+                  <Input
+                    id={id}
+                    type="file"
+                    accept={acceptedMediaTypes?.join(',')}
+                    disabled={uploading}
+                    onChange={(e) => handleFileChange(field, e.target.files?.[0])}
+                  />
+                  {uploading ? (
+                    <p className="text-[10px] text-[var(--muted-foreground)]">Uploading…</p>
+                  ) : null}
+                  {ref ? (
+                    <div className="flex items-center gap-2">
+                      {/* Preview only; the value written into run input is the AssetRef below. */}
+                      <img
+                        src={`${API_BASE}/assets/${encodeURIComponent(ref.assetId)}/content`}
+                        alt=""
+                        className="h-10 w-10 rounded object-cover"
+                      />
+                      <p className="text-[10px] text-[var(--muted-foreground)]">
+                        {ref.assetId} · {ref.sizeBytes} bytes
+                      </p>
+                    </div>
+                  ) : null}
+                  {assetError ? (
+                    <p role="alert" className="text-xs text-red-500">
+                      {assetError}
+                    </p>
+                  ) : null}
                 </>
               ) : (
                 <Input

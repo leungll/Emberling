@@ -6,6 +6,7 @@ import {
   getNodeRunDetail,
   listDefinitions,
   saveDefinition,
+  uploadAsset,
 } from './client';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -106,6 +107,59 @@ describe('api client', () => {
     expect(url).toBe('/api/definitions/wf_123');
     expect(init.method).toBe('PUT');
     expect(JSON.parse(String(init.body)).baseVersion).toBe(4);
+  });
+
+  it('uploads an Asset as multipart/form-data under the "file" part and returns the AssetRef', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(201, {
+        assetId: 'asset_123',
+        mediaType: 'image/png',
+        sizeBytes: 4,
+        sha256: 'abc',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const file = new File(['ref'], 'reference.png', { type: 'image/png' });
+    const ref = await uploadAsset(file);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/assets');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    const body = init.body as FormData;
+    expect(body.get('file')).toBeInstanceOf(File);
+    expect((body.get('file') as File).name).toBe('reference.png');
+    // Only the one accepted part name (08 §3.2); no stray form fields.
+    expect(Array.from(body.keys())).toEqual(['file']);
+    expect(ref).toEqual({
+      assetId: 'asset_123',
+      mediaType: 'image/png',
+      sizeBytes: 4,
+      sha256: 'abc',
+    });
+  });
+
+  it('maps a 413 Asset upload error envelope to ApiRequestError with PAYLOAD_TOO_LARGE', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(413, {
+          error: {
+            code: 'PAYLOAD_TOO_LARGE',
+            message: 'asset exceeds the maximum upload size',
+          },
+        }),
+      ),
+    );
+
+    const file = new File(['x'.repeat(10)], 'large.png', { type: 'image/png' });
+    const failure = await uploadAsset(file).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ApiRequestError);
+    const apiError = failure as ApiRequestError;
+    expect(apiError.status).toBe(413);
+    expect(apiError.code).toBe('PAYLOAD_TOO_LARGE');
   });
 
   it('reads Node Detail from the runs/{runId}/nodes/{nodeRunId} path', async () => {

@@ -1,6 +1,7 @@
 import type {
   AgentTrace,
   ApiError,
+  AssetRef,
   CreateDefinitionRequest,
   CreateRunRequest,
   CreateRunResponse,
@@ -61,7 +62,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   const init: RequestInit = { method };
   if (signal) init.signal = signal;
-  if (body !== undefined) {
+  if (body instanceof FormData) {
+    // Let the browser set Content-Type with its multipart boundary.
+    init.body = body;
+  } else if (body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(body);
   }
@@ -158,6 +162,23 @@ export function listTools(signal?: AbortSignal): Promise<ToolMetadata[]> {
   return request<ToolListResponse>('/tools', { ...(signal ? { signal } : {}) }).then(
     (r) => r.items,
   );
+}
+
+// --- Asset --------------------------------------------------------------------
+
+/**
+ * Uploads one image as the `file` multipart part (08 §3.2's single accepted part name)
+ * and returns the immutable `AssetRef` the Backend commits. The caller writes this value
+ * into `Run.input`; Studio never invents an `assetId` or writes a browser-local URL there.
+ */
+export function uploadAsset(file: File, signal?: AbortSignal): Promise<AssetRef> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request<AssetRef>('/assets', {
+    method: 'POST',
+    body: formData,
+    ...(signal ? { signal } : {}),
+  });
 }
 
 // --- Run --------------------------------------------------------------------
