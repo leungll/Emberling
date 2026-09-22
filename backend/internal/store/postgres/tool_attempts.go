@@ -95,33 +95,45 @@ func (r *toolAttemptRepository) MarkDispatched(ctx context.Context, attemptID st
 	return nil
 }
 
-// MarkSucceeded conditionally moves a STARTED Attempt to SUCCEEDED and writes its result.
-// A duplicated Tool result transaction finds the row no longer STARTED and loses here
-// instead of overwriting the committed result.
-func (r *toolAttemptRepository) MarkSucceeded(ctx context.Context, attemptID string, now time.Time, result json.RawMessage) error {
+// MarkSucceeded conditionally moves an Attempt from the given status to SUCCEEDED and
+// writes its result: STARTED for a synchronous call, DISPATCHED for an asynchronous one
+// resumed by its callback. A duplicated or late result transaction finds the row no
+// longer in that status and loses here instead of overwriting the committed result.
+func (r *toolAttemptRepository) MarkSucceeded(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, result json.RawMessage) error {
+	if !from.CanTransitionTo(domain.ToolAttemptSucceeded) {
+		return &domain.InvalidStateTransitionError{
+			Entity: "ToolAttempt", ID: attemptID, From: string(from), To: string(domain.ToolAttemptSucceeded),
+		}
+	}
+
 	const update = `
 		UPDATE tool_attempts
-		   SET status = 'SUCCEEDED', result = $2, completed_at = $3
-		 WHERE id = $1 AND status = 'STARTED'`
+		   SET status = 'SUCCEEDED', result = $3, completed_at = $4
+		 WHERE id = $1 AND status = $2`
 
 	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkSucceeded", update,
-		attemptID, nullableJSON(result), now)
+		attemptID, string(from), nullableJSON(result), now)
 	if err != nil {
 		return err
 	}
 	switch {
 	case affected == 0:
-		return fmt.Errorf("store/postgres tool_attempts.MarkSucceeded: tool_attempt=%s STARTED -> SUCCEEDED: %w",
-			attemptID, domain.ErrStaleClaim)
+		return fmt.Errorf("store/postgres tool_attempts.MarkSucceeded: tool_attempt=%s %s -> SUCCEEDED: %w",
+			attemptID, from, domain.ErrStaleClaim)
 	case affected > 1:
 		return errUnexpectedRows("tool_attempts.MarkSucceeded", attemptID, affected)
 	}
 	return nil
 }
 
-// MarkFailed conditionally moves a STARTED Attempt to FAILED and writes its error, with
-// the same single-winner semantics as MarkSucceeded.
-func (r *toolAttemptRepository) MarkFailed(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) error {
+// MarkFailed conditionally moves an Attempt from the given status to FAILED and writes
+// its error, with the same single-winner semantics as MarkSucceeded.
+func (r *toolAttemptRepository) MarkFailed(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, execErr domain.ExecutionError) error {
+	if !from.CanTransitionTo(domain.ToolAttemptFailed) {
+		return &domain.InvalidStateTransitionError{
+			Entity: "ToolAttempt", ID: attemptID, From: string(from), To: string(domain.ToolAttemptFailed),
+		}
+	}
 	errPayload, err := marshalExecutionError(&execErr)
 	if err != nil {
 		return fmt.Errorf("store/postgres tool_attempts.MarkFailed: tool_attempt=%s: %w", attemptID, err)
@@ -129,16 +141,17 @@ func (r *toolAttemptRepository) MarkFailed(ctx context.Context, attemptID string
 
 	const update = `
 		UPDATE tool_attempts
-		   SET status = 'FAILED', error = $2, completed_at = $3
-		 WHERE id = $1 AND status = 'STARTED'`
-	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkFailed", update, attemptID, errPayload, now)
+		   SET status = 'FAILED', error = $3, completed_at = $4
+		 WHERE id = $1 AND status = $2`
+	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkFailed", update,
+		attemptID, string(from), errPayload, now)
 	if err != nil {
 		return err
 	}
 	switch {
 	case affected == 0:
-		return fmt.Errorf("store/postgres tool_attempts.MarkFailed: tool_attempt=%s STARTED -> FAILED: %w",
-			attemptID, domain.ErrStaleClaim)
+		return fmt.Errorf("store/postgres tool_attempts.MarkFailed: tool_attempt=%s %s -> FAILED: %w",
+			attemptID, from, domain.ErrStaleClaim)
 	case affected > 1:
 		return errUnexpectedRows("tool_attempts.MarkFailed", attemptID, affected)
 	}

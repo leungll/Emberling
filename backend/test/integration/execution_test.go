@@ -1035,6 +1035,11 @@ func (e *execRecordingEnqueuer) EnqueueAdvance(runID string) bool {
 	return ok
 }
 
+// EnqueueAgentTurn delegates without recording: these Node-only tests create no Agent Turn.
+func (e *execRecordingEnqueuer) EnqueueAgentTurn(runID, turnID string) bool {
+	return e.inner.EnqueueAgentTurn(runID, turnID)
+}
+
 func (e *execRecordingEnqueuer) snapshot() (accepted, refused []string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

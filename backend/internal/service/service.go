@@ -18,12 +18,14 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
-// WorkEnqueuer offers a Run to the in-process work queue after its transaction has
-// committed. It reports whether the item was accepted; a refusal is not an error and
-// must never roll back committed facts, because the Reconciler rediscovers the same
-// persisted READY work (invariant 6).
+// WorkEnqueuer offers committed READY work to the in-process work queue after its
+// transaction has committed: a Run that may have a NodeRun to advance, or one persisted
+// READY Agent Turn. It reports whether the item was accepted; a refusal is not an error
+// and must never roll back committed facts, because the Reconciler rediscovers the same
+// persisted READY work (invariant 6, 06 §2.1).
 type WorkEnqueuer interface {
 	EnqueueAdvance(runID string) bool
+	EnqueueAgentTurn(runID, turnID string) bool
 }
 
 // EventNotifier wakes in-process SSE cursors after Events have committed. PostgreSQL
@@ -37,6 +39,8 @@ type EventNotifier interface {
 type NoopEnqueuer struct{}
 
 func (NoopEnqueuer) EnqueueAdvance(string) bool { return false }
+
+func (NoopEnqueuer) EnqueueAgentTurn(string, string) bool { return false }
 
 // NoopNotifier drops notifications. SSE still works through cursor polling.
 type NoopNotifier struct{}

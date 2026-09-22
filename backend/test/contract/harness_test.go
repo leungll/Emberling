@@ -171,6 +171,10 @@ type testEnvOptions struct {
 	// Backend whose current Tool Registry no longer has it (the Registry is fixed for a
 	// process's lifetime in the MVP; there is no production Unregister to call instead).
 	SkipLookupTool bool
+
+	// WorkHooks is handed to the work.Pool, so a test can observe or hold the worker path
+	// with a barrier instead of sleeping.
+	WorkHooks work.Hooks
 }
 
 // defaultTestCallbackMaxPayloadBytes bounds POST /api/callbacks bodies in every testEnv
@@ -312,7 +316,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	executionService := service.NewExecutionService(deps)
 	assetService := service.NewAssetService(deps)
 
-	workPool := work.NewPool(queue, executionService, 4, work.Hooks{}, opts.Logger)
+	workPool := work.NewPool(queue, executionService, 4, opts.WorkHooks, opts.Logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	workPool.Start(ctx)

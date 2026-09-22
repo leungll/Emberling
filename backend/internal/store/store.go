@@ -419,13 +419,17 @@ type AgentActionRepository interface {
 	// The limit bounds the scan batch.
 	ListReady(ctx context.Context, limit int) ([]domain.AgentAction, error)
 
-	// MarkSucceeded conditionally moves a RUNNING Action to SUCCEEDED and stamps
-	// completed_at, returning domain.ErrStaleClaim when the row is not RUNNING.
-	MarkSucceeded(ctx context.Context, actionID string, now time.Time) error
+	// MarkSucceeded conditionally moves an Action from `from` (RUNNING for a synchronous
+	// call, WAITING_CALLBACK for an asynchronous Tool resumed by its callback) to
+	// SUCCEEDED and stamps completed_at. It returns domain.ErrStaleClaim when the row is
+	// not in `from`, and domain.InvalidStateTransitionError when `from` cannot reach
+	// SUCCEEDED.
+	MarkSucceeded(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time) error
 
-	// MarkFailed conditionally moves a RUNNING Action to FAILED and writes its error and
-	// completed_at, with the same domain.ErrStaleClaim semantics.
-	MarkFailed(ctx context.Context, actionID string, now time.Time, execErr domain.ExecutionError) error
+	// MarkFailed conditionally moves a RUNNING or WAITING_CALLBACK Action to FAILED and
+	// writes its error and completed_at, with the same semantics. READY is rejected: only
+	// MarkTimedOut may fail an unclaimed Action.
+	MarkFailed(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time, execErr domain.ExecutionError) error
 
 	// MarkWaiting conditionally moves a RUNNING Action to WAITING_CALLBACK and stamps
 	// waiting_at, in the transaction that records an ASYNC Tool's dispatch (06 §1.7). It
@@ -448,14 +452,15 @@ type ToolAttemptRepository interface {
 	Get(ctx context.Context, attemptID string) (domain.ToolAttempt, error)
 	ListByActionID(ctx context.Context, actionID string) ([]domain.ToolAttempt, error)
 
-	// MarkSucceeded conditionally moves a STARTED Attempt to SUCCEEDED and writes its
-	// result and completed_at. A late duplicate finds the row no longer STARTED and gets
-	// domain.ErrStaleClaim instead of overwriting the committed result.
-	MarkSucceeded(ctx context.Context, attemptID string, now time.Time, result json.RawMessage) error
+	// MarkSucceeded conditionally moves an Attempt from `from` (STARTED for a synchronous
+	// call, DISPATCHED for an asynchronous call resumed by its callback) to SUCCEEDED and
+	// writes its result and completed_at. A late duplicate finds the row no longer in
+	// `from` and gets domain.ErrStaleClaim instead of overwriting the committed result.
+	MarkSucceeded(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, result json.RawMessage) error
 
-	// MarkFailed conditionally moves a STARTED Attempt to FAILED and writes its error and
-	// completed_at, with the same domain.ErrStaleClaim semantics.
-	MarkFailed(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) error
+	// MarkFailed conditionally moves an Attempt from `from` to FAILED and writes its error
+	// and completed_at, with the same domain.ErrStaleClaim semantics.
+	MarkFailed(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, execErr domain.ExecutionError) error
 
 	// MarkDispatched conditionally moves a STARTED Attempt of an ASYNC Tool to DISPATCHED
 	// and stamps dispatched_at. It returns domain.ErrStaleClaim when the row is no longer

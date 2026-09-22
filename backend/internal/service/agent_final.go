@@ -146,7 +146,7 @@ func (s *ExecutionService) CompleteAgentFinal(ctx context.Context, actionID stri
 		if validationErr != nil {
 			// A committed, deterministic fact is invalid. The same Final Action is never
 			// retried and the model is never asked again (docs/09 §3.3).
-			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil,
+			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
 				domain.FailureSyncExecution, domain.TerminationInvalidAction,
 				domain.ExecutionError{Code: "INVALID_ACTION", Message: validationErr.Error()}, now); err != nil {
 				return err
@@ -155,7 +155,7 @@ func (s *ExecutionService) CompleteAgentFinal(ctx context.Context, actionID stri
 			return nil
 		}
 
-		if err := tx.AgentActions().MarkSucceeded(ctx, action.ID, now); err != nil {
+		if err := tx.AgentActions().MarkSucceeded(ctx, action.ID, domain.AgentActionRunning, now); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}

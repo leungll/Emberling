@@ -260,18 +260,11 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 	task := *result.ExternalTask
 
 	var commit agentCommit
+	var committedAt time.Time
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		run, err := tx.Runs().Get(ctx, call.runID)
+		run, plan, err := s.runPlan(ctx, tx, call.runID)
 		if err != nil {
 			return err
-		}
-		def, err := tx.Definitions().GetVersion(ctx, run.WorkflowID, run.DefinitionVersion)
-		if err != nil {
-			return err
-		}
-		plan, err := s.compile(ctx, def)
-		if err != nil {
-			return fmt.Errorf("execution: recompile definition %s v%d for agent tool dispatch: %w", run.WorkflowID, run.DefinitionVersion, err)
 		}
 
 		lock, err := tx.Runs().LockForUpdate(ctx, call.runID)
@@ -333,29 +326,11 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 
 		// Run status is derived from NodeRun state (invariant #2): with the Agent NodeRun
 		// waiting, the Run becomes PAUSED once nothing else is running.
-		allNodeRuns, err := tx.NodeRuns().ListByRun(ctx, call.runID)
-		if err != nil {
-			return err
-		}
-		nodeStatuses := make(map[string]domain.NodeRunStatus, len(allNodeRuns))
-		for _, nr := range allNodeRuns {
-			nodeStatuses[nr.NodeID] = nr.Status
-		}
-		newStatus := runtime.AggregateRunStatus(runtime.RunAggregateInput{
-			NodeStatuses:   nodeStatuses,
-			AllNodeIDs:     plan.Order,
-			OutputNodeID:   plan.OutputNodeID,
-			OutputProduced: len(run.Output) > 0,
-		})
-		if ev, changed := runtime.NextRunTransitionEvent(lock.Status(), newStatus); changed {
-			if err := s.appendEvent(ctx, tx, lock, call.runID, nil, ev.Type, now, runTransitionPayload{From: lock.Status(), To: newStatus}); err != nil {
-				return err
-			}
-		}
-		if err := tx.Runs().UpdateAggregate(ctx, lock, newStatus, now); err != nil {
+		if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
 			return err
 		}
 		commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq()}
+		committedAt = now
 		return nil
 	})
 	switch {
@@ -374,9 +349,14 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 	}
 	s.wake(commit)
 
-	// A callback that reached the endpoint before this Binding committed is left as a
-	// Pending Callback here; routing it to this Tool Attempt belongs to the Tool resume use
-	// case (M4 slice 4.2), and until then the Agent deadline bounds the wait.
+	// A callback that reached the endpoint before this Binding committed was stored as a
+	// Pending Callback. Now that the Binding routes it, it is replayed through the same
+	// resume use case a live callback enters (06 §1.6 step 3), which consumes the row in
+	// the transaction that acts on it (05 §1.7). A failure here leaves the Action waiting,
+	// bounded by the Agent deadline. The replay ends at its commit: the next READY Turn goes
+	// to the work queue (06 §2.1), so this dispatcher never nests a whole further Turn
+	// chain -- model call, Tool calls -- inside its own call stack.
+	s.consumeEarlyCallback(ctx, task.ExternalTaskID, call.attemptID, committedAt)
 	return nil
 }
 
@@ -462,7 +442,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 					Message: fmt.Sprintf("tool %q of the Agent Run's frozen allowlist is no longer registered", toolName),
 				}
 			}
-			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil,
+			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
 				domain.FailureSyncExecution, termination, execError, now); err != nil {
 				return err
 			}
@@ -473,7 +453,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		if validationErr := runtime.ValidateToolCall(decision, agentRun.AllowedTools, reg.Metadata); validationErr != nil {
 			// A deterministic, committed fact is invalid: no Tool Attempt is created, the
 			// Tool is not called and the model is not asked again.
-			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil,
+			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
 				domain.FailureSyncExecution, domain.TerminationInvalidAction,
 				domain.ExecutionError{Code: "INVALID_ACTION", Message: validationErr.Error()}, now); err != nil {
 				return err
@@ -579,10 +559,104 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 // patch really changed the State, the Agent Run's pointers, and either the next READY Turn
 // or the termination the round or time limit demands.
 func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agentToolCall, result json.RawMessage) error {
+	outcome, err := s.commitAgentToolResult(ctx, call, syncToolOutcome, result)
+	if err != nil || outcome.nextTurnID == "" {
+		return err
+	}
+	// The next Turn is committed READY work before this call is made: the in-process chain
+	// is a latency optimisation, and the Reconciler rediscovers the same Turn if the
+	// process dies here (invariant #6).
+	return s.AdvanceAgentTurn(ctx, outcome.nextTurnID, domain.ClaimImmediate)
+}
+
+// agentToolOutcomeSource says which path delivers a Tool Attempt's outcome and therefore
+// which statuses the conditional updates must find (06 §1.7): the synchronous call
+// resolves a STARTED Attempt of a RUNNING Action, while a callback or Provider poll
+// resolves a DISPATCHED Attempt of a WAITING_CALLBACK Action and also returns the waiting
+// Agent NodeRun to RUNNING when the loop continues. Requiring the expected "from" status
+// is what makes a duplicated, late or timed-out delivery lose without writing anything.
+type agentToolOutcomeSource struct {
+	fromAttempt      domain.ToolAttemptStatus
+	fromAction       domain.AgentActionStatus
+	completionSource domain.CompletionSource
+	failureSource    domain.FailureSource
+	// resumesWaiting is true for the asynchronous resume: the Agent NodeRun is
+	// WAITING_CALLBACK and the Run may be PAUSED, so continuing the loop moves the NodeRun
+	// back to RUNNING and re-derives the Run status (invariant #2).
+	resumesWaiting bool
+	// consumePending is the external task id of a stored early callback this outcome is
+	// the replay of, or "". The row is consumed in the same transaction that acts on it
+	// (05 §1.7), so an early callback can advance an Action at most once.
+	consumePending string
+	payloadHash    string
+	// attemptTokenHash is the Tool Attempt's own callback credential hash, which a
+	// replayed Pending Callback must match (06 §3). It is compared, never written.
+	attemptTokenHash *string
+}
+
+var syncToolOutcome = agentToolOutcomeSource{
+	fromAttempt:      domain.ToolAttemptStarted,
+	fromAction:       domain.AgentActionRunning,
+	completionSource: domain.CompletionSyncExecution,
+	failureSource:    domain.FailureSyncExecution,
+}
+
+// asyncToolOutcome is the outcome source of a callback or Provider-poll resume of a
+// DISPATCHED Tool Attempt.
+func asyncToolOutcome(completion domain.CompletionSource, consumePending, payloadHash string, attemptTokenHash *string) agentToolOutcomeSource {
+	failure := domain.FailureCallback
+	if completion == domain.CompletionProviderPoll {
+		failure = domain.FailureProviderPoll
+	}
+	return agentToolOutcomeSource{
+		fromAttempt:      domain.ToolAttemptDispatched,
+		fromAction:       domain.AgentActionWaitingCallback,
+		completionSource: completion,
+		failureSource:    failure,
+		resumesWaiting:   true,
+		consumePending:   consumePending,
+		payloadHash:      payloadHash,
+		attemptTokenHash: attemptTokenHash,
+	}
+}
+
+// agentToolCommit reports what a Tool outcome transaction did. committed is false when a
+// conditional update lost, in which case nothing was written and no Event seq consumed.
+type agentToolCommit struct {
+	committed  bool
+	nextTurnID string
+}
+
+// consumeReplayedPendingLocked consumes the stored early callback src replays, inside the
+// transaction that acts on it. A row that is already consumed, expired or carries another
+// payload means another delivery won, which rolls this transaction back as superseded.
+func (s *ExecutionService) consumeReplayedPendingLocked(ctx context.Context, tx store.Tx, call agentToolCall, src agentToolOutcomeSource, now time.Time) error {
+	err := s.consumePendingCallback(ctx, tx, call.attemptID, src.attemptTokenHash, src.consumePending, src.payloadHash, now)
+	if errors.Is(err, errResumeSuperseded) {
+		return errAgentTurnSuperseded
+	}
+	return err
+}
+
+// commitAgentToolResult is the transaction that commits one successful Tool outcome and
+// performs the post-COMMIT wake-up it owes. It does not chain the next Turn; the caller
+// decides that.
+func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agentToolCall, src agentToolOutcomeSource, result json.RawMessage) (agentToolCommit, error) {
 	var commit agentCommit
 	var nextTurnID string
 
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		// The resume re-derives the Run status, which needs the compiled plan of the Run's
+		// immutable Definition version (invariant #8); it is resolved before the lock.
+		var plan *runtime.CompiledDefinition
+		var run domain.Run
+		if src.resumesWaiting {
+			var err error
+			if run, plan, err = s.runPlan(ctx, tx, call.runID); err != nil {
+				return err
+			}
+		}
+
 		lock, err := tx.Runs().LockForUpdate(ctx, call.runID)
 		if err != nil {
 			return err
@@ -605,9 +679,12 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 		}
 		now := s.deps.Clock.Now()
 
+		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
+			return err
+		}
 		// The conditional Attempt update is what decides that this caller, and not a stale
-		// duplicate of the same Tool call, owns the result.
-		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, now, result); err != nil {
+		// duplicate of the same Tool call, a late callback or the timeout, owns the result.
+		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, result); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}
@@ -630,7 +707,7 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 			// what fails, deterministically and without a second attempt at the same patch.
 			attemptID := call.attemptID
 			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, call.actionID, &attemptID,
-				domain.FailureSyncExecution, domain.TerminationInvalidAction,
+				src.fromAction, src.failureSource, domain.TerminationInvalidAction,
 				domain.ExecutionError{Code: "INVALID_ACTION", Message: patchErr.Error()}, now); err != nil {
 				return err
 			}
@@ -638,7 +715,7 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 			return nil
 		}
 
-		if err := tx.AgentActions().MarkSucceeded(ctx, call.actionID, now); err != nil {
+		if err := tx.AgentActions().MarkSucceeded(ctx, call.actionID, src.fromAction, now); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}
@@ -650,7 +727,7 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 			TurnID:           call.turnID,
 			ActionID:         call.actionID,
 			ToolAttemptID:    &attemptID,
-			CompletionSource: domain.CompletionSyncExecution,
+			CompletionSource: src.completionSource,
 		}); err != nil {
 			return err
 		}
@@ -734,6 +811,18 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 			return nil
 		}
 
+		if src.resumesWaiting {
+			// The loop continues, so the Agent NodeRun leaves WAITING_CALLBACK in the same
+			// transaction that creates the next Turn (06 §1.7). A NodeRun no longer waiting
+			// means another path already resolved it.
+			if err := tx.NodeRuns().Transition(ctx, nodeRun.ID, domain.NodeRunWaitingCallback, domain.NodeRunRunning, now); err != nil {
+				if errors.Is(err, domain.ErrStaleClaim) {
+					return errAgentTurnSuperseded
+				}
+				return err
+			}
+		}
+
 		turnID := s.deps.IDs.NewID(domain.IDPrefixAgentTurn)
 		requestBytes, err := json.Marshal(agentTurnRequest{
 			ModelID:        agentRun.ModelID,
@@ -763,7 +852,13 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 		}); err != nil {
 			return err
 		}
-		if err := tx.Runs().UpdateAggregate(ctx, lock, lock.Status(), now); err != nil {
+		if src.resumesWaiting {
+			// With the Agent NodeRun RUNNING again, a PAUSED Run becomes RUNNING and
+			// RUN_RESUMED commits with it (invariant #2, invariant #3).
+			if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
+				return err
+			}
+		} else if err := tx.Runs().UpdateAggregate(ctx, lock, lock.Status(), now); err != nil {
 			return err
 		}
 
@@ -772,20 +867,56 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 		return nil
 	})
 	if errors.Is(err, errAgentTurnSuperseded) {
-		return nil
+		return agentToolCommit{}, nil
 	}
+	if err != nil {
+		return agentToolCommit{}, err
+	}
+	s.wake(commit)
+	return agentToolCommit{committed: true, nextTurnID: nextTurnID}, nil
+}
+
+// runPlan reads a Run and compiles the immutable Definition version it is bound to.
+func (s *ExecutionService) runPlan(ctx context.Context, tx store.Tx, runID string) (domain.Run, *runtime.CompiledDefinition, error) {
+	run, err := tx.Runs().Get(ctx, runID)
+	if err != nil {
+		return domain.Run{}, nil, err
+	}
+	def, err := tx.Definitions().GetVersion(ctx, run.WorkflowID, run.DefinitionVersion)
+	if err != nil {
+		return domain.Run{}, nil, err
+	}
+	plan, err := s.compile(ctx, def)
+	if err != nil {
+		return domain.Run{}, nil, fmt.Errorf("execution: recompile definition %s v%d for run %s: %w", run.WorkflowID, run.DefinitionVersion, run.ID, err)
+	}
+	return run, plan, nil
+}
+
+// aggregateRunLocked derives the Run status from its NodeRuns (invariant #2) under the Run
+// aggregate lock the caller holds, writes the Run transition Event when the status
+// changes, and persists the status together with the seq watermark.
+func (s *ExecutionService) aggregateRunLocked(ctx context.Context, tx store.Tx, lock *store.RunLock, run domain.Run, plan *runtime.CompiledDefinition, now time.Time) error {
+	allNodeRuns, err := tx.NodeRuns().ListByRun(ctx, run.ID)
 	if err != nil {
 		return err
 	}
-	s.wake(commit)
-
-	if nextTurnID == "" {
-		return nil
+	nodeStatuses := make(map[string]domain.NodeRunStatus, len(allNodeRuns))
+	for _, nr := range allNodeRuns {
+		nodeStatuses[nr.NodeID] = nr.Status
 	}
-	// The next Turn is committed READY work before this call is made: the in-process chain
-	// is a latency optimisation, and the Reconciler rediscovers the same Turn if the
-	// process dies here (invariant #6).
-	return s.AdvanceAgentTurn(ctx, nextTurnID, domain.ClaimImmediate)
+	newStatus := runtime.AggregateRunStatus(runtime.RunAggregateInput{
+		NodeStatuses:   nodeStatuses,
+		AllNodeIDs:     plan.Order,
+		OutputNodeID:   plan.OutputNodeID,
+		OutputProduced: len(run.Output) > 0,
+	})
+	if ev, changed := runtime.NextRunTransitionEvent(lock.Status(), newStatus); changed {
+		if err := s.appendEvent(ctx, tx, lock, run.ID, nil, ev.Type, now, runTransitionPayload{From: lock.Status(), To: newStatus}); err != nil {
+			return err
+		}
+	}
+	return tx.Runs().UpdateAggregate(ctx, lock, newStatus, now)
 }
 
 // appendToolRoundContext creates the Context Version one successful Tool round produces:
@@ -867,9 +998,16 @@ func (s *ExecutionService) appendToolRoundContext(
 // It applies no state patch, creates no Context or State Version and starts no next Turn.
 // The committed Decision is left untouched, and the MVP does not retry the Tool.
 //
-// failureSource is fixed to SYNC_EXECUTION here because this is the synchronous path; the
-// callback and Provider-poll paths enter the same transaction body with their own source.
+// This is the synchronous entry, with failureSource SYNC_EXECUTION; the callback and
+// Provider-poll resume enter the same transaction body (commitAgentToolFailure) with their
+// own source and "from" statuses.
 func (s *ExecutionService) failAgentToolCall(ctx context.Context, call agentToolCall, execError domain.ExecutionError) error {
+	_, err := s.commitAgentToolFailure(ctx, call, syncToolOutcome, execError)
+	return err
+}
+
+// commitAgentToolFailure is the transaction body of the shared Tool failure use case.
+func (s *ExecutionService) commitAgentToolFailure(ctx context.Context, call agentToolCall, src agentToolOutcomeSource, execError domain.ExecutionError) (agentToolCommit, error) {
 	var commit agentCommit
 
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
@@ -887,7 +1025,10 @@ func (s *ExecutionService) failAgentToolCall(ctx context.Context, call agentTool
 		}
 		now := s.deps.Clock.Now()
 
-		if err := tx.ToolAttempts().MarkFailed(ctx, call.attemptID, now, execError); err != nil {
+		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
+			return err
+		}
+		if err := tx.ToolAttempts().MarkFailed(ctx, call.attemptID, src.fromAttempt, now, execError); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}
@@ -895,7 +1036,7 @@ func (s *ExecutionService) failAgentToolCall(ctx context.Context, call agentTool
 		}
 		attemptID := call.attemptID
 		if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, call.actionID, &attemptID,
-			domain.FailureSyncExecution, domain.TerminationToolError, execError, now); err != nil {
+			src.fromAction, src.failureSource, domain.TerminationToolError, execError, now); err != nil {
 			return err
 		}
 
@@ -903,13 +1044,13 @@ func (s *ExecutionService) failAgentToolCall(ctx context.Context, call agentTool
 		return nil
 	})
 	if errors.Is(err, errAgentTurnSuperseded) {
-		return nil
+		return agentToolCommit{}, nil
 	}
 	if err != nil {
-		return err
+		return agentToolCommit{}, err
 	}
 	s.wake(commit)
-	return nil
+	return agentToolCommit{committed: true}, nil
 }
 
 // failAgentActionLocked fails one Agent Action and the Agent Run it belongs to, inside a
@@ -917,8 +1058,9 @@ func (s *ExecutionService) failAgentToolCall(ctx context.Context, call agentTool
 // every Action failure: an invalid committed Decision, a failed Tool call and a state
 // patch that cannot be applied.
 //
-// The Action's conditional update can lose -- the Action is no longer RUNNING, so another
-// path already completed it -- which rolls the whole transaction back through
+// The Action's conditional update can lose -- the Action is no longer in fromAction
+// (RUNNING for a synchronous path, WAITING_CALLBACK for an asynchronous resume), so
+// another path already completed it -- which rolls the whole transaction back through
 // errAgentTurnSuperseded and leaves this caller writing nothing. The Turn is deliberately
 // not touched: it completed when the model answered.
 func (s *ExecutionService) failAgentActionLocked(
@@ -930,12 +1072,13 @@ func (s *ExecutionService) failAgentActionLocked(
 	turnID string,
 	actionID string,
 	attemptID *string,
+	fromAction domain.AgentActionStatus,
 	failureSource domain.FailureSource,
 	termination domain.AgentTermination,
 	execError domain.ExecutionError,
 	now time.Time,
 ) error {
-	if err := tx.AgentActions().MarkFailed(ctx, actionID, now, execError); err != nil {
+	if err := tx.AgentActions().MarkFailed(ctx, actionID, fromAction, now, execError); err != nil {
 		if errors.Is(err, domain.ErrStaleClaim) {
 			return errAgentTurnSuperseded
 		}

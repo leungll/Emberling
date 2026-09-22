@@ -146,9 +146,9 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 			return err
 		}
 		if binding.TargetType != domain.CallbackTargetNodeAttempt {
-			// Tool Attempt callbacks belong to the Agent resume path, which is not part of
-			// this use case; refusing is safer than guessing a target table.
-			return fmt.Errorf("execution: callback binding %s targets %s, not a Node Attempt", binding.ID, binding.TargetType)
+			// A TOOL_ATTEMPT Binding is resumed by resumeToolAttempt below; any other
+			// target type is refused rather than guessed.
+			return nil
 		}
 		attempt, err = tx.NodeAttempts().Get(ctx, binding.TargetID)
 		if err != nil {
@@ -177,6 +177,15 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 	})
 	if err != nil {
 		return ResumeOutcome{}, err
+	}
+	switch binding.TargetType {
+	case domain.CallbackTargetNodeAttempt:
+	case domain.CallbackTargetToolAttempt:
+		// An asynchronous Agent Tool enters the same resume use case (invariant #5); only
+		// the target it resolves and the transaction that commits the outcome differ.
+		return s.resumeToolAttempt(ctx, req, binding)
+	default:
+		return ResumeOutcome{}, fmt.Errorf("execution: callback binding %s targets unknown type %s", binding.ID, binding.TargetType)
 	}
 	if !resolved {
 		return ResumeOutcome{

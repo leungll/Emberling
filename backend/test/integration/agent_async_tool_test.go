@@ -40,9 +40,13 @@ type agentAsyncTool struct {
 	result registry.ToolExecutionResult
 	err    error
 	during func(ctx context.Context, action registry.ToolAction)
+	// onCallback, when set, replaces the real `remote_lookup` payload interpretation; it
+	// runs where the resume use case calls OnCallback, outside every lock.
+	onCallback func(ctx context.Context, state registry.ToolAsyncState, payload []byte) (registry.ToolResult, error)
 
-	mu    sync.Mutex
-	calls []registry.ToolAction
+	mu        sync.Mutex
+	calls     []registry.ToolAction
+	callbacks []registry.ToolAsyncState
 }
 
 func (a *agentAsyncTool) Execute(ctx context.Context, action registry.ToolAction) (registry.ToolExecutionResult, error) {
@@ -55,16 +59,39 @@ func (a *agentAsyncTool) Execute(ctx context.Context, action registry.ToolAction
 	return a.result, a.err
 }
 
-// OnCallback is never reached in these tests: Tool resume through a callback is not part
-// of the dispatch path.
-func (a *agentAsyncTool) OnCallback(context.Context, registry.ToolAsyncState, []byte) (registry.ToolResult, error) {
-	return registry.ToolResult{}, errors.New("agentAsyncTool: OnCallback is not scripted")
+// OnCallback records the restored async state and, unless scripted, interprets the payload
+// exactly as the real `remote_lookup` Executor does.
+func (a *agentAsyncTool) OnCallback(ctx context.Context, state registry.ToolAsyncState, payload []byte) (registry.ToolResult, error) {
+	a.mu.Lock()
+	a.callbacks = append(a.callbacks, state)
+	a.mu.Unlock()
+	if a.onCallback != nil {
+		return a.onCallback(ctx, state, payload)
+	}
+	return remotelookup.New("http://mock-provider.invalid", nil).OnCallback(ctx, state, payload)
 }
 
 func (a *agentAsyncTool) count() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return len(a.calls)
+}
+
+func (a *agentAsyncTool) callbackCount() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.callbacks)
+}
+
+// lastToken is the plaintext callback credential the last Execute call was handed.
+func (a *agentAsyncTool) lastToken(t *testing.T) string {
+	t.Helper()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.calls) == 0 || a.calls[len(a.calls)-1].Callback == nil {
+		t.Fatal("the async Tool was never handed a callback credential")
+	}
+	return a.calls[len(a.calls)-1].Callback.Token
 }
 
 func agentAsyncDispatched(externalTaskID string) registry.ToolExecutionResult {
@@ -79,14 +106,30 @@ func agentAsyncDispatched(externalTaskID string) registry.ToolExecutionResult {
 // drives the Run up to the Agent NodeRun claim.
 func newAgentAsyncHarness(t *testing.T, workflowID string, tool *agentAsyncTool) (*agentHarness, domain.Run, service.AdvanceOutcome) {
 	t.Helper()
+	return newAgentAsyncHarnessWithNotifier(t, workflowID, tool, nil)
+}
+
+// newAgentAsyncHarnessWithNotifier is newAgentAsyncHarness with the post-COMMIT
+// EventNotifier replaced, so a test can stop the in-process chain at a chosen commit.
+func newAgentAsyncHarnessWithNotifier(t *testing.T, workflowID string, tool *agentAsyncTool, notifier service.EventNotifier) (*agentHarness, domain.Run, service.AdvanceOutcome) {
+	t.Helper()
+	return newAgentAsyncHarnessWithOptions(t, workflowID, tool, agentHarnessOptions{Notifier: notifier})
+}
+
+// newAgentAsyncHarnessWithOptions is newAgentAsyncHarness with the notifier and the
+// WorkEnqueuer taken from opts; the Tools and the Clock are always the async ones.
+func newAgentAsyncHarnessWithOptions(t *testing.T, workflowID string, tool *agentAsyncTool, opts agentHarnessOptions) (*agentHarness, domain.Run, service.AdvanceOutcome) {
+	t.Helper()
 	registration := remotelookup.Registration("http://mock-provider.invalid", nil)
 	registration.Executor = tool
 	// The Agent deadline also bounds the real Tool call's context, so the fake clock starts
 	// at wall-clock time: fixtureTime's deadline has already passed in real time and would
 	// expire the call's context before the scripted Tool returns.
 	h := newAgentHarness(t, agentHarnessOptions{
-		Tools: []registry.ToolRegistration{registration},
-		Clock: newExecClock(time.Now().UTC().Truncate(time.Millisecond)),
+		Tools:    []registry.ToolRegistration{registration},
+		Clock:    newExecClock(time.Now().UTC().Truncate(time.Millisecond)),
+		Notifier: opts.Notifier,
+		Queue:    opts.Queue,
 	})
 	agentScriptToolCallThenFinal(h, mockmodel.Scenario{
 		ToolName: remotelookup.ToolName, ToolArguments: json.RawMessage(agentToolArguments),

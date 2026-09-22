@@ -1270,7 +1270,7 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 			return fmt.Errorf("execution: encode node output: %w", err)
 		}
 
-		if err := s.consumePendingCallback(ctx, tx, attempt, p.consumePending, p.payloadHash, now); err != nil {
+		if err := s.consumePendingCallback(ctx, tx, attempt.ID, attempt.CallbackTokenHash, p.consumePending, p.payloadHash, now); err != nil {
 			return err
 		}
 
@@ -1469,7 +1469,7 @@ func matchesAttemptCredential(attemptTokenHash *string, pendingTokenHash string)
 // the whole transaction rolls back. A row whose stored credential does not match attempt's
 // own callback token hash is also refused -- the consumption performed by ConsumeOnce above
 // is rolled back along with everything else, since attempt is not this row's owner (06 §3).
-func (s *ExecutionService) consumePendingCallback(ctx context.Context, tx store.Tx, attempt domain.NodeAttempt, externalTaskID, expectedPayloadHash string, now time.Time) error {
+func (s *ExecutionService) consumePendingCallback(ctx context.Context, tx store.Tx, attemptID string, attemptTokenHash *string, externalTaskID, expectedPayloadHash string, now time.Time) error {
 	if externalTaskID == "" {
 		return nil
 	}
@@ -1483,8 +1483,8 @@ func (s *ExecutionService) consumePendingCallback(ctx context.Context, tx store.
 	if expectedPayloadHash != "" && pending.PayloadHash != expectedPayloadHash {
 		return errResumeSuperseded
 	}
-	if !matchesAttemptCredential(attempt.CallbackTokenHash, pending.CallbackTokenHash) {
-		return &PendingCallbackCredentialMismatchError{ExternalTaskID: externalTaskID, AttemptID: attempt.ID}
+	if !matchesAttemptCredential(attemptTokenHash, pending.CallbackTokenHash) {
+		return &PendingCallbackCredentialMismatchError{ExternalTaskID: externalTaskID, AttemptID: attemptID}
 	}
 	return nil
 }
@@ -1604,7 +1604,7 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 
 		now := s.deps.Clock.Now()
 
-		if err := s.consumePendingCallback(ctx, tx, attempt, p.consumePending, p.payloadHash, now); err != nil {
+		if err := s.consumePendingCallback(ctx, tx, attempt.ID, attempt.CallbackTokenHash, p.consumePending, p.payloadHash, now); err != nil {
 			return err
 		}
 

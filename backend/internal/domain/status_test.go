@@ -127,6 +127,34 @@ func TestAgentActionStatus_Transition_WaitingResolvesWithoutRerunningModel(t *te
 	}
 }
 
+func TestToolAttemptStatus_Transition_DispatchedResolvesOnce(t *testing.T) {
+	allowed := []struct{ from, to ToolAttemptStatus }{
+		{ToolAttemptStarted, ToolAttemptDispatched},
+		{ToolAttemptStarted, ToolAttemptSucceeded},
+		{ToolAttemptStarted, ToolAttemptFailed},
+		{ToolAttemptDispatched, ToolAttemptSucceeded},
+		{ToolAttemptDispatched, ToolAttemptFailed},
+	}
+	for _, tc := range allowed {
+		if !tc.from.CanTransitionTo(tc.to) {
+			t.Fatalf("ToolAttempt %s -> %s: want allowed, got rejected", tc.from, tc.to)
+		}
+	}
+	// A callback result is written once; a terminal Attempt never moves again, and a
+	// dispatched call never returns to STARTED.
+	rejected := []struct{ from, to ToolAttemptStatus }{
+		{ToolAttemptDispatched, ToolAttemptStarted},
+		{ToolAttemptSucceeded, ToolAttemptFailed},
+		{ToolAttemptFailed, ToolAttemptSucceeded},
+		{ToolAttemptSucceeded, ToolAttemptDispatched},
+	}
+	for _, tc := range rejected {
+		if tc.from.CanTransitionTo(tc.to) {
+			t.Fatalf("ToolAttempt %s -> %s: want rejected, got allowed", tc.from, tc.to)
+		}
+	}
+}
+
 func TestEventType_IsValid_ExcludesPhase2Types(t *testing.T) {
 	mvp := []EventType{
 		EventRunCreated, EventRunPaused, EventRunResumed, EventRunCompleted, EventRunFailed,

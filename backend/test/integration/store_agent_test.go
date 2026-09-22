@@ -524,7 +524,7 @@ func TestAgentActionStore_MarkSucceeded_NotRunning_StaleClaim(t *testing.T) {
 
 	// A completion path that never held the Action's execution right must lose.
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.AgentActions().MarkSucceeded(ctx, "action_1", fixtureTime)
+		return tx.AgentActions().MarkSucceeded(ctx, "action_1", domain.AgentActionRunning, fixtureTime)
 	})
 	if !errors.Is(err, domain.ErrStaleClaim) {
 		t.Fatalf("MarkSucceeded on a READY Action: want domain.ErrStaleClaim, got %v", err)
@@ -534,7 +534,7 @@ func TestAgentActionStore_MarkSucceeded_NotRunning_StaleClaim(t *testing.T) {
 		t.Fatal("ClaimReady: want true, got false")
 	}
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.AgentActions().MarkSucceeded(ctx, "action_1", fixtureTime)
+		return tx.AgentActions().MarkSucceeded(ctx, "action_1", domain.AgentActionRunning, fixtureTime)
 	}); err != nil {
 		t.Fatalf("MarkSucceeded on the claimed Action: %v", err)
 	}
@@ -594,14 +594,14 @@ func TestToolAttemptStore_MarkSucceeded_SecondWrite_StaleClaim(t *testing.T) {
 
 	result := json.RawMessage(`{"answer":"ember"}`)
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", fixtureTime, result)
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptStarted, fixtureTime, result)
 	}); err != nil {
 		t.Fatalf("first MarkSucceeded: %v", err)
 	}
 
 	// A duplicated Tool result transaction must not overwrite the committed result.
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.ToolAttempts().MarkFailed(ctx, "tool_attempt_1", fixtureTime,
+		return tx.ToolAttempts().MarkFailed(ctx, "tool_attempt_1", domain.ToolAttemptStarted, fixtureTime,
 			domain.ExecutionError{Code: "TOOL_ERROR", Message: "late failure"})
 	})
 	if !errors.Is(err, domain.ErrStaleClaim) {
@@ -620,6 +620,204 @@ func TestToolAttemptStore_MarkSucceeded_SecondWrite_StaleClaim(t *testing.T) {
 		t.Fatalf("Tool Attempt after the losing failure: status=%s error=%v", attempt.Status, attempt.Error)
 	}
 	assertSameJSON(t, "tool result", result, attempt.Result)
+}
+
+func TestToolAttemptStore_CallbackResolvesDispatchedAttempt_LateWriteStale(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_1", "turn_1", "decision_1", "action_1")
+	createToolAttempt(ctx, t, uow, newToolAttempt("tool_attempt_1", "action_1", 1))
+	createToolAttempt(ctx, t, uow, newToolAttempt("tool_attempt_2", "action_1", 2))
+
+	// A callback path expecting DISPATCHED loses against an Attempt that is still
+	// STARTED: its dispatch has not committed, so there is nothing to resume yet.
+	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptDispatched, fixtureTime,
+			json.RawMessage(`{"answer":"early"}`))
+	})
+	if !errors.Is(err, domain.ErrStaleClaim) {
+		t.Fatalf("MarkSucceeded(from DISPATCHED) on a STARTED Attempt: want domain.ErrStaleClaim, got %v", err)
+	}
+
+	for _, id := range []string{"tool_attempt_1", "tool_attempt_2"} {
+		if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			return tx.ToolAttempts().MarkDispatched(ctx, id, fixtureTime)
+		}); err != nil {
+			t.Fatalf("MarkDispatched %s: %v", id, err)
+		}
+	}
+
+	result := json.RawMessage(`{"answer":"ember"}`)
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptDispatched, fixtureTime, result)
+	}); err != nil {
+		t.Fatalf("MarkSucceeded(from DISPATCHED): %v", err)
+	}
+	callbackFailure := domain.ExecutionError{Code: "REMOTE_LOOKUP_FAILED", Message: "provider failed"}
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkFailed(ctx, "tool_attempt_2", domain.ToolAttemptDispatched, fixtureTime, callbackFailure)
+	}); err != nil {
+		t.Fatalf("MarkFailed(from DISPATCHED): %v", err)
+	}
+
+	// A duplicated or late callback finds the row no longer DISPATCHED and loses.
+	err = uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkFailed(ctx, "tool_attempt_1", domain.ToolAttemptDispatched, fixtureTime,
+			domain.ExecutionError{Code: "TOOL_ERROR", Message: "late failure"})
+	})
+	if !errors.Is(err, domain.ErrStaleClaim) {
+		t.Fatalf("late MarkFailed after callback success: want domain.ErrStaleClaim, got %v", err)
+	}
+	err = uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_2", domain.ToolAttemptDispatched, fixtureTime, result)
+	})
+	if !errors.Is(err, domain.ErrStaleClaim) {
+		t.Fatalf("late MarkSucceeded after callback failure: want domain.ErrStaleClaim, got %v", err)
+	}
+
+	// A from-status that cannot reach the target is a programming error, not a lost race.
+	var invalid *domain.InvalidStateTransitionError
+	err = uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptSucceeded, fixtureTime, result)
+	})
+	if !errors.As(err, &invalid) {
+		t.Fatalf("MarkSucceeded(from SUCCEEDED): want InvalidStateTransitionError, got %v", err)
+	}
+
+	var first, second domain.ToolAttempt
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		if first, err = tx.ToolAttempts().Get(ctx, "tool_attempt_1"); err != nil {
+			return err
+		}
+		second, err = tx.ToolAttempts().Get(ctx, "tool_attempt_2")
+		return err
+	}); err != nil {
+		t.Fatalf("Get Tool Attempts: %v", err)
+	}
+	if first.Status != domain.ToolAttemptSucceeded || first.Error != nil || first.CompletedAt == nil {
+		t.Fatalf("tool_attempt_1: status=%s error=%v completed_at=%v", first.Status, first.Error, first.CompletedAt)
+	}
+	assertSameJSON(t, "callback result", result, first.Result)
+	if second.Status != domain.ToolAttemptFailed || second.Error == nil ||
+		second.Error.Code != callbackFailure.Code || second.Result != nil {
+		t.Fatalf("tool_attempt_2: status=%s error=%v result=%s", second.Status, second.Error, second.Result)
+	}
+}
+
+func TestAgentActionStore_WaitingActionResolvesOnce_LateWriteStale(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_1", "turn_1", "decision_1", "action_1")
+	// A second decided Turn of the same Agent Run gives a second Action to fail.
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		if err := tx.AgentTurns().Create(ctx, newAgentTurn("turn_2", "ar_1", 2)); err != nil {
+			return err
+		}
+		if _, err := tx.AgentTurns().ClaimReady(ctx, "turn_2", fixtureTime); err != nil {
+			return err
+		}
+		if err := tx.AgentTurns().MarkCompleted(ctx, "turn_2", fixtureTime,
+			json.RawMessage(`{"kind":"TOOL_CALL"}`), nil); err != nil {
+			return err
+		}
+		if err := tx.AgentDecisions().Create(ctx, newAgentDecision("decision_2", "turn_2")); err != nil {
+			return err
+		}
+		return tx.AgentActions().Create(ctx, newAgentAction("action_2", "turn_2", "decision_2"))
+	}); err != nil {
+		t.Fatalf("seed second decided Turn: %v", err)
+	}
+
+	for _, id := range []string{"action_1", "action_2"} {
+		if !claimAction(ctx, t, uow, f.runID, id) {
+			t.Fatalf("ClaimReady %s: want true, got false", id)
+		}
+	}
+
+	// A RUNNING Action has not started waiting; a callback path expecting
+	// WAITING_CALLBACK must lose rather than complete a synchronous call's Action.
+	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.AgentActions().MarkSucceeded(ctx, "action_1", domain.AgentActionWaitingCallback, fixtureTime)
+	})
+	if !errors.Is(err, domain.ErrStaleClaim) {
+		t.Fatalf("MarkSucceeded(from WAITING_CALLBACK) on a RUNNING Action: want domain.ErrStaleClaim, got %v", err)
+	}
+
+	for _, id := range []string{"action_1", "action_2"} {
+		if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			return tx.AgentActions().MarkWaiting(ctx, id, fixtureTime)
+		}); err != nil {
+			t.Fatalf("MarkWaiting %s: %v", id, err)
+		}
+	}
+
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.AgentActions().MarkSucceeded(ctx, "action_1", domain.AgentActionWaitingCallback, fixtureTime)
+	}); err != nil {
+		t.Fatalf("MarkSucceeded(from WAITING_CALLBACK): %v", err)
+	}
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.AgentActions().MarkFailed(ctx, "action_2", domain.AgentActionWaitingCallback, fixtureTime,
+			domain.ExecutionError{Code: "REMOTE_LOOKUP_FAILED", Message: "provider failed"})
+	}); err != nil {
+		t.Fatalf("MarkFailed(from WAITING_CALLBACK): %v", err)
+	}
+
+	// A late callback finds the Action already resolved and loses.
+	err = uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.AgentActions().MarkFailed(ctx, "action_1", domain.AgentActionWaitingCallback, fixtureTime,
+			domain.ExecutionError{Code: "TOOL_ERROR", Message: "late failure"})
+	})
+	if !errors.Is(err, domain.ErrStaleClaim) {
+		t.Fatalf("late MarkFailed after success: want domain.ErrStaleClaim, got %v", err)
+	}
+
+	var invalid *domain.InvalidStateTransitionError
+	err = uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.AgentActions().MarkSucceeded(ctx, "action_2", domain.AgentActionReady, fixtureTime)
+	})
+	if !errors.As(err, &invalid) {
+		t.Fatalf("MarkSucceeded(from READY): want InvalidStateTransitionError, got %v", err)
+	}
+
+	if a := getAgentAction(ctx, t, uow, "action_1"); a.Status != domain.AgentActionSucceeded || a.Error != nil {
+		t.Fatalf("action_1: status=%s error=%v", a.Status, a.Error)
+	}
+	if a := getAgentAction(ctx, t, uow, "action_2"); a.Status != domain.AgentActionFailed || a.Error == nil {
+		t.Fatalf("action_2: status=%s error=%v", a.Status, a.Error)
+	}
+}
+
+// TestAgentActionStore_MarkFailedFromReady_RejectedAsTimeoutOnly covers 06 §1.7: failing an
+// Action that no executor ever claimed is the Agent timeout's transition alone
+// (MarkTimedOut). MarkFailed refuses READY as its expected state before any SQL runs, and
+// the READY row is left untouched.
+func TestAgentActionStore_MarkFailedFromReady_RejectedAsTimeoutOnly(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_1", "turn_1", "decision_1", "action_1")
+
+	var invalid *domain.InvalidStateTransitionError
+	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.AgentActions().MarkFailed(ctx, "action_1", domain.AgentActionReady, fixtureTime,
+			domain.ExecutionError{Code: "TOOL_ERROR", Message: "not a timeout"})
+	})
+	if !errors.As(err, &invalid) {
+		t.Fatalf("MarkFailed(from READY): want InvalidStateTransitionError, got %v", err)
+	}
+	if a := getAgentAction(ctx, t, uow, "action_1"); a.Status != domain.AgentActionReady || a.Error != nil || a.CompletedAt != nil {
+		t.Fatalf("action_1 after a refused MarkFailed: status=%s error=%v completedAt=%v, want untouched READY", a.Status, a.Error, a.CompletedAt)
+	}
 }
 
 // ---------------------------------------------------------------------------

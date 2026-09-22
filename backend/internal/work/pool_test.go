@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/service"
 )
 
@@ -18,6 +19,19 @@ type execScriptedExecutor struct {
 
 	advanceCalls int32
 	executeCalls int32
+
+	// turnCalls records every AdvanceAgentTurn call; it must be buffered by the test.
+	turnCalls chan agentTurnCall
+}
+
+type agentTurnCall struct {
+	turnID      string
+	claimSource domain.ClaimSource
+}
+
+func (e *execScriptedExecutor) AdvanceAgentTurn(_ context.Context, turnID string, claimSource domain.ClaimSource) error {
+	e.turnCalls <- agentTurnCall{turnID: turnID, claimSource: claimSource}
+	return nil
 }
 
 func (e *execScriptedExecutor) Advance(_ context.Context, _ string) (service.AdvanceOutcome, error) {
@@ -140,4 +154,60 @@ func TestPool_Stop_WaitsForInFlightExecuteToFinish(t *testing.T) {
 	fresh := NewPool(NewQueue(1), exec, 1, Hooks{}, nil)
 	fresh.Stop()
 	pool.Stop()
+}
+
+// TestPool_AgentTurnItem_DispatchesToAdvanceAgentTurn covers the typed queue item of
+// 06 §2.1: an AGENT_TURN item carries the persisted Turn ID and its Run ID, and the Pool
+// hands it to the Agent Turn use case as immediate advancement -- never to the Run-level
+// Advance -- under the same Before/AfterExecute hooks a Run item uses.
+func TestPool_AgentTurnItem_DispatchesToAdvanceAgentTurn(t *testing.T) {
+	var hooked []string
+	done := make(chan struct{})
+	exec := &execScriptedExecutor{
+		advance: func(int) (service.AdvanceOutcome, error) {
+			t.Error("Advance called for an AGENT_TURN item")
+			return service.AdvanceOutcome{}, nil
+		},
+		execute:   func(int) error { return nil },
+		turnCalls: make(chan agentTurnCall, 1),
+	}
+	hooks := Hooks{
+		BeforeExecute: func(runID string) { hooked = append(hooked, "before:"+runID) },
+		AfterExecute: func(runID string) {
+			hooked = append(hooked, "after:"+runID)
+			close(done)
+		},
+	}
+
+	queue := NewQueue(4)
+	pool := NewPool(queue, exec, 1, hooks, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pool.Start(ctx)
+	defer pool.Stop()
+
+	if !queue.EnqueueAgentTurn("run_a", "turn_1") {
+		t.Fatal("enqueue agent turn: want accepted, got refused")
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("AfterExecute hook: want fired within 5s, got timeout")
+	}
+	pool.Stop()
+
+	select {
+	case call := <-exec.turnCalls:
+		if call.turnID != "turn_1" || call.claimSource != domain.ClaimImmediate {
+			t.Errorf("AdvanceAgentTurn(%q, %s), want (turn_1, IMMEDIATE)", call.turnID, call.claimSource)
+		}
+	default:
+		t.Fatal("AdvanceAgentTurn was not called for the AGENT_TURN item")
+	}
+	if len(hooked) != 2 || hooked[0] != "before:run_a" || hooked[1] != "after:run_a" {
+		t.Errorf("hooks = %v, want before and after for run_a", hooked)
+	}
+	if got := atomic.LoadInt32(&exec.advanceCalls); got != 0 {
+		t.Errorf("Advance calls = %d, want 0", got)
+	}
 }

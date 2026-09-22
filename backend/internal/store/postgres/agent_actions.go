@@ -116,31 +116,45 @@ func (r *agentActionRepository) MarkWaiting(ctx context.Context, actionID string
 	return nil
 }
 
-// MarkSucceeded conditionally moves a RUNNING Action to SUCCEEDED. Requiring RUNNING is
-// what ties completion to the caller that actually holds the execution right.
-func (r *agentActionRepository) MarkSucceeded(ctx context.Context, actionID string, now time.Time) error {
+// MarkSucceeded conditionally moves an Action from the given status to SUCCEEDED: RUNNING
+// for the caller that holds the execution right of a synchronous call, WAITING_CALLBACK
+// for the resume of an asynchronous one. Requiring the expected status is what ties
+// completion to the single winner.
+func (r *agentActionRepository) MarkSucceeded(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time) error {
+	if !from.CanTransitionTo(domain.AgentActionSucceeded) {
+		return &domain.InvalidStateTransitionError{
+			Entity: "AgentAction", ID: actionID, From: string(from), To: string(domain.AgentActionSucceeded),
+		}
+	}
+
 	const update = `
 		UPDATE agent_actions
-		   SET status = 'SUCCEEDED', completed_at = $2
-		 WHERE id = $1 AND status = 'RUNNING'`
+		   SET status = 'SUCCEEDED', completed_at = $3
+		 WHERE id = $1 AND status = $2`
 
-	affected, err := affectedRows(ctx, r.conn, "agent_actions.MarkSucceeded", update, actionID, now)
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.MarkSucceeded", update, actionID, string(from), now)
 	if err != nil {
 		return err
 	}
 	switch {
 	case affected == 0:
-		return fmt.Errorf("store/postgres agent_actions.MarkSucceeded: action=%s RUNNING -> SUCCEEDED: %w",
-			actionID, domain.ErrStaleClaim)
+		return fmt.Errorf("store/postgres agent_actions.MarkSucceeded: action=%s %s -> SUCCEEDED: %w",
+			actionID, from, domain.ErrStaleClaim)
 	case affected > 1:
 		return errUnexpectedRows("agent_actions.MarkSucceeded", actionID, affected)
 	}
 	return nil
 }
 
-// MarkFailed conditionally moves a RUNNING Action to FAILED and records the failure the
-// Agent Run terminates on.
-func (r *agentActionRepository) MarkFailed(ctx context.Context, actionID string, now time.Time, execErr domain.ExecutionError) error {
+// MarkFailed conditionally moves a RUNNING or WAITING_CALLBACK Action to FAILED and
+// records the failure the Agent Run terminates on. READY -> FAILED is reserved for the
+// Agent timeout transaction (MarkTimedOut), so it is rejected here as well.
+func (r *agentActionRepository) MarkFailed(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time, execErr domain.ExecutionError) error {
+	if from == domain.AgentActionReady || !from.CanTransitionTo(domain.AgentActionFailed) {
+		return &domain.InvalidStateTransitionError{
+			Entity: "AgentAction", ID: actionID, From: string(from), To: string(domain.AgentActionFailed),
+		}
+	}
 	errPayload, err := marshalExecutionError(&execErr)
 	if err != nil {
 		return fmt.Errorf("store/postgres agent_actions.MarkFailed: action=%s: %w", actionID, err)
@@ -148,16 +162,17 @@ func (r *agentActionRepository) MarkFailed(ctx context.Context, actionID string,
 
 	const update = `
 		UPDATE agent_actions
-		   SET status = 'FAILED', error = $2, completed_at = $3
-		 WHERE id = $1 AND status = 'RUNNING'`
-	affected, err := affectedRows(ctx, r.conn, "agent_actions.MarkFailed", update, actionID, errPayload, now)
+		   SET status = 'FAILED', error = $3, completed_at = $4
+		 WHERE id = $1 AND status = $2`
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.MarkFailed", update,
+		actionID, string(from), errPayload, now)
 	if err != nil {
 		return err
 	}
 	switch {
 	case affected == 0:
-		return fmt.Errorf("store/postgres agent_actions.MarkFailed: action=%s RUNNING -> FAILED: %w",
-			actionID, domain.ErrStaleClaim)
+		return fmt.Errorf("store/postgres agent_actions.MarkFailed: action=%s %s -> FAILED: %w",
+			actionID, from, domain.ErrStaleClaim)
 	case affected > 1:
 		return errUnexpectedRows("agent_actions.MarkFailed", actionID, affected)
 	}

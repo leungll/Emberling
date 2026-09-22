@@ -74,6 +74,9 @@ type agentHarnessOptions struct {
 	// Notifier replaces the no-op EventNotifier. It is the only hook this service exposes
 	// between a committed transaction and the in-process advancement that follows it.
 	Notifier service.EventNotifier
+	// Queue replaces the no-op WorkEnqueuer, so a test can hand post-COMMIT work to a real
+	// bounded work.Queue drained by a work.Pool, or refuse it outright.
+	Queue service.WorkEnqueuer
 }
 
 // agentHarness wires one real PostgreSQL-backed ExecutionService with the `agent` Node
@@ -152,6 +155,7 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		Clock:    clock,
 		IDs:      ids,
 		Notifier: opts.Notifier,
+		Queue:    opts.Queue,
 		// An ASYNC Tool's claim transaction issues an Attempt-scoped callback credential,
 		// which needs a signing secret and a callback origin.
 		Callback: service.CallbackConfig{

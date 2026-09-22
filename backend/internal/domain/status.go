@@ -132,6 +132,25 @@ func (s ToolAttemptStatus) IsValid() bool {
 	}
 }
 
+// A synchronous call resolves from STARTED; an asynchronous one resolves from DISPATCHED
+// when its callback arrives (06 §1.7). A terminal Attempt never moves again, so a
+// duplicated or late result cannot overwrite the committed one.
+var toolAttemptTransitions = map[ToolAttemptStatus][]ToolAttemptStatus{
+	ToolAttemptStarted:    {ToolAttemptDispatched, ToolAttemptSucceeded, ToolAttemptFailed},
+	ToolAttemptDispatched: {ToolAttemptSucceeded, ToolAttemptFailed},
+	ToolAttemptSucceeded:  nil,
+	ToolAttemptFailed:     nil,
+}
+
+func (s ToolAttemptStatus) CanTransitionTo(to ToolAttemptStatus) bool {
+	for _, allowed := range toolAttemptTransitions[s] {
+		if allowed == to {
+			return true
+		}
+	}
+	return false
+}
+
 // AgentTurnStatus tracks one model interaction. A Turn has no WAITING_CALLBACK state;
 // waiting belongs to the Agent Action that follows the Decision.
 type AgentTurnStatus string

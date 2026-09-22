@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/service"
 )
 
@@ -14,11 +15,13 @@ import (
 type Executor interface {
 	Advance(ctx context.Context, runID string) (service.AdvanceOutcome, error)
 	Execute(ctx context.Context, outcome service.AdvanceOutcome) error
+	AdvanceAgentTurn(ctx context.Context, turnID string, claimSource domain.ClaimSource) error
 }
 
 // Hooks lets a caller observe or synchronize on Pool activity without sleeps
 // (CLAUDE.md testing standard: "concurrency and failure tests use explicit barriers or
-// injected hooks"). Both fields are optional.
+// injected hooks"). Both fields are optional. For an AGENT_TURN item they bracket the
+// Agent Turn use case and receive the item's Run ID.
 type Hooks struct {
 	BeforeExecute func(runID string)
 	AfterExecute  func(runID string)
@@ -90,7 +93,12 @@ func (p *Pool) run(ctx context.Context) {
 			if !ok {
 				return
 			}
-			p.processItem(ctx, item.RunID)
+			switch item.Kind {
+			case ItemAgentTurn:
+				p.processAgentTurn(ctx, item)
+			default:
+				p.processItem(ctx, item.RunID)
+			}
 		}
 	}
 }
@@ -133,5 +141,25 @@ func (p *Pool) processItem(ctx context.Context, runID string) {
 		if p.hooks.AfterExecute != nil {
 			p.hooks.AfterExecute(runID)
 		}
+	}
+}
+
+// processAgentTurn hands one committed READY Agent Turn to the same use case immediate
+// advancement and the Reconciler enter (06 §2.1). It runs under the Pool's context, never
+// a transport request's: the model call and the Tool calls the Turn chains outlive the
+// request that committed the Turn, and stop only when the Pool stops. A lost claim or an
+// error leaves the Turn to its own conditional updates and to the Reconciler.
+func (p *Pool) processAgentTurn(ctx context.Context, item Item) {
+	if ctx.Err() != nil {
+		return
+	}
+	if p.hooks.BeforeExecute != nil {
+		p.hooks.BeforeExecute(item.RunID)
+	}
+	if err := p.executor.AdvanceAgentTurn(ctx, item.TurnID, domain.ClaimImmediate); err != nil {
+		p.logger.Error("work: advance agent turn failed", "run_id", item.RunID, "agent_turn_id", item.TurnID, "error", err)
+	}
+	if p.hooks.AfterExecute != nil {
+		p.hooks.AfterExecute(item.RunID)
 	}
 }
