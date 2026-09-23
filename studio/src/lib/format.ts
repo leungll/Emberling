@@ -30,3 +30,32 @@ export function formatMillis(ms: number | null | undefined): string {
 export function truncate(value: string, max = 160): string {
   return value.length <= max ? value : `${value.slice(0, max)}…`;
 }
+
+/**
+ * Coarse relative-time label for the Definitions table's "Updated" column (04 §1.1).
+ * Formatting only: it reads a server timestamp and never derives one.
+ */
+export function formatRelativeTime(value: string | null | undefined): string {
+  if (!value) return '—';
+  const parsed = new Date(value).getTime();
+  if (Number.isNaN(parsed)) return '—';
+  const diffMs = Date.now() - parsed;
+  if (diffMs < 0) return 'just now';
+
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return 'just now';
+  if (diffMs < hour) {
+    const minutes = Math.floor(diffMs / minute);
+    return `${minutes} min ago`;
+  }
+  if (diffMs < day) {
+    const hours = Math.floor(diffMs / hour);
+    return `${hours} hr ago`;
+  }
+  if (diffMs < 2 * day) return 'Yesterday';
+  const days = Math.floor(diffMs / day);
+  return `${days} days ago`;
+}

@@ -41,3 +41,17 @@ describe('StudioHeader — Run gating (04-ux.md §6 item 3)', () => {
     expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled();
   });
 });
+
+describe('StudioHeader — mode subtitle (04 §1.4)', () => {
+  it('states the saved Definition version and the Editing mode, with the workflow id on hover', () => {
+    renderHeader({ version: 4 });
+    const subtitle = screen.getByTestId('studio-subtitle');
+    expect(subtitle).toHaveTextContent('Definition v4 · Editing');
+    expect(subtitle).toHaveAttribute('title', 'Workflow wf_123');
+  });
+
+  it('states an unsaved draft explicitly while still naming the Editing mode', () => {
+    renderHeader({ version: null });
+    expect(screen.getByTestId('studio-subtitle')).toHaveTextContent('Unsaved draft · Editing');
+  });
+});

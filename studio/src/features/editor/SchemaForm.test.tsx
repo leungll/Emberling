@@ -41,7 +41,7 @@ describe('SchemaForm', () => {
   it('renders a required string field and marks it required', () => {
     renderForm();
 
-    const modelId = screen.getByLabelText(/Model Id/i);
+    const modelId = screen.getByLabelText(/^Model\s*\*?$/);
     expect(modelId).toBeInTheDocument();
     expect(modelId).toBeRequired();
     expect(modelId).toHaveValue('text-model-v1');
@@ -72,12 +72,12 @@ describe('SchemaForm', () => {
     renderForm();
 
     const labels = screen
-      .getAllByText(/Model Id|Prompt|Width|Quality|Stream/)
+      .getAllByText(/^(Model|Prompt|Width|Quality|Stream)$/, { selector: 'label' })
       .map((element) => element.textContent?.replace('*', '').trim());
 
-    expect(labels.slice(0, 3)).toEqual(['Model Id', 'Prompt', 'Width']);
+    expect(labels.slice(0, 3)).toEqual(['Model', 'Prompt', 'Width']);
     expect(screen.getByText('Basic')).toBeInTheDocument();
-    expect(screen.getByText('Model')).toBeInTheDocument();
+    expect(screen.getByText('Model', { selector: 'legend' })).toBeInTheDocument();
     expect(screen.getByText('Model Parameters')).toBeInTheDocument();
   });
 
@@ -169,7 +169,7 @@ describe('SchemaForm — schema-driven widgets', () => {
     const onChange = renderAgentForm();
     const user = userEvent.setup();
 
-    const select = screen.getByLabelText(/Model Id/i);
+    const select = screen.getByLabelText(/^Model\s*\*?$/);
     expect(select.tagName).toBe('SELECT');
     expect(within(select).getByRole('option', { name: /Decision Model/ })).toBeInTheDocument();
     expect(within(select).queryByRole('option', { name: /Image Model/ })).toBeNull();
@@ -181,7 +181,7 @@ describe('SchemaForm — schema-driven widgets', () => {
   it('keeps an unregistered saved model visible instead of silently dropping it', () => {
     renderAgentForm({ modelId: 'retired-model' });
 
-    const select = screen.getByLabelText(/Model Id/i);
+    const select = screen.getByLabelText(/^Model\s*\*?$/);
     expect(select).toHaveValue('retired-model');
     expect(within(select).getByRole('option', { name: /retired-model.*not registered/i })).toBe(
       within(select).getByRole('option', { name: /retired-model/ }),

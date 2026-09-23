@@ -1,3 +1,4 @@
+import { executionKindLabel } from './nodeSummary';
 import { SchemaForm } from './SchemaForm';
 import type { JsonObject, ModelMetadata, Node, NodeMetadata } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
@@ -5,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 interface PropertiesPanelProps {
   node: Node | null;
@@ -30,25 +32,51 @@ export function PropertiesPanel({
   onConfigChange,
 }: PropertiesPanelProps) {
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-[var(--border)]">
-      <div className="border-b border-[var(--border)] p-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-          Properties
+    <aside className="flex w-80 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--card)]">
+      <div className="border-b border-[var(--border)] p-3">
+        <h2 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
+          PROPERTIES · DEFINITION
         </h2>
       </div>
 
       <ScrollArea className="flex-1 p-3">
         {!node ? (
-          <p className="text-xs text-[var(--muted-foreground)]">
+          <p className="text-sm text-[var(--muted-foreground)]">
             Select a node to edit its configuration.
           </p>
         ) : (
           <div className="space-y-4">
-            <div className="space-y-1">
+            {/* Title row (04 §2.6): the node's name with its registered Node Type as a pill,
+                tinted like the selected card (Agent purple, everything else amber). The name
+                wraps rather than truncating so it is always fully readable beside the pill. */}
+            <div className="flex items-start justify-between gap-3">
+              <p
+                className="min-w-0 flex-1 text-xl leading-7 font-bold break-words"
+                title={node.name}
+              >
+                {node.name}
+              </p>
+              {metadata ? (
+                <span
+                  className={cn(
+                    'mt-0.5 shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
+                    metadata.category === 'Agent'
+                      ? 'bg-[var(--node-selected-agent-fill)] text-[#b9a8ff]'
+                      : 'bg-[var(--node-selected-fill)] text-[#fdb022]',
+                  )}
+                >
+                  {metadata.displayName}
+                </span>
+              ) : null}
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="node-name">Name</Label>
               <Input id="node-name" value={node.name} onChange={(e) => onRename(e.target.value)} />
             </div>
 
+            {/* SchemaForm groups every field (including a MODEL_SELECTOR field) under its
+                own uiSchema group header — Basic/Model/Model Parameters — so this panel adds
+                no second, overlapping section label around it (avoids duplicated headers). */}
             {metadata ? (
               <>
                 <Separator />
@@ -62,22 +90,25 @@ export function PropertiesPanel({
                 />
                 <Separator />
                 <section className="space-y-2">
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                    Runtime Contract
+                  <h3 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
+                    RUNTIME CONTRACT · READ ONLY
                   </h3>
                   {/* Read-only registration facts. Not node config, not editable. */}
-                  <dl className="space-y-1 text-xs">
+                  <dl className="space-y-1.5 text-sm">
                     <div className="flex justify-between gap-2">
                       <dt className="text-[var(--muted-foreground)]">Execution</dt>
                       <dd>
-                        <Badge variant="outline">{metadata.executionKind}</Badge>
+                        <Badge variant="outline">
+                          {executionKindLabel(metadata.executionKind)}
+                        </Badge>
                       </dd>
                     </div>
                     <div className="flex justify-between gap-2">
                       <dt className="text-[var(--muted-foreground)]">Side effect</dt>
                       <dd>
                         <Badge variant="outline">
-                          {metadata.sideEffect.kind} · {metadata.sideEffect.idempotency}
+                          {metadata.sideEffect.kind === 'EXTERNAL' ? 'External write' : 'None'} ·{' '}
+                          {metadata.sideEffect.idempotency}
                         </Badge>
                       </dd>
                     </div>
@@ -92,12 +123,16 @@ export function PropertiesPanel({
                           <dd>{node.executionPolicy.maxAttempts}</dd>
                         </div>
                       </>
-                    ) : null}
+                    ) : (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        No execution policy override; the Registry default applies.
+                      </p>
+                    )}
                   </dl>
                 </section>
               </>
             ) : (
-              <p className="text-xs text-red-500">
+              <p className="text-sm text-[var(--status-failed-fg)]">
                 Node type <code>{node.type}</code> is not in the Registry. Save is blocked until it
                 resolves.
               </p>

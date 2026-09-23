@@ -120,13 +120,13 @@ export function nodeRunBorderClass(status: NodeRunStatus | undefined): string {
     case 'READY':
       return 'border-[var(--muted-foreground)]';
     case 'RUNNING':
-      return 'border-sky-500';
+      return 'border-[var(--status-running-dot)]';
     case 'WAITING_CALLBACK':
-      return 'border-amber-500';
+      return 'border-[var(--status-waiting-dot)]';
     case 'SUCCEEDED':
-      return 'border-emerald-500';
+      return 'border-[var(--status-succeeded-dot)]';
     case 'FAILED':
-      return 'border-red-500';
+      return 'border-[var(--status-failed-dot)]';
     default:
       return 'border-[var(--border)]';
   }

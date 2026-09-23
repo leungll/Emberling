@@ -11,15 +11,18 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 
 import { NodePalette } from './NodePalette';
 import { PropertiesPanel } from './PropertiesPanel';
+import { RecentExecutionBar } from './RecentExecutionBar';
 import { StudioHeader } from './StudioHeader';
 import type { CanvasFocusRequest } from './WorkflowCanvas';
-import type { RegisteredFlowNode } from './RegisteredNode';
+import { NODE_CARD_HEIGHT, NODE_CARD_WIDTH, type RegisteredFlowNode } from './RegisteredNode';
 import { WorkflowCanvas } from './WorkflowCanvas';
 import {
   ApiRequestError,
   createDefinition,
   createRun,
   getDefinition,
+  getRun,
+  listDefinitions,
   listModels,
   listNodeTypes,
   saveDefinition,
@@ -32,6 +35,7 @@ import type {
   ModelMetadata,
   Node,
   NodeMetadata,
+  RunSnapshot,
   ValidationError,
 } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
@@ -124,6 +128,8 @@ export function EditPage() {
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const [nodeTypes, setNodeTypes] = useState<NodeMetadata[]>([]);
   const [models, setModels] = useState<ModelMetadata[]>([]);
+  const [recentRun, setRecentRun] = useState<RunSnapshot | null>(null);
+  const [recentRunLoaded, setRecentRunLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<ValidationError[] | null>(null);
   const [conflict, setConflict] = useState<Definition | null>(null);
@@ -178,6 +184,29 @@ export function EditPage() {
           if (controller.signal.aborted) return;
           setLoadError(describeError(error, 'Could not load definition'));
         });
+
+      // The Recent Execution bar (04 §2.6) reads the Definition list's `lastRun` summary,
+      // then one `GET /runs/:id` for duration/Event count when a Run exists. A brand-new
+      // draft cannot have a Run yet, so this only runs for an existing workflowId. A
+      // failure here only empties the bar; it must never block or error the rest of Edit.
+      listDefinitions(controller.signal)
+        .then((items) => {
+          const lastRun = items.find((item) => item.workflowId === workflowId)?.lastRun ?? null;
+          if (!lastRun) {
+            setRecentRun(null);
+            setRecentRunLoaded(true);
+            return;
+          }
+          return getRun(lastRun.id, controller.signal).then((snapshot) => {
+            setRecentRun(snapshot);
+            setRecentRunLoaded(true);
+          });
+        })
+        .catch((_error: unknown) => {
+          if (controller.signal.aborted) return;
+          setRecentRun(null);
+          setRecentRunLoaded(true);
+        });
     }
 
     return () => controller.abort();
@@ -214,11 +243,22 @@ export function EditPage() {
         id: node.id,
         type: 'registered' as const,
         position: positions[node.id] ?? node.position,
+        // Every card renders at this fixed CSS size (RegisteredNode); declaring it here
+        // lets React Flow skip its measure-then-reveal pass on a controlled `nodes` array
+        // (see NODE_CARD_WIDTH/HEIGHT). The `measured` feedback below still applies on top
+        // for the internal dimension change React Flow reports after mounting each card.
+        width: NODE_CARD_WIDTH,
+        height: NODE_CARD_HEIGHT,
         ...(measured[node.id] ? { measured: measured[node.id] } : {}),
         selected: node.id === selectedNodeId,
-        data: { label: node.name, metadata: metadataByType.get(node.type) },
+        data: {
+          label: node.name,
+          metadata: metadataByType.get(node.type),
+          config: node.config,
+          models,
+        },
       })),
-    [nodes, positions, measured, metadataByType, selectedNodeId],
+    [nodes, positions, measured, metadataByType, selectedNodeId, models],
   );
 
   const flowEdges = useMemo<FlowEdge[]>(
@@ -516,16 +556,26 @@ export function EditPage() {
 
       <div className="flex min-h-0 flex-1">
         <NodePalette nodeTypes={nodeTypes} onAdd={addNode} error={loadError} />
-        <div className="min-w-0 flex-1">
-          <WorkflowCanvas
-            nodes={flowNodes}
-            edges={flowEdges}
-            focus={focusRequest}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onSelectNode={selectNode}
-          />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2">
+            <h2 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
+              WORKFLOW CANVAS
+            </h2>
+            <span className="text-xs text-[var(--muted-foreground)]">
+              ports · schema · execution contract
+            </span>
+          </div>
+          <div className="min-h-0 flex-1">
+            <WorkflowCanvas
+              nodes={flowNodes}
+              edges={flowEdges}
+              focus={focusRequest}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onSelectNode={selectNode}
+            />
+          </div>
         </div>
         <PropertiesPanel
           node={selectedNode}
@@ -546,6 +596,8 @@ export function EditPage() {
           }}
         />
       </div>
+
+      <RecentExecutionBar loaded={recentRunLoaded} snapshot={recentRun} />
 
       {definition ? (
         <RunInputDialog

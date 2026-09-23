@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 
+import { paletteSummaryLine, runtimeSemanticsCounts } from './nodeSummary';
+import { nodeAccentColor } from './portStyles';
 import type { NodeMetadata } from '@/api/types';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,6 +14,8 @@ interface NodePaletteProps {
 
 /** Fixed reading order for the known categories; anything else sorts after, alphabetically. */
 const CATEGORY_ORDER = ['Input', 'Prompt & Model', 'Agent', 'Output'];
+
+const TWO_COLUMN_CATEGORIES = new Set(['Input', 'Output']);
 
 function categoryRank(category: string): number {
   const index = CATEGORY_ORDER.indexOf(category);
@@ -46,43 +50,63 @@ export function NodePalette({ nodeTypes, onAdd, error }: NodePaletteProps) {
     });
   }, [nodeTypes, query]);
 
+  const semantics = useMemo(() => runtimeSemanticsCounts(nodeTypes), [nodeTypes]);
+
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-[var(--border)]">
-      <div className="border-b border-[var(--border)] p-2">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-          Node Palette
-        </h2>
+    <aside className="flex w-[286px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--muted)]">
+      <div className="border-b border-[var(--border)] p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
+            NODE REGISTRY
+          </h2>
+          <span className="text-xs text-[var(--muted-foreground)]">
+            {nodeTypes.length} registered
+          </span>
+        </div>
         <Input
           type="search"
-          placeholder="Search nodes"
+          placeholder="Search nodes…"
           aria-label="Search nodes"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          className="bg-[var(--secondary)]"
         />
       </div>
 
-      <ScrollArea className="flex-1 p-2">
-        {error ? <p className="text-xs text-red-500">{error}</p> : null}
+      <ScrollArea className="flex-1 p-3">
+        {error ? <p className="text-xs text-[var(--status-failed-fg)]">{error}</p> : null}
         {!error && nodeTypes.length === 0 ? (
           <p className="text-xs text-[var(--muted-foreground)]">No registered node types.</p>
         ) : null}
 
         {grouped.map(([category, items]) => (
           <section key={category} className="mb-4">
-            <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-              {category}
+            <h3 className="mb-2 text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
+              {category.toUpperCase()}
             </h3>
-            <ul className="space-y-1">
+            {/* Input and Output types are short, so they pair up two per row (04 §2.5). */}
+            <ul
+              className={
+                TWO_COLUMN_CATEGORIES.has(category) ? 'grid grid-cols-2 gap-2' : 'space-y-2'
+              }
+            >
               {items.map((metadata) => (
                 <li key={metadata.type}>
                   <button
                     type="button"
                     onClick={() => onAdd(metadata)}
-                    className="w-full rounded border border-[var(--border)] px-2 py-1.5 text-left text-xs hover:bg-[var(--accent)]"
+                    className="h-full w-full rounded-[9px] border border-[var(--border)] bg-[var(--secondary)] px-3 py-2.5 text-left hover:bg-[var(--accent)]"
                   >
-                    <span className="block font-medium">{metadata.displayName}</span>
-                    <span className="block text-[10px] text-[var(--muted-foreground)]">
-                      {metadata.executionKind}
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <span
+                        aria-hidden="true"
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: nodeAccentColor(metadata) }}
+                      />
+                      {metadata.displayName}
+                    </span>
+                    <span className="mt-0.5 block pl-3.5 text-xs text-[var(--muted-foreground)]">
+                      {paletteSummaryLine(metadata)}
                     </span>
                   </button>
                 </li>
@@ -91,6 +115,23 @@ export function NodePalette({ nodeTypes, onAdd, error }: NodePaletteProps) {
           </section>
         ))}
       </ScrollArea>
+
+      <div className="border-t border-[var(--border)] p-3">
+        <p className="mb-2 text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
+          RUNTIME SEMANTICS
+        </p>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-1">
+            sync × {semantics.sync}
+          </span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-1">
+            async × {semantics.async}
+          </span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-1">
+            agent × {semantics.agent}
+          </span>
+        </div>
+      </div>
     </aside>
   );
 }

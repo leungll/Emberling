@@ -41,6 +41,11 @@ function stubFetch() {
     if (url === '/api/node-types' || url === '/api/models') {
       return Promise.resolve(jsonResponse(200, { items: [] }));
     }
+    // The Recent Execution bar's list lookup (04 §2.6): no matching item means no Run yet,
+    // which is the common case across these fixtures.
+    if (url === '/api/definitions') {
+      return Promise.resolve(jsonResponse(200, { items: [] }));
+    }
     if (url === '/api/definitions/wf_123') {
       return Promise.resolve(jsonResponse(200, DEFINITION));
     }
@@ -175,6 +180,11 @@ function stubRoutes(routes: Record<string, Handler>) {
       return Promise.resolve(jsonResponse(200, { items: [TEXT_GENERATION] }));
     }
     if (key === 'GET /api/models') return Promise.resolve(jsonResponse(200, { items: MODELS }));
+    // The Recent Execution bar's list lookup (04 §2.6): defaults to no Run unless a test
+    // overrides this key in `routes` to exercise the bar itself.
+    if (key === 'GET /api/definitions' && !routes[key]) {
+      return Promise.resolve(jsonResponse(200, { items: [] }));
+    }
     const handler = routes[key];
     if (!handler) throw new Error(`unexpected fetch: ${key}`);
     return Promise.resolve(handler(init));
@@ -257,7 +267,7 @@ describe('EditPage — creating a Definition', () => {
     });
 
     expect(await screen.findByText('Document Processing')).toBeInTheDocument();
-    expect(screen.getByText(/unsaved/)).toBeInTheDocument();
+    expect(screen.getByTestId('studio-subtitle')).toHaveTextContent('Unsaved draft · Editing');
 
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -267,7 +277,10 @@ describe('EditPage — creating a Definition', () => {
     expect(callsTo(fetchMock, 'POST', '/api/definitions')).toEqual([
       { name: 'Document Processing', description: 'Summarise a document', nodes: [], edges: [] },
     ]);
-    expect(await screen.findByText(/wf_new · v1/)).toBeInTheDocument();
+    expect(await screen.findByText('Definition v1 · Editing')).toHaveAttribute(
+      'title',
+      'Workflow wf_new',
+    );
   });
 });
 
@@ -314,7 +327,7 @@ describe('EditPage — version conflict', () => {
     // Reload: local edits are discarded explicitly and the page is on the server's v5.
     await user.click(within(again).getByRole('button', { name: 'Reload latest' }));
     await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Server Generate'));
-    expect(screen.getByText(/wf_123 · v5/)).toBeInTheDocument();
+    expect(screen.getByText('Definition v5 · Editing')).toHaveAttribute('title', 'Workflow wf_123');
     expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
     expect(screen.queryByRole('alert', { name: 'Version conflict' })).toBeNull();
   });
@@ -347,7 +360,7 @@ describe('EditPage — Backend validation errors', () => {
     const user = userEvent.setup();
 
     renderStudio('/studio/wf_123');
-    await screen.findByText(/wf_123 · v4/);
+    await screen.findByText('Definition v4 · Editing');
     await user.click(screen.getByRole('button', { name: 'Validate' }));
 
     const list = await screen.findByRole('list', { name: 'Validation errors' });
@@ -362,7 +375,7 @@ describe('EditPage — Backend validation errors', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('Generate');
 
     await user.click(within(items[1]!).getByRole('button', { name: /Generate/ }));
-    expect(screen.getByLabelText(/Model Id/)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/^Model\s*\*?$/)).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getAllByText('minLength: got 0, want 1')).toHaveLength(2);
   });
 
@@ -390,11 +403,11 @@ describe('EditPage — Backend validation errors', () => {
     const user = userEvent.setup();
 
     renderStudio('/studio/wf_123');
-    await screen.findByText(/wf_123 · v4/);
+    await screen.findByText('Definition v4 · Editing');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     const list = await screen.findByRole('list', { name: 'Validation errors' });
     expect(list).toHaveTextContent('edge "edge_1" carries image into a text port');
-    expect(screen.getByText(/wf_123 · v4/)).toBeInTheDocument();
+    expect(screen.getByText('Definition v4 · Editing')).toHaveAttribute('title', 'Workflow wf_123');
   });
 });

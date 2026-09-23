@@ -183,7 +183,8 @@ export interface UiSchemaField {
 }
 
 export interface UiSchema {
-  fields: UiSchemaField[];
+  /** `null` for a Node Type with no configurable fields (e.g. Text Output). */
+  fields: UiSchemaField[] | null;
 }
 
 export interface NodeMetadata {
@@ -191,8 +192,9 @@ export interface NodeMetadata {
   displayName: string;
   category: string;
   executionKind: ExecutionKind;
-  inputs: PortMetadata[];
-  outputs: PortMetadata[];
+  /** The Backend serialises a side with no ports as `null` (Input types have no inputs). */
+  inputs: PortMetadata[] | null;
+  outputs: PortMetadata[] | null;
   configSchema: JsonSchema;
   uiSchema: UiSchema;
   sideEffect: SideEffectPolicy;

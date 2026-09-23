@@ -85,6 +85,13 @@ describe('DefinitionsPage', () => {
     expect(await screen.findByText('AIGC Media Generation')).toBeInTheDocument();
     expect(screen.getByText('v4')).toBeInTheDocument();
     expect(screen.getByText('Completed')).toBeInTheDocument();
+    // The Last Run cell states both status and time (04 §1.1): the run's own createdAt is
+    // rendered under the status pill, with the absolute timestamp available on hover.
+    const lastRunTime = screen.getByTestId('last-run-time-wf_123');
+    expect(lastRunTime).toHaveAttribute('dateTime', '2026-08-03T12:10:00Z');
+    expect(lastRunTime).toHaveAttribute('title', '2026-08-03 12:10:00Z');
+    expect(lastRunTime.textContent).not.toBe('');
+    expect(lastRunTime.textContent).not.toBe('—');
     expect(screen.getByText('Never run')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Last Run' })).toHaveAttribute(
       'href',
@@ -114,7 +121,7 @@ describe('DefinitionsPage — New Definition', () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'New Definition' }));
+    await user.click(await screen.findByRole('button', { name: '+ New Definition' }));
     const dialog = screen.getByRole('dialog', { name: 'New Definition' });
     const create = screen.getByRole('button', { name: 'Create' });
     expect(create).toBeDisabled();

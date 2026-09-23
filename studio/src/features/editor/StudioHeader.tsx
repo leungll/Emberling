@@ -1,6 +1,5 @@
 import { Link } from 'react-router';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface StudioHeaderProps {
@@ -14,6 +13,9 @@ interface StudioHeaderProps {
   onRun: () => void;
 }
 
+/** Header actions follow the mock's large, equal-weight buttons (04 §2.6). */
+const ACTION = 'h-9 min-w-[88px] px-5 font-semibold';
+
 /** Edit-mode header. Observe mode keeps the same shell but swaps the actions. */
 export function StudioHeader({
   name,
@@ -26,34 +28,51 @@ export function StudioHeader({
   onRun,
 }: StudioHeaderProps) {
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-[var(--border)] px-4 py-2">
+    <header className="flex h-[72px] shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--card)] px-4">
       <div className="flex items-center gap-3">
-        <Link to="/" className="text-xs text-[var(--muted-foreground)] hover:underline">
-          Definitions
+        <Link
+          to="/"
+          aria-label="Back to Definitions"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--primary)] text-[18px] font-bold text-[var(--primary-foreground)]"
+        >
+          E
         </Link>
         <div>
-          <h1 className="text-sm font-semibold">{name}</h1>
-          <p className="text-[10px] text-[var(--muted-foreground)]">
-            {workflowId} · {version === null ? 'unsaved' : `v${version}`}
+          <h1 className="text-[15px] font-semibold">{name}</h1>
+          {/* 04 §1.4: the mode is always explicit, so Edit states "Definition vN · Editing".
+              The workflow id stays available on hover as the bound Definition identity. */}
+          <p
+            data-testid="studio-subtitle"
+            title={version === null ? undefined : `Workflow ${workflowId}`}
+            className="text-xs text-[var(--muted-foreground)]"
+          >
+            {version === null ? 'Unsaved draft' : `Definition v${version}`} · Editing
           </p>
         </div>
         {hasUnsavedChanges ? (
-          <Badge variant="waiting" data-testid="unsaved-indicator">
+          <span
+            data-testid="unsaved-indicator"
+            className="flex items-center gap-1.5 text-xs text-[var(--status-waiting-fg)]"
+          >
+            <span
+              aria-hidden="true"
+              className="h-2 w-2 rounded-full bg-[var(--status-waiting-dot)]"
+            />
             Unsaved changes
-          </Badge>
+          </span>
         ) : null}
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={onValidate} disabled={busy}>
-          Validate
-        </Button>
-        <Button variant="outline" size="sm" onClick={onSave} disabled={busy}>
+        <Button variant="outline" className={ACTION} onClick={onSave} disabled={busy}>
           Save
+        </Button>
+        <Button variant="outline" className={ACTION} onClick={onValidate} disabled={busy}>
+          Validate
         </Button>
         {/* Run targets the saved, validated version only, so unsaved edits disable it. */}
         <Button
-          size="sm"
+          className={ACTION}
           onClick={onRun}
           disabled={busy || hasUnsavedChanges || version === null}
           title={hasUnsavedChanges ? 'Save the Definition before running it' : undefined}

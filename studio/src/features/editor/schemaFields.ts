@@ -117,7 +117,10 @@ export function resolveFields(
       field: {
         path,
         schema,
-        label: schema.title ?? humanize(path),
+        // Display label only; `path` (the API field) is untouched. A registered Model
+        // Selector without its own title reads "Model" as in the 04 §2.3 MODEL group,
+        // decided by the uiSchema widget, never by the field's name.
+        label: schema.title ?? (widget === 'model' ? 'Model' : humanize(path)),
         required: required.has(path),
         widget,
         group: ui?.group ?? DEFAULT_GROUP,

@@ -4,28 +4,44 @@ import type { HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium',
+  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] font-semibold',
   {
     variants: {
       variant: {
         default: 'border-transparent bg-[var(--secondary)] text-[var(--secondary-foreground)]',
         outline: 'border-[var(--border)] text-[var(--foreground)]',
-        // Status colours follow 04 §4 and are shared by Canvas, Timeline and Detail.
-        neutral: 'border-[var(--border)] bg-transparent text-[var(--muted-foreground)]',
-        running: 'border-sky-500/40 bg-sky-500/10 text-sky-500',
-        waiting: 'border-amber-500/40 bg-amber-500/10 text-amber-500',
-        succeeded: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500',
-        failed: 'border-red-500/40 bg-red-500/10 text-red-500',
+        // Status colours follow 04 §4 and are shared by Definitions, Canvas, Timeline and
+        // Detail. Tokens are defined per theme (light/dark) in index.css.
+        neutral: 'border-transparent bg-[var(--status-neutral-bg)] text-[var(--status-neutral-fg)]',
+        running: 'border-transparent bg-[var(--status-running-bg)] text-[var(--status-running-fg)]',
+        waiting: 'border-transparent bg-[var(--status-waiting-bg)] text-[var(--status-waiting-fg)]',
+        succeeded:
+          'border-transparent bg-[var(--status-succeeded-bg)] text-[var(--status-succeeded-fg)]',
+        failed: 'border-transparent bg-[var(--status-failed-bg)] text-[var(--status-failed-fg)]',
       },
     },
     defaultVariants: { variant: 'default' },
   },
 );
 
-export type BadgeProps = HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badgeVariants>;
+export type BadgeProps = HTMLAttributes<HTMLSpanElement> &
+  VariantProps<typeof badgeVariants> & {
+    /** Renders the leading status dot used by the Definitions table and Canvas (04 §4). */
+    dot?: boolean;
+  };
 
-export function Badge({ className, variant, ...props }: BadgeProps) {
-  return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
+export function Badge({ className, variant, dot, children, ...props }: BadgeProps) {
+  return (
+    <span className={cn(badgeVariants({ variant }), className)} {...props}>
+      {dot ? (
+        <span
+          aria-hidden="true"
+          className="h-[5px] w-[5px] shrink-0 rounded-full bg-current opacity-90"
+        />
+      ) : null}
+      {children}
+    </span>
+  );
 }
 
 export { badgeVariants };

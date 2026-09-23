@@ -53,7 +53,7 @@ export function SchemaForm({
     <div className="space-y-4">
       {groupFields(fields).map(([group, groupedFields]) => (
         <fieldset key={group} className="space-y-3">
-          <legend className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
+          <legend className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
             {groupLabel(group)}
           </legend>
           {groupedFields.map((field) => (
@@ -195,13 +195,13 @@ function SchemaField({
       ) : null}
 
       {field.schema.description ? (
-        <p id={descriptionId} className="text-[10px] text-[var(--muted-foreground)]">
+        <p id={descriptionId} className="text-xs text-[var(--muted-foreground)]">
           {field.schema.description}
         </p>
       ) : null}
 
       {errors.length > 0 ? (
-        <ul id={errorId} className="text-[10px] text-red-500">
+        <ul id={errorId} className="text-xs text-red-500">
           {errors.map((message, index) => (
             <li key={index}>{message}</li>
           ))}
@@ -419,13 +419,13 @@ function JsonField({
     <>
       <Textarea
         {...control}
-        className="font-mono text-xs"
+        className="font-mono text-sm"
         spellCheck={false}
         placeholder={expectsArray ? '[]' : '{}'}
         value={text}
         onChange={(e) => handleChange(e.target.value)}
       />
-      {parseError ? <p className="text-[10px] text-red-500">{parseError}</p> : null}
+      {parseError ? <p className="text-xs text-red-500">{parseError}</p> : null}
     </>
   );
 }

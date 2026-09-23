@@ -85,6 +85,9 @@ export function ObserveCanvas({
         data: {
           label: node.name,
           metadata: metadataByType.get(node.type),
+          // The bound Definition version's own config, so the shared card summary states
+          // the configured facts (model ID, input key) instead of empty-config placeholders.
+          config: node.config,
           nodeRunStatus: nodeRunByNodeId.get(node.id)?.status,
         },
       })),

@@ -1,6 +1,5 @@
 import {
   Background,
-  Controls,
   ReactFlow,
   type Edge as FlowEdge,
   type Connection,
@@ -8,8 +7,9 @@ import {
   type EdgeChange,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { CanvasToolbar, type InteractionMode } from './CanvasToolbar';
 import { RegisteredNode, type RegisteredFlowNode } from './RegisteredNode';
 
 /** Asks the canvas to bring one node into view; `seq` repeats a request for the same node. */
@@ -37,6 +37,12 @@ interface WorkflowCanvasProps {
   onSelectNode?: (nodeId: string | null) => void;
 }
 
+/**
+ * `<ReactFlow>` wraps its own children in a `ReactFlowProvider` internally (falling back
+ * to `Fragment` if one already wraps it), so `CanvasToolbar` — rendered here as a `<Panel>`
+ * child — can call `useReactFlow`/`useViewport` without this component adding a second,
+ * redundant provider of its own.
+ */
 export function WorkflowCanvas({
   nodes,
   edges,
@@ -49,6 +55,8 @@ export function WorkflowCanvas({
 }: WorkflowCanvasProps) {
   const nodeTypes = useMemo(() => ({ registered: RegisteredNode }), []);
   const instance = useRef<ReactFlowInstance<RegisteredFlowNode, FlowEdge> | null>(null);
+  const [mode, setMode] = useState<InteractionMode>('select');
+  const [showGrid, setShowGrid] = useState(true);
 
   useEffect(() => {
     if (!focus) return;
@@ -74,9 +82,22 @@ export function WorkflowCanvas({
         edgesReconnectable={!readOnly}
         deleteKeyCode={readOnly ? null : undefined}
         elementsSelectable
+        // Read-only never offers the select/pan mode toggle (the Toolbar itself is hidden
+        // below), so it always drags-to-pan and leaves `selectionOnDrag` off. React Flow's
+        // Pane only attaches a plain `onClick` (what drives blank-area deselection back to
+        // the Run Summary) when `elementsSelectable && !isSelecting`; `selectionOnDrag: true`
+        // makes every pointer-down a potential selection-box drag instead, which replaces
+        // that click handler with a pointerup path that requires a real drag sequence to
+        // have started one. Observe has no selection box to draw, so this would otherwise
+        // silently break the blank-area click without ever failing to compile or lint.
+        panOnDrag={readOnly ? true : mode === 'pan'}
+        selectionOnDrag={readOnly ? false : mode === 'select'}
         // The fitView prop waits until every node is measured, so it only works when the
         // caller applies React Flow's `dimensions` changes back into `nodes`.
         fitView
+        // Never magnify a small graph past 100%: cards keep the mock's reading size
+        // instead of ballooning to fill the canvas.
+        fitViewOptions={{ maxZoom: 1 }}
         onInit={(flow) => {
           instance.current = flow;
         }}
@@ -85,8 +106,15 @@ export function WorkflowCanvas({
         onPaneClick={() => onSelectNode?.(null)}
         proOptions={{ hideAttribution: true }}
       >
-        <Background />
-        <Controls showInteractive={false} />
+        {showGrid ? <Background color="var(--border)" gap={24} /> : null}
+        {!readOnly ? (
+          <CanvasToolbar
+            mode={mode}
+            onModeChange={setMode}
+            showGrid={showGrid}
+            onShowGridChange={setShowGrid}
+          />
+        ) : null}
       </ReactFlow>
     </div>
   );

@@ -168,15 +168,43 @@ describe('ObserveCanvas', () => {
     );
 
     const imageNode = await screen.findByTestId('rf__node-node_image');
-    // SUCCEEDED uses the same `lib/status.ts` border class as everywhere else in Studio.
-    expect(imageNode.querySelector('.border-emerald-500')).toBeInTheDocument();
+    // SUCCEEDED uses the same `lib/status.ts` border class as everywhere else in Studio:
+    // `nodeRunBorderClass` returns a `border-[var(--status-*-dot)]` Tailwind arbitrary-value
+    // class, so a substring match on the CSS variable name is used instead of matching the
+    // literal (bracket- and paren-laden) class string.
+    expect(imageNode.querySelector('[class*="status-succeeded-dot"]')).toBeInTheDocument();
 
     const captionNode = screen.getByTestId('rf__node-node_caption');
     // No NodeRun yet: idle, not any terminal or in-flight status colour.
-    expect(captionNode.querySelector('.border-emerald-500')).not.toBeInTheDocument();
-    expect(captionNode.querySelector('.border-sky-500')).not.toBeInTheDocument();
-    expect(captionNode.querySelector('.border-amber-500')).not.toBeInTheDocument();
-    expect(captionNode.querySelector('.border-red-500')).not.toBeInTheDocument();
+    expect(captionNode.querySelector('[class*="status-succeeded-dot"]')).not.toBeInTheDocument();
+    expect(captionNode.querySelector('[class*="status-running-dot"]')).not.toBeInTheDocument();
+    expect(captionNode.querySelector('[class*="status-waiting-dot"]')).not.toBeInTheDocument();
+    expect(captionNode.querySelector('[class*="status-failed-dot"]')).not.toBeInTheDocument();
+  });
+
+  it('keeps the NodeRun status border on a selected node instead of the Edit selection colour', async () => {
+    stubFetch();
+    render(
+      <ObserveCanvas
+        workflowId="wf_1"
+        definitionVersion={3}
+        nodeRuns={[nodeRun('nr_image', 'node_image', 'SUCCEEDED')]}
+        selectedNodeRunId="nr_image"
+        onSelectNodeRun={vi.fn()}
+      />,
+    );
+
+    const imageNode = await screen.findByTestId('rf__node-node_image');
+    const card = imageNode.querySelector<HTMLElement>('[title="Generate"]');
+    expect(card).not.toBeNull();
+    // Status colours are never overridden (04 §4): a selected SUCCEEDED node still reads as
+    // succeeded, and the Edit-mode amber selected border/fill is not applied over it.
+    expect(card).toHaveClass('border-[var(--status-succeeded-dot)]');
+    expect(card?.style.borderColor).toBe('');
+    expect(card?.style.backgroundColor).toBe('');
+    expect(card?.outerHTML).not.toMatch(/fdb022|rgb\(253, 176, 34\)/i);
+    // Selection is still visible, through a cue that does not replace the status border.
+    expect(card).toHaveAttribute('data-selected', 'true');
   });
 
   it('resolves a Canvas node click to its own NodeRun id', async () => {

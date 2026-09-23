@@ -1,18 +1,30 @@
-import type { PortDataType } from '@/api/types';
+import type { NodeMetadata, PortDataType } from '@/api/types';
 
 /**
  * Port colour encodes the data type only (04 §2.2). Execution status is shown by the node
  * border and status badge and must never reuse these colours.
  */
 const PORT_COLORS: Record<PortDataType, string> = {
-  text: '#a855f7', // purple
-  image: '#ec4899', // pink
-  json: '#eab308', // yellow
-  any: '#9ca3af', // gray
+  text: '#a48afb', // purple
+  image: '#ff78b2', // pink
+  json: '#fdb022', // amber
+  any: '#93a0b5', // slate
 };
 
 export function portColor(dataType: PortDataType): string {
   return PORT_COLORS[dataType] ?? PORT_COLORS.any;
+}
+
+/**
+ * A node's accent colour for the Palette dot, Canvas eyebrow dot and selected-state border
+ * (04 §2.5): the colour of its primary port type, first output else first input.
+ */
+export function nodeAccentColor(metadata: NodeMetadata | undefined): string {
+  if (!metadata) return portColor('any');
+  // The Backend serialises a Node Type with no ports on a side as `null` (e.g. Text Input
+  // has no inputs, Text Output no outputs), so both sides are read defensively.
+  const port = metadata.outputs?.[0] ?? metadata.inputs?.[0];
+  return port ? portColor(port.dataType) : portColor('any');
 }
 
 /**

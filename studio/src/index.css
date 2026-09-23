@@ -30,51 +30,109 @@
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
 }
 
+/* Palette anchors are the literal hex values of the 04 §1.1 / §1.2 mocks (04 §4): Definitions
+   stays light, Studio (Edit/Observe) is a fixed dark workspace with no runtime theme toggle. */
 :root {
   --radius: 0.5rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.21 0.03 264);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.03 264);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.03 264);
-  --primary: oklch(0.21 0.03 264);
-  --primary-foreground: oklch(0.98 0.002 248);
-  --secondary: oklch(0.968 0.007 248);
-  --secondary-foreground: oklch(0.21 0.03 264);
-  --muted: oklch(0.968 0.007 248);
-  --muted-foreground: oklch(0.55 0.025 257);
-  --accent: oklch(0.968 0.007 248);
-  --accent-foreground: oklch(0.21 0.03 264);
-  --destructive: oklch(0.58 0.22 27);
-  --destructive-foreground: oklch(0.98 0.002 248);
-  --border: oklch(0.929 0.013 256);
-  --input: oklch(0.929 0.013 256);
-  --ring: oklch(0.21 0.03 264);
+  --background: #f6f7f9;
+  --foreground: #18212f;
+  --card: #ffffff;
+  --card-foreground: #18212f;
+  --popover: #ffffff;
+  --popover-foreground: #18212f;
+  --primary: #7657ff;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f2f5;
+  --secondary-foreground: #18212f;
+  --muted: #f7f8fa;
+  --muted-foreground: #667085;
+  --accent: #f0f2f5;
+  --accent-foreground: #18212f;
+  --destructive: #f04438;
+  --destructive-foreground: #ffffff;
+  --border: #dfe3e8;
+  --input: #dfe3e8;
+  --ring: #7657ff;
+
+  /* Sidebar/shell tokens (dark chrome around the light Definitions surface). */
+  --sidebar: #101828;
+  --sidebar-foreground: #f2f4f7;
+  --sidebar-muted: #98a2b3;
+  --sidebar-active: #262f40;
+  --sidebar-border: #344054;
+
+  /* Status tokens (04 §4): shared by Definitions status pills, Canvas and Trace. */
+  --status-running-bg: #eff8ff;
+  --status-running-fg: #175cd3;
+  --status-running-dot: #53a7ff;
+  --status-waiting-bg: #fffaeb;
+  --status-waiting-fg: #b54708;
+  --status-waiting-dot: #f79009;
+  --status-succeeded-bg: #ecfdf3;
+  --status-succeeded-fg: #027a48;
+  --status-succeeded-dot: #12b76a;
+  --status-failed-bg: #fef3f2;
+  --status-failed-fg: #b42318;
+  --status-failed-dot: #f04438;
+  --status-neutral-bg: #f2f4f7;
+  --status-neutral-fg: #475467;
+  --status-neutral-dot: #98a2b3;
 }
 
 .dark {
-  --background: oklch(0.21 0.02 258);
-  --foreground: oklch(0.93 0.012 250);
-  --card: oklch(0.25 0.02 258);
-  --card-foreground: oklch(0.93 0.012 250);
-  --popover: oklch(0.25 0.02 258);
-  --popover-foreground: oklch(0.93 0.012 250);
-  --primary: oklch(0.93 0.012 250);
-  --primary-foreground: oklch(0.25 0.02 258);
-  --secondary: oklch(0.3 0.02 258);
-  --secondary-foreground: oklch(0.93 0.012 250);
-  --muted: oklch(0.3 0.02 258);
-  --muted-foreground: oklch(0.72 0.02 253);
-  --accent: oklch(0.3 0.02 258);
-  --accent-foreground: oklch(0.93 0.012 250);
-  --destructive: oklch(0.6 0.19 26);
-  --destructive-foreground: oklch(0.96 0.01 250);
-  --border: oklch(0.36 0.02 258);
-  --input: oklch(0.36 0.02 258);
-  --ring: oklch(0.72 0.02 253);
+  --background: #0d1118;
+  --foreground: #e6eaf0;
+  --card: #171d28;
+  --card-foreground: #e6eaf0;
+  --popover: #181e29;
+  --popover-foreground: #e6eaf0;
+  --primary: #7657ff;
+  --primary-foreground: #ffffff;
+  --secondary: #202735;
+  --secondary-foreground: #e6eaf0;
+  --muted: #141a24;
+  --muted-foreground: #93a0b5;
+  --accent: #222a38;
+  --accent-foreground: #e6eaf0;
+  --destructive: #f04438;
+  --destructive-foreground: #ffffff;
+  --border: #30394a;
+  --input: #3a4558;
+  --ring: #7657ff;
+
+  --sidebar: #101828;
+  --sidebar-foreground: #f2f4f7;
+  --sidebar-muted: #98a2b3;
+  --sidebar-active: #262f40;
+  --sidebar-border: #344054;
+
+  /* Status tokens keep the same hues on dark surfaces; only bg/fg pairs shift to the
+     mock's dark-panel equivalents (04 §4 still names the same four states). */
+  --status-running-bg: rgba(83, 167, 255, 0.12);
+  --status-running-fg: #53a7ff;
+  --status-running-dot: #53a7ff;
+  --status-waiting-bg: rgba(253, 176, 34, 0.12);
+  --status-waiting-fg: #fdb022;
+  --status-waiting-dot: #fdb022;
+  --status-succeeded-bg: rgba(18, 183, 106, 0.12);
+  --status-succeeded-fg: #32d583;
+  --status-succeeded-dot: #12b76a;
+  --status-failed-bg: rgba(240, 68, 56, 0.12);
+  --status-failed-fg: #f97066;
+  --status-failed-dot: #f04438;
+  --status-neutral-bg: #202735;
+  --status-neutral-fg: #93a0b5;
+  --status-neutral-dot: #93a0b5;
+
+  /* Selected Canvas node card fill (04 §2.5): a generic warm tint for every category, and
+     a distinct purple tint for the Agent category. Edit-only: a card carrying a NodeRun
+     status keeps its status colours (04 §4). */
+  --node-selected-fill: #282215;
+  --node-selected-agent-fill: #25213a;
 }
 
 @layer base {
