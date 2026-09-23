@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,12 +11,39 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-/** Minimal EventSource stand-in: ObservePage never has to see it fire to pass this test. */
+/**
+ * Browser-faithful EventSource stand-in: a named frame reaches only the listeners
+ * registered for that name, exactly like the frames the Backend writes.
+ */
 class FakeEventSource {
-  onmessage: ((event: MessageEvent) => void) | null = null;
+  static instances: FakeEventSource[] = [];
+  readyState = 0;
+  onopen: ((event: Event) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
-  constructor(readonly url: string) {}
-  close(): void {}
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  closed = false;
+  private readonly listeners = new Map<string, Array<(event: MessageEvent) => void>>();
+
+  constructor(readonly url: string) {
+    FakeEventSource.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: (event: MessageEvent) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  close(): void {
+    this.closed = true;
+    this.readyState = 2;
+  }
+
+  frame(event: { type: string; seq: number }): void {
+    const message = new MessageEvent(event.type, {
+      data: JSON.stringify(event),
+      lastEventId: String(event.seq),
+    });
+    for (const listener of this.listeners.get(event.type) ?? []) listener(message);
+  }
 }
 
 const OLD_RUN = {
@@ -57,6 +84,110 @@ function renderObservePage() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  FakeEventSource.instances = [];
+});
+
+function liveEvent(seq: number, type: string, nodeRunId: string | null, payload = {}) {
+  return {
+    id: `evt_${seq}`,
+    runId: 'run_live',
+    nodeRunId,
+    type,
+    seq,
+    timestamp: '2026-08-03T12:00:04Z',
+    payload,
+  };
+}
+
+function liveNodeRun(id: string, status: string) {
+  return {
+    id,
+    runId: 'run_live',
+    nodeId: id.replace('nr_', 'node_'),
+    nodeType: 'image_generation',
+    status,
+    input: null,
+    output: null,
+    error: null,
+    readyAt: '2026-08-03T12:00:01Z',
+    startedAt: null,
+    waitingAt: null,
+    completedAt: null,
+    latencyMs: null,
+    tokenUsage: null,
+  };
+}
+
+describe('ObservePage — live pipeline', () => {
+  it('shows history, streams named SSE frames and re-reads the Snapshot for a new NodeRun', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+
+    const log = [
+      liveEvent(1, 'RUN_CREATED', null),
+      liveEvent(2, 'NODE_READY', 'nr_image'),
+      liveEvent(3, 'NODE_STARTED', 'nr_image'),
+    ];
+    let nodeRuns = [liveNodeRun('nr_image', 'RUNNING')];
+    const snapshot = () => ({
+      run: { ...OLD_RUN, id: 'run_live', status: 'RUNNING' },
+      nodeRuns,
+      lastSeq: log.length,
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://studio.test');
+        if (url.pathname === '/api/runs/run_live') {
+          return Promise.resolve(jsonResponse(200, snapshot()));
+        }
+        if (url.pathname === '/api/runs/run_live/events') {
+          const after = Number(url.searchParams.get('afterSeq'));
+          return Promise.resolve(jsonResponse(200, { items: log.filter((e) => e.seq > after) }));
+        }
+        if (url.pathname.startsWith('/api/runs/run_live/nodes/')) {
+          return Promise.resolve(jsonResponse(404, { error: { code: 'NOT_FOUND', message: '' } }));
+        }
+        throw new Error(`unexpected fetch: ${url.pathname}`);
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/runs/run_live']}>
+        <Routes>
+          <Route path="/runs/:runId" element={<ObservePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // History at or below the Snapshot's lastSeq is loaded, then SSE opens after it.
+    expect(await screen.findByText('Run created')).toBeInTheDocument();
+    expect(screen.getByText('Node started')).toBeInTheDocument();
+    const source = FakeEventSource.instances[0]!;
+    expect(source.url).toBe('/api/runs/run_live/events?afterSeq=3');
+
+    // The Image NodeRun succeeds and the Caption NodeRun is created after the page opened.
+    nodeRuns = [liveNodeRun('nr_image', 'SUCCEEDED'), liveNodeRun('nr_caption', 'READY')];
+    log.push(liveEvent(4, 'NODE_COMPLETED', 'nr_image'), liveEvent(5, 'NODE_READY', 'nr_caption'));
+    act(() => {
+      source.frame(log[3]!);
+      source.frame(log[4]!);
+    });
+
+    expect(await screen.findByText('Node completed')).toBeInTheDocument();
+    const caption = await screen.findByRole('button', { name: /node_caption/ });
+    expect(within(caption).getByText('Ready')).toBeInTheDocument();
+    // The Image NodeRun finished (SUCCEEDED), so the Run Rail drops it: only Active
+    // NodeRuns are grouped there (docs/04-ux.md §3, Run Rail).
+    expect(screen.queryByRole('button', { name: /node_image/ })).not.toBeInTheDocument();
+
+    // The Run completes: the stream is closed and not reopened.
+    log.push(liveEvent(6, 'RUN_COMPLETED', null, { from: 'RUNNING', to: 'COMPLETED' }));
+    act(() => source.frame(log[5]!));
+    expect(await screen.findByText('Run completed')).toBeInTheDocument();
+    expect(source.closed).toBe(true);
+    expect(FakeEventSource.instances).toHaveLength(1);
+  });
 });
 
 describe('ObservePage — Run Again', () => {

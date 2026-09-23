@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
-import { applyEvent } from './applyEvent';
 import { DetailPanel } from './DetailPanel';
 import { EventTimeline } from './EventTimeline';
 import { ObserveHeader } from './ObserveHeader';
 import { RunRail } from './RunRail';
-import { ApiRequestError, createRun, getDefinitionVersion, getRun } from '@/api/client';
-import { subscribeRunEvents } from '@/api/sse';
-import type { JsonObject, RunEvent, RunInputSchema, RunSnapshot } from '@/api/types';
+import { observeRun, type ObservedRun } from './runObserver';
+import { ApiRequestError, createRun, getDefinitionVersion } from '@/api/client';
+import type { JsonObject, RunEvent, RunInputSchema } from '@/api/types';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { useStudioStore } from '@/stores/studio-store';
 
@@ -29,9 +28,18 @@ export function ObservePage() {
   const followLive = useStudioStore((s) => s.followLive);
   const setFollowLive = useStudioStore((s) => s.setFollowLive);
 
-  const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
-  const [events, setEvents] = useState<RunEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [observed, setObserved] = useState<ObservedRun>({
+    snapshot: null,
+    events: [],
+    loadError: null,
+  });
+  const { snapshot, events } = observed;
+  const error =
+    observed.loadError === null
+      ? null
+      : observed.loadError instanceof ApiRequestError
+        ? `${observed.loadError.code}: ${observed.loadError.message}`
+        : 'Could not load run';
 
   // Run Again reopens the Run Input Dialog bound to THIS Run's own workflowId and
   // definitionVersion (never the latest), prefilled with this Run's own input. The
@@ -41,41 +49,11 @@ export function ObservePage() {
   const [runAgainSubmitting, setRunAgainSubmitting] = useState(false);
   const [runAgainError, setRunAgainError] = useState<string | null>(null);
 
-  // Read the Snapshot first, then stream from its lastSeq. Events committed between the
-  // two are replayed by the first `seq > cursor` query on the server.
+  // Snapshot, history, SSE handoff, gap re-query, reconnect and terminal close all live
+  // in observeRun; the page only renders what it reports.
   useEffect(() => {
-    const controller = new AbortController();
-    let subscription: { close: () => void } | null = null;
-
-    getRun(runId, controller.signal)
-      .then((loaded) => {
-        if (controller.signal.aborted) return;
-        setSnapshot(loaded);
-        setError(null);
-
-        subscription = subscribeRunEvents(runId, {
-          afterSeq: loaded.lastSeq,
-          onEvent: (event) => {
-            setEvents((prev) => [...prev, event]);
-            // The Backend owns every status here; applyEvent only copies what the Event
-            // states, so a gap degrades to a stale view instead of a wrong one.
-            setSnapshot((prev) => (prev ? applyEvent(prev, event) : prev));
-          },
-        });
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(
-          error instanceof ApiRequestError
-            ? `${error.code}: ${error.message}`
-            : 'Could not load run',
-        );
-      });
-
-    return () => {
-      controller.abort();
-      subscription?.close();
-    };
+    const observer = observeRun(runId, setObserved);
+    return () => observer.close();
   }, [runId]);
 
   const onSelectEvent = useCallback(

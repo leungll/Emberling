@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyEvent } from './applyEvent';
+import { applyEvent, needsSnapshotRead } from './applyEvent';
 import type { EventType, NodeRun, RunEvent, RunSnapshot, RunStatus } from '@/api/types';
 
 function nodeRun(id: string, status: NodeRun['status']): NodeRun {
@@ -38,7 +38,12 @@ function snapshot(runStatus: RunStatus, nodeRuns: NodeRun[], lastSeq = 0): RunSn
   };
 }
 
-function event(seq: number, type: EventType, nodeRunId: string | null = null): RunEvent {
+function event(
+  seq: number,
+  type: EventType,
+  nodeRunId: string | null = null,
+  payload: RunEvent['payload'] = {},
+): RunEvent {
   return {
     id: `evt_${seq}`,
     runId: 'run_123',
@@ -46,8 +51,13 @@ function event(seq: number, type: EventType, nodeRunId: string | null = null): R
     type,
     seq,
     timestamp: '2026-08-03T12:00:04Z',
-    payload: {},
+    payload,
   };
+}
+
+/** A Run status Event as the Backend writes it: payload `{from, to}`. */
+function runEvent(seq: number, type: EventType, from: RunStatus, to: RunStatus): RunEvent {
+  return event(seq, type, null, { from, to });
 }
 
 const NON_RUN_EVENTS: EventType[] = [
@@ -98,13 +108,33 @@ describe('applyEvent', () => {
     expect(next.run.status).toBe('RUNNING');
   });
 
-  it('applies the run status a RUN_* event names', () => {
+  it('applies the run status a RUN_* event payload states as `to`', () => {
     const base = snapshot('RUNNING', [nodeRun('nr_1', 'WAITING_CALLBACK')]);
 
-    expect(applyEvent(base, event(1, 'RUN_PAUSED')).run.status).toBe('PAUSED');
-    expect(applyEvent(base, event(1, 'RUN_COMPLETED')).run.status).toBe('COMPLETED');
-    expect(applyEvent(base, event(1, 'RUN_FAILED')).run.status).toBe('FAILED');
-    expect(applyEvent(snapshot('PAUSED', []), event(1, 'RUN_RESUMED')).run.status).toBe('RUNNING');
+    expect(applyEvent(base, runEvent(1, 'RUN_PAUSED', 'RUNNING', 'PAUSED')).run.status).toBe(
+      'PAUSED',
+    );
+    expect(applyEvent(base, runEvent(1, 'RUN_COMPLETED', 'RUNNING', 'COMPLETED')).run.status).toBe(
+      'COMPLETED',
+    );
+    expect(applyEvent(base, runEvent(1, 'RUN_FAILED', 'RUNNING', 'FAILED')).run.status).toBe(
+      'FAILED',
+    );
+    expect(
+      applyEvent(snapshot('PAUSED', []), runEvent(1, 'RUN_RESUMED', 'PAUSED', 'RUNNING')).run
+        .status,
+    ).toBe('RUNNING');
+  });
+
+  it('does not guess a run status the RUN_* payload does not state', () => {
+    const base = snapshot('RUNNING', []);
+
+    // No `to` in the payload: the status stays as last read until the Snapshot is re-read.
+    expect(applyEvent(base, event(1, 'RUN_PAUSED')).run.status).toBe('RUNNING');
+    expect(applyEvent(base, event(1, 'RUN_COMPLETED', null, { to: 'SUCCEEDED' })).run.status).toBe(
+      'RUNNING',
+    );
+    expect(needsSnapshotRead(base, event(1, 'RUN_PAUSED'))).toBe(true);
   });
 
   it('ignores an event whose seq is not newer than the snapshot', () => {
@@ -148,5 +178,42 @@ describe('applyEvent', () => {
     expect(base.run.status).toBe('RUNNING');
     expect(base.nodeRuns[0]?.status).toBe('RUNNING');
     expect(base.lastSeq).toBe(0);
+  });
+
+  it('never changes a NodeRun status for an AGENT_* event', () => {
+    const base = snapshot('RUNNING', [nodeRun('nr_agent', 'RUNNING')]);
+
+    for (const type of NON_RUN_EVENTS.filter((t) => t.startsWith('AGENT_'))) {
+      expect(applyEvent(base, event(1, type, 'nr_agent')).nodeRuns[0]?.status).toBe('RUNNING');
+    }
+  });
+});
+
+describe('needsSnapshotRead', () => {
+  const base = snapshot('RUNNING', [nodeRun('nr_1', 'RUNNING'), nodeRun('nr_agent', 'RUNNING')]);
+
+  it('asks for a re-read when the Event names a NodeRun the view has not seen', () => {
+    expect(needsSnapshotRead(base, event(1, 'NODE_READY', 'nr_new'))).toBe(true);
+  });
+
+  it('asks for a re-read after every AGENT_* Event, whose NodeRun status it does not state', () => {
+    for (const type of NON_RUN_EVENTS.filter((t) => t.startsWith('AGENT_'))) {
+      expect(needsSnapshotRead(base, event(1, type, 'nr_agent')), type).toBe(true);
+    }
+  });
+
+  it('asks for a re-read when the Run reaches a terminal status, for output and error', () => {
+    expect(needsSnapshotRead(base, runEvent(1, 'RUN_COMPLETED', 'RUNNING', 'COMPLETED'))).toBe(
+      true,
+    );
+    expect(needsSnapshotRead(base, runEvent(1, 'RUN_FAILED', 'RUNNING', 'FAILED'))).toBe(true);
+  });
+
+  it('does not re-read for Events that state their own transition of a known NodeRun', () => {
+    expect(needsSnapshotRead(base, event(1, 'NODE_STARTED', 'nr_1'))).toBe(false);
+    expect(needsSnapshotRead(base, event(1, 'NODE_DISPATCHED', 'nr_1'))).toBe(false);
+    expect(needsSnapshotRead(base, event(1, 'NODE_COMPLETED', 'nr_1'))).toBe(false);
+    expect(needsSnapshotRead(base, runEvent(1, 'RUN_PAUSED', 'RUNNING', 'PAUSED'))).toBe(false);
+    expect(needsSnapshotRead(base, event(1, 'RUN_CREATED'))).toBe(false);
   });
 });
