@@ -7,17 +7,20 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { NodePalette } from './NodePalette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { StudioHeader } from './StudioHeader';
+import type { CanvasFocusRequest } from './WorkflowCanvas';
 import type { RegisteredFlowNode } from './RegisteredNode';
 import { WorkflowCanvas } from './WorkflowCanvas';
 import {
   ApiRequestError,
+  createDefinition,
   createRun,
   getDefinition,
+  listModels,
   listNodeTypes,
   saveDefinition,
   validateDefinition,
@@ -26,16 +29,73 @@ import type {
   Definition,
   Edge,
   JsonObject,
+  ModelMetadata,
   Node,
   NodeMetadata,
   ValidationError,
 } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { useStudioStore } from '@/stores/studio-store';
 
+/**
+ * Router state a "New Definition" navigation from Definitions carries. POST /definitions
+ * creates the first version with no baseVersion (08 §3.1), but since
+ * backend/internal/runtime/graph.go rejects a graph with no Output Node, that POST is
+ * deferred until the first Save.
+ */
+interface NewDefinitionState {
+  name?: string;
+  description?: string;
+}
+
+/**
+ * The unsaved name/description of a not-yet-created Definition. 08 §1: MVP defines no
+ * server-side DRAFT state, so this only ever lives in this component's memory; it never
+ * becomes a Definition version until the first Save.
+ */
+interface DraftMeta {
+  name: string;
+  description: string;
+}
+
+/** Finds the node a Backend `ValidationError.path` of shape `nodes[<id>]...` names. */
+function nodeIdFromPath(path: string): string | undefined {
+  return /^nodes\[([^\]]+)\]/.exec(path)?.[1];
+}
+
+/**
+ * Finds the top-level config field a node-config ValidationError.path names, matching
+ * `runtime.schemaValidationErrors`' `"nodes[" + id + "].config" + jsonPointer` shape
+ * (backend/internal/runtime/configschema.go). A path that never enters `.config` (a port
+ * or whole-graph error) has no field to point a form control at.
+ */
+function configFieldFromPath(path: string): string | undefined {
+  const marker = '.config';
+  const at = path.indexOf(marker);
+  if (at === -1) return undefined;
+  const rest = path.slice(at + marker.length).replace(/^\//, '');
+  return rest === '' ? undefined : rest.split('/')[0];
+}
+
+/** Extracts the structured errors a rejected Save's 400/422 envelope carries, if any. */
+function extractValidationErrors(error: unknown): ValidationError[] | null {
+  if (!(error instanceof ApiRequestError)) return null;
+  const details = error.body.error.details;
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) return null;
+  const errors = (details as { errors?: unknown }).errors;
+  return Array.isArray(errors) ? (errors as ValidationError[]) : null;
+}
+
 export function EditPage() {
-  const { workflowId = '' } = useParams();
+  // `/studio/new` (no :workflowId) is a brand-new, unsaved Definition; `/studio/:workflowId`
+  // is a saved one. They are distinct routes, not a sentinel value, so a real workflowId can
+  // never collide with the literal segment "new".
+  const { workflowId: workflowIdParam } = useParams();
+  const isNewDraft = workflowIdParam === undefined;
+  const workflowId = workflowIdParam ?? '';
+  const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -44,15 +104,32 @@ export function EditPage() {
   const hasUnsavedChanges = useStudioStore((s) => s.hasUnsavedChanges);
   const setUnsavedChanges = useStudioStore((s) => s.setUnsavedChanges);
 
+  // Captured once, at mount: later edits to Definition name/description do not come from
+  // this router state, and a later re-render must not re-read a stale location.state.
+  const [draftMeta] = useState<DraftMeta | null>(() => {
+    if (!isNewDraft) return null;
+    const state = (location.state as NewDefinitionState | null) ?? null;
+    return { name: state?.name ?? 'Untitled workflow', description: state?.description ?? '' };
+  });
+
   const [definition, setDefinition] = useState<Definition | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+  // React Flow reports each node's rendered size through a `dimensions` NodeChange once it
+  // has measured the DOM; that measurement decides visibility and `fitView` (WorkflowCanvas
+  // §6 canvas defect). It is kept out of `nodes`/`positions` so it never marks the
+  // Definition dirty, but it still has to be fed back into the controlled `nodes` prop or
+  // every render looks unmeasured again and the canvas never becomes visible.
+  const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const [nodeTypes, setNodeTypes] = useState<NodeMetadata[]>([]);
+  const [models, setModels] = useState<ModelMetadata[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<ValidationError[] | null>(null);
+  const [conflict, setConflict] = useState<Definition | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [focusRequest, setFocusRequest] = useState<CanvasFocusRequest | null>(null);
   // Captured once, at mount, from the `?run=1` the Definitions table's Run action links
   // here with. `RunInputDialog` is only rendered once `definition` has loaded (see below),
   // so this lazy initial value alone reproduces "opens once the definition has loaded"
@@ -60,6 +137,20 @@ export function EditPage() {
   // param-clearing effect right below) cannot flip it back.
   const [runDialogOpen, setRunDialogOpen] = useState(() => searchParams.get('run') === '1');
   const [runError, setRunError] = useState<string | null>(null);
+
+  const applyDefinition = useCallback(
+    (loaded: Definition) => {
+      setDefinition(loaded);
+      setNodes(loaded.nodes);
+      setEdges(loaded.edges);
+      setPositions(Object.fromEntries(loaded.nodes.map((node) => [node.id, node.position])));
+      setMeasured({});
+      setValidationErrors(null);
+      setConflict(null);
+      setUnsavedChanges(false);
+    },
+    [setUnsavedChanges],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -71,21 +162,26 @@ export function EditPage() {
         setLoadError(describeError(error, 'Could not load node types'));
       });
 
-    getDefinition(workflowId, controller.signal)
-      .then((loaded) => {
-        setDefinition(loaded);
-        setNodes(loaded.nodes);
-        setEdges(loaded.edges);
-        setPositions(Object.fromEntries(loaded.nodes.map((node) => [node.id, node.position])));
-        setUnsavedChanges(false);
-      })
+    listModels(controller.signal)
+      .then(setModels)
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setLoadError(describeError(error, 'Could not load definition'));
+        setLoadError(describeError(error, 'Could not load models'));
       });
 
+    // A brand-new Definition has nothing to fetch yet; it stays an empty, unsaved graph
+    // until the first Save creates version 1.
+    if (!isNewDraft) {
+      getDefinition(workflowId, controller.signal)
+        .then(applyDefinition)
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
+          setLoadError(describeError(error, 'Could not load definition'));
+        });
+    }
+
     return () => controller.abort();
-  }, [workflowId, setUnsavedChanges]);
+  }, [workflowId, isNewDraft, applyDefinition]);
 
   // This effect's only job is to drop the one-shot `run` param afterwards so a reload or
   // Back does not reopen the dialog. It runs at mount — well before the async Definition
@@ -118,10 +214,11 @@ export function EditPage() {
         id: node.id,
         type: 'registered' as const,
         position: positions[node.id] ?? node.position,
+        ...(measured[node.id] ? { measured: measured[node.id] } : {}),
         selected: node.id === selectedNodeId,
         data: { label: node.name, metadata: metadataByType.get(node.type) },
       })),
-    [nodes, positions, metadataByType, selectedNodeId],
+    [nodes, positions, measured, metadataByType, selectedNodeId],
   );
 
   const flowEdges = useMemo<FlowEdge[]>(
@@ -148,9 +245,26 @@ export function EditPage() {
     (changes: NodeChange<RegisteredFlowNode>[]) => {
       const next = applyNodeChanges(changes, flowNodes);
       setPositions(Object.fromEntries(next.map((node) => [node.id, node.position])));
-      const removed = new Set(next.map((node) => node.id));
-      setNodes((prev) => prev.filter((node) => removed.has(node.id)));
-      if (changes.some((change) => change.type !== 'select')) markDirty();
+      setMeasured((prev) => {
+        let changed = false;
+        const merged = { ...prev };
+        for (const node of next) {
+          if (node.measured?.width !== undefined && node.measured.height !== undefined) {
+            merged[node.id] = { width: node.measured.width, height: node.measured.height };
+            changed = true;
+          }
+        }
+        return changed ? merged : prev;
+      });
+      const remaining = new Set(next.map((node) => node.id));
+      setNodes((prev) => prev.filter((node) => remaining.has(node.id)));
+      // `dimensions` is React Flow reporting its own measurement, and `select` is pure
+      // canvas UI state; neither changes what Save would persist, so neither may mark the
+      // Definition dirty (06 canvas defect: this used to flag every initial render as an
+      // edit).
+      if (changes.some((change) => change.type !== 'select' && change.type !== 'dimensions')) {
+        markDirty();
+      }
     },
     [flowNodes, markDirty],
   );
@@ -200,15 +314,15 @@ export function EditPage() {
 
   const currentDraft = useCallback(
     () => ({
-      name: definition?.name ?? 'Untitled workflow',
-      description: definition?.description ?? '',
+      name: definition?.name ?? draftMeta?.name ?? 'Untitled workflow',
+      description: definition?.description ?? draftMeta?.description ?? '',
       nodes: nodes.map((node) => ({
         ...node,
         position: positions[node.id] ?? node.position,
       })),
       edges,
     }),
-    [definition, nodes, positions, edges],
+    [definition, draftMeta, nodes, positions, edges],
   );
 
   const handleValidate = useCallback(async () => {
@@ -230,31 +344,49 @@ export function EditPage() {
   }, [currentDraft]);
 
   const handleSave = useCallback(async () => {
-    if (!definition) return;
     setBusy(true);
     setNotice(null);
     try {
+      if (isNewDraft) {
+        const created = await createDefinition(currentDraft());
+        setUnsavedChanges(false);
+        // The Definition now exists: hand off to the saved-version route, which loads it
+        // fresh rather than trusting this response as the new source of truth.
+        navigate(`/studio/${created.workflowId}`, { replace: true });
+        return;
+      }
+      if (!definition) return;
       const saved = await saveDefinition(workflowId, {
         ...currentDraft(),
         baseVersion: definition.version,
       });
       setDefinition(saved);
       setValidationErrors(null);
+      setConflict(null);
       setUnsavedChanges(false);
       setNotice(`Saved version ${saved.version}.`);
     } catch (error) {
-      // A conflicting save keeps the local edits; the Backend created no version.
       if (error instanceof ApiRequestError && error.code === 'VERSION_CONFLICT') {
-        setNotice(
-          'This definition changed on the server since you loaded it. Your local edits are preserved; reload to see the latest version before saving again.',
-        );
+        // The Backend never includes the newer version in a 409 body (it names no
+        // resource to avoid leaking one Definition's content into another's error path),
+        // so naming it to the user needs a fresh read. Local edits are untouched either
+        // way (04 §2.6): nothing here may overwrite them.
+        try {
+          setConflict(await getDefinition(workflowId));
+        } catch (reloadError) {
+          setNotice(
+            describeError(reloadError, 'A newer version exists, but it could not be loaded'),
+          );
+        }
       } else {
-        setNotice(describeError(error, 'Save failed'));
+        const errors = extractValidationErrors(error);
+        if (errors) setValidationErrors(errors);
+        else setNotice(describeError(error, 'Save failed'));
       }
     } finally {
       setBusy(false);
     }
-  }, [definition, workflowId, currentDraft, setUnsavedChanges]);
+  }, [isNewDraft, definition, workflowId, currentDraft, navigate, setUnsavedChanges]);
 
   const handleCreateRun = useCallback(
     async (input: JsonObject) => {
@@ -279,10 +411,35 @@ export function EditPage() {
     [definition, workflowId, navigate],
   );
 
+  const focusValidationError = useCallback(
+    (nodeId: string) => {
+      selectNode(nodeId);
+      setFocusRequest((prev) => ({ nodeId, seq: (prev?.seq ?? 0) + 1 }));
+    },
+    [selectNode],
+  );
+
+  // Backend validation errors that name the selected node's config, keyed by the
+  // top-level field they point at (04 §2's "clicking an entry focuses the offending
+  // node"): SchemaForm renders each list under its field, so the field itself does not
+  // need its own lookup UI.
+  const selectedNodeFieldErrors = useMemo(() => {
+    if (!validationErrors || !selectedNodeId) return {};
+    const byField: Record<string, string[]> = {};
+    for (const error of validationErrors) {
+      const nodeId = error.nodeId ?? nodeIdFromPath(error.path);
+      if (nodeId !== selectedNodeId) continue;
+      const field = configFieldFromPath(error.path);
+      if (!field) continue;
+      (byField[field] ??= []).push(error.message);
+    }
+    return byField;
+  }, [validationErrors, selectedNodeId]);
+
   return (
     <div className="dark flex h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
       <StudioHeader
-        name={definition?.name ?? workflowId}
+        name={definition?.name ?? draftMeta?.name ?? workflowId}
         workflowId={workflowId}
         version={definition?.version ?? null}
         hasUnsavedChanges={hasUnsavedChanges}
@@ -304,13 +461,56 @@ export function EditPage() {
         </p>
       ) : null}
 
+      {conflict ? (
+        <div
+          role="alert"
+          aria-label="Version conflict"
+          className="space-y-2 border-b border-[var(--border)] px-4 py-2 text-xs text-amber-500"
+        >
+          <p>
+            The definition was saved as v{conflict.version} on the server while you were editing v
+            {definition?.version ?? '?'} locally. Reload to see the latest version, or keep your
+            edits and compare before saving again.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setConflict(null)}>
+              Keep my edits
+            </Button>
+            <Button size="sm" onClick={() => applyDefinition(conflict)}>
+              Reload latest
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {validationErrors ? (
-        <ul role="alert" className="border-b border-[var(--border)] px-4 py-2 text-xs text-red-500">
-          {validationErrors.map((error) => (
-            <li key={`${error.code}-${error.path}`}>
-              <Badge variant="failed">{error.code}</Badge> {error.path} — {error.message}
-            </li>
-          ))}
+        <ul
+          role="list"
+          aria-label="Validation errors"
+          className="space-y-1 border-b border-[var(--border)] px-4 py-2 text-xs text-red-500"
+        >
+          {validationErrors.map((error) => {
+            const nodeId = error.nodeId ?? nodeIdFromPath(error.path);
+            const node = nodeId ? nodes.find((candidate) => candidate.id === nodeId) : undefined;
+            return (
+              <li key={`${error.code}-${error.path}`}>
+                <Badge variant="failed">{error.code}</Badge> {error.path} —{' '}
+                <span>{error.message}</span>
+                {node ? (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => focusValidationError(node.id)}
+                    >
+                      {node.name}
+                    </button>
+                  </>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 
@@ -320,6 +520,7 @@ export function EditPage() {
           <WorkflowCanvas
             nodes={flowNodes}
             edges={flowEdges}
+            focus={focusRequest}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -329,6 +530,8 @@ export function EditPage() {
         <PropertiesPanel
           node={selectedNode}
           metadata={selectedNode ? metadataByType.get(selectedNode.type) : undefined}
+          models={models}
+          fieldErrors={selectedNodeFieldErrors}
           onRename={(name) => {
             setNodes((prev) =>
               prev.map((node) => (node.id === selectedNodeId ? { ...node, name } : node)),

@@ -1,6 +1,22 @@
-import type { JsonSchema, UiSchema, UiSchemaField } from '@/api/types';
+import type {
+  JsonObject,
+  JsonSchema,
+  JsonValue,
+  ModelMetadata,
+  UiSchema,
+  UiSchemaField,
+} from '@/api/types';
 
-export type FieldWidget = 'text' | 'textarea' | 'number' | 'checkbox' | 'select';
+export type FieldWidget =
+  | 'text'
+  | 'textarea'
+  | 'number'
+  | 'checkbox'
+  | 'select'
+  | 'model'
+  | 'multiselect'
+  | 'list'
+  | 'json';
 
 export interface ResolvedField {
   path: string;
@@ -9,10 +25,25 @@ export interface ResolvedField {
   required: boolean;
   widget: FieldWidget;
   group: string;
+  /** `enum` of the field itself (`select`) or of its array items (`multiselect`). */
   enumValues: string[];
+  /** Model capability the Model Selector filters on; set only for `model`. */
+  capability: string | undefined;
 }
 
-const DEFAULT_GROUP = 'Basic';
+// 04 §2.3: a field the uiSchema omits keeps the ConfigSchema default control and lands at
+// the end of the Basic group, so the fallback must be the same key the Backend uses.
+const DEFAULT_GROUP = 'BASIC';
+
+const GROUP_LABELS: Record<string, string> = {
+  BASIC: 'Basic',
+  MODEL: 'Model',
+  MODEL_PARAMETERS: 'Model Parameters',
+};
+
+export function groupLabel(group: string): string {
+  return GROUP_LABELS[group] ?? group;
+}
 
 function humanize(path: string): string {
   const last = path.split('.').pop() ?? path;
@@ -27,13 +58,15 @@ function humanize(path: string): string {
  *
  * `configSchema` decides the value contract, `uiSchema` only decides presentation. A
  * uiSchema widget may therefore refine the control (TEXTAREA instead of a single line)
- * but never override the schema's type, enum or required set.
+ * but never override the schema's type, enum or required set. Every choice below comes
+ * from the registered metadata; Studio keeps no per-node-type or per-field knowledge.
  */
 function resolveWidget(schema: JsonSchema, uiWidget: string | undefined): FieldWidget {
   if (schema.enum && schema.enum.length > 0) return 'select';
 
   const widget = (uiWidget ?? '').toUpperCase();
-  if (widget === 'TEXTAREA' || widget === 'PROMPT') return 'textarea';
+  if (widget === 'MODEL_SELECTOR') return 'model';
+  if (widget === 'TEXTAREA' || widget === 'PROMPT_EDITOR') return 'textarea';
 
   switch (schema.type) {
     case 'boolean':
@@ -41,6 +74,12 @@ function resolveWidget(schema: JsonSchema, uiWidget: string | undefined): FieldW
     case 'number':
     case 'integer':
       return 'number';
+    case 'array':
+      if (schema.items?.enum && schema.items.enum.length > 0) return 'multiselect';
+      if (schema.items?.type === 'string') return 'list';
+      return 'json';
+    case 'object':
+      return 'json';
     default:
       return 'text';
   }
@@ -69,7 +108,8 @@ export function resolveFields(
 
   for (const [path, schema] of Object.entries(properties)) {
     const ui = uiByPath.get(path);
-    const enumValues = (schema.enum ?? []).map((value) => String(value));
+    const widget = resolveWidget(schema, ui?.widget);
+    const enumSource = widget === 'multiselect' ? schema.items?.enum : schema.enum;
 
     described.push({
       declared: ui !== undefined,
@@ -79,9 +119,10 @@ export function resolveFields(
         schema,
         label: schema.title ?? humanize(path),
         required: required.has(path),
-        widget: resolveWidget(schema, ui?.widget),
+        widget,
         group: ui?.group ?? DEFAULT_GROUP,
-        enumValues,
+        enumValues: (enumSource ?? []).map((value) => String(value)),
+        capability: widget === 'model' ? ui?.capability : undefined,
       },
     });
   }
@@ -102,4 +143,28 @@ export function groupFields(fields: ResolvedField[]): [string, ResolvedField[]][
     else groups.set(field.group, [field]);
   }
   return [...groups.entries()];
+}
+
+/**
+ * Model Selector options: Model Registry entries that declare the uiSchema capability
+ * (04 §2.3). A field without a capability lists every registered model.
+ */
+export function modelOptions(
+  models: ModelMetadata[],
+  capability: string | undefined,
+): ModelMetadata[] {
+  if (!capability) return models;
+  return models.filter((model) => model.capabilities.includes(capability));
+}
+
+/** Returns `config` with `path` set, or removed when `next` is undefined. */
+export function setConfigField(
+  config: JsonObject,
+  path: string,
+  next: JsonValue | undefined,
+): JsonObject {
+  const copy = { ...config };
+  if (next === undefined) delete copy[path];
+  else copy[path] = next;
+  return copy;
 }

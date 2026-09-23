@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DefinitionsPage } from './DefinitionsPage';
@@ -89,5 +90,46 @@ describe('DefinitionsPage', () => {
       'href',
       '/runs/run_123',
     );
+  });
+});
+
+/** Shows where the router went and the draft identity it carried, without rendering Studio. */
+function DraftProbe() {
+  const location = useLocation();
+  return <pre data-testid="draft-probe">{JSON.stringify(location.state)}</pre>;
+}
+
+describe('DefinitionsPage — New Definition', () => {
+  it('opens a new unsaved draft in the editor with the entered name and description', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <Routes>
+          <Route path="/" element={<DefinitionsPage />} />
+          <Route path="/studio/new" element={<DraftProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'New Definition' }));
+    const dialog = screen.getByRole('dialog', { name: 'New Definition' });
+    const create = screen.getByRole('button', { name: 'Create' });
+    expect(create).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/Name/), 'Document Processing');
+    await user.type(screen.getByLabelText(/Description/), 'Summarise a document');
+    await user.click(create);
+
+    expect(dialog).not.toBeInTheDocument();
+    expect(JSON.parse(screen.getByTestId('draft-probe').textContent ?? 'null')).toEqual({
+      name: 'Document Processing',
+      description: 'Summarise a document',
+    });
+    // POST /definitions only happens on the first Save: the Backend validates before it
+    // creates version 1, so an empty graph cannot be persisted here.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

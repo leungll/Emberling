@@ -1,5 +1,5 @@
 import { SchemaForm } from './SchemaForm';
-import type { JsonObject, Node, NodeMetadata } from '@/api/types';
+import type { JsonObject, ModelMetadata, Node, NodeMetadata } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,10 @@ import { Separator } from '@/components/ui/separator';
 interface PropertiesPanelProps {
   node: Node | null;
   metadata: NodeMetadata | undefined;
+  /** Model Registry catalog; feeds the config form's Model Selector fields. */
+  models?: ModelMetadata[];
+  /** Backend validation messages for the selected node's config, keyed by field path. */
+  fieldErrors?: Record<string, string[]>;
   onRename: (name: string) => void;
   onConfigChange: (config: JsonObject) => void;
 }
@@ -20,6 +24,8 @@ interface PropertiesPanelProps {
 export function PropertiesPanel({
   node,
   metadata,
+  models = [],
+  fieldErrors = {},
   onRename,
   onConfigChange,
 }: PropertiesPanelProps) {
@@ -50,6 +56,8 @@ export function PropertiesPanel({
                   configSchema={metadata.configSchema}
                   uiSchema={metadata.uiSchema}
                   value={node.config}
+                  models={models}
+                  fieldErrors={fieldErrors}
                   onChange={onConfigChange}
                 />
                 <Separator />

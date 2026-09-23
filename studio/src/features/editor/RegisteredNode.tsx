@@ -19,7 +19,7 @@ export type RegisteredFlowNode = Node<RegisteredNodeData, 'registered'>;
  * Canvas node. Ports come from the registered NodeMetadata; status, when shown, is the
  * NodeRun status returned by the Backend. Nothing here is computed locally.
  */
-export function RegisteredNode({ data, selected }: NodeProps<RegisteredFlowNode>) {
+export function RegisteredNode({ data, selected, isConnectable }: NodeProps<RegisteredFlowNode>) {
   const metadata = data.metadata;
   const inputs = metadata?.inputs ?? [];
   const outputs = metadata?.outputs ?? [];
@@ -49,6 +49,7 @@ export function RegisteredNode({ data, selected }: NodeProps<RegisteredFlowNode>
           id={port.name}
           type="target"
           position={FlowPosition.Left}
+          isConnectable={isConnectable}
           style={{ ...portHandleStyle(port.dataType, port.required), top: 32 + index * 16 }}
           title={`${port.name}: ${port.dataType}${port.required ? ' (required)' : ' (optional)'}`}
           data-testid={`handle-in-${port.name}`}
@@ -63,6 +64,7 @@ export function RegisteredNode({ data, selected }: NodeProps<RegisteredFlowNode>
           id={port.name}
           type="source"
           position={FlowPosition.Right}
+          isConnectable={isConnectable}
           style={{ ...portHandleStyle(port.dataType, port.required), top: 32 + index * 16 }}
           title={`${port.name}: ${port.dataType}${port.required ? ' (required)' : ' (optional)'}`}
           data-testid={`handle-out-${port.name}`}

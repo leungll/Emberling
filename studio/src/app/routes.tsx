@@ -10,6 +10,12 @@ import { ObservePage } from '@/features/observe/ObservePage';
  */
 export const routes = [
   { path: '/', element: <DefinitionsPage /> },
+  // An unsaved new Definition has no workflowId yet: POST /definitions creates the first
+  // version with no baseVersion (08 §3.1), but since backend/internal/runtime/graph.go
+  // rejects a graph with no Output Node, that POST is deferred until the first Save. This
+  // is a distinct static route rather than a special :workflowId value so an actual
+  // Definition can never collide with the literal segment "new".
+  { path: '/studio/new', element: <EditPage /> },
   { path: '/studio/:workflowId', element: <EditPage /> },
   { path: '/runs/:runId', element: <ObservePage /> },
 ];
