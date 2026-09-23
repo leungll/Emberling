@@ -27,8 +27,21 @@ const ModelID = "text-model-v1"
 const ImageModelID = "image-model-v1"
 
 // mockDirectivePrefix marks the last user message as a scenario trigger instead of plain
-// prompt content: "mock:fail", "mock:tool-call:<name>" or "mock:invalid-decision".
+// prompt content: "mock:fail", "mock:tool-call:<name>[:<json-arguments>]" or
+// "mock:invalid-decision". The optional JSON arguments let a caller reach this Provider's
+// TOOL_CALL scenario over the public HTTP surface (Run input, not the in-process Script
+// hook) with a non-empty, schema-satisfying argument value -- e.g. remote_lookup's
+// required "key" (internal/tools/remotelookup). Everything after the second colon is taken
+// verbatim as the arguments JSON, so the JSON's own colons and braces are never
+// misinterpreted as further directive syntax. Omitting it keeps the pre-existing
+// "mock:tool-call:<name>" form, which still yields empty ("{}") arguments.
 const mockDirectivePrefix = "mock:"
+
+// roleTool mirrors the "tool" role documented on registry.ModelMessage.Role. It is
+// duplicated here rather than imported, because runtime.AgentRoleTool lives in a package
+// this Adapter must not depend on (CLAUDE.md "Package boundaries": adapters depend on
+// registry contracts, not on runtime).
+const roleTool = "tool"
 
 // configSchema is the sole contract for this model's parameters (07 §1.4): one optional
 // temperature bounded to [0, 2] with a documented default.
@@ -133,11 +146,20 @@ func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error)
 func (p *Provider) Generate(ctx context.Context, request registry.ModelRequest) (registry.ModelResponse, error) {
 	p.record(request)
 
-	scenario := p.resolveScenario(request)
+	scenario, err := p.resolveScenario(request)
 	promptText := lastUserMessageText(request)
 
 	if p.BeforeReturn != nil {
 		p.BeforeReturn(ctx)
+	}
+
+	if err != nil {
+		// A malformed "mock:" directive is a test-authoring error, not a Provider
+		// response to normalise: it must surface as an explicit failure rather than
+		// silently falling back to ScenarioFinal or an empty TOOL_CALL (07 §1.4's
+		// MODEL_ERROR path covers "the Provider response could not be normalised";
+		// an unparsable directive is the same kind of fact for this fixture).
+		return registry.ModelResponse{}, fmt.Errorf("mockmodel: %w", err)
 	}
 
 	switch scenario.Kind {
@@ -213,29 +235,87 @@ func (p *Provider) finish(scenario Scenario, decision registry.ModelDecision, pr
 }
 
 // resolveScenario applies Script first, then the `mock:` directive in the last user
-// message, and defaults to ScenarioFinal.
-func (p *Provider) resolveScenario(request registry.ModelRequest) Scenario {
+// message, and defaults to ScenarioFinal. An error return means the directive itself was
+// malformed (invalid syntax, not merely an unrecognised kind); every other outcome is a
+// valid Scenario and a nil error.
+func (p *Provider) resolveScenario(request registry.ModelRequest) (Scenario, error) {
 	if p.Script != nil {
 		if scenario := p.Script(request); scenario != nil {
-			return *scenario
+			return *scenario, nil
 		}
 	}
 	text := lastUserMessageText(request)
 	if !strings.HasPrefix(text, mockDirectivePrefix) {
-		return Scenario{Kind: ScenarioFinal}
+		return Scenario{Kind: ScenarioFinal}, nil
 	}
 	rest := strings.TrimPrefix(text, mockDirectivePrefix)
 	kind, arg, _ := strings.Cut(rest, ":")
 	switch ScenarioKind(kind) {
 	case ScenarioFail:
-		return Scenario{Kind: ScenarioFail}
+		return Scenario{Kind: ScenarioFail}, nil
 	case ScenarioToolCall:
-		return Scenario{Kind: ScenarioToolCall, ToolName: arg}
+		return p.resolveToolCallDirective(request, arg)
 	case ScenarioInvalidDecision:
-		return Scenario{Kind: ScenarioInvalidDecision}
+		return Scenario{Kind: ScenarioInvalidDecision}, nil
 	default:
-		return Scenario{Kind: ScenarioFinal}
+		return Scenario{Kind: ScenarioFinal}, nil
 	}
+}
+
+// resolveToolCallDirective parses "<name>" or "<name>:<json-arguments>" (mockDirectivePrefix's
+// doc comment) into a ScenarioToolCall, or reports the directive as malformed.
+//
+// The Agent Loop's persisted safe points (06 §1.7) mean the same Context Version 0 "user"
+// message -- this directive's own text -- is still the last "user" role message on Turn 2:
+// the Tool result is appended as a "tool" role message, not a rewritten "user" one. Without
+// a check here, this Provider would read the identical directive again on Turn 2 and issue
+// the same TOOL_CALL forever, so the second-turn answer instead has to be a deterministic
+// function of request content, not of hidden Provider state: once any "tool" message is
+// present the directive is treated as already satisfied and this Turn answers FINAL,
+// echoing that Tool result so the Run can still complete.
+func (p *Provider) resolveToolCallDirective(request registry.ModelRequest, arg string) (Scenario, error) {
+	if hasToolMessage(request.Messages) {
+		return Scenario{Kind: ScenarioFinal, Output: "tool result: " + lastToolMessageContent(request.Messages)}, nil
+	}
+	name, argumentsJSON, hasArguments := strings.Cut(arg, ":")
+	if name == "" {
+		return Scenario{}, fmt.Errorf("mock:tool-call directive names no Tool: %q", arg)
+	}
+	scenario := Scenario{Kind: ScenarioToolCall, ToolName: name}
+	if hasArguments {
+		trimmed := strings.TrimSpace(argumentsJSON)
+		// Only syntactic well-formedness is checked here, mirroring
+		// runtime.ParseModelDecision's own boundary: this Adapter does not know the
+		// named Tool's InputSchema, so a value that is valid JSON but the wrong shape
+		// (e.g. an array) is left for ValidateToolCall to reject when the Action
+		// executes (docs/07-extensibility.md §1.4).
+		if !json.Valid([]byte(trimmed)) {
+			return Scenario{}, fmt.Errorf("mock:tool-call:%s directive arguments are not valid JSON: %q", name, argumentsJSON)
+		}
+		scenario.ToolArguments = json.RawMessage(trimmed)
+	}
+	return scenario, nil
+}
+
+// hasToolMessage reports whether messages already contains a "tool" role entry.
+func hasToolMessage(messages []registry.ModelMessage) bool {
+	for _, message := range messages {
+		if message.Role == roleTool {
+			return true
+		}
+	}
+	return false
+}
+
+// lastToolMessageContent returns the most recent "tool" role message's raw content, or ""
+// if there is none.
+func lastToolMessageContent(messages []registry.ModelMessage) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == roleTool {
+			return string(messages[i].Content)
+		}
+	}
+	return ""
 }
 
 // lastUserMessageText decodes the most recent `user` message as plain text. A message

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
@@ -172,6 +173,87 @@ func TestProvider_Generate_MockToolCallDirectiveReturnsToolCallDecision(t *testi
 	}
 	if response.Decision.ToolName == nil || *response.Decision.ToolName != "lookup_customer" {
 		t.Fatalf("Decision.ToolName = %v, want %q", response.Decision.ToolName, "lookup_customer")
+	}
+	if string(response.Decision.Arguments) != "{}" {
+		t.Fatalf("Decision.Arguments = %s, want {} when the directive carries no arguments", response.Decision.Arguments)
+	}
+}
+
+// TestProvider_Generate_MockToolCallDirectiveWithArguments_SetsDecisionArguments covers the
+// M5 slice 5.3b extension: "mock:tool-call:<name>:<json-arguments>" lets a caller reach a
+// non-empty TOOL_CALL over the public HTTP surface (Run input), not only through the
+// in-process Script hook. remote_lookup (internal/tools/remotelookup) requires a non-empty
+// "key", so a directive that cannot carry arguments can never dispatch that Tool.
+func TestProvider_Generate_MockToolCallDirectiveWithArguments_SetsDecisionArguments(t *testing.T) {
+	p := NewProvider()
+	request := registry.ModelRequest{ModelID: ModelID, Messages: []registry.ModelMessage{
+		userMessage(t, `mock:tool-call:remote_lookup:{"key":"k1"}`),
+	}}
+	response, err := p.Generate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Generate() error = %v, want nil", err)
+	}
+	if response.Decision.Kind != registry.DecisionToolCall {
+		t.Fatalf("Decision.Kind = %q, want %q", response.Decision.Kind, registry.DecisionToolCall)
+	}
+	if response.Decision.ToolName == nil || *response.Decision.ToolName != "remote_lookup" {
+		t.Fatalf("Decision.ToolName = %v, want %q", response.Decision.ToolName, "remote_lookup")
+	}
+	if string(response.Decision.Arguments) != `{"key":"k1"}` {
+		t.Fatalf("Decision.Arguments = %s, want %s", response.Decision.Arguments, `{"key":"k1"}`)
+	}
+}
+
+// TestProvider_Generate_MockToolCallDirectiveMalformedArguments_ReturnsError covers the
+// "never a silently empty call" requirement: arguments JSON that does not parse must fail
+// Generate outright, not fall back to "{}".
+func TestProvider_Generate_MockToolCallDirectiveMalformedArguments_ReturnsError(t *testing.T) {
+	p := NewProvider()
+	request := registry.ModelRequest{ModelID: ModelID, Messages: []registry.ModelMessage{
+		userMessage(t, `mock:tool-call:remote_lookup:{not-json`),
+	}}
+	if _, err := p.Generate(context.Background(), request); err == nil {
+		t.Fatal("Generate() error = nil, want error for malformed tool-call arguments JSON")
+	}
+}
+
+// TestProvider_Generate_MockToolCallDirectiveNoToolName_ReturnsError covers the same
+// requirement for a directive that names no Tool at all.
+func TestProvider_Generate_MockToolCallDirectiveNoToolName_ReturnsError(t *testing.T) {
+	p := NewProvider()
+	request := registry.ModelRequest{ModelID: ModelID, Messages: []registry.ModelMessage{
+		userMessage(t, "mock:tool-call:"),
+	}}
+	if _, err := p.Generate(context.Background(), request); err == nil {
+		t.Fatal("Generate() error = nil, want error when the directive names no Tool")
+	}
+}
+
+// TestProvider_Generate_MockToolCallDirectiveWithPriorToolMessage_ReturnsFinal covers the
+// second-turn behaviour the Agent Loop's persisted safe points force on this fixture (06
+// §1.7): Context Version 0's "user" message is the directive text, and it never gets
+// rewritten, so it is still the last "user" role message once a "tool" role message has
+// been appended after the Tool result comes back. Without special handling this Provider
+// would read the same directive again and loop TOOL_CALL forever; instead it must answer
+// FINAL once a "tool" message is present, so the Agent Loop can reach a terminal Turn.
+func TestProvider_Generate_MockToolCallDirectiveWithPriorToolMessage_ReturnsFinal(t *testing.T) {
+	p := NewProvider()
+	toolName := "remote_lookup"
+	request := registry.ModelRequest{ModelID: ModelID, Messages: []registry.ModelMessage{
+		userMessage(t, `mock:tool-call:remote_lookup:{"key":"k1"}`),
+		{Role: "assistant", Content: json.RawMessage(`{"kind":"TOOL_CALL"}`)},
+		{Role: "tool", Content: json.RawMessage(`{"key":"k1","record":"record for k1"}`), ToolName: &toolName},
+	}}
+	response, err := p.Generate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Generate() error = %v, want nil", err)
+	}
+	if response.Decision.Kind != registry.DecisionFinal {
+		t.Fatalf("Decision.Kind = %q, want %q (the directive must not loop once a tool result exists)", response.Decision.Kind, registry.DecisionFinal)
+	}
+	got := decodeOutput(t, response.Decision.Output)
+	if !strings.Contains(got, "record for k1") {
+		t.Fatalf("Decision.Output = %q, want it to echo the prior tool result", got)
 	}
 }
 
