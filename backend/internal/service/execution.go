@@ -1778,9 +1778,24 @@ func hasIdempotencyKey(side domain.SideEffectPolicy) bool {
 // Uncertain=true exactly when the node's registered SideEffectPolicy is EXTERNAL (an
 // EXTERNAL call cut off by a deadline has an unproven remote result; a NONE-side-effect
 // node has nothing to be uncertain about).
+//
+// A NodeRun whose Node Type the Registry no longer carries is a second, unconditional
+// reason to fail rather than the ordinary TIMEOUT path: 06 §4 "恢复还要求当前 Runtime
+// 注册表能够解析绑定 Definition 中的 Node、Provider 和 Tool 类型；缺失或不兼容时必须确定性失败
+// 并保留 Trace", echoed by 09 §3.4's recovery row and CLAUDE.md "Extensions and external
+// calls" ("A missing or incompatible registration fails explicitly and retains Trace").
+// This mirrors Execute's own unregistered-Node-Type handling (this file, ~833-841): same
+// NODE_TYPE_NOT_REGISTERED code, same Uncertain=false (no SideEffectPolicy survives a
+// dropped registration to judge uncertainty by), same terminal failNode transaction --
+// so the Attempt/NodeRun reach FAILED with a retained NODE_FAILED Event instead of
+// bubbling a bare error that would abort the guard transaction and leave the row stuck
+// DISPATCHED/WAITING_CALLBACK (or STARTED/RUNNING) forever. failNode already tolerates a
+// missing registration gracefully on its own registry lookup (it forces decision.Retry =
+// false when regOK is false), so routing through it here needs no new status or code.
 func (s *ExecutionService) TimeoutAttempt(ctx context.Context, attemptID string) error {
 	var expired bool
 	var uncertain bool
+	var missingNodeType string
 	fromAttempt := domain.NodeAttemptStarted
 	fromNodeRun := domain.NodeRunRunning
 
@@ -1814,7 +1829,13 @@ func (s *ExecutionService) TimeoutAttempt(ctx context.Context, attemptID string)
 		}
 		reg, ok := s.deps.Nodes.Get(nodeRun.NodeType)
 		if !ok {
-			return fmt.Errorf("execution: node type %q is not registered", nodeRun.NodeType)
+			// Registry drift, not an ordinary deadline: record which type is gone and
+			// still fall through to failNode below rather than aborting the guard
+			// transaction (which committed nothing and left the row stuck -- the bug
+			// this comment block explains above).
+			expired = true
+			missingNodeType = nodeRun.NodeType
+			return nil
 		}
 
 		expired = true
@@ -1828,15 +1849,30 @@ func (s *ExecutionService) TimeoutAttempt(ctx context.Context, attemptID string)
 		return nil
 	}
 
+	execError := domain.ExecutionError{Code: "TIMEOUT", Message: "attempt deadline exceeded"}
+	// FailureSource records which path produced the failure, not which persisted fact it
+	// produced (nodeFailedPayload/NODE_FAILED never persists it -- see failNodeParams and
+	// ResumeOutcome's doc comments); TIMEOUT stays accurate for the registry-drift case
+	// too, since it was this timeout scan, not a synchronous Execute call, that surfaced
+	// the dropped registration.
+	source := domain.FailureTimeout
+	if missingNodeType != "" {
+		execError = domain.ExecutionError{Code: "NODE_TYPE_NOT_REGISTERED", Message: fmt.Sprintf("node type %q is not registered", missingNodeType)}
+		uncertain = false
+	}
+
 	_, err = s.failNode(ctx, failNodeParams{
 		attemptID:   attemptID,
-		execError:   domain.ExecutionError{Code: "TIMEOUT", Message: "attempt deadline exceeded"},
+		execError:   execError,
 		uncertain:   uncertain,
-		source:      domain.FailureTimeout,
+		source:      source,
 		fromAttempt: fromAttempt,
 		fromNodeRun: fromNodeRun,
 		// A timeout of an Attempt that already reached the Provider resolves the NodeRun:
 		// 06 §2.2 forbids re-dispatching an external task that entered WAITING_CALLBACK.
+		// failNode forces Retry=false unconditionally for the registry-drift case too, so
+		// this terminal flag only changes which NodeRun/Run guard failNode uses; it does
+		// not need its own registry-drift branch.
 		terminal: fromNodeRun == domain.NodeRunWaitingCallback,
 	})
 	return err

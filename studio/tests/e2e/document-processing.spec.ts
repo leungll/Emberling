@@ -41,6 +41,13 @@ test('Document Processing completes synchronously and shows its output', async (
   // version is shown throughout (asserted via the header's "v<version>" text below).
   await expect(page.getByText(`${workflowId} · v`)).toBeVisible();
 
+  // 04-ux.md §6 item 5: Observe must not render the Palette or the node config/edit form.
+  // NodePalette.tsx and PropertiesPanel.tsx render "Node Palette" and "Properties" headings
+  // respectively and are only ever mounted by EditPage, never by ObservePage - so their
+  // absence here proves the edit-only surfaces were never rendered, not merely hidden by CSS.
+  await expect(page.getByText('Node Palette')).toHaveCount(0);
+  await expect(page.getByText('Properties', { exact: true })).toHaveCount(0);
+
   const status = page.getByTestId('run-status');
   await expect(status).toHaveText('Completed', { timeout: 30_000 });
 
