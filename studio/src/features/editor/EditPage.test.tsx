@@ -372,6 +372,17 @@ describe('EditPage — Backend validation errors', () => {
     const items = within(list).getAllByRole('listitem');
     expect(items).toHaveLength(3);
     expect(items[2]).toHaveTextContent('the graph has a cycle');
+    // 04 §4 palette: the row uses the shared FAILED tokens, the message is body text (≥14px)
+    // and the path is a helper label (≥12px); no off-palette Tailwind red.
+    expect(list.className).toContain('bg-[var(--status-failed-bg)]');
+    expect(list.className).not.toMatch(/text-red-|text-xs/);
+    expect(within(items[0]!).getByText('required input "prompt" is not connected')).toHaveClass(
+      'text-sm',
+    );
+    expect(within(items[0]!).getByText('nodes[node_gen].inputs.prompt')).toHaveClass('text-xs');
+    expect(within(items[0]!).getByRole('button', { name: /Generate/ })).toHaveClass(
+      'text-[var(--status-failed-fg)]',
+    );
     // A whole-graph error has no node to focus.
     expect(within(items[2]!).queryByRole('button')).toBeNull();
 

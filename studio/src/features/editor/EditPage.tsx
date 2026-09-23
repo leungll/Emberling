@@ -636,26 +636,34 @@ export function EditPage() {
         <ul
           role="list"
           aria-label="Validation errors"
-          className="space-y-1 border-b border-[var(--border)] px-4 py-2 text-xs text-red-500"
+          // 04 §4: the FAILED red is shared with Canvas, Timeline and Detail, so the row uses
+          // the status-failed tokens; the message is body text (≥14px) and the Backend path a
+          // helper label (≥12px).
+          className="space-y-1.5 border-b border-[var(--status-failed-dot)]/40 bg-[var(--status-failed-bg)] px-4 py-2.5"
         >
           {validationErrors.map((error) => {
             const nodeId = error.nodeId ?? nodeIdFromPath(error.path);
             const node = nodeId ? nodes.find((candidate) => candidate.id === nodeId) : undefined;
             return (
-              <li key={`${error.code}-${error.path}`}>
-                <Badge variant="failed">{error.code}</Badge> {error.path} —{' '}
-                <span>{error.message}</span>
+              <li
+                key={`${error.code}-${error.path}`}
+                className="flex flex-wrap items-center gap-x-2.5 gap-y-1"
+              >
+                <Badge variant="failed">{error.code}</Badge>
+                <span className="text-sm text-[var(--foreground)]">{error.message}</span>
+                {error.path ? (
+                  <span className="font-mono text-xs text-[var(--muted-foreground)]">
+                    {error.path}
+                  </span>
+                ) : null}
                 {node ? (
-                  <>
-                    {' '}
-                    <button
-                      type="button"
-                      className="underline"
-                      onClick={() => focusValidationError(node.id)}
-                    >
-                      {node.name}
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-[var(--status-failed-fg)] underline underline-offset-2 hover:text-[var(--foreground)]"
+                    onClick={() => focusValidationError(node.id)}
+                  >
+                    {node.name}
+                  </button>
                 ) : null}
               </li>
             );
