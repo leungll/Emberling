@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 
+import { toCanvasEdges } from './canvasEdges';
 import { NodePalette } from './NodePalette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { RecentExecutionBar } from './RecentExecutionBar';
@@ -299,15 +300,8 @@ export function EditPage() {
   );
 
   const flowEdges = useMemo<FlowEdge[]>(
-    () =>
-      edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        sourceHandle: edge.sourceHandle,
-        target: edge.target,
-        targetHandle: edge.targetHandle,
-      })),
-    [edges],
+    () => toCanvasEdges(edges, nodes, metadataByType),
+    [edges, nodes, metadataByType],
   );
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
