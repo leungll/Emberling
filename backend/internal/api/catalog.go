@@ -6,10 +6,27 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// nodeTypes serves GET /node-types. domain.NodeMetadata already carries the wire-matching
-// JSON tags docs/08-interface-spec.md §2 defines, so no DTO conversion is needed.
+// nodeTypes serves GET /node-types. Empty metadata collections are JSON arrays under
+// the docs/08-interface-spec.md §2 contract, even when a registration stores nil slices.
 func (d Deps) nodeTypes(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, listEnvelope[domain.NodeMetadata]{Items: d.Catalog.NodeTypes()})
+	items := d.Catalog.NodeTypes()
+	for i := range items {
+		items[i] = nodeMetadataForResponse(items[i])
+	}
+	writeJSON(w, http.StatusOK, listEnvelope[domain.NodeMetadata]{Items: items})
+}
+
+func nodeMetadataForResponse(metadata domain.NodeMetadata) domain.NodeMetadata {
+	if metadata.Inputs == nil {
+		metadata.Inputs = []domain.PortMetadata{}
+	}
+	if metadata.Outputs == nil {
+		metadata.Outputs = []domain.PortMetadata{}
+	}
+	if metadata.UISchema.Fields == nil {
+		metadata.UISchema.Fields = []domain.UIField{}
+	}
+	return metadata
 }
 
 // models serves GET /models.

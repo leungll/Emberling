@@ -22,18 +22,18 @@ function metadata(
   };
 }
 
-const TEXT_SOURCE = metadata('text_input', null, [
-  { name: 'text', dataType: 'text', required: true },
-]);
-const IMAGE_SOURCE = metadata('image_input', null, [
-  { name: 'image', dataType: 'image', required: true },
-]);
-const TEXT_SINK = metadata(
-  'text_output',
+const TEXT_SOURCE = metadata(
+  'text_input',
+  [],
   [{ name: 'text', dataType: 'text', required: true }],
-  null,
 );
-const ANY_SINK = metadata('any_output', [{ name: 'value', dataType: 'any', required: true }], null);
+const IMAGE_SOURCE = metadata(
+  'image_input',
+  [],
+  [{ name: 'image', dataType: 'image', required: true }],
+);
+const TEXT_SINK = metadata('text_output', [{ name: 'text', dataType: 'text', required: true }], []);
+const ANY_SINK = metadata('any_output', [{ name: 'value', dataType: 'any', required: true }], []);
 
 const METADATA = new Map(
   [TEXT_SOURCE, IMAGE_SOURCE, TEXT_SINK, ANY_SINK].map((item) => [item.type, item]),

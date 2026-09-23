@@ -17,7 +17,7 @@ const textInput: NodeMetadata = {
   displayName: 'Text Input',
   category: 'Input',
   executionKind: 'SYNC',
-  inputs: null,
+  inputs: [],
   outputs: [{ name: 'text', dataType: 'text', required: true }],
   uiSchema: { fields: [{ path: 'inputKey', order: 1, group: 'BASIC', widget: 'DEFAULT' }] },
 };
@@ -29,8 +29,8 @@ const textOutput: NodeMetadata = {
   category: 'Output',
   executionKind: 'SYNC',
   inputs: [{ name: 'text', dataType: 'text', required: true }],
-  outputs: null,
-  uiSchema: { fields: null },
+  outputs: [],
+  uiSchema: { fields: [] },
 };
 
 const imageGeneration: NodeMetadata = {
@@ -115,9 +115,9 @@ describe('paletteSummaryLine', () => {
 });
 
 describe('nodeAccentColor', () => {
-  it('tolerates the null port lists the Backend sends', () => {
+  it('handles empty port lists from the Backend', () => {
     expect(nodeAccentColor(textInput)).toBe('#a48afb');
     expect(nodeAccentColor(textOutput)).toBe('#a48afb');
-    expect(nodeAccentColor({ ...textOutput, inputs: null })).toBe('#93a0b5');
+    expect(nodeAccentColor({ ...textOutput, inputs: [] })).toBe('#93a0b5');
   });
 });

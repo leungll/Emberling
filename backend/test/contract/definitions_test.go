@@ -3,6 +3,8 @@
 package contract
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -321,5 +323,41 @@ func TestAPI_CreateDefinition_AIGCGraph_WithMediaOutput_Validates(t *testing.T) 
 	}
 	if category, _ := mediaOutputMeta["category"].(string); category != "Output" {
 		t.Errorf("GET /api/node-types media_output category = %q, want %q", category, "Output")
+	}
+
+	// docs/08-interface-spec.md §2 fixes inputs, outputs and uiSchema.fields as arrays. A
+	// Node Type with nothing on a side (text_input has no inputs; the Output types have no
+	// outputs and no uiSchema fields) must therefore serialise that side as exactly `[]`,
+	// never `null`, even though the registration stores a nil slice. The check reads the
+	// raw bytes because decoding into map[string]any would erase the distinction.
+	rawCatalog := decodeBody[map[string]json.RawMessage](t, catalogBody)
+	rawItems := decodeBody[[]map[string]json.RawMessage](t, rawCatalog["items"])
+	wantEmpty := map[string][]string{
+		"text_input":   {"inputs"},
+		"text_output":  {"outputs", "uiSchema.fields"},
+		"media_output": {"outputs", "uiSchema.fields"},
+	}
+	for _, item := range rawItems {
+		var typ string
+		if err := json.Unmarshal(item["type"], &typ); err != nil {
+			t.Fatalf("GET /api/node-types item type is not a string: %v, item=%s", err, item["type"])
+		}
+		collections, ok := wantEmpty[typ]
+		if !ok {
+			continue
+		}
+		delete(wantEmpty, typ)
+		for _, collection := range collections {
+			raw := item[collection]
+			if collection == "uiSchema.fields" {
+				raw = decodeBody[map[string]json.RawMessage](t, item["uiSchema"])["fields"]
+			}
+			if got := string(bytes.TrimSpace(raw)); got != "[]" {
+				t.Errorf("GET /api/node-types %s.%s = %s, want []", typ, collection, got)
+			}
+		}
+	}
+	for typ := range wantEmpty {
+		t.Errorf("GET /api/node-types response does not list %s: %s", typ, catalogBody)
 	}
 }

@@ -21,8 +21,9 @@ export function portColor(dataType: PortDataType): string {
  */
 export function nodeAccentColor(metadata: NodeMetadata | undefined): string {
   if (!metadata) return portColor('any');
-  // The Backend serialises a Node Type with no ports on a side as `null` (e.g. Text Input
-  // has no inputs, Text Output no outputs), so both sides are read defensively.
+  // A side with no ports (Text Input has no inputs, Text Output no outputs) arrives as an
+  // empty array, never `null` (08 §2), so indexing either side is safe; the optional
+  // chaining only guards a partially built metadata object.
   const port = metadata.outputs?.[0] ?? metadata.inputs?.[0];
   return port ? portColor(port.dataType) : portColor('any');
 }
