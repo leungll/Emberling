@@ -49,7 +49,7 @@ Preserve the repository's established package layout and the dependency directio
 - `work` and `reconciler` call the same `service` use cases. `reconciler` may use `store` only to discover persisted work and perform Pending Callback TTL retention; it must not claim work, mutate Execution business state, write Events, or maintain a second execution path.
 - `registry` owns stable Node Type, Model ID, and Tool Name resolution.
 - `nodes`, `tools`, and `adapters` perform one registered operation. They do not own retry, timeout, callback routing, state transitions, or Event writes.
-- `trace` builds read-only projections. Projection filtering must never mutate or truncate authoritative Execution State.
+- `api` builds read-only Trace response projections. Projection filtering must never mutate or truncate authoritative Execution State.
 - `domain` contains shared domain types and errors only. Transport DTOs, SQL rows, Provider SDK types, and UI projections do not belong there.
 
 Prefer explicit dependencies and constructors. Do not add a dependency injection framework, ORM, internal message bus, or Redis to solve an MVP problem already covered by the selected architecture.
