@@ -41,7 +41,11 @@ const requiredImageSchema: RunInputSchema = {
   required: ['brief', 'reference'],
 };
 
-function renderDialog(onSubmit = vi.fn(), schema: RunInputSchema = runInputSchema) {
+function renderDialog(
+  onSubmit = vi.fn(),
+  schema: RunInputSchema = runInputSchema,
+  initialInput?: Record<string, unknown>,
+) {
   render(
     <RunInputDialog
       open
@@ -49,6 +53,7 @@ function renderDialog(onSubmit = vi.fn(), schema: RunInputSchema = runInputSchem
       workflowId="wf_123"
       definitionVersion={4}
       runInputSchema={schema}
+      initialInput={initialInput as never}
       onSubmit={onSubmit}
     />,
   );
@@ -142,6 +147,25 @@ describe('RunInputDialog', () => {
     expect(onSubmit).toHaveBeenCalledWith({ brief: 'A small ember creature' });
     const submitted = onSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
     expect('reference' in submitted).toBe(false);
+  });
+
+  it('carries a prior AssetRef through on Run Again without re-uploading', async () => {
+    const onSubmit = renderDialog(vi.fn(), runInputSchema, {
+      brief: 'A small ember creature',
+      reference: assetRef,
+    });
+    const user = userEvent.setup();
+
+    // The prior Asset preview renders immediately, with no upload interaction at all.
+    expect(screen.getByText(/asset_123/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Create run' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      brief: 'A small ember creature',
+      reference: assetRef,
+    });
+    expect(uploadAssetMock).not.toHaveBeenCalled();
   });
 
   it('disables the Run button while an upload is in flight', async () => {

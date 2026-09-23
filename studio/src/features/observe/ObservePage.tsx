@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import { DetailPanel } from './DetailPanel';
 import { EventTimeline } from './EventTimeline';
+import { ObserveCanvas } from './ObserveCanvas';
 import { ObserveHeader } from './ObserveHeader';
 import { RunRail } from './RunRail';
 import { observeRun, type ObservedRun } from './runObserver';
@@ -125,13 +126,26 @@ export function ObservePage() {
       <ObserveHeader run={snapshot.run} onRunAgain={onRunAgain} />
       <div className="flex min-h-0 flex-1">
         <RunRail snapshot={snapshot} selectedNodeRunId={selectedNodeId} onSelect={selectNode} />
-        <EventTimeline
-          events={events}
-          selectedSeq={selectedEventSeq}
-          followLive={followLive}
-          onSelect={onSelectEvent}
-          onResumeLive={() => setFollowLive(true)}
-        />
+        {/* docs/04-ux.md §3 names only Run Rail | Event Timeline | Detail; §1.4 says Edit
+            and Observe "两个模式复用 Header 和 Canvas" with Observe's Canvas as a "只读快照、
+            缩小" (read-only snapshot, shrunk). §3 does not place it, so it sits above the
+            Timeline in the centre column. */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <ObserveCanvas
+            workflowId={snapshot.run.workflowId}
+            definitionVersion={snapshot.run.definitionVersion}
+            nodeRuns={snapshot.nodeRuns}
+            selectedNodeRunId={selectedNodeId}
+            onSelectNodeRun={selectNode}
+          />
+          <EventTimeline
+            events={events}
+            selectedSeq={selectedEventSeq}
+            followLive={followLive}
+            onSelect={onSelectEvent}
+            onResumeLive={() => setFollowLive(true)}
+          />
+        </div>
         <DetailPanel
           snapshot={snapshot}
           selectedNodeRun={selectedNodeRun}

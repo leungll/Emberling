@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import { ApiRequestError, getAgentTrace, getNodeRunDetail } from '@/api/client';
+import { API_BASE, ApiRequestError, getAgentTrace, getNodeRunDetail } from '@/api/client';
 import type {
   AgentTrace,
   AgentTurnTrace,
+  ImageRef,
+  ImageSource,
   NodeRun,
   NodeRunDetail,
   NodeRunStatus,
@@ -397,13 +399,102 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+const IMAGE_SOURCES: readonly ImageSource[] = ['ASSET', 'ARTIFACT', 'EXTERNAL'];
+
+/** Mirrors `backend/internal/domain/imageref.go`'s `Source` discriminant (08 §2.2). */
+function isImageRefValue(value: unknown): value is ImageRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    IMAGE_SOURCES.includes((value as { source?: unknown }).source as ImageSource)
+  );
+}
+
+/**
+ * Finds ImageRef-shaped values at the top level or one property deep. NodeRun input/output
+ * is a raw `NodeOutput.Ports` map keyed by port name (e.g. `{ image: <ImageRef> }`), so one
+ * level of nesting is enough; this does not walk arbitrary JSON depth looking for a match.
+ */
+function collectImageRefs(value: unknown): ImageRef[] {
+  if (isImageRefValue(value)) return [value];
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return Object.values(value).filter(isImageRefValue);
+  }
+  return [];
+}
+
+/**
+ * `<img>` preview plus the raw reference text (04 §3, "图片显示预览和原始引用"). EXTERNAL
+ * renders the given URI directly; ASSET reuses the existing `/assets/{id}/content` route.
+ * ARTIFACT has no documented content endpoint (08), so it shows only the raw reference —
+ * never a guessed or invented proxy URL.
+ */
+function ImagePreview({ image }: { image: ImageRef }) {
+  const src =
+    image.source === 'EXTERNAL' && image.uri
+      ? image.uri
+      : image.source === 'ASSET' && image.asset
+        ? `${API_BASE}/assets/${encodeURIComponent(image.asset.assetId)}/content`
+        : null;
+  const reference =
+    image.source === 'EXTERNAL'
+      ? image.uri
+      : image.source === 'ASSET'
+        ? image.asset?.assetId
+        : image.artifact?.artifactId;
+
+  return (
+    <div className="space-y-1">
+      {src ? (
+        // Non-empty alt text: an ImageRef preview is content, not decoration, and keeps
+        // the "img" role for assistive tech and tests alike.
+        <img
+          src={src}
+          alt={`${image.source} image preview`}
+          className="max-h-32 max-w-full rounded object-contain"
+        />
+      ) : null}
+      <p className="break-all text-[10px] text-[var(--muted-foreground)]">
+        {image.source} · {reference ?? '—'}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Above this serialized length a value counts as a "large field" that collapses by default
+ * (04 §3, "大字段默认折叠"); everything at or under it stays visible, since only large
+ * fields are documented to default-collapse — a small value like `{"brief":"x"}` must not
+ * require an extra click to read.
+ */
+const JSON_BLOCK_COLLAPSE_THRESHOLD_CHARS = 2000;
+
 function JsonBlock({ label, value }: { label: string; value: unknown }) {
+  const images = collectImageRefs(value);
+  const json = JSON.stringify(value, null, 2) ?? 'null';
+  // An ImageRef preview already carries the human-readable summary (preview + raw
+  // reference), so its raw JSON collapses regardless of size to avoid duplicating that
+  // content in the panel; otherwise only large fields collapse.
+  const collapsedByDefault = images.length > 0 || json.length > JSON_BLOCK_COLLAPSE_THRESHOLD_CHARS;
+  const pre = <pre className="max-h-48 overflow-auto p-2 text-[10px]">{json}</pre>;
+
   return (
     <div className="space-y-1">
       <span className="text-[var(--muted-foreground)]">{label}</span>
-      <pre className="max-h-48 overflow-auto rounded border border-[var(--border)] p-2 text-[10px]">
-        {JSON.stringify(value, null, 2)}
-      </pre>
+      {images.map((image, index) => (
+        <ImagePreview key={index} image={image} />
+      ))}
+      {collapsedByDefault ? (
+        <details className="rounded border border-[var(--border)]">
+          <summary className="cursor-pointer select-none px-2 py-1 text-[10px] text-[var(--muted-foreground)]">
+            Raw JSON
+          </summary>
+          {pre}
+        </details>
+      ) : (
+        pre
+      )}
     </div>
   );
 }

@@ -231,6 +231,116 @@ describe('DetailPanel — Attempt rows', () => {
   });
 });
 
+// --- JsonBlock default visibility --------------------------------------------
+
+describe('DetailPanel — JsonBlock default visibility', () => {
+  it('shows a small Input value without interaction', () => {
+    const snapshot: RunSnapshot = {
+      run: { ...run(), input: { brief: 'x' } },
+      nodeRuns: [],
+      lastSeq: 0,
+    };
+    render(
+      <DetailPanel snapshot={snapshot} selectedNodeRun={null} selectedEvent={null} events={[]} />,
+    );
+
+    // 04 §3 only collapses large fields by default; a small value has no <details> toggle.
+    expect(screen.queryByText('Raw JSON')).not.toBeInTheDocument();
+    expect(screen.getByText(/"brief": "x"/)).toBeVisible();
+  });
+
+  it('collapses an Input value over the large-field threshold by default', () => {
+    const snapshot: RunSnapshot = {
+      run: { ...run(), input: { blob: 'x'.repeat(2500) } },
+      nodeRuns: [],
+      lastSeq: 0,
+    };
+    render(
+      <DetailPanel snapshot={snapshot} selectedNodeRun={null} selectedEvent={null} events={[]} />,
+    );
+
+    expect(screen.getByText('Raw JSON').closest('details')).not.toHaveAttribute('open');
+  });
+});
+
+// --- ImageRef preview ---------------------------------------------------------
+
+const IMAGE_NODE_RUN: NodeRun = {
+  id: 'nr_image',
+  runId: 'run_1',
+  nodeId: 'node_image',
+  nodeType: 'image_generation',
+  status: 'SUCCEEDED',
+  input: null,
+  // NodeOutput.Ports wraps each port's value one level under its port name
+  // (backend/internal/nodes/imagegeneration/node.go), so the ImageRef sits under "image".
+  output: {
+    image: {
+      uri: 'https://cdn.example.com/generated/cat.png',
+      width: 512,
+      height: 512,
+      source: 'EXTERNAL',
+      mediaType: 'image/png',
+    },
+  },
+  error: null,
+  readyAt: '2026-08-03T12:00:00Z',
+  startedAt: '2026-08-03T12:00:01Z',
+  waitingAt: null,
+  completedAt: '2026-08-03T12:00:05Z',
+  latencyMs: 4000,
+  tokenUsage: null,
+};
+
+describe('DetailPanel — ImageRef preview', () => {
+  it('renders an <img> preview and the raw reference for an EXTERNAL ImageRef output', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, { nodeRun: IMAGE_NODE_RUN, attempts: [] })),
+    );
+
+    const snapshot: RunSnapshot = { run: run(), nodeRuns: [IMAGE_NODE_RUN], lastSeq: 5 };
+    render(
+      <DetailPanel
+        snapshot={snapshot}
+        selectedNodeRun={IMAGE_NODE_RUN}
+        selectedEvent={null}
+        events={[]}
+      />,
+    );
+
+    await screen.findByText('Output');
+    const img = (await screen.findByRole('img')) as HTMLImageElement;
+    expect(img.src).toBe('https://cdn.example.com/generated/cat.png');
+    // The raw reference (the URI itself, given as-is — never a proxy) is shown as text too,
+    // distinct from the collapsed raw JSON below (which also contains this substring).
+    expect(
+      screen.getByText('EXTERNAL · https://cdn.example.com/generated/cat.png'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the raw JSON collapsed by default', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, { nodeRun: IMAGE_NODE_RUN, attempts: [] })),
+    );
+
+    const snapshot: RunSnapshot = { run: run(), nodeRuns: [IMAGE_NODE_RUN], lastSeq: 5 };
+    render(
+      <DetailPanel
+        snapshot={snapshot}
+        selectedNodeRun={IMAGE_NODE_RUN}
+        selectedEvent={null}
+        events={[]}
+      />,
+    );
+
+    await screen.findByText('Output');
+    // The raw JSON body is reachable but not visible until the <summary> is toggled open.
+    expect(screen.getByText('Raw JSON').closest('details')).not.toHaveAttribute('open');
+  });
+});
+
 // --- Agent Trace ------------------------------------------------------------
 
 const AGENT_NODE_RUN: NodeRun = {

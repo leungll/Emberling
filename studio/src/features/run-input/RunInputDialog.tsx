@@ -32,6 +32,22 @@ function isAssetRefSchema(schema: JsonSchema): boolean {
   return schema.type === 'object' && schema.properties?.assetId !== undefined;
 }
 
+/**
+ * An AssetRef value carries exactly the immutable reference fields (04 §1.3): a prior
+ * Run's input has already been through Backend validation, so a shape check is sufficient
+ * to recognise it without re-deriving Runtime rules client-side.
+ */
+function isAssetRefValue(value: unknown): value is AssetRef {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.assetId === 'string' &&
+    typeof candidate.mediaType === 'string' &&
+    typeof candidate.sizeBytes === 'number' &&
+    typeof candidate.sha256 === 'string'
+  );
+}
+
 export function RunInputDialog({
   open,
   onClose,
@@ -64,7 +80,15 @@ export function RunInputDialog({
 
   // Completed Asset uploads, keyed by inputKey. Only a completed upload's AssetRef is
   // written into run input (04 §1.5): a browser-local file selection is never enough.
-  const [assets, setAssets] = useState<Record<string, AssetRef>>({});
+  // Run Again seeds this from `initialInput`'s own AssetRef values (04 §1.3) so the prior
+  // Run's Assets are resubmitted unchanged rather than requiring a fresh upload.
+  const [assets, setAssets] = useState<Record<string, AssetRef>>(() => {
+    const seed: Record<string, AssetRef> = {};
+    for (const [key, value] of Object.entries(initialInput ?? {})) {
+      if (isAssetRefValue(value)) seed[key] = value;
+    }
+    return seed;
+  });
   const [assetUploading, setAssetUploading] = useState<Record<string, boolean>>({});
   const [assetErrors, setAssetErrors] = useState<Record<string, string | null>>({});
 

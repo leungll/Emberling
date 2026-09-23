@@ -23,8 +23,11 @@ interface WorkflowCanvasProps {
   edges: FlowEdge[];
   /**
    * Read-only is a topology snapshot (04 §1.4, Observe): no drag, no connect, no delete.
-   * Selection stays so Observe can pick a NodeRun. Change handlers are not attached at
-   * all, so nothing can reach the caller's Definition state even by keyboard.
+   * Selection stays so Observe can pick a NodeRun. `onEdgesChange`/`onConnect` are never
+   * attached, so nothing can reach the caller's Definition state even by keyboard.
+   * `onNodesChange`, if given, still is: `nodesDraggable={false}` already rules out a
+   * position edit reaching it, and it is the only channel React Flow reports a node's
+   * measured `dimensions` through, which `fitView` needs (see the `fitView` prop below).
    */
   readOnly?: boolean;
   focus?: CanvasFocusRequest | null;
@@ -52,13 +55,13 @@ export function WorkflowCanvas({
     void instance.current?.fitView({ nodes: [{ id: focus.nodeId }], duration: 200, maxZoom: 1 });
   }, [focus]);
 
-  const editHandlers = readOnly
-    ? {}
-    : {
-        ...(onNodesChange ? { onNodesChange } : {}),
-        ...(onEdgesChange ? { onEdgesChange } : {}),
-        ...(onConnect ? { onConnect } : {}),
-      };
+  const editHandlers = {
+    // Dimension measurement, not editing: kept attached in read-only mode so a caller can
+    // feed `dimensions` changes back into `nodes` (see the prop doc above).
+    ...(onNodesChange ? { onNodesChange } : {}),
+    ...(!readOnly && onEdgesChange ? { onEdgesChange } : {}),
+    ...(!readOnly && onConnect ? { onConnect } : {}),
+  };
 
   return (
     <div className="h-full w-full" data-testid="workflow-canvas" data-read-only={readOnly}>
