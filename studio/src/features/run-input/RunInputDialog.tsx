@@ -14,6 +14,8 @@ interface RunInputDialogProps {
   definitionVersion: number;
   /** Frozen contract of the bound Definition version. Studio never edits or invents it. */
   runInputSchema: RunInputSchema | undefined;
+  /** Input node labels keyed by input key (see runInputLabels); display only. */
+  inputLabels?: Readonly<Record<string, string>>;
   initialInput?: JsonObject;
   submitting?: boolean;
   errorMessage?: string | null;
@@ -54,6 +56,7 @@ export function RunInputDialog({
   workflowId,
   definitionVersion,
   runInputSchema,
+  inputLabels,
   initialInput,
   submitting = false,
   errorMessage,
@@ -170,24 +173,25 @@ export function RunInputDialog({
       description={`${workflowId} · v${definitionVersion}`}
       footer={
         <>
-          <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button size="sm" onClick={submit} disabled={runDisabled}>
+          <Button onClick={submit} disabled={runDisabled}>
             {submitting ? 'Creating run…' : 'Create run'}
           </Button>
         </>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-4">
         {fields.length === 0 ? (
-          <p className="text-xs text-[var(--muted-foreground)]">
+          <p className="text-[14px] text-[var(--muted-foreground)]">
             This Definition declares no run input.
           </p>
         ) : null}
 
         {fields.map((field) => {
           const id = `run-input-${field.key}`;
+          const helperId = `${id}-helper`;
           const acceptedMediaTypes = field.schema.properties?.mediaType?.enum as
             string[] | undefined;
           const ref = assets[field.key];
@@ -195,27 +199,33 @@ export function RunInputDialog({
           const assetError = assetErrors[field.key];
 
           return (
-            <div key={field.key} className="space-y-1">
-              <Label htmlFor={id}>
-                {field.schema.title ?? field.key}
+            <div key={field.key} className="space-y-1.5">
+              <Label htmlFor={id} className="text-[14px] font-semibold text-[var(--foreground)]">
+                {inputLabels?.[field.key] ?? field.schema.title ?? field.key}
                 {field.required ? (
                   <span aria-hidden="true" className="ml-0.5 text-red-500">
                     *
                   </span>
                 ) : null}
               </Label>
+              {/* The submitted field name, whether it is required and its value kind. */}
+              <p id={helperId} className="text-[12px] text-[var(--muted-foreground)]">
+                {field.key} · {field.required ? 'required' : 'optional'} ·{' '}
+                {field.isAssetRef ? 'image' : 'text'}
+              </p>
 
               {field.isAssetRef ? (
                 <>
                   <Input
                     id={id}
                     type="file"
+                    aria-describedby={helperId}
                     accept={acceptedMediaTypes?.join(',')}
                     disabled={uploading}
                     onChange={(e) => handleFileChange(field, e.target.files?.[0])}
                   />
                   {uploading ? (
-                    <p className="text-[10px] text-[var(--muted-foreground)]">Uploading…</p>
+                    <p className="text-[12px] text-[var(--muted-foreground)]">Uploading…</p>
                   ) : null}
                   {ref ? (
                     <div className="flex items-center gap-2">
@@ -225,13 +235,13 @@ export function RunInputDialog({
                         alt=""
                         className="h-10 w-10 rounded object-cover"
                       />
-                      <p className="text-[10px] text-[var(--muted-foreground)]">
+                      <p className="text-[12px] text-[var(--muted-foreground)]">
                         {ref.assetId} · {ref.sizeBytes} bytes
                       </p>
                     </div>
                   ) : null}
                   {assetError ? (
-                    <p role="alert" className="text-xs text-red-500">
+                    <p role="alert" className="text-[13px] text-red-500">
                       {assetError}
                     </p>
                   ) : null}
@@ -240,6 +250,7 @@ export function RunInputDialog({
                 <Input
                   id={id}
                   type="text"
+                  aria-describedby={helperId}
                   required={field.required}
                   minLength={field.schema.minLength}
                   maxLength={field.schema.maxLength}
@@ -252,12 +263,12 @@ export function RunInputDialog({
         })}
 
         {errorMessage ? (
-          <p role="alert" className="text-xs text-red-500">
+          <p role="alert" className="text-[13px] text-red-500">
             {errorMessage}
           </p>
         ) : null}
 
-        <p className="text-[10px] text-[var(--muted-foreground)]">
+        <p className="text-[12px] text-[var(--muted-foreground)]">
           The Backend revalidates this input against the frozen schema of v{definitionVersion}{' '}
           before it creates a Run.
         </p>

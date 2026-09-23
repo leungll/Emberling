@@ -5,10 +5,12 @@ import {
   type Connection,
   type NodeChange,
   type EdgeChange,
+  type Node as FlowNode,
+  type NodeTypes,
   type ReactFlowInstance,
   useStore,
 } from '@xyflow/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { CanvasToolbar, type InteractionMode } from './CanvasToolbar';
 import { RegisteredNode, type RegisteredFlowNode } from './RegisteredNode';
@@ -32,8 +34,20 @@ const PORT_HINT_MIN_ZOOM = 1;
  */
 const READ_ONLY_MIN_ZOOM = 0.1;
 
-interface WorkflowCanvasProps {
-  nodes: RegisteredFlowNode[];
+/** Port-hint floor on screen (04 §4): hint text never renders under 10px at any zoom. */
+const PORT_HINT_MIN_PX = 10;
+
+/**
+ * Fit margin around the whole graph. A fixed pixel margin, rather than React Flow's
+ * default 10%-of-viewport padding, lets a graph that fits the canvas open at 100%.
+ */
+const FIT_PADDING = '8px';
+
+/** Edit's full-size card; a read-only caller may pass its own node types instead. */
+const REGISTERED_NODE_TYPES: NodeTypes = { registered: RegisteredNode };
+
+interface WorkflowCanvasProps<N extends FlowNode> {
+  nodes: N[];
   edges: FlowEdge[];
   /**
    * Read-only is a topology snapshot (04 §1.4, Observe): no drag, no connect, no delete.
@@ -48,10 +62,15 @@ interface WorkflowCanvasProps {
   readOnly?: boolean;
   /** Edit only: zooms onto one node. Observe never passes it (see `readOnly`). */
   focus?: CanvasFocusRequest | null;
-  onNodesChange?: (changes: NodeChange<RegisteredFlowNode>[]) => void;
+  onNodesChange?: (changes: NodeChange<N>[]) => void;
   onEdgesChange?: (changes: EdgeChange<FlowEdge>[]) => void;
   onConnect?: (connection: Connection) => void;
   onSelectNode?: (nodeId: string | null) => void;
+  /**
+   * Node renderers keyed by node `type`; a module-level constant, since React Flow
+   * re-mounts every node when this object changes. Defaults to Edit's `RegisteredNode`.
+   */
+  nodeTypes?: NodeTypes;
 }
 
 /**
@@ -60,7 +79,7 @@ interface WorkflowCanvasProps {
  * child — can call `useReactFlow`/`useViewport` without this component adding a second,
  * redundant provider of its own.
  */
-export function WorkflowCanvas({
+export function WorkflowCanvas<N extends FlowNode = RegisteredFlowNode>({
   nodes,
   edges,
   readOnly = false,
@@ -69,9 +88,9 @@ export function WorkflowCanvas({
   onEdgesChange,
   onConnect,
   onSelectNode,
-}: WorkflowCanvasProps) {
-  const nodeTypes = useMemo(() => ({ registered: RegisteredNode }), []);
-  const instance = useRef<ReactFlowInstance<RegisteredFlowNode, FlowEdge> | null>(null);
+  nodeTypes = REGISTERED_NODE_TYPES,
+}: WorkflowCanvasProps<N>) {
+  const instance = useRef<ReactFlowInstance<N, FlowEdge> | null>(null);
   const [mode, setMode] = useState<InteractionMode>('select');
   const [showGrid, setShowGrid] = useState(true);
 
@@ -89,7 +108,11 @@ export function WorkflowCanvas({
     const element = container.current;
     if (!readOnly || !element) return;
     const observer = new ResizeObserver(() => {
-      void instance.current?.fitView({ maxZoom: 1, minZoom: READ_ONLY_MIN_ZOOM });
+      void instance.current?.fitView({
+        maxZoom: 1,
+        minZoom: READ_ONLY_MIN_ZOOM,
+        padding: FIT_PADDING,
+      });
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -103,15 +126,23 @@ export function WorkflowCanvas({
     ...(!readOnly && onConnect ? { onConnect } : {}),
   };
 
+  // An editable canvas keeps its port hints at any zoom: below 100% the hint font grows in
+  // flow units by 1/zoom so it still lands at the 10px floor on screen, and at 100% or
+  // more it stays the card's own 10px.
+  const hintStyle = {
+    '--port-hint-font': `${Math.max(PORT_HINT_MIN_PX, PORT_HINT_MIN_PX / zoom)}px`,
+  } as CSSProperties;
+
   return (
     <div
       ref={container}
       className="group/canvas h-full w-full"
+      style={hintStyle}
       data-testid="workflow-canvas"
       data-read-only={readOnly}
       data-port-hints={readOnly && zoom < PORT_HINT_MIN_ZOOM ? 'hidden' : 'shown'}
     >
-      <ReactFlow<RegisteredFlowNode, FlowEdge>
+      <ReactFlow<N, FlowEdge>
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -135,7 +166,11 @@ export function WorkflowCanvas({
         fitView
         // Never magnify a small graph past 100%: cards keep the mock's reading size
         // instead of ballooning to fill the canvas.
-        fitViewOptions={readOnly ? { maxZoom: 1, minZoom: READ_ONLY_MIN_ZOOM } : { maxZoom: 1 }}
+        fitViewOptions={
+          readOnly
+            ? { maxZoom: 1, minZoom: READ_ONLY_MIN_ZOOM, padding: FIT_PADDING }
+            : { maxZoom: 1, padding: FIT_PADDING }
+        }
         {...(readOnly ? { minZoom: READ_ONLY_MIN_ZOOM } : {})}
         onInit={(flow) => {
           instance.current = flow;

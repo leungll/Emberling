@@ -162,7 +162,7 @@ function EventDetail({ event }: { event: RunEvent }) {
       <h3 className="text-[15px] font-semibold">Event #{event.seq}</h3>
       <Field label="Type" value={event.type} />
       <Field label="At" value={formatTimestamp(event.timestamp)} />
-      <Field label="NodeRun" value={event.nodeRunId ?? '— (run level)'} />
+      <Field label="NodeRun" value={event.nodeRunId ?? '— (run level)'} stacked />
       <JsonBlock label="Payload" value={event.payload} />
     </section>
   );
@@ -271,7 +271,7 @@ function NodeRunHeading({ nodeRun, nodeName }: { nodeRun: NodeRun; nodeName?: st
         <h3 className="truncate text-[22px] leading-tight font-bold">
           {nodeName ?? nodeRun.nodeId}
         </h3>
-        <p className="mt-1 truncate text-[13px] text-[var(--muted-foreground)]">
+        <p className="mt-1 text-[13px] text-[var(--muted-foreground)] [overflow-wrap:anywhere]">
           {nodeName ? `${nodeRun.nodeId} · ` : ''}
           {nodeRun.nodeType} · {nodeRun.id}
         </p>
@@ -417,7 +417,11 @@ function NodeRunDetailView({
                 {attempt.callbackBinding ? (
                   <div className="mt-2 space-y-1 text-[14px]">
                     <Field label="Callback provider" value={attempt.callbackBinding.providerId} />
-                    <Field label="External task" value={attempt.callbackBinding.externalTaskId} />
+                    <Field
+                      label="External task"
+                      value={attempt.callbackBinding.externalTaskId}
+                      stacked
+                    />
                     <Field
                       label="Bound at"
                       value={formatTimestamp(attempt.callbackBinding.createdAt)}
@@ -492,7 +496,7 @@ function AgentRunSummary({ trace }: { trace: AgentTrace | null }) {
       </h3>
       {trace ? (
         <>
-          <Field label="Agent Run" value={trace.agentRun.id} />
+          <Field label="Agent Run" value={trace.agentRun.id} stacked />
           {/* `running` is not a status: it is how an absent server-side termination reads. */}
           <Field label="Termination" value={trace.agentRun.termination ?? 'running'} />
           <Field label="Turns" value={String(trace.turns.length)} />
@@ -590,7 +594,7 @@ function AgentTurnCard({
           {attempt.callbackBinding ? (
             <div className="space-y-1 text-[14px]">
               <Field label="Callback provider" value={attempt.callbackBinding.providerId} />
-              <Field label="External task" value={attempt.callbackBinding.externalTaskId} />
+              <Field label="External task" value={attempt.callbackBinding.externalTaskId} stacked />
             </div>
           ) : null}
           {attempt.error ? (
@@ -603,18 +607,43 @@ function AgentTurnCard({
 }
 
 /** Label/value row. The value is the label's next sibling, which tests rely on. */
-function Field({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function Field({
+  label,
+  value,
+  strong,
+  stacked,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  /** An opaque ID: the value takes its own full-width line under the label. */
+  stacked?: boolean;
+}) {
   // `strong` rows are the waiting diagnostics: a fixed label column with the value beside
-  // it, as in the 04 §3.2 mock; plain rows spread label and value across the width.
+  // it, as in the 04 §3.2 mock; plain rows spread label and value across the width. An
+  // ID squeezed beside its label would wrap its last one or two characters onto a line of
+  // their own, so `stacked` gives it the whole width instead.
   return (
     <div
+      data-field-layout={stacked ? 'stacked' : strong ? 'strong' : 'row'}
       className={cn(
-        'gap-4',
-        strong ? 'grid grid-cols-[116px_minmax(0,1fr)]' : 'flex justify-between',
+        stacked
+          ? 'flex flex-col gap-0.5'
+          : strong
+            ? 'grid grid-cols-[116px_minmax(0,1fr)] gap-4'
+            : 'flex justify-between gap-4',
       )}
     >
       <span className="shrink-0 text-[13px] text-[var(--muted-foreground)]">{label}</span>
-      <span className={cn(strong ? 'font-semibold break-words' : 'text-right break-all')}>
+      <span
+        className={cn(
+          stacked
+            ? 'font-mono text-[14px] [overflow-wrap:anywhere]'
+            : strong
+              ? 'font-semibold [overflow-wrap:anywhere]'
+              : 'text-right break-all',
+        )}
+      >
         {value}
       </span>
     </div>
@@ -683,13 +712,21 @@ function ImagePreview({ image }: { image: ImageRef }) {
       {src ? (
         // Non-empty alt text: an ImageRef preview is content, not decoration, and keeps
         // the "img" role for assistive tech and tests alike.
-        <img
-          src={src}
-          alt={`${image.source} image preview`}
-          className="max-h-48 max-w-full rounded-lg object-contain"
-        />
+        // A fixed preview box: a tiny image (a 16x16 mock output) is scaled up to stay
+        // visible, a large one is scaled down, and both keep their aspect ratio on a
+        // checkerboard so transparent pixels read as such.
+        <div
+          data-testid="image-preview-box"
+          className="flex h-40 w-40 items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--muted)] bg-[repeating-conic-gradient(var(--accent)_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]"
+        >
+          <img
+            src={src}
+            alt={`${image.source} image preview`}
+            className="h-full w-full object-contain"
+          />
+        </div>
       ) : null}
-      <p className="break-all text-xs text-[var(--muted-foreground)]">
+      <p className="text-[13px] text-[var(--muted-foreground)] [overflow-wrap:anywhere]">
         {image.source} · {reference ?? '—'}
       </p>
     </div>
@@ -712,7 +749,14 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
   // content in the panel; otherwise only large fields collapse.
   const collapsedByDefault = images.length > 0 || json.length > JSON_BLOCK_COLLAPSE_THRESHOLD_CHARS;
   const pre = (
-    <pre className="max-h-56 overflow-auto px-4 py-3 text-[14px] leading-relaxed">{json}</pre>
+    // Long strings wrap inside the block instead of running off its right edge; the block
+    // keeps a bounded height and scrolls vertically.
+    <pre
+      data-testid="json-block"
+      className="max-h-56 overflow-x-hidden overflow-y-auto px-4 py-3 text-[14px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
+    >
+      {json}
+    </pre>
   );
 
   return (

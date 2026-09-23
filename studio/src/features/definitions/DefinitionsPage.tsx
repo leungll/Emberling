@@ -189,11 +189,10 @@ function NewDefinitionDialog({ open, onClose, onCreate }: NewDefinitionDialogPro
       title="New Definition"
       footer={
         <>
-          <Button variant="outline" size="sm" onClick={handleClose}>
+          <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
           <Button
-            size="sm"
             disabled={name.trim() === ''}
             onClick={() => {
               const trimmedName = name.trim();
@@ -208,9 +207,11 @@ function NewDefinitionDialog({ open, onClose, onCreate }: NewDefinitionDialogPro
         </>
       }
     >
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <Label htmlFor="new-definition-name">Name</Label>
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="new-definition-name" className="text-[14px] font-semibold">
+            Name
+          </Label>
           <Input
             id="new-definition-name"
             value={name}
@@ -219,8 +220,10 @@ function NewDefinitionDialog({ open, onClose, onCreate }: NewDefinitionDialogPro
             autoFocus
           />
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="new-definition-description">Description</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="new-definition-description" className="text-[14px] font-semibold">
+            Description
+          </Label>
           <Textarea
             id="new-definition-description"
             value={description}

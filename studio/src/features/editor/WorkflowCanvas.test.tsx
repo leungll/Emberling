@@ -105,4 +105,53 @@ describe('WorkflowCanvas', () => {
     await flushDeletes();
     expect(screen.getByTestId('workflow-canvas')).toHaveAttribute('data-port-hints', 'shown');
   });
+  it('keeps editable port hints at 10px or more on screen when the fit zooms below 100%', async () => {
+    // Same undersized canvas as above: the editable fit also zooms out, and a hint drawn at
+    // a fixed 10px in flow units would land under the 10px floor on screen.
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(180);
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(60);
+    const sized = nodes.map((node) => ({ ...node, width: 176, height: 128 }));
+    try {
+      render(<WorkflowCanvas nodes={sized} edges={[]} />);
+      const canvas = screen.getByTestId('workflow-canvas');
+      const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
+      const zoomOf = () => Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1]);
+      await waitFor(() => expect(zoomOf()).toBeLessThan(1));
+      const hintPx = parseFloat(canvas.style.getPropertyValue('--port-hint-font'));
+      expect(hintPx * zoomOf()).toBeGreaterThanOrEqual(10 - 1e-9);
+      expect(canvas).toHaveAttribute('data-port-hints', 'shown');
+      expect(screen.getByTestId('handle-out-text').querySelector('[data-port-hint]')).toHaveClass(
+        'text-[length:var(--port-hint-font,10px)]',
+      );
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+  it('opens an editable canvas at 100% when the whole graph fits with a small margin', async () => {
+    // Two cards on the fixtures' 200px column grid span 376px; a 400px canvas holds them
+    // with a pixel margin, where a 10%-of-graph fit padding (React Flow's default) would
+    // zoom below 100% and shrink every label for no reason.
+    // Nodes measure as their 176x128 card; everything else (the canvas) as 400x160.
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('react-flow__node') ? 176 : 400;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('react-flow__node') ? 128 : 160;
+    });
+    const sized = [
+      ...nodes,
+      { ...nodes[0]!, id: 'node_b', position: { x: 200, y: 0 }, selected: false },
+    ].map((node) => ({ ...node, width: 176, height: 128 }));
+    try {
+      render(<WorkflowCanvas nodes={sized} edges={[]} />);
+      const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
+      await waitFor(() => expect(viewport?.style.transform).toMatch(/scale\(1\)/));
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
 });

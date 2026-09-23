@@ -3,9 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RunInputDialog } from './RunInputDialog';
+import { runInputLabels } from './runInputLabels';
 import { ApiRequestError, uploadAsset } from '@/api/client';
 import type * as ClientModule from '@/api/client';
-import type { RunInputSchema } from '@/api/types';
+import type { Node, RunInputSchema } from '@/api/types';
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof ClientModule>();
@@ -186,5 +187,72 @@ describe('RunInputDialog', () => {
     resolveUpload(assetRef);
     await screen.findByText(/asset_123/);
     expect(screen.getByRole('button', { name: 'Create run' })).not.toBeDisabled();
+  });
+});
+
+describe('RunInputDialog — Input node labels and typography', () => {
+  const inputNodes: Node[] = [
+    {
+      id: 'brief',
+      type: 'text_input',
+      name: 'Creative Brief',
+      position: { x: 0, y: 0 },
+      config: { inputKey: 'brief', label: 'Creative Brief', required: true },
+    },
+    {
+      id: 'gen',
+      type: 'image_generation',
+      name: 'Image Generation',
+      position: { x: 200, y: 0 },
+      config: { prompt: 'x' },
+    },
+  ];
+  // The Backend's runInputSchema carries no titles: the label comes from the Input node.
+  const untitledSchema: RunInputSchema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: { brief: { type: 'string', minLength: 1 } },
+    required: ['brief'],
+  };
+
+  it('maps each node declaring an inputKey and a label to that key, skipping nodes without them', () => {
+    expect(runInputLabels(inputNodes)).toEqual({ brief: 'Creative Brief' });
+    expect(runInputLabels(undefined)).toEqual({});
+  });
+
+  it('labels the field with the Input node label and describes it with key, requiredness and kind', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <RunInputDialog
+        open
+        onClose={vi.fn()}
+        workflowId="wf_123"
+        definitionVersion={4}
+        runInputSchema={untitledSchema}
+        inputLabels={runInputLabels(inputNodes)}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const field = screen.getByRole('textbox', { name: /Creative Brief/ });
+    expect(field).toHaveAccessibleDescription('brief · required · text');
+    const helper = screen.getByText('brief · required · text');
+    expect(helper).toHaveClass('text-[12px]');
+    expect(screen.getByText('Creative Brief')).toHaveClass('text-[14px]');
+
+    // The label is display only: the submitted field name is still the input key.
+    await userEvent.type(field, 'a lighthouse');
+    await userEvent.click(screen.getByRole('button', { name: 'Create run' }));
+    expect(onSubmit).toHaveBeenCalledWith({ brief: 'a lighthouse' });
+  });
+
+  it('keeps every dialog text at or above the 12px floor and buttons at 14px', () => {
+    renderDialog();
+    const dialog = screen.getByRole('dialog');
+    for (const element of dialog.querySelectorAll('*')) {
+      expect(element.className.toString()).not.toMatch(/text-\[(10|11)px\]|text-xs/);
+    }
+    expect(screen.getByRole('button', { name: 'Create run' })).toHaveClass('text-sm');
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('text-sm');
   });
 });

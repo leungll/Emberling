@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -138,5 +138,30 @@ describe('DefinitionsPage — New Definition', () => {
     // POST /definitions only happens on the first Save: the Backend validates before it
     // creates version 1, so an empty graph cannot be persisted here.
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DefinitionsPage — New Definition dialog typography', () => {
+  it('stays on the light Definitions theme with 14px labels, 14px buttons and a 16px title', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { items: [] })));
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <DefinitionsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '+ New Definition' }));
+    const dialog = screen.getByRole('dialog', { name: 'New Definition' });
+    // The Definitions page is light; only the Studio pages render inside `.dark`.
+    expect(dialog.closest('.dark')).toBeNull();
+    expect(within(dialog).getByRole('heading', { name: 'New Definition' })).toHaveClass(
+      'text-[16px]',
+    );
+    expect(within(dialog).getByText('Name')).toHaveClass('text-[14px]');
+    expect(within(dialog).getByText('Description')).toHaveClass('text-[14px]');
+    expect(within(dialog).getByRole('button', { name: 'Create' })).toHaveClass('text-sm');
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveClass('text-sm');
   });
 });

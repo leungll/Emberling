@@ -29,8 +29,9 @@ test('Document Processing completes synchronously and shows its output', async (
   await expect(dialog).toBeVisible();
 
   // The Run Input Dialog's field label is the Text Input node's configured `label`
-  // ("Document"), not its `inputKey` ("document") - RunInputDialog.tsx: `field.schema.title
-  // ?? field.key`. Item 2: the actual input is written to the Run, never to the Definition.
+  // ("Document"), not its `inputKey` ("document") - RunInputDialog.tsx reads it through
+  // runInputLabels from the Definition's Input nodes, and the key stays the submitted field
+  // name. Item 2: the actual input is written to the Run, never to the Definition.
   await dialog.getByLabel('Document').fill('Emberling keeps every execution fact in PostgreSQL.');
   await dialog.getByRole('button', { name: 'Create run' }).click();
 

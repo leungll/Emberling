@@ -12,7 +12,8 @@ import { WorkflowStepper } from './WorkflowStepper';
 import { useBoundDefinition } from './boundDefinition';
 import { observeRun, type ObservedRun } from './runObserver';
 import { ApiRequestError, createRun, getDefinitionVersion } from '@/api/client';
-import type { Definition, JsonObject, RunEvent, RunInputSchema } from '@/api/types';
+import type { Definition, JsonObject, RunEvent } from '@/api/types';
+import { runInputLabels } from '@/features/run-input/runInputLabels';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { useStudioStore } from '@/stores/studio-store';
 
@@ -73,7 +74,7 @@ export function ObservePage() {
   // definitionVersion (never the latest), prefilled with this Run's own input. The
   // frozen runInputSchema for that version is fetched lazily, only when the dialog opens.
   const [runAgainOpen, setRunAgainOpen] = useState(false);
-  const [runAgainSchema, setRunAgainSchema] = useState<RunInputSchema | undefined>(undefined);
+  const [runAgainDefinition, setRunAgainDefinition] = useState<Definition | undefined>(undefined);
   const [runAgainSubmitting, setRunAgainSubmitting] = useState(false);
   const [runAgainError, setRunAgainError] = useState<string | null>(null);
 
@@ -107,10 +108,10 @@ export function ObservePage() {
     if (!snapshot) return;
     setRunAgainError(null);
     setRunAgainOpen(true);
-    setRunAgainSchema(undefined);
+    setRunAgainDefinition(undefined);
     // The version is frozen and immutable, so this fetch is safe to key off it alone.
     getDefinitionVersion(snapshot.run.workflowId, snapshot.run.definitionVersion)
-      .then((definition) => setRunAgainSchema(definition.runInputSchema))
+      .then((definition) => setRunAgainDefinition(definition))
       .catch((error: unknown) => {
         setRunAgainError(describeError(error, 'Could not load the run input schema'));
       });
@@ -255,8 +256,10 @@ export function ObservePage() {
         </>
       ) : (
         // 04 §3.3 Run view: topology and Run Summary over Event Timeline and Detail.
-        <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-          <div className="flex h-[400px] shrink-0 gap-4">
+        // The top row grows with the Run Summary so its RUNNING / WAITING lists are never
+        // clipped; the page scrolls when the lower row would drop below its minimum.
+        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+          <div data-testid="run-view-top-row" className="flex min-h-[400px] shrink-0 gap-4">
             <Panel
               title="Read-only Topology"
               meta={`Definition v${snapshot.run.definitionVersion}`}
@@ -277,7 +280,7 @@ export function ObservePage() {
               </RunSummaryCard>
             </div>
           </div>
-          <div className="flex min-h-0 flex-1 gap-4">
+          <div className="flex min-h-[320px] flex-1 gap-4">
             <section className="flex w-[490px] shrink-0 flex-col rounded-xl border border-[var(--border)] bg-[var(--card)]">
               <EventTimeline
                 events={events}
@@ -300,7 +303,9 @@ export function ObservePage() {
         onClose={() => setRunAgainOpen(false)}
         workflowId={snapshot.run.workflowId}
         definitionVersion={snapshot.run.definitionVersion}
-        runInputSchema={runAgainSchema}
+        runInputSchema={runAgainDefinition?.runInputSchema}
+        // The bound version's Input node labels name the fields; the keys are unchanged.
+        inputLabels={runInputLabels(runAgainDefinition?.nodes)}
         initialInput={snapshot.run.input}
         submitting={runAgainSubmitting}
         errorMessage={runAgainError}

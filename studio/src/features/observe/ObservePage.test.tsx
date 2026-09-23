@@ -61,7 +61,15 @@ const OLD_DEFINITION_VERSION = {
   version: 3,
   name: 'AIGC Media Generation',
   description: '',
-  nodes: [],
+  nodes: [
+    {
+      id: 'node_prompt',
+      type: 'text_input',
+      name: 'Campaign Prompt',
+      position: { x: 0, y: 0 },
+      config: { inputKey: 'prompt', label: 'Campaign Prompt', required: true },
+    },
+  ],
   edges: [],
   runInputSchema: {
     type: 'object',
@@ -240,6 +248,10 @@ describe('ObservePage — Run Again', () => {
       exact: false,
     })) as HTMLInputElement;
     expect(promptField.value).toBe('old prompt value');
+    // The field is named by the bound version's Input node label, and its helper gives the
+    // input key the value is submitted under.
+    expect(within(dialog).getByRole('textbox', { name: /Campaign Prompt/ })).toBe(promptField);
+    expect(promptField).toHaveAccessibleDescription('prompt · required · text');
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create run' }));
 
@@ -260,5 +272,32 @@ describe('ObservePage — Run Again', () => {
         'Run run_new · Definition v3 · Observe',
       ),
     );
+  });
+});
+
+describe('ObservePage — Run view layout', () => {
+  it('lets the top row grow with the Run Summary instead of fixing its height', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/runs/run_old') {
+          return Promise.resolve(jsonResponse(200, { run: OLD_RUN, nodeRuns: [], lastSeq: 0 }));
+        }
+        if (url === '/api/definitions/wf_123/versions/3') {
+          return Promise.resolve(jsonResponse(200, OLD_DEFINITION_VERSION));
+        }
+        return Promise.resolve(jsonResponse(200, { items: [] }));
+      }),
+    );
+
+    renderObservePage();
+
+    const row = await screen.findByTestId('run-view-top-row');
+    expect(row).toContainElement(screen.getByTestId('run-summary'));
+    // A fixed h-[400px] clipped the RUNNING / WAITING lists; a minimum height does not.
+    expect(row).not.toHaveClass('h-[400px]');
+    expect(row).toHaveClass('min-h-[400px]');
   });
 });

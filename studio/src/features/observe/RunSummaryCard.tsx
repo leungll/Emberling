@@ -127,7 +127,7 @@ export function RunSummaryCard({
   return (
     <section
       data-testid="run-summary"
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--card)] px-5 pt-4 pb-5"
+      className="flex min-w-0 flex-1 flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--card)] px-5 pt-4 pb-5"
     >
       <SectionLabel>Run Summary</SectionLabel>
 
@@ -147,7 +147,9 @@ export function RunSummaryCard({
         </div>
       </div>
 
-      <dl className="grid grid-cols-[1.4fr_1.6fr_0.8fr_0.8fr] gap-4">
+      {/* The Run ID column is the widest so a full Run ID fits on one line; if it still
+          has to wrap it breaks anywhere rather than leaving a one- or two-character tail. */}
+      <dl className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.7fr)] gap-4">
         <Fact label="Run ID" value={run.id} wrap />
         <Fact
           label="Definition"
@@ -194,7 +196,10 @@ function Fact({
         {label}
       </dt>
       <dd
-        className={cn('mt-1.5 text-[15px] font-semibold', wrap ? 'break-all' : 'truncate')}
+        className={cn(
+          'mt-1.5 text-[15px] font-semibold',
+          wrap ? '[overflow-wrap:anywhere]' : 'truncate',
+        )}
         title={value}
       >
         {value}

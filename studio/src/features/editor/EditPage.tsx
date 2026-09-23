@@ -41,6 +41,7 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
+import { runInputLabels } from '@/features/run-input/runInputLabels';
 import { useStudioStore } from '@/stores/studio-store';
 
 /**
@@ -501,28 +502,6 @@ export function EditPage() {
         </p>
       ) : null}
 
-      {conflict ? (
-        <div
-          role="alert"
-          aria-label="Version conflict"
-          className="space-y-2 border-b border-[var(--border)] px-4 py-2 text-xs text-amber-500"
-        >
-          <p>
-            The definition was saved as v{conflict.version} on the server while you were editing v
-            {definition?.version ?? '?'} locally. Reload to see the latest version, or keep your
-            edits and compare before saving again.
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setConflict(null)}>
-              Keep my edits
-            </Button>
-            <Button size="sm" onClick={() => applyDefinition(conflict)}>
-              Reload latest
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
       {validationErrors ? (
         <ul
           role="list"
@@ -565,7 +544,28 @@ export function EditPage() {
               ports · schema · execution contract
             </span>
           </div>
-          <div className="min-h-0 flex-1">
+          <div data-testid="canvas-region" className="relative min-h-0 flex-1">
+            {conflict ? (
+              // An overlay on the canvas rather than a row above it: the palette, canvas
+              // and properties keep their full height while the conflict is unresolved.
+              <div
+                role="alert"
+                aria-label="Version conflict"
+                className="absolute inset-x-3 top-3 z-10 flex items-start gap-4 rounded-lg border border-amber-500/60 bg-[var(--card)] px-4 py-3 text-[14px] shadow-lg"
+              >
+                <p className="min-w-0 flex-1 text-amber-500">
+                  The definition was saved as v{conflict.version} on the server while you were
+                  editing v{definition?.version ?? '?'} locally. Reload to see the latest version,
+                  or keep your edits and compare before saving again.
+                </p>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" onClick={() => setConflict(null)}>
+                    Keep my edits
+                  </Button>
+                  <Button onClick={() => applyDefinition(conflict)}>Reload latest</Button>
+                </div>
+              </div>
+            ) : null}
             <WorkflowCanvas
               nodes={flowNodes}
               edges={flowEdges}
@@ -606,6 +606,7 @@ export function EditPage() {
           workflowId={workflowId}
           definitionVersion={definition.version}
           runInputSchema={definition.runInputSchema}
+          inputLabels={runInputLabels(definition.nodes)}
           submitting={busy}
           errorMessage={runError}
           onSubmit={(input) => void handleCreateRun(input)}

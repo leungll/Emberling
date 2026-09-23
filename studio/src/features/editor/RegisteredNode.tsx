@@ -135,7 +135,7 @@ export function RegisteredNode({ data, selected, isConnectable }: NodeProps<Regi
           <span
             aria-hidden="true"
             data-port-hint
-            className="pointer-events-none absolute top-1/2 left-full ml-1.5 -translate-y-1/2 whitespace-nowrap text-[10px] group-data-[port-hints=hidden]/canvas:hidden text-[var(--muted-foreground)]"
+            className="pointer-events-none absolute top-1/2 left-full ml-1.5 -translate-y-1/2 whitespace-nowrap text-[length:var(--port-hint-font,10px)] group-data-[port-hints=hidden]/canvas:hidden text-[var(--muted-foreground)]"
           >
             {port.name}
             {port.required ? '' : '?'}
@@ -162,7 +162,7 @@ export function RegisteredNode({ data, selected, isConnectable }: NodeProps<Regi
           <span
             aria-hidden="true"
             data-port-hint
-            className="pointer-events-none absolute top-1/2 right-full mr-1.5 -translate-y-1/2 whitespace-nowrap text-[10px] group-data-[port-hints=hidden]/canvas:hidden text-[var(--muted-foreground)]"
+            className="pointer-events-none absolute top-1/2 right-full mr-1.5 -translate-y-1/2 whitespace-nowrap text-[length:var(--port-hint-font,10px)] group-data-[port-hints=hidden]/canvas:hidden text-[var(--muted-foreground)]"
           >
             {port.name}
             {port.required ? '' : '?'}

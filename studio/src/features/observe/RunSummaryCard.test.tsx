@@ -44,6 +44,28 @@ function snapshot(status: RunStatus, nodeRuns: NodeRun[]): RunSnapshot {
 const NAMES = new Map([['node_image', 'Image Generation']]);
 
 describe('RunSummaryCard', () => {
+  it('grows with its RUNNING / WAITING lists and keeps the Run ID from orphaning characters', () => {
+    render(
+      <RunSummaryCard
+        snapshot={snapshot('PAUSED', [waitingNodeRun()])}
+        events={[]}
+        followLive
+        nodeNames={NAMES}
+      >
+        <ul data-testid="rail" />
+      </RunSummaryCard>,
+    );
+
+    // The card is sized by its content, not clipped to a fixed-height scroll box.
+    const card = screen.getByTestId('run-summary');
+    expect(card).not.toHaveClass('overflow-auto');
+    expect(card).not.toHaveClass('min-h-0');
+    // The Run ID wraps anywhere instead of break-all with a one-character tail.
+    const runId = screen.getByText('run_1');
+    expect(runId).toHaveClass('[overflow-wrap:anywhere]');
+    expect(runId).not.toHaveClass('break-all');
+  });
+
   it('names the waiting NodeRuns when the server reports the Run PAUSED', () => {
     render(
       <RunSummaryCard

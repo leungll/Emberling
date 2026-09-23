@@ -310,6 +310,11 @@ describe('EditPage — version conflict', () => {
     const conflict = await screen.findByRole('alert', { name: 'Version conflict' });
     expect(conflict).toHaveTextContent('v5');
     expect(conflict).toHaveTextContent('v4');
+    // The banner overlays the canvas instead of taking a row above the palette, so the
+    // palette, canvas and properties keep their full height (no squashed layout).
+    expect(screen.getByTestId('canvas-region')).toContainElement(conflict);
+    expect(conflict).toHaveClass('absolute');
+    expect(conflict).toHaveClass('text-[14px]');
     expect(screen.getByLabelText('Name')).toHaveValue('Local Generate');
     expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
 

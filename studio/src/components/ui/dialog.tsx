@@ -42,9 +42,9 @@ export function Dialog({
       >
         <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-4 py-3">
           <div>
-            <h2 className="text-sm font-semibold">{title}</h2>
+            <h2 className="text-[16px] font-semibold">{title}</h2>
             {description ? (
-              <div className="mt-1 text-xs text-[var(--muted-foreground)]">{description}</div>
+              <div className="mt-1 text-[13px] text-[var(--muted-foreground)]">{description}</div>
             ) : null}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close dialog">

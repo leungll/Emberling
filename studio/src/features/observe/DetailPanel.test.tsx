@@ -261,6 +261,22 @@ describe('DetailPanel — JsonBlock default visibility', () => {
 
     expect(screen.getByText('Raw JSON').closest('details')).not.toHaveAttribute('open');
   });
+
+  it('wraps long JSON strings inside a bounded, vertically scrolling block', () => {
+    const snapshot: RunSnapshot = {
+      run: { ...run(), input: { uri: 'https://cdn.example.com/' + 'a'.repeat(300) } },
+      nodeRuns: [],
+      lastSeq: 0,
+    };
+    render(
+      <DetailPanel snapshot={snapshot} selectedNodeRun={null} selectedEvent={null} events={[]} />,
+    );
+
+    const block = screen.getByTestId('json-block');
+    // A long unbroken value wraps at any character instead of running off the right edge.
+    expect(block).toHaveClass('whitespace-pre-wrap', '[overflow-wrap:anywhere]');
+    expect(block).toHaveClass('max-h-56', 'overflow-y-auto', 'text-[14px]');
+  });
 });
 
 // --- ImageRef preview ---------------------------------------------------------
@@ -317,6 +333,30 @@ describe('DetailPanel — ImageRef preview', () => {
     expect(
       screen.getByText('EXTERNAL · https://cdn.example.com/generated/cat.png'),
     ).toBeInTheDocument();
+  });
+
+  it('shows the image inside a fixed 160px preview box with object-contain', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, { nodeRun: IMAGE_NODE_RUN, attempts: [] })),
+    );
+
+    const snapshot: RunSnapshot = { run: run(), nodeRuns: [IMAGE_NODE_RUN], lastSeq: 5 };
+    render(
+      <DetailPanel
+        snapshot={snapshot}
+        selectedNodeRun={IMAGE_NODE_RUN}
+        selectedEvent={null}
+        events={[]}
+      />,
+    );
+
+    const img = await screen.findByRole('img');
+    const box = screen.getByTestId('image-preview-box');
+    expect(box).toContainElement(img);
+    // A 16x16 mock image is scaled up into the box rather than rendered as a speck.
+    expect(box).toHaveClass('h-40', 'w-40');
+    expect(img).toHaveClass('h-full', 'w-full', 'object-contain');
   });
 
   it('keeps the raw JSON collapsed by default', async () => {
@@ -469,6 +509,19 @@ describe('DetailPanel — Agent Trace', () => {
     );
 
     expect(fieldValue('Agent Run')).toBe('ar_1');
+    // An opaque ID takes its own full-width line under its label, so it never wraps one or
+    // two orphan characters beside a squeezed label column.
+    expect(screen.getByText('Agent Run').parentElement).toHaveAttribute(
+      'data-field-layout',
+      'stacked',
+    );
+    expect(screen.getByText('Agent Run').nextElementSibling).toHaveClass(
+      '[overflow-wrap:anywhere]',
+    );
+    expect(screen.getByText('External task').parentElement).toHaveAttribute(
+      'data-field-layout',
+      'stacked',
+    );
     // A still-running Agent Run has no server-side termination; Studio prints no outcome.
     expect(fieldValue('Termination')).toBe('running');
     expect(fieldValue('Current turn')).toBe('2');
