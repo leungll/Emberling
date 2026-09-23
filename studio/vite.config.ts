@@ -8,6 +8,17 @@ import { defineConfig } from 'vitest/config';
 // Studio never falls back to a mock or in-browser Runtime when the Backend is absent.
 const BACKEND_ORIGIN = process.env.EMBERLING_BACKEND_ORIGIN ?? 'http://localhost:8080';
 
+// Shared by `server` (local dev) and `preview` (deploy/Dockerfile.studio, Playwright's
+// webServer) so the two modes proxy identically and never drift.
+const API_PROXY = {
+  '/api': {
+    target: BACKEND_ORIGIN,
+    changeOrigin: true,
+    // SSE must stream; buffering the proxy response would delay Event delivery.
+    ws: false,
+  },
+};
+
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   resolve: {
@@ -17,14 +28,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      '/api': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-        // SSE must stream; buffering the proxy response would delay Event delivery.
-        ws: false,
-      },
-    },
+    proxy: API_PROXY,
+  },
+  preview: {
+    port: 5173,
+    proxy: API_PROXY,
   },
   test: {
     environment: 'jsdom',

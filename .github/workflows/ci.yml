@@ -72,3 +72,64 @@ jobs:
 
       - name: Check
         run: make check
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    # `check` already proves the unit/integration/build gate; this job only has to prove
+    # the three MVP acceptance scenarios still work end-to-end (04-ux.md §6, 09 §4.6), so
+    # it does not block on `check` and can report its own, separate signal.
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: emberling
+          POSTGRES_PASSWORD: emberling
+          POSTGRES_DB: emberling_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U emberling -d emberling_e2e"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      EMBERLING_E2E_DATABASE_URL: postgres://emberling:emberling@127.0.0.1:5432/emberling_e2e?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: studio/pnpm-lock.yaml
+
+      - name: Bootstrap
+        run: make bootstrap
+
+      - name: Install Playwright browsers
+        run: cd studio && pnpm exec playwright install --with-deps chromium
+
+      - name: E2E
+        run: make test-e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: studio/playwright-report/
+          retention-days: 7

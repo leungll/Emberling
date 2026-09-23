@@ -5,3 +5,4 @@ test-results
 .vite
 *.tsbuildinfo
 .DS_Store
+tests/e2e/.generated

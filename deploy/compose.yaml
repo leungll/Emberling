@@ -1,9 +1,19 @@
-# Local development topology (10-ops §1): one Backend process, PostgreSQL 18 and a
+# Local development topology (10-ops §1): one Backend process, Studio, PostgreSQL 18 and a
 # persistent volume. Redis, external queues and distributed workers are not part of the
 # MVP and must not appear here.
 #
-# Studio is not in this compose file yet: studio/ does not exist in the repository. Add
-# the service in the same change that creates it.
+# Known gap (M5 slice 5.3): the image URI a completed image_generation/media_output NodeRun
+# returns is built from EMBERLING_MODEL_PROVIDER_BASE_URL (backend/internal/adapters/
+# mocktask/adapter.go successPayload), the same value the backend container uses to reach
+# the mockprovider container. That value must be the container-DNS name
+# "http://mockprovider:9101" for the backend's own dispatch to work, but a browser loading
+# Studio from the host cannot resolve that hostname, so the AIGC image preview will not
+# load an <img> when the full stack runs under `docker compose up --profile mock` (the raw
+# ImageRef reference is still shown correctly; only the rendered preview is affected). No
+# existing config key lets these two audiences see a different base URL, and this change is
+# restricted to compose/Makefile/CI/studio, so the fix (for example a
+# backend-configured public base URL used only for the returned ImageRef.uri) is out of
+# scope here and reported rather than worked around with an invented backend env var.
 name: emberling
 
 services:
@@ -26,9 +36,14 @@ services:
       retries: 30
       start_period: 5s
 
-  # Deterministic Provider fixture used by integration and failure tests. The service is
-  # behind a profile because backend/cmd/mockprovider is owned by another track and does
-  # not exist yet; `docker compose --profile mock up` starts it once it lands.
+  # Deterministic Provider fixture used by integration, failure and the three MVP
+  # acceptance E2E scenarios. `docker compose --profile mock up` starts it alongside
+  # postgres, backend and studio for a full acceptance stack (09 §6).
+  #
+  # The host-published port below makes http://localhost:9101 reachable from a browser on
+  # the host, but the image URI a Run actually returns is built from
+  # EMBERLING_MODEL_PROVIDER_BASE_URL ("http://mockprovider:9101" below) -- see the gap
+  # noted at the top of this file.
   mockprovider:
     profiles: ["mock"]
     build:
@@ -60,7 +75,10 @@ services:
       # Secrets are placeholders resolved from the developer's own environment. They are
       # never committed, and they never reach a Definition, an Event or Trace.
       EMBERLING_MODEL_PROVIDER_API_KEY: ${EMBERLING_MODEL_PROVIDER_API_KEY:?set EMBERLING_MODEL_PROVIDER_API_KEY in your shell or .env}
-      EMBERLING_CALLBACK_BASE_URL: ${EMBERLING_CALLBACK_BASE_URL:-http://localhost:8080}
+      # Reachable from the mockprovider container as the compose service name, not
+      # "localhost": a callback is delivered container-to-container, never through the
+      # host loopback (10-ops §1).
+      EMBERLING_CALLBACK_BASE_URL: ${EMBERLING_CALLBACK_BASE_URL:-http://backend:8080}
       EMBERLING_CALLBACK_SIGNING_SECRET: ${EMBERLING_CALLBACK_SIGNING_SECRET:?set EMBERLING_CALLBACK_SIGNING_SECRET in your shell or .env}
       EMBERLING_RECONCILE_INTERVAL: 5s
       EMBERLING_RECONCILE_BATCH_SIZE: "100"
@@ -71,6 +89,20 @@ services:
       EMBERLING_HTTP_ADDR: ":8080"
     volumes:
       - emberling-asset-data:/var/lib/emberling/assets
+
+  # Thin client (CLAUDE.md: Studio owns no Runtime behaviour). It serves the production
+  # build and proxies /api to the backend service exactly as the dev server does
+  # (studio/vite.config.ts's `preview` block), so no Studio-only routing logic exists.
+  studio:
+    build:
+      context: ../studio
+      dockerfile: ../deploy/Dockerfile.studio
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      EMBERLING_BACKEND_ORIGIN: http://backend:8080
 
 volumes:
   emberling-postgres-data:

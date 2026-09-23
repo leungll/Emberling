@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": ["ES2023"],
+    // DOM is only needed for the Playwright specs under `tests/e2e`, which evaluate
+    // callbacks inside a real browser (e.g. reading `HTMLImageElement.naturalWidth`).
+    "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": ["node"],
