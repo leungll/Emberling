@@ -42,7 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { runInputLabels } from '@/features/run-input/runInputLabels';
-import { useStudioStore } from '@/stores/studio-store';
+import { type EditorGraph, useStudioStore } from '@/stores/studio-store';
 
 /**
  * Router state a "New Definition" navigation from Definitions carries. POST /definitions
@@ -63,6 +63,27 @@ interface NewDefinitionState {
 interface DraftMeta {
   name: string;
   description: string;
+}
+
+const EMPTY_GRAPH: EditorGraph = { nodes: [], edges: [] };
+
+/** Focus in a text control keeps Cmd/Ctrl+Z for the control's own native text undo. */
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable
+  );
+}
+
+/** Top-level config keys whose values differ, naming the field a config edit touched. */
+function changedConfigFields(before: JsonObject, after: JsonObject): string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys]
+    .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+    .sort();
 }
 
 /** Finds the node a Backend `ValidationError.path` of shape `nodes[<id>]...` names. */
@@ -108,6 +129,13 @@ export function EditPage() {
   const selectNode = useStudioStore((s) => s.selectNode);
   const hasUnsavedChanges = useStudioStore((s) => s.hasUnsavedChanges);
   const setUnsavedChanges = useStudioStore((s) => s.setUnsavedChanges);
+  const canUndo = useStudioStore((s) => s.past.length > 0);
+  const canRedo = useStudioStore((s) => s.future.length > 0);
+  const resetHistory = useStudioStore((s) => s.resetHistory);
+  const markSaved = useStudioStore((s) => s.markSaved);
+  const checkpoint = useStudioStore((s) => s.checkpoint);
+  const closeCoalescing = useStudioStore((s) => s.closeCoalescing);
+  const syncUnsavedChanges = useStudioStore((s) => s.syncUnsavedChanges);
 
   // Captured once, at mount: later edits to Definition name/description do not come from
   // this router state, and a later re-render must not re-read a stale location.state.
@@ -144,6 +172,9 @@ export function EditPage() {
   // param-clearing effect right below) cannot flip it back.
   const [runDialogOpen, setRunDialogOpen] = useState(() => searchParams.get('run') === '1');
   const [runError, setRunError] = useState<string | null>(null);
+  // Bumped on every Undo/Redo so the Properties form remounts from the restored config
+  // (a field such as the JSON editor keeps its own text state while mounted).
+  const [historyRevision, setHistoryRevision] = useState(0);
 
   const applyDefinition = useCallback(
     (loaded: Definition) => {
@@ -154,13 +185,18 @@ export function EditPage() {
       setMeasured({});
       setValidationErrors(null);
       setConflict(null);
-      setUnsavedChanges(false);
+      // A (re)load, including Reload latest after a version conflict, starts history over
+      // with the loaded version as the clean point.
+      resetHistory({ nodes: loaded.nodes, edges: loaded.edges });
     },
-    [setUnsavedChanges],
+    [resetHistory],
   );
 
   useEffect(() => {
     const controller = new AbortController();
+    // History and the saved point are page-local; nothing carries over from another
+    // Definition opened earlier in this session.
+    resetHistory(EMPTY_GRAPH);
 
     listNodeTypes(controller.signal)
       .then(setNodeTypes)
@@ -211,7 +247,7 @@ export function EditPage() {
     }
 
     return () => controller.abort();
-  }, [workflowId, isNewDraft, applyDefinition]);
+  }, [workflowId, isNewDraft, applyDefinition, resetHistory]);
 
   // This effect's only job is to drop the one-shot `run` param afterwards so a reload or
   // Back does not reopen the dialog. It runs at mount — well before the async Definition
@@ -276,14 +312,102 @@ export function EditPage() {
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
 
+  /** What Save would persist of the canvas right now. */
+  const graph = useMemo<EditorGraph>(
+    () => ({
+      nodes: nodes.map((node) => ({ ...node, position: positions[node.id] ?? node.position })),
+      edges,
+    }),
+    [nodes, positions, edges],
+  );
+
+  // "Unsaved changes" compares the canvas with the last loaded or saved graph rather than
+  // counting edits, so undoing back to exactly that graph is clean again.
+  useEffect(() => {
+    syncUnsavedChanges(graph);
+  }, [graph, syncUnsavedChanges]);
+
+  // React Flow reports one deletion as separate node and edge removals within the same
+  // task; they share this key so a single Undo restores the node with its edges.
+  const removalKey = useRef<string | null>(null);
+  const removalCount = useRef(0);
+  const sameTaskRemovalKey = useCallback(() => {
+    if (removalKey.current === null) {
+      removalCount.current += 1;
+      removalKey.current = `remove:${removalCount.current}`;
+      queueMicrotask(() => {
+        removalKey.current = null;
+      });
+    }
+    return removalKey.current;
+  }, []);
+
+  // An edit makes earlier Validate/Save feedback stale. Whether it is unsaved is decided
+  // by the graph comparison above, not here.
   const markDirty = useCallback(() => {
-    setUnsavedChanges(true);
     setValidationErrors(null);
     setNotice(null);
-  }, [setUnsavedChanges]);
+  }, []);
+
+  const restoreGraph = useCallback(
+    (restored: EditorGraph) => {
+      setNodes(restored.nodes);
+      setEdges(restored.edges);
+      setPositions(Object.fromEntries(restored.nodes.map((node) => [node.id, node.position])));
+      setHistoryRevision((revision) => revision + 1);
+      setValidationErrors(null);
+      setNotice(null);
+      if (selectedNodeId && !restored.nodes.some((node) => node.id === selectedNodeId)) {
+        selectNode(null);
+      }
+    },
+    [selectedNodeId, selectNode],
+  );
+
+  // Undo/Redo only swap local graphs; they never call the server (04 §2.5).
+  const undo = useCallback(() => {
+    const restored = useStudioStore.getState().undo(graph);
+    if (restored) restoreGraph(restored);
+  }, [graph, restoreGraph]);
+
+  const redo = useCallback(() => {
+    const restored = useStudioStore.getState().redo(graph);
+    if (restored) restoreGraph(restored);
+  }, [graph, restoreGraph]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (isTextEditingTarget(event.target) || runDialogOpen) return;
+      const key = event.key.toLowerCase();
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      } else if ((key === 'z' && event.shiftKey) || (key === 'y' && event.ctrlKey)) {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [undo, redo, runDialogOpen]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<RegisteredFlowNode>[]) => {
+      if (changes.some((change) => change.type === 'remove')) {
+        checkpoint(graph, sameTaskRemovalKey());
+      } else {
+        const moves = changes.filter((change) => change.type === 'position');
+        if (moves.some((change) => change.dragging)) {
+          // One drag, however many frames, is one entry.
+          checkpoint(graph, 'drag');
+        } else if (moves.length > 0) {
+          // The drag-end frame belongs to the drag it ends; any other move (a keyboard
+          // nudge) is its own entry.
+          if (useStudioStore.getState().coalesceKey === 'drag') closeCoalescing();
+          else checkpoint(graph);
+        }
+      }
       const next = applyNodeChanges(changes, flowNodes);
       setPositions(Object.fromEntries(next.map((node) => [node.id, node.position])));
       setMeasured((prev) => {
@@ -307,22 +431,26 @@ export function EditPage() {
         markDirty();
       }
     },
-    [flowNodes, markDirty],
+    [flowNodes, markDirty, graph, checkpoint, closeCoalescing, sameTaskRemovalKey],
   );
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange<FlowEdge>[]) => {
+      if (changes.some((change) => change.type === 'remove')) {
+        checkpoint(graph, sameTaskRemovalKey());
+      }
       const next = applyEdgeChanges(changes, flowEdges);
       const kept = new Set(next.map((edge) => edge.id));
       setEdges((prev) => prev.filter((edge) => kept.has(edge.id)));
       if (changes.some((change) => change.type !== 'select')) markDirty();
     },
-    [flowEdges, markDirty],
+    [flowEdges, markDirty, graph, checkpoint, sameTaskRemovalKey],
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
+      checkpoint(graph);
       setEdges((prev) => [
         ...prev,
         {
@@ -335,13 +463,14 @@ export function EditPage() {
       ]);
       markDirty();
     },
-    [markDirty],
+    [markDirty, graph, checkpoint],
   );
 
   const addNode = useCallback(
     (metadata: NodeMetadata) => {
       const id = `node_${metadata.type}_${Date.now()}`;
       const position = { x: 80 + nodes.length * 40, y: 80 + nodes.length * 30 };
+      checkpoint(graph);
       setNodes((prev) => [
         ...prev,
         { id, type: metadata.type, name: metadata.displayName, position, config: {} },
@@ -350,20 +479,17 @@ export function EditPage() {
       selectNode(id);
       markDirty();
     },
-    [nodes.length, selectNode, markDirty],
+    [nodes.length, selectNode, markDirty, graph, checkpoint],
   );
 
   const currentDraft = useCallback(
     () => ({
       name: definition?.name ?? draftMeta?.name ?? 'Untitled workflow',
       description: definition?.description ?? draftMeta?.description ?? '',
-      nodes: nodes.map((node) => ({
-        ...node,
-        position: positions[node.id] ?? node.position,
-      })),
-      edges,
+      nodes: graph.nodes,
+      edges: graph.edges,
     }),
-    [definition, draftMeta, nodes, positions, edges],
+    [definition, draftMeta, graph],
   );
 
   const handleValidate = useCallback(async () => {
@@ -404,7 +530,8 @@ export function EditPage() {
       setDefinition(saved);
       setValidationErrors(null);
       setConflict(null);
-      setUnsavedChanges(false);
+      // The graph just saved is the new clean point; history is kept.
+      markSaved(graph);
       setNotice(`Saved version ${saved.version}.`);
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === 'VERSION_CONFLICT') {
@@ -427,7 +554,16 @@ export function EditPage() {
     } finally {
       setBusy(false);
     }
-  }, [isNewDraft, definition, workflowId, currentDraft, navigate, setUnsavedChanges]);
+  }, [
+    isNewDraft,
+    definition,
+    workflowId,
+    currentDraft,
+    navigate,
+    setUnsavedChanges,
+    graph,
+    markSaved,
+  ]);
 
   const handleCreateRun = useCallback(
     async (input: JsonObject) => {
@@ -574,27 +710,41 @@ export function EditPage() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onSelectNode={selectNode}
+              history={{ canUndo, canRedo, onUndo: undo, onRedo: redo }}
             />
           </div>
         </div>
-        <PropertiesPanel
-          node={selectedNode}
-          metadata={selectedNode ? metadataByType.get(selectedNode.type) : undefined}
-          models={models}
-          fieldErrors={selectedNodeFieldErrors}
-          onRename={(name) => {
-            setNodes((prev) =>
-              prev.map((node) => (node.id === selectedNodeId ? { ...node, name } : node)),
-            );
-            markDirty();
-          }}
-          onConfigChange={(config) => {
-            setNodes((prev) =>
-              prev.map((node) => (node.id === selectedNodeId ? { ...node, config } : node)),
-            );
-            markDirty();
-          }}
-        />
+        {/* Leaving a Properties field ends its typing session, so the next edit of the same
+            field is a separate Undo entry. `display: contents` keeps the panel's layout. */}
+        <div className="contents" onBlur={closeCoalescing}>
+          <PropertiesPanel
+            key={historyRevision}
+            node={selectedNode}
+            metadata={selectedNode ? metadataByType.get(selectedNode.type) : undefined}
+            models={models}
+            fieldErrors={selectedNodeFieldErrors}
+            // An edit that leaves the graph as it is (the same name, a config equal to the
+            // current one) is not an edit: it must not add a do-nothing Undo entry.
+            onRename={(name) => {
+              if (!selectedNode || name === selectedNode.name) return;
+              checkpoint(graph, `name:${selectedNode.id}`);
+              setNodes((prev) =>
+                prev.map((node) => (node.id === selectedNodeId ? { ...node, name } : node)),
+              );
+              markDirty();
+            }}
+            onConfigChange={(config) => {
+              if (!selectedNode) return;
+              const fields = changedConfigFields(selectedNode.config, config);
+              if (fields.length === 0) return;
+              checkpoint(graph, `config:${selectedNode.id}:${fields.join(',')}`);
+              setNodes((prev) =>
+                prev.map((node) => (node.id === selectedNodeId ? { ...node, config } : node)),
+              );
+              markDirty();
+            }}
+          />
+        </div>
       </div>
 
       <RecentExecutionBar loaded={recentRunLoaded} snapshot={recentRun} />

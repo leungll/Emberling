@@ -9,15 +9,26 @@ interface CanvasToolbarProps {
   onModeChange: (mode: InteractionMode) => void;
   showGrid: boolean;
   onShowGridChange: (show: boolean) => void;
+  history?: CanvasHistoryControls;
+}
+
+/** Undo/Redo of unsaved Definition edits, owned by the Edit page (04 §2.5). */
+export interface CanvasHistoryControls {
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
 function ToolbarButton({
   active,
+  disabled,
   onClick,
   label,
   children,
 }: {
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   label: string;
   children: React.ReactNode;
@@ -26,12 +37,14 @@ function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       aria-pressed={active}
       title={label}
       className={cn(
         'flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-xs font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
         active && 'bg-[var(--accent)] text-[var(--accent-foreground)]',
+        'disabled:pointer-events-none disabled:opacity-40',
       )}
     >
       {children}
@@ -40,17 +53,18 @@ function ToolbarButton({
 }
 
 /**
- * Floating Canvas toolbar (04 §2.5). It only wraps
- * capabilities React Flow's public API actually provides: Select/Pan interaction mode,
- * Fit View, a Grid (Background) visibility toggle and zoom. The Backend and the codebase
- * have no Undo/Redo of Canvas edits today, so this toolbar does not add dead buttons for
- * them — Undo/Redo is a known gap to raise, not something to fake here.
+ * Floating Canvas toolbar (04 §2.5 lists Select, Pan, Fit View, Zoom, Undo and Redo among
+ * the MVP Canvas operations; Grid is optional). Select/Pan, Fit, Grid and zoom wrap React
+ * Flow's public API. Undo/Redo follow Grid in the same group, where the Edit mock places
+ * them; they are rendered only when the page supplies its edit history, and each is
+ * disabled while its stack is empty.
  */
 export function CanvasToolbar({
   mode,
   onModeChange,
   showGrid,
   onShowGridChange,
+  history,
 }: CanvasToolbarProps) {
   const { fitView, zoomIn, zoomOut } = useReactFlow();
   // useViewport subscribes to the store and re-renders this component on every pan/zoom
@@ -81,6 +95,16 @@ export function CanvasToolbar({
         >
           Grid
         </ToolbarButton>
+        {history ? (
+          <>
+            <ToolbarButton disabled={!history.canUndo} onClick={history.onUndo} label="Undo">
+              Undo
+            </ToolbarButton>
+            <ToolbarButton disabled={!history.canRedo} onClick={history.onRedo} label="Redo">
+              Redo
+            </ToolbarButton>
+          </>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--card)] px-1 py-1 shadow-md">

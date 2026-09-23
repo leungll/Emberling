@@ -171,7 +171,7 @@ function definitionWithNode(version: number, nodeName: string) {
   };
 }
 
-type Handler = (init: RequestInit | undefined) => Response;
+type Handler = (init: RequestInit | undefined) => Response | Promise<Response>;
 
 function stubRoutes(routes: Record<string, Handler>) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -414,5 +414,229 @@ describe('EditPage — Backend validation errors', () => {
     const list = await screen.findByRole('list', { name: 'Validation errors' });
     expect(list).toHaveTextContent('edge "edge_1" carries image into a text port');
     expect(screen.getByText('Definition v4 · Editing')).toHaveAttribute('title', 'Workflow wf_123');
+  });
+});
+
+describe('EditPage — Undo and Redo', () => {
+  const undoButton = () => screen.getByRole('button', { name: 'Undo' });
+  const redoButton = () => screen.getByRole('button', { name: 'Redo' });
+  const canvasNodes = () => document.querySelectorAll('.react-flow__node');
+
+  it('disables both buttons until there is something to undo or redo', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+
+    renderStudio('/studio/wf_123');
+    await screen.findByTestId('rf__node-node_gen');
+
+    expect(undoButton()).toBeDisabled();
+    expect(redoButton()).toBeDisabled();
+  });
+
+  it('undoes and redoes a node add from the keyboard, keeping Unsaved changes truthful', async () => {
+    const fetchMock = stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    const user = userEvent.setup();
+
+    renderStudio('/studio/wf_123');
+    await screen.findByTestId('rf__node-node_gen');
+    const requestsBefore = fetchMock.mock.calls.length;
+
+    await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
+    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
+    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
+    expect(undoButton()).toBeEnabled();
+    expect(redoButton()).toBeDisabled();
+
+    fireEvent.keyDown(document.body, { key: 'z', metaKey: true });
+    await waitFor(() => expect(canvasNodes()).toHaveLength(1));
+    // Back at exactly the loaded graph: nothing is unsaved any more.
+    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
+    expect(undoButton()).toBeDisabled();
+    expect(redoButton()).toBeEnabled();
+
+    fireEvent.keyDown(document.body, { key: 'Z', metaKey: true, shiftKey: true });
+    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
+    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
+    await waitFor(() => expect(canvasNodes()).toHaveLength(1));
+    fireEvent.keyDown(document.body, { key: 'y', ctrlKey: true });
+    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
+
+    // Undo and Redo are local only: they never talk to the server.
+    expect(fetchMock.mock.calls.length).toBe(requestsBefore);
+  });
+
+  it('restores a deleted node together with its edges in one undo', async () => {
+    const withEdge = {
+      ...definitionWithNode(4, 'Generate'),
+      nodes: [
+        ...definitionWithNode(4, 'Generate').nodes,
+        {
+          id: 'node_next',
+          type: 'text_generation',
+          name: 'Next',
+          position: { x: 200, y: 0 },
+          config: { modelId: 'text-model-v1' },
+        },
+      ],
+      edges: [
+        {
+          id: 'edge_1',
+          source: 'node_gen',
+          sourceHandle: 'text',
+          target: 'node_next',
+          targetHandle: 'prompt',
+        },
+      ],
+    };
+    const fetchMock = stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, withEdge),
+      'POST /api/definitions/validate': () =>
+        jsonResponse(200, { valid: true, runInputSchema: DEFINITION.runInputSchema }),
+    });
+    const user = userEvent.setup();
+    // jsdom has no layout, so React Flow never draws edge paths; the graph Validate sends
+    // is what shows which edges the page holds.
+    const validatedGraph = async () => {
+      await user.click(screen.getByRole('button', { name: 'Validate' }));
+      await screen.findByText('Definition is valid.');
+      const body = callsTo(fetchMock, 'POST', '/api/definitions/validate').at(-1)!;
+      return { nodes: (body.nodes as unknown[]).length, edges: (body.edges as unknown[]).length };
+    };
+
+    renderStudio('/studio/wf_123');
+    await selectCanvasNode('node_gen');
+    await waitFor(() => expect(screen.getByTestId('rf__node-node_gen')).toHaveClass('selected'));
+    fireEvent.keyDown(document.body, { key: 'Backspace' });
+    await waitFor(() => expect(canvasNodes()).toHaveLength(1));
+    expect(await validatedGraph()).toEqual({ nodes: 1, edges: 0 });
+
+    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
+    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
+    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
+    expect(undoButton()).toBeDisabled();
+    expect(await validatedGraph()).toEqual({ nodes: 2, edges: 1 });
+  });
+
+  it('leaves Cmd/Ctrl+Z to a focused text field and undoes one typing session as one step', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    const user = userEvent.setup();
+
+    renderStudio('/studio/wf_123');
+    await selectCanvasNode('node_gen');
+    const nameInput = await screen.findByLabelText('Name');
+    await user.type(nameInput, ' Look');
+    expect(nameInput).toHaveValue('Generate Look');
+
+    // Focus is in the input: the page must not take over the native text undo.
+    fireEvent.keyDown(nameInput, { key: 'z', metaKey: true });
+    expect(nameInput).toHaveValue('Generate Look');
+    expect(redoButton()).toBeDisabled();
+
+    // The whole typing session is one entry: one undo restores the loaded name.
+    await user.click(undoButton());
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Generate'));
+    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
+    expect(undoButton()).toBeDisabled();
+
+    await user.click(redoButton());
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Generate Look'));
+    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
+  });
+
+  it('starts a new entry for a second typing session in the same field', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    const user = userEvent.setup();
+
+    renderStudio('/studio/wf_123');
+    await selectCanvasNode('node_gen');
+    await user.type(await screen.findByLabelText('Name'), ' A');
+    // Leaving the field ends the typing session.
+    await user.tab();
+    await user.type(screen.getByLabelText('Name'), ' B');
+
+    await user.click(undoButton());
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Generate A'));
+    await user.click(undoButton());
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Generate'));
+  });
+
+  it('clears history when Reload latest replaces the local edits after a conflict', async () => {
+    let latest = definitionWithNode(4, 'Generate');
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, latest),
+      'PUT /api/definitions/wf_123': () => {
+        latest = definitionWithNode(5, 'Server Generate');
+        return jsonResponse(409, {
+          error: { code: 'VERSION_CONFLICT', message: 'the definition has already been saved' },
+        });
+      },
+    });
+    const user = userEvent.setup();
+
+    renderStudio('/studio/wf_123');
+    await selectCanvasNode('node_gen');
+    await user.type(await screen.findByLabelText('Name'), ' Local');
+    expect(undoButton()).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    const conflict = await screen.findByRole('alert', { name: 'Version conflict' });
+    await user.click(within(conflict).getByRole('button', { name: 'Reload latest' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Server Generate'));
+    expect(undoButton()).toBeDisabled();
+    expect(redoButton()).toBeDisabled();
+  });
+
+  it('keeps Unsaved changes and Run disabled when the canvas changes during Save', async () => {
+    let resolveSave: (response: Response) => void = () => {};
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+      'PUT /api/definitions/wf_123': () =>
+        new Promise<Response>((resolve) => {
+          resolveSave = resolve;
+        }),
+    });
+    const user = userEvent.setup();
+
+    renderStudio('/studio/wf_123');
+    await screen.findByTestId('rf__node-node_gen');
+    await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
+    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    // The Save request is in flight; the user keeps editing.
+    await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
+    await waitFor(() => expect(canvasNodes()).toHaveLength(3));
+
+    resolveSave(jsonResponse(200, definitionWithNode(5, 'Generate')));
+    await screen.findByText('Saved version 5.');
+
+    // 04 §2.6: Run is disabled while unsaved changes exist; the third node was never saved.
+    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
+  });
+
+  it('records no Undo entry for an edit that leaves the graph unchanged', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    const user = userEvent.setup();
+
+    renderStudio('/studio/wf_123');
+    await selectCanvasNode('node_gen');
+    // Re-selecting the Model already configured reports a config equal to the current one.
+    await user.selectOptions(screen.getByLabelText(/^Model\s*\*?$/), 'text-model-v1');
+
+    expect(undoButton()).toBeDisabled();
+    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
   });
 });

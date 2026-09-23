@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
-import { CanvasToolbar, type InteractionMode } from './CanvasToolbar';
+import { CanvasToolbar, type CanvasHistoryControls, type InteractionMode } from './CanvasToolbar';
 import { RegisteredNode, type RegisteredFlowNode } from './RegisteredNode';
 
 /** Asks the canvas to bring one node into view; `seq` repeats a request for the same node. */
@@ -71,6 +71,8 @@ interface WorkflowCanvasProps<N extends FlowNode> {
    * re-mounts every node when this object changes. Defaults to Edit's `RegisteredNode`.
    */
   nodeTypes?: NodeTypes;
+  /** Edit only: the page's Undo/Redo, shown in the Canvas toolbar. */
+  history?: CanvasHistoryControls;
 }
 
 /**
@@ -89,6 +91,7 @@ export function WorkflowCanvas<N extends FlowNode = RegisteredFlowNode>({
   onConnect,
   onSelectNode,
   nodeTypes = REGISTERED_NODE_TYPES,
+  history,
 }: WorkflowCanvasProps<N>) {
   const instance = useRef<ReactFlowInstance<N, FlowEdge> | null>(null);
   const [mode, setMode] = useState<InteractionMode>('select');
@@ -188,6 +191,7 @@ export function WorkflowCanvas<N extends FlowNode = RegisteredFlowNode>({
             onModeChange={setMode}
             showGrid={showGrid}
             onShowGridChange={setShowGrid}
+            {...(history ? { history } : {})}
           />
         ) : null}
       </ReactFlow>
