@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DetailPanel } from './DetailPanel';
@@ -112,7 +112,7 @@ describe('DetailPanel — WAITING_CALLBACK', () => {
     expect(fieldValue('External Task ID')).toBe('ext_task_789');
     expect(fieldValue('Attempt')).toBe('1');
     expect(fieldValue('Runtime State')).toBe('DISPATCHED');
-    expect(fieldValue('Latest Event')).toBe('NODE_DISPATCHED');
+    expect(fieldValue('Latest Event')).toBe('NODE_DISPATCHED · seq 5');
     expect(fieldValue('Deadline')).toBe('2026-08-03 12:05:00Z');
 
     // The Attempts list is rendered in addition to the WAITING_CALLBACK summary fields.
@@ -603,5 +603,144 @@ describe('DetailPanel — Agent Trace', () => {
       />,
     );
     await waitFor(() => expect(agentCalls()).toHaveLength(2));
+  });
+});
+
+describe('DetailPanel — Waiting Diagnostics', () => {
+  it('shows when the NodeRun started waiting and for how long', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, NODE_RUN_DETAIL_BODY)));
+
+    renderPanel({ run: run(), nodeRuns: [WAITING_NODE_RUN], lastSeq: 5 }, [LATEST_EVENT]);
+
+    await waitFor(() => expect(fieldValue('Provider')).toBe('stability-ai'));
+    expect(screen.getByTestId('waiting-diagnostics')).toBeInTheDocument();
+    expect(fieldValue('Waiting Since')).toMatch(/^2026-08-03 12:00:02Z · \S/);
+  });
+
+  it('reads "—" for Waiting Since when the Backend reports no waitingAt', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, { nodeRun: WAITING_NODE_RUN, attempts: [] })),
+    );
+
+    render(
+      <DetailPanel
+        snapshot={{ run: run(), nodeRuns: [WAITING_NODE_RUN], lastSeq: 5 }}
+        selectedNodeRun={{ ...WAITING_NODE_RUN, waitingAt: null }}
+        selectedEvent={null}
+        events={[]}
+      />,
+    );
+
+    await screen.findByText('Provider');
+    expect(fieldValue('Waiting Since')).toBe('—');
+  });
+
+  it('shows no Waiting Diagnostics for a NodeRun that is not WAITING_CALLBACK', async () => {
+    const succeeded: NodeRun = { ...WAITING_NODE_RUN, status: 'SUCCEEDED', output: { text: 'ok' } };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, { nodeRun: succeeded, attempts: [] })),
+    );
+
+    render(
+      <DetailPanel
+        snapshot={{ run: run(), nodeRuns: [succeeded], lastSeq: 5 }}
+        selectedNodeRun={succeeded}
+        selectedEvent={null}
+        events={[]}
+        nodeName="Image Generation"
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Image Generation' })).toBeInTheDocument();
+    expect(screen.queryByTestId('waiting-diagnostics')).not.toBeInTheDocument();
+    expect(screen.queryByText('Provider')).not.toBeInTheDocument();
+  });
+});
+
+describe('DetailPanel — Agent Turn timeline', () => {
+  function stubAgentFetch(trace: unknown, nodeRun: NodeRun) {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            url.endsWith('/agent')
+              ? jsonResponse(200, trace)
+              : jsonResponse(200, { nodeRun, attempts: [] }),
+          ),
+        ),
+    );
+  }
+
+  it('lists the bound Definition allowedTools as the candidate Tools of every Turn', async () => {
+    stubAgentFetch(AGENT_TRACE_BODY, AGENT_NODE_RUN);
+
+    render(
+      <DetailPanel
+        snapshot={{ run: run(), nodeRuns: [AGENT_NODE_RUN], lastSeq: 9 }}
+        selectedNodeRun={AGENT_NODE_RUN}
+        selectedEvent={null}
+        events={[]}
+        allowedTools={['lookup', 'web_search']}
+      />,
+    );
+
+    const turns = await screen.findAllByTestId('agent-turn');
+    expect(turns).toHaveLength(2);
+    for (const turn of turns) {
+      const candidates = within(turn).getByTestId('candidate-tools');
+      expect(within(candidates).getByText('lookup')).toBeInTheDocument();
+      expect(within(candidates).getByText('web_search')).toBeInTheDocument();
+    }
+    // Turn 1's dot is the green class of its COMPLETED status, Turn 2's the running one.
+    expect(turns[0]!.querySelector('[data-tone]')).toHaveAttribute('data-tone', 'succeeded');
+    expect(turns[1]!.querySelector('[data-tone]')).toHaveAttribute('data-tone', 'running');
+    expect(fieldValue('Turns')).toBe('2');
+  });
+
+  it('shows no candidate Tools when the bound Definition gave none to show', async () => {
+    stubAgentFetch(AGENT_TRACE_BODY, AGENT_NODE_RUN);
+
+    renderAgentPanel();
+
+    expect(await screen.findAllByTestId('agent-turn')).toHaveLength(2);
+    expect(screen.queryByTestId('candidate-tools')).not.toBeInTheDocument();
+  });
+
+  it('reads the waiting Provider and External Task ID from the dispatched Tool Attempt', async () => {
+    const waitingAgent: NodeRun = {
+      ...AGENT_NODE_RUN,
+      status: 'WAITING_CALLBACK',
+      waitingAt: '2026-08-03T12:00:03Z',
+    };
+    const [turn1] = AGENT_TRACE_BODY.turns;
+    const dispatchedTrace = {
+      ...AGENT_TRACE_BODY,
+      turns: [
+        {
+          ...turn1!,
+          status: 'RUNNING',
+          toolAttempts: [{ ...turn1!.toolAttempts[0]!, status: 'DISPATCHED', completedAt: null }],
+        },
+      ],
+    };
+    stubAgentFetch(dispatchedTrace, waitingAgent);
+
+    render(
+      <DetailPanel
+        snapshot={{ run: run(), nodeRuns: [waitingAgent], lastSeq: 9 }}
+        selectedNodeRun={waitingAgent}
+        selectedEvent={null}
+        events={[]}
+      />,
+    );
+
+    await screen.findByText('Tool Attempt');
+    expect(fieldValue('Provider')).toBe('tool-provider-v1');
+    expect(fieldValue('External Task ID')).toBe('provider_task_789');
+    expect(fieldValue('Tool Attempt')).toBe('lookup · attempt 1');
   });
 });

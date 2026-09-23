@@ -1,4 +1,5 @@
 import type { EventType, JsonObject } from '@/api/types';
+import type { StatusTone } from '@/lib/status';
 
 /**
  * Display helpers for committed Events. Like every other projection in Studio these are
@@ -35,6 +36,43 @@ const EVENT_LABELS: Record<EventType, string> = {
 
 export function eventLabel(type: EventType): string {
   return EVENT_LABELS[type] ?? type;
+}
+
+/**
+ * Timeline dot colour per committed Event type (04 §4 status colours). It classifies the
+ * transition the Event itself records; it never looks at other Events or NodeRuns, so it
+ * cannot turn into a client-side status derivation.
+ */
+const EVENT_TONES: Record<EventType, StatusTone> = {
+  RUN_CREATED: 'succeeded',
+  RUN_PAUSED: 'waiting',
+  RUN_RESUMED: 'running',
+  RUN_COMPLETED: 'succeeded',
+  RUN_FAILED: 'failed',
+
+  NODE_READY: 'neutral',
+  NODE_STARTED: 'running',
+  NODE_RETRYING: 'running',
+  NODE_DISPATCHED: 'waiting',
+  NODE_CALLBACK_RECEIVED: 'running',
+  NODE_COMPLETED: 'succeeded',
+  NODE_FAILED: 'failed',
+
+  AGENT_STARTED: 'running',
+  AGENT_TURN_READY: 'neutral',
+  AGENT_TURN_STARTED: 'running',
+  AGENT_DECISION_COMMITTED: 'succeeded',
+  AGENT_ACTION_STARTED: 'running',
+  AGENT_ACTION_WAITING: 'waiting',
+  AGENT_ACTION_COMPLETED: 'succeeded',
+  AGENT_ACTION_FAILED: 'failed',
+  AGENT_STATE_UPDATED: 'succeeded',
+  AGENT_COMPLETED: 'succeeded',
+  AGENT_FAILED: 'failed',
+};
+
+export function eventTone(type: EventType): StatusTone {
+  return EVENT_TONES[type] ?? 'neutral';
 }
 
 /**

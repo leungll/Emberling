@@ -2,20 +2,20 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ObserveCanvas } from './ObserveCanvas';
-import type { CanvasFocusRequest } from '@/features/editor/WorkflowCanvas';
 import type { Definition, NodeMetadata, NodeRun } from '@/api/types';
+import type { RegisteredFlowNode } from '@/features/editor/RegisteredNode';
 
 /**
- * `WorkflowCanvas` and its `focus` contract already have their own coverage
- * (`features/editor/WorkflowCanvas.tsx`, `.test.tsx`): a real `fitView` call is proven
- * there. This file only proves that `ObserveCanvas` computes the right `focus` prop —
- * the Definition node id of whichever NodeRun is selected — when selection changes from
- * outside the Canvas (04 §3.1: "选择联动").
+ * The READ-ONLY TOPOLOGY card always shows the whole graph (fitted by `WorkflowCanvas`
+ * itself, whose `fitView` behaviour has its own coverage). This file proves that selecting
+ * a NodeRun from outside the Canvas (04 §3.1: "选择联动") only moves the highlight: the
+ * Canvas receives no zoom-to-node request, and nothing but the nodes' `selected` flags
+ * changes between renders.
  */
-let lastFocus: CanvasFocusRequest | null | undefined;
+let lastProps: Record<string, unknown> | undefined;
 vi.mock('@/features/editor/WorkflowCanvas', () => ({
-  WorkflowCanvas: (props: { focus?: CanvasFocusRequest | null }) => {
-    lastFocus = props.focus;
+  WorkflowCanvas: (props: Record<string, unknown>) => {
+    lastProps = props;
     return <div data-testid="mock-workflow-canvas" />;
   },
 }));
@@ -93,52 +93,67 @@ function stubFetch() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  lastFocus = undefined;
+  lastProps = undefined;
 });
 
-describe('ObserveCanvas — focus on selection from elsewhere', () => {
-  it("passes the selected NodeRun's own Definition node id as the focus request", async () => {
+const NODE_RUNS = [nodeRun('nr_image', 'node_image'), nodeRun('nr_caption', 'node_caption')];
+
+function canvasProps() {
+  const props = lastProps ?? {};
+  const nodes = props.nodes as RegisteredFlowNode[];
+  return {
+    props,
+    selected: nodes.filter((node) => node.selected).map((node) => node.id),
+    // Everything the viewport is fitted from: node ids, positions and sizes.
+    fitTarget: nodes.map((node) => ({ id: node.id, position: node.position })),
+  };
+}
+
+describe('ObserveCanvas — selection from elsewhere', () => {
+  it('highlights the selected NodeRun without changing the viewport or its fit target', async () => {
     stubFetch();
     const { rerender } = render(
       <ObserveCanvas
         workflowId="wf_1"
         definitionVersion={3}
-        nodeRuns={[nodeRun('nr_image', 'node_image'), nodeRun('nr_caption', 'node_caption')]}
+        nodeRuns={NODE_RUNS}
         selectedNodeRunId={null}
         onSelectNodeRun={vi.fn()}
       />,
     );
-
     await screen.findByTestId('mock-workflow-canvas');
-    expect(lastFocus).toBeNull();
+    const before = canvasProps();
+    expect(before.selected).toEqual([]);
+    expect(before.props).not.toHaveProperty('focus');
+    expect(before.props.readOnly).toBe(true);
 
-    // Selecting a NodeRun elsewhere (e.g. the Run Rail or Timeline) re-renders with that
-    // NodeRun's id; the Canvas must resolve it to the matching Definition node and focus it.
+    // Selecting a NodeRun elsewhere (the Run Rail or Timeline) resolves to its Definition
+    // node and marks only that node selected.
     rerender(
       <ObserveCanvas
         workflowId="wf_1"
         definitionVersion={3}
-        nodeRuns={[nodeRun('nr_image', 'node_image'), nodeRun('nr_caption', 'node_caption')]}
+        nodeRuns={NODE_RUNS}
         selectedNodeRunId="nr_caption"
         onSelectNodeRun={vi.fn()}
       />,
     );
-
-    expect(lastFocus?.nodeId).toBe('node_caption');
-    const firstSeq = lastFocus?.seq;
+    const after = canvasProps();
+    expect(after.selected).toEqual(['node_caption']);
+    expect(after.props).not.toHaveProperty('focus');
+    expect(after.fitTarget).toEqual(before.fitTarget);
+    expect(Object.keys(after.props).sort()).toEqual(Object.keys(before.props).sort());
 
     rerender(
       <ObserveCanvas
         workflowId="wf_1"
         definitionVersion={3}
-        nodeRuns={[nodeRun('nr_image', 'node_image'), nodeRun('nr_caption', 'node_caption')]}
+        nodeRuns={NODE_RUNS}
         selectedNodeRunId="nr_image"
         onSelectNodeRun={vi.fn()}
       />,
     );
-
-    expect(lastFocus?.nodeId).toBe('node_image');
-    // A changed selection always bumps `seq`, even switching between two already-seen nodes.
-    expect(lastFocus?.seq).not.toBe(firstSeq);
+    expect(canvasProps().selected).toEqual(['node_image']);
+    expect(canvasProps().props).not.toHaveProperty('focus');
   });
 });

@@ -11,6 +11,13 @@ import type {
 type BadgeVariant = NonNullable<BadgeProps['variant']>;
 
 /**
+ * The five status colours of 04 §4 (neutral, blue running, amber waiting, green succeeded,
+ * red failed). A tone is a display class for a status the Backend reported; it is also a
+ * valid Badge variant, so pills, dots and glyphs share one lookup.
+ */
+export type StatusTone = 'neutral' | 'running' | 'waiting' | 'succeeded' | 'failed';
+
+/**
  * Display lookup tables for server-reported statuses.
  *
  * These are total maps over the MVP status sets, not derivations. Studio never computes a
@@ -25,7 +32,7 @@ const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   FAILED: 'Failed',
 };
 
-const RUN_STATUS_VARIANTS: Record<RunStatus, BadgeVariant> = {
+const RUN_STATUS_TONES: Record<RunStatus, StatusTone> = {
   RUNNING: 'running',
   PAUSED: 'waiting',
   COMPLETED: 'succeeded',
@@ -40,7 +47,7 @@ const NODE_RUN_STATUS_LABELS: Record<NodeRunStatus, string> = {
   FAILED: 'Failed',
 };
 
-const NODE_RUN_STATUS_VARIANTS: Record<NodeRunStatus, BadgeVariant> = {
+const NODE_RUN_STATUS_TONES: Record<NodeRunStatus, StatusTone> = {
   READY: 'neutral',
   RUNNING: 'running',
   WAITING_CALLBACK: 'waiting',
@@ -52,16 +59,24 @@ export function runStatusLabel(status: RunStatus): string {
   return RUN_STATUS_LABELS[status] ?? status;
 }
 
+export function runStatusTone(status: RunStatus): StatusTone {
+  return RUN_STATUS_TONES[status] ?? 'neutral';
+}
+
 export function runStatusVariant(status: RunStatus): BadgeVariant {
-  return RUN_STATUS_VARIANTS[status] ?? 'neutral';
+  return runStatusTone(status);
 }
 
 export function nodeRunStatusLabel(status: NodeRunStatus): string {
   return NODE_RUN_STATUS_LABELS[status] ?? status;
 }
 
+export function nodeRunStatusTone(status: NodeRunStatus): StatusTone {
+  return NODE_RUN_STATUS_TONES[status] ?? 'neutral';
+}
+
 export function nodeRunStatusVariant(status: NodeRunStatus): BadgeVariant {
-  return NODE_RUN_STATUS_VARIANTS[status] ?? 'neutral';
+  return nodeRunStatusTone(status);
 }
 
 const NODE_ATTEMPT_STATUS_VARIANTS: Record<NodeAttemptStatus, BadgeVariant> = {
@@ -101,6 +116,17 @@ const TOOL_ATTEMPT_STATUS_VARIANTS: Record<ToolAttemptStatus, BadgeVariant> = {
   SUCCEEDED: 'succeeded',
   FAILED: 'failed',
 };
+
+const AGENT_TURN_STATUS_TONES: Record<AgentTurnStatus, StatusTone> = {
+  READY: 'neutral',
+  RUNNING: 'running',
+  COMPLETED: 'succeeded',
+  FAILED: 'failed',
+};
+
+export function agentTurnStatusTone(status: AgentTurnStatus): StatusTone {
+  return AGENT_TURN_STATUS_TONES[status] ?? 'neutral';
+}
 
 export function agentTurnStatusVariant(status: AgentTurnStatus): BadgeVariant {
   return AGENT_TURN_STATUS_VARIANTS[status] ?? 'neutral';

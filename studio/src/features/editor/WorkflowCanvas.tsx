@@ -6,6 +6,7 @@ import {
   type NodeChange,
   type EdgeChange,
   type ReactFlowInstance,
+  useStore,
 } from '@xyflow/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -18,11 +19,26 @@ export interface CanvasFocusRequest {
   seq: number;
 }
 
+/**
+ * Below 100% zoom a 10px port label renders under the 10px port-hint floor (04 §4), so a
+ * read-only canvas fitted smaller than that hides the labels and keeps only the ports.
+ */
+const PORT_HINT_MIN_ZOOM = 1;
+
+/**
+ * React Flow's default minimum zoom (0.5) is too large to fit a wide topology into the
+ * Observe card, which would clip its outer nodes; read-only may zoom out further so the
+ * whole graph always shows.
+ */
+const READ_ONLY_MIN_ZOOM = 0.1;
+
 interface WorkflowCanvasProps {
   nodes: RegisteredFlowNode[];
   edges: FlowEdge[];
   /**
    * Read-only is a topology snapshot (04 §1.4, Observe): no drag, no connect, no delete.
+   * It always shows the whole graph, fitted at up to 100% and re-fitted when the canvas
+   * resizes; selecting a node highlights it and never moves the viewport.
    * Selection stays so Observe can pick a NodeRun. `onEdgesChange`/`onConnect` are never
    * attached, so nothing can reach the caller's Definition state even by keyboard.
    * `onNodesChange`, if given, still is: `nodesDraggable={false}` already rules out a
@@ -30,6 +46,7 @@ interface WorkflowCanvasProps {
    * measured `dimensions` through, which `fitView` needs (see the `fitView` prop below).
    */
   readOnly?: boolean;
+  /** Edit only: zooms onto one node. Observe never passes it (see `readOnly`). */
   focus?: CanvasFocusRequest | null;
   onNodesChange?: (changes: NodeChange<RegisteredFlowNode>[]) => void;
   onEdgesChange?: (changes: EdgeChange<FlowEdge>[]) => void;
@@ -63,6 +80,21 @@ export function WorkflowCanvas({
     void instance.current?.fitView({ nodes: [{ id: focus.nodeId }], duration: 200, maxZoom: 1 });
   }, [focus]);
 
+  const container = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+
+  // Read-only re-fits the whole graph whenever its card changes size (a window resize, or
+  // the Observe layout switching columns); an editable canvas keeps the user's viewport.
+  useEffect(() => {
+    const element = container.current;
+    if (!readOnly || !element) return;
+    const observer = new ResizeObserver(() => {
+      void instance.current?.fitView({ maxZoom: 1, minZoom: READ_ONLY_MIN_ZOOM });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [readOnly]);
+
   const editHandlers = {
     // Dimension measurement, not editing: kept attached in read-only mode so a caller can
     // feed `dimensions` changes back into `nodes` (see the prop doc above).
@@ -72,7 +104,13 @@ export function WorkflowCanvas({
   };
 
   return (
-    <div className="h-full w-full" data-testid="workflow-canvas" data-read-only={readOnly}>
+    <div
+      ref={container}
+      className="group/canvas h-full w-full"
+      data-testid="workflow-canvas"
+      data-read-only={readOnly}
+      data-port-hints={readOnly && zoom < PORT_HINT_MIN_ZOOM ? 'hidden' : 'shown'}
+    >
       <ReactFlow<RegisteredFlowNode, FlowEdge>
         nodes={nodes}
         edges={edges}
@@ -97,7 +135,8 @@ export function WorkflowCanvas({
         fitView
         // Never magnify a small graph past 100%: cards keep the mock's reading size
         // instead of ballooning to fill the canvas.
-        fitViewOptions={{ maxZoom: 1 }}
+        fitViewOptions={readOnly ? { maxZoom: 1, minZoom: READ_ONLY_MIN_ZOOM } : { maxZoom: 1 }}
+        {...(readOnly ? { minZoom: READ_ONLY_MIN_ZOOM } : {})}
         onInit={(flow) => {
           instance.current = flow;
         }}
@@ -107,6 +146,7 @@ export function WorkflowCanvas({
         proOptions={{ hideAttribution: true }}
       >
         {showGrid ? <Background color="var(--border)" gap={24} /> : null}
+        <ZoomReporter onZoom={setZoom} />
         {!readOnly ? (
           <CanvasToolbar
             mode={mode}
@@ -118,4 +158,11 @@ export function WorkflowCanvas({
       </ReactFlow>
     </div>
   );
+}
+
+/** Reports the viewport zoom out of React Flow's store, which only its children can read. */
+function ZoomReporter({ onZoom }: { onZoom: (zoom: number) => void }) {
+  const zoom = useStore((state) => state.transform[2]);
+  useEffect(() => onZoom(zoom), [zoom, onZoom]);
+  return null;
 }

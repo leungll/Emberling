@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RegisteredFlowNode } from './RegisteredNode';
@@ -81,5 +81,28 @@ describe('WorkflowCanvas', () => {
     // Selection stays available: Observe reuses this canvas to pick a NodeRun.
     fireEvent.click(node);
     expect(handlers.onSelectNode).toHaveBeenCalledWith('node_a');
+  });
+
+  it('hides port hint labels, not ports, when a read-only fit shrinks cards below 100%', async () => {
+    // A 180x60 canvas cannot fit a 176x128 card at 100%, so fitting the whole graph zooms
+    // out: a 10px label there would render under the 10px port-hint floor.
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(180);
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(60);
+    const sized = nodes.map((node) => ({ ...node, width: 176, height: 128 }));
+    try {
+      render(<WorkflowCanvas nodes={sized} edges={[]} readOnly />);
+      const canvas = screen.getByTestId('workflow-canvas');
+      await waitFor(() => expect(canvas).toHaveAttribute('data-port-hints', 'hidden'));
+      expect(screen.getByTestId('handle-out-text')).toBeInTheDocument();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('keeps port hint labels on an editable canvas at any zoom', async () => {
+    const sized = nodes.map((node) => ({ ...node, width: 176, height: 128 }));
+    render(<WorkflowCanvas nodes={sized} edges={[]} />);
+    await flushDeletes();
+    expect(screen.getByTestId('workflow-canvas')).toHaveAttribute('data-port-hints', 'shown');
   });
 });

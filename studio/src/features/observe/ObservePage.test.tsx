@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -255,6 +255,10 @@ describe('ObservePage — Run Again', () => {
     });
 
     // On success, Studio navigates to the new Run's own Observe page.
-    await screen.findByRole('heading', { name: 'run_new', level: 1 });
+    await waitFor(() =>
+      expect(screen.getByTestId('observe-subtitle')).toHaveTextContent(
+        'Run run_new · Definition v3 · Observe',
+      ),
+    );
   });
 });

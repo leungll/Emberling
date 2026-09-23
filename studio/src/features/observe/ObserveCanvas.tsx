@@ -1,10 +1,10 @@
 import { applyNodeChanges, type Edge as FlowEdge, type NodeChange } from '@xyflow/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import { ApiRequestError, getDefinitionVersion, listNodeTypes } from '@/api/client';
-import type { Definition, NodeMetadata, NodeRun } from '@/api/types';
+import { useBoundDefinition, type BoundDefinition } from './boundDefinition';
+import type { Definition, NodeRun } from '@/api/types';
 import type { RegisteredFlowNode } from '@/features/editor/RegisteredNode';
-import { WorkflowCanvas, type CanvasFocusRequest } from '@/features/editor/WorkflowCanvas';
+import { WorkflowCanvas } from '@/features/editor/WorkflowCanvas';
 
 interface ObserveCanvasProps {
   workflowId: string;
@@ -13,6 +13,11 @@ interface ObserveCanvasProps {
   nodeRuns: NodeRun[];
   selectedNodeRunId: string | null;
   onSelectNodeRun: (nodeRunId: string | null) => void;
+  /**
+   * The bound Definition already read by the page. When given, the Canvas renders it and
+   * issues no request of its own; when omitted, it reads the same immutable version itself.
+   */
+  bound?: BoundDefinition;
 }
 
 /**
@@ -20,7 +25,8 @@ interface ObserveCanvasProps {
  * node shows the status of its own NodeRun, if one exists yet; a node with no NodeRun
  * renders idle. Selection is shared with the Timeline and Run Rail through the NodeRun id
  * (04 §3.1): a Canvas click resolves to that node's NodeRun, and selecting a NodeRun
- * elsewhere focuses its Definition node here.
+ * elsewhere highlights its Definition node here. The card always shows the whole graph
+ * (fitted at up to 100%); a selection never zooms the viewport onto one node.
  */
 export function ObserveCanvas({
   workflowId,
@@ -28,8 +34,10 @@ export function ObserveCanvas({
   nodeRuns,
   selectedNodeRunId,
   onSelectNodeRun,
+  bound,
 }: ObserveCanvasProps) {
-  const { definition, nodeTypes, error } = useBoundDefinition(workflowId, definitionVersion);
+  const own = useBoundDefinition(workflowId, definitionVersion, bound !== undefined);
+  const { definition, nodeTypes, error } = bound ?? own;
 
   const metadataByType = useMemo(
     () => new Map(nodeTypes.map((metadata) => [metadata.type, metadata])),
@@ -56,9 +64,9 @@ export function ObserveCanvas({
     values: Record<string, { width: number; height: number }>;
   }>({ definition, values: {} });
   // A new Definition object (the initial fetch, or a different Run reusing this same
-  // mounted Canvas) must not carry over another topology's sizes; this is the same
-  // "adjust state during render" pattern `useFocusRequest` below uses, not an effect, so it
-  // never triggers the extra render-after-commit an effect-based reset would.
+  // mounted Canvas) must not carry over another topology's sizes; this is React's "adjust
+  // state during render" pattern, not an effect, so it never triggers the extra
+  // render-after-commit an effect-based reset would.
   if (measuredState.definition !== definition) {
     setMeasuredState({ definition, values: {} });
   }
@@ -124,8 +132,6 @@ export function ObserveCanvas({
     [definition],
   );
 
-  const focus = useFocusRequest(selectedDefinitionNodeId);
-
   const onSelectDefinitionNode = (definitionNodeId: string | null) => {
     if (definitionNodeId === null) {
       // Blank-area click returns to the Run Summary (04 §3.1).
@@ -138,76 +144,20 @@ export function ObserveCanvas({
   };
 
   return (
-    <div className="h-64 shrink-0 border-b border-[var(--border)]">
+    <div className="h-full min-h-0 w-full">
       {error ? (
-        <p className="p-3 text-xs text-[var(--destructive)]">{error}</p>
+        <p className="p-3 text-sm text-[var(--destructive)]">{error}</p>
       ) : !definition ? (
-        <p className="p-3 text-xs text-[var(--muted-foreground)]">Loading topology…</p>
+        <p className="p-3 text-sm text-[var(--muted-foreground)]">Loading topology…</p>
       ) : (
         <WorkflowCanvas
           nodes={flowNodes}
           edges={flowEdges}
           readOnly
-          focus={focus}
           onNodesChange={onNodesChange}
           onSelectNode={onSelectDefinitionNode}
         />
       )}
     </div>
   );
-}
-
-/**
- * Fetches the Run's own bound Definition version and the registered Node Types needed to
- * render it, exactly as the Editor does for its own Canvas. This is a read-only lookup by
- * immutable version (08 §3): it never falls back to the Definition's latest version.
- */
-function useBoundDefinition(
-  workflowId: string,
-  definitionVersion: number,
-): { definition: Definition | null; nodeTypes: NodeMetadata[]; error: string | null } {
-  const [state, setState] = useState<{
-    definition: Definition | null;
-    nodeTypes: NodeMetadata[];
-    error: string | null;
-  }>({ definition: null, nodeTypes: [], error: null });
-
-  useEffect(() => {
-    const controller = new AbortController();
-    Promise.all([
-      getDefinitionVersion(workflowId, definitionVersion, controller.signal),
-      listNodeTypes(controller.signal),
-    ])
-      .then(([definition, nodeTypes]) => setState({ definition, nodeTypes, error: null }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setState({
-          definition: null,
-          nodeTypes: [],
-          error:
-            error instanceof ApiRequestError
-              ? `${error.code}: ${error.message}`
-              : 'Could not load the workflow topology',
-        });
-      });
-    return () => controller.abort();
-  }, [workflowId, definitionVersion]);
-
-  return state;
-}
-
-/**
- * Bumps `seq` each time the selected Definition node id changes, so the Canvas re-runs
- * `fitView` even when the newly selected NodeRun maps back to the same node (`focus`'s own
- * contract requires a changed `seq` to repeat a request for the same node id). This is
- * React's own "adjust state during render" pattern (comparing a prop to state and calling
- * the setter inline): it needs no effect and no ref, since a ref must never be read during
- * render.
- */
-function useFocusRequest(definitionNodeId: string | null): CanvasFocusRequest | null {
-  const [state, setState] = useState({ nodeId: definitionNodeId, seq: 0 });
-  if (definitionNodeId !== state.nodeId) {
-    setState({ nodeId: definitionNodeId, seq: state.seq + 1 });
-  }
-  return state.nodeId ? { nodeId: state.nodeId, seq: state.seq } : null;
 }

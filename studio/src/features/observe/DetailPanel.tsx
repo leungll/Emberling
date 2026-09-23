@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
+import { SectionLabel } from './Panel';
+import { StatusDot } from './StatusGlyph';
 import { API_BASE, ApiRequestError, getAgentTrace, getNodeRunDetail } from '@/api/client';
 import type {
   AgentTrace,
@@ -11,19 +13,20 @@ import type {
   NodeRunStatus,
   RunEvent,
   RunSnapshot,
+  ToolAttemptTrace,
 } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { formatDuration, formatMillis, formatTimestamp } from '@/lib/format';
 import {
   agentActionStatusVariant,
+  agentTurnStatusTone,
   agentTurnStatusVariant,
   nodeAttemptStatusVariant,
   nodeRunStatusLabel,
   nodeRunStatusVariant,
   toolAttemptStatusVariant,
 } from '@/lib/status';
+import { cn } from '@/lib/utils';
 
 /** Registered Node Type of a MANAGED_AGENT NodeRun. Only these have an Agent Trace. */
 const AGENT_NODE_TYPE = 'agent';
@@ -35,6 +38,14 @@ interface DetailPanelProps {
   /** Committed Events held by the page so far, used only to find the latest one already
    * known for the selected NodeRun. This never fetches or invents an Event of its own. */
   events: RunEvent[];
+  /** Display name of the selected NodeRun's node in the bound Definition version. */
+  nodeName?: string;
+  /**
+   * `allowedTools` of the selected Agent node in the Run's bound, immutable Definition
+   * version. Every Turn of that Agent Run chooses among exactly these Tools, so they are
+   * the candidate Tools shown per Turn; nothing is inferred from the Trace.
+   */
+  allowedTools?: readonly string[];
 }
 
 /** NodeRun and Event detail. Every value is a server fact rendered as received. */
@@ -43,6 +54,8 @@ export function DetailPanel({
   selectedNodeRun,
   selectedEvent,
   events,
+  nodeName,
+  allowedTools,
 }: DetailPanelProps) {
   const detail = useNodeRunDetail(snapshot.run.id, selectedNodeRun?.id, selectedNodeRun?.status);
 
@@ -64,58 +77,100 @@ export function DetailPanel({
         )
     : null;
 
+  const eventView = selectedEvent ? <EventDetail event={selectedEvent} /> : null;
+
+  // 04 §3.4 Agent view: Turn timeline beside the NodeRun detail.
+  if (selectedNodeRun && agentNodeRunId) {
+    return (
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
+        <section className="flex min-h-0 min-w-0 flex-col border-r border-[var(--border)]">
+          <div className="flex shrink-0 items-center justify-between px-6 pt-5 pb-3">
+            <SectionLabel>Agent Execution · Turn Timeline</SectionLabel>
+            <span className="text-[13px] text-[var(--muted-foreground)] tabular-nums">
+              {trace.value ? `turn ${trace.value.agentRun.currentTurnNo}` : null}
+            </span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto px-6 pb-6">
+            {trace.error ? (
+              <p className="text-sm text-[var(--destructive)]">{trace.error}</p>
+            ) : null}
+            {trace.value ? (
+              <ol className="space-y-4">
+                {trace.value.turns.map((turn) => (
+                  <AgentTurnCard key={turn.id} turn={turn} allowedTools={allowedTools} />
+                ))}
+              </ol>
+            ) : null}
+          </div>
+        </section>
+
+        <aside
+          data-testid="detail-panel"
+          className="min-h-0 min-w-0 overflow-auto px-6 pt-5 pb-6 text-[14px]"
+        >
+          <SectionLabel>Detail · Agent NodeRun</SectionLabel>
+          <div className="mt-3 space-y-5">
+            <NodeRunHeading nodeRun={selectedNodeRun} nodeName={nodeName} />
+            {selectedNodeRun.status === 'WAITING_CALLBACK' ? (
+              <AgentWaiting
+                nodeRun={selectedNodeRun}
+                trace={trace.value}
+                latestEvent={latestEvent}
+              />
+            ) : null}
+            <AgentRunSummary trace={trace.value} />
+            <NodeRunFacts nodeRun={selectedNodeRun} compact />
+            <NodeRunValues nodeRun={selectedNodeRun} />
+            {detail.error ? <p className="text-[var(--destructive)]">{detail.error}</p> : null}
+            {eventView}
+          </div>
+        </aside>
+      </div>
+    );
+  }
+
   return (
-    <aside className="flex w-96 shrink-0 flex-col">
-      <div className="border-b border-[var(--border)] px-3 py-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-          Detail
-        </h2>
+    <aside data-testid="detail-panel" className="flex min-h-0 min-w-0 flex-1 flex-col text-[14px]">
+      <div className="shrink-0 px-6 pt-4 pb-2">
+        <SectionLabel>
+          {selectedNodeRun ? 'Node Run Detail' : selectedEvent ? 'Event Detail' : 'Run Detail'}
+        </SectionLabel>
       </div>
 
-      <ScrollArea className="flex-1 p-3 text-xs">
-        {!selectedNodeRun && !selectedEvent ? <RunSummary snapshot={snapshot} /> : null}
+      <div className="min-h-0 flex-1 space-y-5 overflow-auto px-6 pb-6">
+        {!selectedNodeRun && !selectedEvent ? <RunValues snapshot={snapshot} /> : null}
 
         {selectedNodeRun ? (
           <NodeRunDetailView
             nodeRun={selectedNodeRun}
+            nodeName={nodeName}
             detail={detail.value}
             detailError={detail.error}
             latestEvent={latestEvent}
           />
         ) : null}
 
-        {agentNodeRunId ? (
-          <>
-            <Separator className="my-3" />
-            <AgentTraceView trace={trace.value} traceError={trace.error} />
-          </>
-        ) : null}
-
-        {selectedEvent ? (
-          <>
-            {selectedNodeRun ? <Separator className="my-3" /> : null}
-            <section className="space-y-2">
-              <h3 className="font-medium">Event #{selectedEvent.seq}</h3>
-              <Field label="Type" value={selectedEvent.type} />
-              <Field label="At" value={formatTimestamp(selectedEvent.timestamp)} />
-              <Field label="NodeRun" value={selectedEvent.nodeRunId ?? '— (run level)'} />
-              <JsonBlock label="Payload" value={selectedEvent.payload} />
-            </section>
-          </>
-        ) : null}
-      </ScrollArea>
+        {eventView}
+      </div>
     </aside>
   );
 }
 
-function RunSummary({ snapshot }: { snapshot: RunSnapshot }) {
+function EventDetail({ event }: { event: RunEvent }) {
   return (
-    <section className="space-y-2">
-      <h3 className="font-medium">Run Summary</h3>
-      <Field label="Run" value={snapshot.run.id} />
-      <Field label="Workflow" value={snapshot.run.workflowId} />
-      <Field label="Version" value={`v${snapshot.run.definitionVersion}`} />
-      <Field label="NodeRuns" value={String(snapshot.nodeRuns.length)} />
+    <section className="space-y-2 rounded-xl border border-[var(--border)] px-5 py-4">
+      <h3 className="text-[15px] font-semibold">Event #{event.seq}</h3>
+      <Field label="Type" value={event.type} />
+      <Field label="At" value={formatTimestamp(event.timestamp)} />
+      <Field label="NodeRun" value={event.nodeRunId ?? '— (run level)'} />
+      <JsonBlock label="Payload" value={event.payload} />
+    </section>
+  );
+}
+
+function RunValues({ snapshot }: { snapshot: RunSnapshot }) {
+  return (
+    <section className="space-y-4">
       <JsonBlock label="Input" value={snapshot.run.input} />
       {snapshot.run.output !== null ? (
         <JsonBlock label="Output" value={snapshot.run.output} />
@@ -209,13 +264,100 @@ function useAgentTrace(
   return nodeRunId ? state : { value: null, error: null };
 }
 
+function NodeRunHeading({ nodeRun, nodeName }: { nodeRun: NodeRun; nodeName?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h3 className="truncate text-[22px] leading-tight font-bold">
+          {nodeName ?? nodeRun.nodeId}
+        </h3>
+        <p className="mt-1 truncate text-[13px] text-[var(--muted-foreground)]">
+          {nodeName ? `${nodeRun.nodeId} · ` : ''}
+          {nodeRun.nodeType} · {nodeRun.id}
+        </p>
+      </div>
+      {/* The raw NodeRun status sits beside its 04 §4 wording. */}
+      <Badge
+        variant={nodeRunStatusVariant(nodeRun.status)}
+        className="shrink-0 px-4 py-1.5"
+        title={nodeRun.status}
+      >
+        {nodeRunStatusLabel(nodeRun.status)}
+      </Badge>
+    </div>
+  );
+}
+
+function NodeRunFacts({ nodeRun, compact }: { nodeRun: NodeRun; compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="space-y-2">
+        <Field label="Ready at" value={formatTimestamp(nodeRun.readyAt)} />
+        <Field label="Started at" value={formatTimestamp(nodeRun.startedAt)} />
+        <Field label="Completed at" value={formatTimestamp(nodeRun.completedAt)} />
+        <Field label="Latency" value={formatMillis(nodeRun.latencyMs)} />
+        {nodeRun.tokenUsage ? (
+          <Field label="Tokens" value={String(nodeRun.tokenUsage.totalTokens)} />
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-3 gap-x-6 gap-y-3">
+      <Stat label="Ready at" value={formatTimestamp(nodeRun.readyAt)} />
+      <Stat label="Started at" value={formatTimestamp(nodeRun.startedAt)} />
+      <Stat label="Completed at" value={formatTimestamp(nodeRun.completedAt)} />
+      <Stat label="Latency" value={formatMillis(nodeRun.latencyMs)} />
+      {nodeRun.tokenUsage ? (
+        <Stat label="Tokens" value={String(nodeRun.tokenUsage.totalTokens)} />
+      ) : null}
+    </div>
+  );
+}
+
+function NodeRunValues({ nodeRun }: { nodeRun: NodeRun }) {
+  return (
+    <>
+      {nodeRun.input !== null ? <JsonBlock label="Input" value={nodeRun.input} /> : null}
+      {nodeRun.output !== null ? <JsonBlock label="Output" value={nodeRun.output} /> : null}
+      {nodeRun.error ? <JsonBlock label="Error" value={nodeRun.error as unknown} /> : null}
+    </>
+  );
+}
+
+/** When the NodeRun started waiting and for how long; "—" until the Backend reports it. */
+function waitingSince(nodeRun: NodeRun): string {
+  return nodeRun.waitingAt
+    ? `${formatTimestamp(nodeRun.waitingAt)} · ${formatDuration(nodeRun.waitingAt)}`
+    : '—';
+}
+
+function latestEventText(latestEvent: RunEvent | null): string {
+  return latestEvent ? `${latestEvent.type} · seq ${latestEvent.seq}` : '—';
+}
+
+/** Amber WAITING DIAGNOSTICS block of a WAITING_CALLBACK NodeRun (04 §3.2). */
+function WaitingDiagnostics({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section
+      data-testid="waiting-diagnostics"
+      className="rounded-xl border border-[var(--status-waiting-dot)] bg-[var(--status-waiting-bg)] px-5 py-4"
+    >
+      <SectionLabel>{title}</SectionLabel>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
 function NodeRunDetailView({
   nodeRun,
+  nodeName,
   detail,
   detailError,
   latestEvent,
 }: {
   nodeRun: NodeRun;
+  nodeName?: string;
   detail: NodeRunDetail | null;
   detailError: string | null;
   latestEvent: RunEvent | null;
@@ -224,55 +366,56 @@ function NodeRunDetailView({
   const callbackBinding = lastAttempt?.callbackBinding ?? null;
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="font-medium">{nodeRun.nodeId}</h3>
-        <Badge variant={nodeRunStatusVariant(nodeRun.status)}>
-          {nodeRunStatusLabel(nodeRun.status)}
-        </Badge>
-      </div>
-      <Field label="NodeRun" value={nodeRun.id} />
-      <Field label="Type" value={nodeRun.nodeType} />
-      <Field label="Ready at" value={formatTimestamp(nodeRun.readyAt)} />
-      <Field label="Started at" value={formatTimestamp(nodeRun.startedAt)} />
+    <section className="space-y-5">
+      <NodeRunHeading nodeRun={nodeRun} nodeName={nodeName} />
+
       {nodeRun.status === 'WAITING_CALLBACK' ? (
         <>
-          <Field
-            label="Waiting since"
-            value={`${formatTimestamp(nodeRun.waitingAt)} (${formatDuration(nodeRun.waitingAt)})`}
-          />
-          <Field label="Provider" value={callbackBinding?.providerId ?? '—'} />
-          <Field label="External Task ID" value={callbackBinding?.externalTaskId ?? '—'} />
-          <Field label="Attempt" value={lastAttempt ? String(lastAttempt.attemptNo) : '—'} />
-          <Field label="Runtime State" value={lastAttempt?.status ?? '—'} />
-          <Field label="Latest Event" value={latestEvent ? latestEvent.type : '—'} />
-          <Field label="Deadline" value={formatTimestamp(lastAttempt?.deadlineAt)} />
+          {/* 04 §3.2: every waiting field is a persisted fact; a value the Backend has not
+              reported yet reads "—" and is never guessed. */}
+          <WaitingDiagnostics title="Waiting Diagnostics">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+              <Field label="Provider" value={callbackBinding?.providerId ?? '—'} strong />
+              <Field label="Waiting Since" value={waitingSince(nodeRun)} strong />
+              <Field
+                label="External Task ID"
+                value={callbackBinding?.externalTaskId ?? '—'}
+                strong
+              />
+              <Field label="Runtime State" value={lastAttempt?.status ?? '—'} strong />
+              <Field label="Deadline" value={formatTimestamp(lastAttempt?.deadlineAt)} strong />
+            </div>
+          </WaitingDiagnostics>
+          <div className="grid grid-cols-2 gap-x-6">
+            <Stat label="Attempt" value={lastAttempt ? String(lastAttempt.attemptNo) : '—'} />
+            <Stat label="Latest Event" value={latestEventText(latestEvent)} />
+          </div>
         </>
       ) : null}
-      <Field label="Completed at" value={formatTimestamp(nodeRun.completedAt)} />
-      <Field label="Latency" value={formatMillis(nodeRun.latencyMs)} />
-      {nodeRun.tokenUsage ? (
-        <Field label="Tokens" value={String(nodeRun.tokenUsage.totalTokens)} />
-      ) : null}
-      {nodeRun.input !== null ? <JsonBlock label="Input" value={nodeRun.input} /> : null}
-      {nodeRun.output !== null ? <JsonBlock label="Output" value={nodeRun.output} /> : null}
-      {nodeRun.error ? <JsonBlock label="Error" value={nodeRun.error as unknown} /> : null}
+
+      <NodeRunFacts nodeRun={nodeRun} />
+      <NodeRunValues nodeRun={nodeRun} />
       {detailError ? <p className="text-[var(--destructive)]">{detailError}</p> : null}
       {detail && detail.attempts.length > 0 ? (
-        <div className="space-y-1">
-          <span className="text-[var(--muted-foreground)]">Attempts</span>
-          <ul className="space-y-1">
+        <div className="space-y-2">
+          <span className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
+            Attempts
+          </span>
+          <ul className="space-y-2">
             {detail.attempts.map((attempt) => (
-              <li key={attempt.id} className="rounded border border-[var(--border)] px-2 py-1">
+              <li
+                key={attempt.id}
+                className="rounded-lg border border-[var(--border)] bg-[var(--muted)] px-4 py-2.5"
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <span>#{attempt.attemptNo}</span>
+                  <span className="font-semibold">#{attempt.attemptNo}</span>
                   <Badge variant={nodeAttemptStatusVariant(attempt.status)}>{attempt.status}</Badge>
                 </div>
                 {/* Dispatch facts belong to the Attempt that produced them: a retry keeps
                     the earlier Attempt and its own Binding in this list, while a
                     synchronous Attempt has no Binding and shows no Binding rows at all. */}
                 {attempt.callbackBinding ? (
-                  <div className="mt-1 space-y-0.5 text-[10px] text-[var(--muted-foreground)]">
+                  <div className="mt-2 space-y-1 text-[14px]">
                     <Field label="Callback provider" value={attempt.callbackBinding.providerId} />
                     <Field label="External task" value={attempt.callbackBinding.externalTaskId} />
                     <Field
@@ -291,26 +434,68 @@ function NodeRunDetailView({
 }
 
 /**
- * Agent Run summary and its Turns, in the order the Backend persisted them. Every value is
- * printed as received: Studio derives no Turn, Action or Agent status of its own, and an
- * Agent Run the Backend has not terminated simply has no `termination` to show.
+ * The Tool Attempt an Agent NodeRun is waiting on: the latest one the Backend reports as
+ * DISPATCHED. A MANAGED_AGENT NodeRun has no Node Attempts, so its callback facts live on
+ * the Tool Attempt; none is picked when the Trace reports no dispatched Attempt.
  */
-function AgentTraceView({
+function dispatchedToolAttempt(trace: AgentTrace | null): ToolAttemptTrace | null {
+  if (!trace) return null;
+  for (const turn of [...trace.turns].reverse()) {
+    const attempt = [...turn.toolAttempts].reverse().find((a) => a.status === 'DISPATCHED');
+    if (attempt) return attempt;
+  }
+  return null;
+}
+
+function AgentWaiting({
+  nodeRun,
   trace,
-  traceError,
+  latestEvent,
 }: {
+  nodeRun: NodeRun;
   trace: AgentTrace | null;
-  traceError: string | null;
+  latestEvent: RunEvent | null;
 }) {
+  const attempt = dispatchedToolAttempt(trace);
   return (
-    <section className="space-y-2">
-      <h3 className="font-medium">Agent</h3>
-      {traceError ? <p className="text-[var(--destructive)]">{traceError}</p> : null}
+    <WaitingDiagnostics title="Waiting">
+      <div className="space-y-2">
+        <Field label="Provider" value={attempt?.callbackBinding?.providerId ?? '—'} strong />
+        <Field
+          label="External Task ID"
+          value={attempt?.callbackBinding?.externalTaskId ?? '—'}
+          strong
+        />
+        <Field
+          label="Tool Attempt"
+          value={attempt ? `${attempt.toolName} · attempt ${attempt.attemptNo}` : '—'}
+          strong
+        />
+        <Field label="Waiting Since" value={waitingSince(nodeRun)} strong />
+        {/* Same source as the Run view's Runtime State: the waited-on Attempt's status. */}
+        <Field label="Runtime State" value={attempt?.status ?? '—'} strong />
+        <Field label="Latest Event" value={latestEventText(latestEvent)} strong />
+      </div>
+    </WaitingDiagnostics>
+  );
+}
+
+/**
+ * Agent Run summary, printed as received: Studio derives no Agent status of its own, and
+ * an Agent Run the Backend has not terminated simply has no `termination` to show.
+ */
+function AgentRunSummary({ trace }: { trace: AgentTrace | null }) {
+  return (
+    <section className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--muted)] px-5 py-4">
+      <h3 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
+        Agent
+      </h3>
       {trace ? (
         <>
           <Field label="Agent Run" value={trace.agentRun.id} />
           {/* `running` is not a status: it is how an absent server-side termination reads. */}
           <Field label="Termination" value={trace.agentRun.termination ?? 'running'} />
+          <Field label="Turns" value={String(trace.turns.length)} />
           <Field label="Current turn" value={String(trace.agentRun.currentTurnNo)} />
           <Field label="Context version" value={String(trace.agentRun.currentContextVersion)} />
           <Field label="State version" value={String(trace.agentRun.currentStateVersion)} />
@@ -321,40 +506,62 @@ function AgentTraceView({
           {trace.agentRun.error ? (
             <JsonBlock label="Agent error" value={trace.agentRun.error as unknown} />
           ) : null}
-          {trace.turns.length > 0 ? (
-            <div className="space-y-1">
-              <span className="text-[var(--muted-foreground)]">Turns</span>
-              <ul className="space-y-1">
-                {trace.turns.map((turn) => (
-                  <AgentTurnRow key={turn.id} turn={turn} />
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </>
       ) : null}
     </section>
   );
 }
 
-function AgentTurnRow({ turn }: { turn: AgentTurnTrace }) {
+/** One persisted Turn. A Turn that has not committed a Decision shows none; it is never
+ * guessed from the Action or the Tool Attempts below it. */
+function AgentTurnCard({
+  turn,
+  allowedTools,
+}: {
+  turn: AgentTurnTrace;
+  allowedTools?: readonly string[];
+}) {
+  const tone = agentTurnStatusTone(turn.status);
   return (
-    <li className="space-y-1 rounded border border-[var(--border)] px-2 py-1">
-      <div className="flex items-center justify-between gap-2">
-        <span>Turn {turn.turnNo}</span>
+    <li
+      data-testid="agent-turn"
+      className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--muted)] px-5 py-4 text-[14px]"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-3">
+          <StatusDot tone={tone} />
+          <span className="text-[16px] font-bold">Turn {turn.turnNo}</span>
+        </span>
         <Badge variant={agentTurnStatusVariant(turn.status)}>{turn.status}</Badge>
       </div>
-      {/* A Turn that has not committed a Decision yet shows none; it is never guessed
-          from the Action or the Tool Attempts below. */}
+
+      {allowedTools ? (
+        <div data-testid="candidate-tools" className="flex flex-wrap items-center gap-2">
+          <span className="text-[13px] text-[var(--muted-foreground)]">Candidate tools</span>
+          {allowedTools.length === 0 ? (
+            <span className="text-[14px] text-[var(--muted-foreground)]">none</span>
+          ) : (
+            allowedTools.map((tool) => (
+              <span
+                key={tool}
+                className="rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[14px] font-medium"
+              >
+                {tool}
+              </span>
+            ))
+          )}
+        </div>
+      ) : null}
+
       {turn.decision ? (
-        <div className="space-y-0.5 text-[10px] text-[var(--muted-foreground)]">
-          <Field label="Decision" value={turn.decision.kind} />
-          <Field label="Tool" value={turn.decision.tool ?? '—'} />
-          <Field label="State patch" value={turn.decision.hasStatePatch ? 'yes' : 'no'} />
+        <div className="grid grid-cols-3 gap-x-4">
+          <Stat label="Decision" value={turn.decision.kind} />
+          <Stat label="Tool" value={turn.decision.tool ?? '—'} />
+          <Stat label="State patch" value={turn.decision.hasStatePatch ? 'yes' : 'no'} />
         </div>
       ) : null}
       {turn.action ? (
-        <div className="flex items-center justify-between gap-2 text-[10px]">
+        <div className="flex items-center justify-between gap-2">
           <span className="text-[var(--muted-foreground)]">Action {turn.action.type}</span>
           <Badge variant={agentActionStatusVariant(turn.action.status)}>{turn.action.status}</Badge>
         </div>
@@ -366,17 +573,22 @@ function AgentTurnRow({ turn }: { turn: AgentTurnTrace }) {
       {turn.toolAttempts.map((attempt) => (
         <div
           key={attempt.id}
-          className="rounded border border-[var(--border)] px-2 py-1 text-[10px]"
+          className={cn(
+            'space-y-1.5 rounded-lg border px-4 py-3',
+            attempt.status === 'DISPATCHED'
+              ? 'border-[var(--status-waiting-dot)] bg-[var(--status-waiting-bg)]'
+              : 'border-[var(--border)] bg-[var(--card)]',
+          )}
         >
           <div className="flex items-center justify-between gap-2">
-            <span>
+            <span className="font-semibold">
               {attempt.toolName} #{attempt.attemptNo}
             </span>
             <Badge variant={toolAttemptStatusVariant(attempt.status)}>{attempt.status}</Badge>
           </div>
           {/* A synchronous Tool Attempt has no Binding; no empty row is printed for it. */}
           {attempt.callbackBinding ? (
-            <div className="mt-1 space-y-0.5 text-[var(--muted-foreground)]">
+            <div className="space-y-1 text-[14px]">
               <Field label="Callback provider" value={attempt.callbackBinding.providerId} />
               <Field label="External task" value={attempt.callbackBinding.externalTaskId} />
             </div>
@@ -390,11 +602,33 @@ function AgentTurnRow({ turn }: { turn: AgentTurnTrace }) {
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+/** Label/value row. The value is the label's next sibling, which tests rely on. */
+function Field({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  // `strong` rows are the waiting diagnostics: a fixed label column with the value beside
+  // it, as in the 04 §3.2 mock; plain rows spread label and value across the width.
   return (
-    <div className="flex justify-between gap-3">
-      <span className="text-[var(--muted-foreground)]">{label}</span>
-      <span className="text-right break-all">{value}</span>
+    <div
+      className={cn(
+        'gap-4',
+        strong ? 'grid grid-cols-[116px_minmax(0,1fr)]' : 'flex justify-between',
+      )}
+    >
+      <span className="shrink-0 text-[13px] text-[var(--muted-foreground)]">{label}</span>
+      <span className={cn(strong ? 'font-semibold break-words' : 'text-right break-all')}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** Stacked label over value, for the mocks' ATTEMPT / LATEST EVENT style facts. */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <span className="block text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
+        {label}
+      </span>
+      <span className="mt-1 block text-[15px] font-semibold break-all">{value}</span>
     </div>
   );
 }
@@ -452,10 +686,10 @@ function ImagePreview({ image }: { image: ImageRef }) {
         <img
           src={src}
           alt={`${image.source} image preview`}
-          className="max-h-32 max-w-full rounded object-contain"
+          className="max-h-48 max-w-full rounded-lg object-contain"
         />
       ) : null}
-      <p className="break-all text-[10px] text-[var(--muted-foreground)]">
+      <p className="break-all text-xs text-[var(--muted-foreground)]">
         {image.source} · {reference ?? '—'}
       </p>
     </div>
@@ -477,23 +711,27 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
   // reference), so its raw JSON collapses regardless of size to avoid duplicating that
   // content in the panel; otherwise only large fields collapse.
   const collapsedByDefault = images.length > 0 || json.length > JSON_BLOCK_COLLAPSE_THRESHOLD_CHARS;
-  const pre = <pre className="max-h-48 overflow-auto p-2 text-[10px]">{json}</pre>;
+  const pre = (
+    <pre className="max-h-56 overflow-auto px-4 py-3 text-[14px] leading-relaxed">{json}</pre>
+  );
 
   return (
-    <div className="space-y-1">
-      <span className="text-[var(--muted-foreground)]">{label}</span>
+    <div className="space-y-2">
+      <span className="block text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
+        {label}
+      </span>
       {images.map((image, index) => (
         <ImagePreview key={index} image={image} />
       ))}
       {collapsedByDefault ? (
-        <details className="rounded border border-[var(--border)]">
-          <summary className="cursor-pointer select-none px-2 py-1 text-[10px] text-[var(--muted-foreground)]">
+        <details className="rounded-lg border border-[var(--border)] bg-[var(--background)]">
+          <summary className="cursor-pointer px-4 py-2 text-xs text-[var(--muted-foreground)] select-none">
             Raw JSON
           </summary>
           {pre}
         </details>
       ) : (
-        pre
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--background)]">{pre}</div>
       )}
     </div>
   );

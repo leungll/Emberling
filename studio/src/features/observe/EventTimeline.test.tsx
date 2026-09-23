@@ -86,3 +86,38 @@ describe('EventTimeline — async Node events', () => {
     expect(screen.queryByText(/must-not-render/)).not.toBeInTheDocument();
   });
 });
+
+describe('EventTimeline — status dots', () => {
+  it('gives each entry the dot colour of its own Event type, in seq order', () => {
+    const { container } = renderTimeline([
+      event(7, 'NODE_DISPATCHED'),
+      event(1, 'RUN_CREATED'),
+      event(6, 'NODE_STARTED'),
+      event(9, 'NODE_FAILED'),
+    ]);
+
+    const tones = [...container.querySelectorAll('li [data-tone]')].map((dot) =>
+      dot.getAttribute('data-tone'),
+    );
+    expect(tones).toEqual(['succeeded', 'running', 'waiting', 'failed']);
+    // Only the running dot pulses (04 §4).
+    expect(container.querySelector('[data-tone="running"]')).toHaveClass('animate-pulse');
+    expect(container.querySelector('[data-tone="waiting"]')).not.toHaveClass('animate-pulse');
+  });
+
+  it('marks the selected Event and offers Resume Live when not following', () => {
+    render(
+      <EventTimeline
+        events={[event(1, 'RUN_CREATED'), event(7, 'NODE_DISPATCHED')]}
+        selectedSeq={7}
+        followLive={false}
+        onSelect={() => {}}
+        onResumeLive={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('12:00:03Z · seq 7')).toBeInTheDocument();
+    expect(screen.getByText('selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resume Live' })).toBeInTheDocument();
+  });
+});

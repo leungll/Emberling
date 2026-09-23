@@ -62,8 +62,9 @@ test('Agent with an asynchronous Tool pauses at the Agent NodeRun, then resumes 
   // The Canvas node chip also reads "Agent" (its node type label), so this must be scoped
   // to AgentTraceView's own `<h3>` heading, not a plain text match.
   await expect(page.getByRole('heading', { name: 'Agent', exact: true })).toBeVisible();
-  // The dispatched Tool Attempt's row prints "remote_lookup #<attemptNo>" (AgentTurnRow).
-  await expect(page.getByText(/remote_lookup/)).toBeVisible();
+  // The dispatched Tool Attempt's row prints "remote_lookup #<attemptNo>" (AgentTurnCard).
+  // Anchored, since the Turn's candidate Tools and Decision also name remote_lookup.
+  await expect(page.getByText(/^remote_lookup #\d+$/)).toBeVisible();
 
   // Item 16: the Mock Provider's own scheduled callback (not this test) resolves the Tool
   // Attempt, which resumes the Agent to Turn 2 and on to FINAL; the Run completes.
