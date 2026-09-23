@@ -116,9 +116,13 @@ describe('WorkflowCanvas', () => {
       const canvas = screen.getByTestId('workflow-canvas');
       const viewport = document.querySelector<HTMLElement>('.react-flow__viewport');
       const zoomOf = () => Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1]);
-      await waitFor(() => expect(zoomOf()).toBeLessThan(1));
-      const hintPx = parseFloat(canvas.style.getPropertyValue('--port-hint-font'));
-      expect(hintPx * zoomOf()).toBeGreaterThanOrEqual(10 - 1e-9);
+      // The viewport transform changes first; the hint font follows on the next render
+      // (ZoomReporter), so wait for both together rather than reading it in between.
+      await waitFor(() => {
+        expect(zoomOf()).toBeLessThan(1);
+        const hintPx = parseFloat(canvas.style.getPropertyValue('--port-hint-font'));
+        expect(hintPx * zoomOf()).toBeGreaterThanOrEqual(10 - 1e-9);
+      });
       expect(canvas).toHaveAttribute('data-port-hints', 'shown');
       expect(screen.getByTestId('handle-out-text').querySelector('[data-port-hint]')).toHaveClass(
         'text-[length:var(--port-hint-font,10px)]',

@@ -1,5 +1,5 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { DetailPanel } from './DetailPanel';
 import type { NodeRun, Run, RunEvent, RunSnapshot } from '@/api/types';
@@ -76,6 +76,19 @@ const NODE_RUN_DETAIL_BODY = {
   ],
 };
 
+/**
+ * Resolves once the component has read the body `text` spies on and applied it: the body
+ * read itself is awaited, then one macrotask drains the parse-and-setState microtasks
+ * inside `act`. Used where the loaded state renders identically to the in-flight one.
+ */
+async function settleBody(text: MockInstance<() => Promise<string>>) {
+  await waitFor(() => expect(text).toHaveBeenCalled());
+  await act(async () => {
+    await text.mock.results[0]!.value;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 /** Reads a `<Field label value>` row by its unique label, since the value text alone (for
  * example "DISPATCHED") can also appear in the unrelated Attempts list below it. */
 function fieldValue(label: string): string {
@@ -105,10 +118,11 @@ describe('DetailPanel — WAITING_CALLBACK', () => {
     const snapshot: RunSnapshot = { run: run(), nodeRuns: [WAITING_NODE_RUN], lastSeq: 5 };
     renderPanel(snapshot, [LATEST_EVENT]);
 
-    await screen.findByText('Provider');
+    // "Provider" renders at once with "—" while the Node Detail is in flight; wait for the
+    // loaded value itself before asserting the rest.
+    await waitFor(() => expect(fieldValue('Provider')).toBe('stability-ai'));
     expect(fetchMock).toHaveBeenCalledWith('/api/runs/run_1/nodes/nr_1', expect.anything());
 
-    expect(fieldValue('Provider')).toBe('stability-ai');
     expect(fieldValue('External Task ID')).toBe('ext_task_789');
     expect(fieldValue('Attempt')).toBe('1');
     expect(fieldValue('Runtime State')).toBe('DISPATCHED');
@@ -121,15 +135,16 @@ describe('DetailPanel — WAITING_CALLBACK', () => {
   });
 
   it('shows "—" for the WAITING_CALLBACK fields when the Node Detail payload has no Attempts yet', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(jsonResponse(200, { nodeRun: WAITING_NODE_RUN, attempts: [] })),
-    );
+    const response = jsonResponse(200, { nodeRun: WAITING_NODE_RUN, attempts: [] });
+    const body = vi.spyOn(response, 'text');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
 
     const snapshot: RunSnapshot = { run: run(), nodeRuns: [WAITING_NODE_RUN], lastSeq: 5 };
     renderPanel(snapshot, []);
 
-    await screen.findByText('Provider');
+    // An empty Attempts list renders exactly like the in-flight state, so wait for the
+    // Node Detail body itself to be read and applied before asserting the "—" values.
+    await settleBody(body);
     // Never invented: every WAITING_CALLBACK field the Backend has not reported yet reads "—".
     expect(fieldValue('Provider')).toBe('—');
     expect(fieldValue('External Task ID')).toBe('—');
@@ -170,11 +185,10 @@ describe('DetailPanel — WAITING_CALLBACK', () => {
     const snapshot: RunSnapshot = { run: run(), nodeRuns: [WAITING_NODE_RUN], lastSeq: 5 };
     renderPanel(snapshot, [LATEST_EVENT]);
 
-    await screen.findByText('Provider');
+    // The loaded Attempt, not the "Provider" label that renders before the fetch lands.
+    await waitFor(() => expect(fieldValue('Attempt')).toBe('1'));
     expect(fieldValue('Provider')).toBe('—');
     expect(fieldValue('External Task ID')).toBe('—');
-    // The Attempt itself is real and must still render, unlike the no-Attempts case above.
-    expect(fieldValue('Attempt')).toBe('1');
     expect(fieldValue('Runtime State')).toBe('DISPATCHED');
     expect(screen.getByText('Attempts')).toBeInTheDocument();
   });
@@ -502,13 +516,13 @@ describe('DetailPanel — Agent Trace', () => {
 
     renderAgentPanel();
 
-    await screen.findByText('Agent');
+    // The "Agent" heading renders before the Trace arrives; wait for the loaded Agent Run.
+    await waitFor(() => expect(fieldValue('Agent Run')).toBe('ar_1'));
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/runs/run_1/nodes/nr_agent/agent',
       expect.anything(),
     );
 
-    expect(fieldValue('Agent Run')).toBe('ar_1');
     // An opaque ID takes its own full-width line under its label, so it never wraps one or
     // two orphan characters beside a squeezed label column.
     expect(screen.getByText('Agent Run').parentElement).toHaveAttribute(
@@ -591,9 +605,8 @@ describe('DetailPanel — Agent Trace', () => {
 
     renderAgentPanel();
 
-    await screen.findByText('Agent');
     // The termination is the Backend's, reported verbatim, not derived from the failed Turn.
-    expect(fieldValue('Termination')).toBe('TIMEOUT');
+    await waitFor(() => expect(fieldValue('Termination')).toBe('TIMEOUT'));
     expect(fieldValue('Terminated at')).toBe('2026-08-03 12:10:01Z');
     expect(screen.getByText('Agent error')).toBeInTheDocument();
     expect(screen.getByText('Turn error')).toBeInTheDocument();
