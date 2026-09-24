@@ -166,6 +166,8 @@ func run(logger *slog.Logger) error {
 				return fmt.Errorf("register mock model provider: %w", err)
 			}
 			taskClient := &http.Client{Timeout: defaultTaskDispatchTimeout}
+			// TODO: Move built-in node registration into a dedicated package or helper so adding
+			// new node types does not require editing the process entry point.
 			registrations := []registry.NodeRegistration{
 				textinput.Registration(),
 				imageinput.Registration(),
