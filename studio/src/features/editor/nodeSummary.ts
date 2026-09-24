@@ -63,9 +63,7 @@ function generationSummary(
   modelField: string,
 ): string {
   const parts = [modelLabel(config[modelField], models)];
-  const specField = (metadata.uiSchema?.fields ?? []).find(
-    (field) => field.group === 'MODEL_PARAMETERS',
-  );
+  const specField = metadata.uiSchema.fields.find((field) => field.group === 'MODEL_PARAMETERS');
   if (specField) {
     const value = config[specField.path];
     // Name the parameter with its config key ("width 1024") so a bare number is not
@@ -91,8 +89,8 @@ function agentSummary(config: JsonObject, models: ModelMetadata[]): string {
   return parts.join(' · ');
 }
 
-function portTypeList(ports: NodeMetadata['inputs'] | null | undefined): string {
-  const unique = [...new Set((ports ?? []).map((p) => p.dataType))];
+function portTypeList(ports: NodeMetadata['inputs']): string {
+  const unique = [...new Set(ports.map((p) => p.dataType))];
   return unique.join('/');
 }
 
@@ -120,9 +118,7 @@ export function nodeSummaryLine(
   if (metadata.category === 'Output') return outputSummary();
   if (metadata.category === 'Agent') return agentSummary(config, models);
 
-  const modelField = (metadata.uiSchema?.fields ?? []).find(
-    (field) => field.widget === 'MODEL_SELECTOR',
-  );
+  const modelField = metadata.uiSchema.fields.find((field) => field.widget === 'MODEL_SELECTOR');
   if (modelField) return generationSummary(metadata, config, models, modelField.path);
 
   return portFlowSummary(metadata);
@@ -140,9 +136,7 @@ export function paletteSummaryLine(metadata: NodeMetadata): string {
   }
   if (metadata.category === 'Output') return 'Run output';
   if (metadata.category === 'Agent') return 'Model · Tools · managed loop';
-  const hasModel = (metadata.uiSchema?.fields ?? []).some(
-    (field) => field.widget === 'MODEL_SELECTOR',
-  );
+  const hasModel = metadata.uiSchema.fields.some((field) => field.widget === 'MODEL_SELECTOR');
   if (hasModel) return `Model call · ${executionKindLabel(metadata.executionKind)}`;
   return portFlowSummary(metadata);
 }
