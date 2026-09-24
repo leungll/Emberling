@@ -5,10 +5,13 @@ import type { FullConfig } from '@playwright/test';
 
 import {
   agentLookup,
+  agentSyncLookup,
   aigcMedia,
   documentProcessing,
+  referenceImage,
   type CreateDefinitionRequest,
 } from './fixtures';
+import { waitForReady } from './stack';
 
 // Only the two fields this file needs from the Backend's Definition response - see
 // fixtures.ts's comment on why this is a local copy rather than an import from
@@ -23,7 +26,7 @@ const MOCKPROVIDER_URL = process.env.EMBERLING_E2E_MOCKPROVIDER_URL ?? 'http://l
 
 // Playwright's `globalSetup` runs in its own process; its return value is not shared with
 // the worker processes that run each spec file (only `globalTeardown` gets it back). The
-// three Definitions created here are instead written to this file, which every spec reads.
+// Definitions created here are instead written to this file, which every spec reads.
 // `studio/package.json` sets `"type": "module"`, so this file runs as real ESM (no
 // `__dirname`); `import.meta.dirname` is Node's ESM-native equivalent (Node 20.11+/21.2+,
 // well under this repository's `.nvmrc` baseline).
@@ -37,22 +40,8 @@ export interface GeneratedDefinitions {
   documentProcessing: { workflowId: string; version: number };
   aigcMedia: { workflowId: string; version: number };
   agentLookup: { workflowId: string; version: number };
-}
-
-async function waitForReady(url: string, label: string, deadlineMs: number): Promise<void> {
-  const start = Date.now();
-  let lastError: unknown;
-  while (Date.now() - start < deadlineMs) {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
-      if (response.ok) return;
-      lastError = new Error(`${label} answered ${response.status}`);
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(`${label} did not become ready within ${deadlineMs}ms: ${String(lastError)}`);
+  agentSyncLookup: { workflowId: string; version: number };
+  referenceImage: { workflowId: string; version: number };
 }
 
 // The Backend is the sole authority for Definitions (CLAUDE.md: Studio owns no Runtime
@@ -79,12 +68,19 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   await waitForReady(`${BACKEND_URL}/ready`, 'backend /ready', 60_000);
   await waitForReady(`${MOCKPROVIDER_URL}/healthz`, 'mockprovider /healthz', 60_000);
 
-  const [documentProcessingDefinition, aigcMediaDefinition, agentLookupDefinition] =
-    await Promise.all([
-      createDefinition(documentProcessing),
-      createDefinition(aigcMedia),
-      createDefinition(agentLookup),
-    ]);
+  const [
+    documentProcessingDefinition,
+    aigcMediaDefinition,
+    agentLookupDefinition,
+    agentSyncLookupDefinition,
+    referenceImageDefinition,
+  ] = await Promise.all([
+    createDefinition(documentProcessing),
+    createDefinition(aigcMedia),
+    createDefinition(agentLookup),
+    createDefinition(agentSyncLookup),
+    createDefinition(referenceImage),
+  ]);
 
   const generated: GeneratedDefinitions = {
     documentProcessing: {
@@ -95,6 +91,14 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     agentLookup: {
       workflowId: agentLookupDefinition.workflowId,
       version: agentLookupDefinition.version,
+    },
+    agentSyncLookup: {
+      workflowId: agentSyncLookupDefinition.workflowId,
+      version: agentSyncLookupDefinition.version,
+    },
+    referenceImage: {
+      workflowId: referenceImageDefinition.workflowId,
+      version: referenceImageDefinition.version,
     },
   };
 

@@ -29,7 +29,7 @@ export interface CreateDefinitionRequest {
 }
 
 /**
- * Definition payloads for the three MVP acceptance scenarios (docs/04-ux.md §6, docs/09
+ * Definition payloads for the MVP acceptance scenarios (docs/04-ux.md §6, docs/09
  * §1). `global-setup.ts` creates each of these directly through `POST /api/definitions`
  * (never through the UI - only Run creation is driven from Studio), so a spec file only
  * has to open the Run Input Dialog and observe.
@@ -243,6 +243,152 @@ export const agentLookup: CreateDefinitionRequest = {
       sourceHandle: 'text',
       target: 'node_output',
       targetHandle: 'text',
+    },
+  ],
+};
+
+/**
+ * `agentSyncLookup` reproduces `backend/test/fixtures/definitions/agent_lookup.json`
+ * verbatim (minus `workflowId`): the Agent's only candidate Tool is the built-in,
+ * synchronous `lookup` (`backend/internal/tools/lookup`), which returns a deterministic
+ * record for any non-empty `key` in the same call. agent-sync-tool.spec.ts drives it with
+ * `mock:tool-call:lookup:<json-arguments>`, so Turn 1 commits a TOOL_CALL whose Action
+ * runs the Tool to SUCCEEDED without any callback, and Turn 2 (whose request now carries
+ * the "tool" message) answers FINAL.
+ */
+export const agentSyncLookup: CreateDefinitionRequest = {
+  name: 'Agent Lookup (E2E, sync)',
+  description: 'An Agent that may call the lookup Tool before producing a final text answer',
+  nodes: [
+    {
+      id: 'node_input',
+      type: 'text_input',
+      name: 'Question',
+      position: { x: 0, y: 0 },
+      config: { inputKey: 'question', label: 'Question', required: true },
+    },
+    {
+      id: 'node_agent',
+      type: 'agent',
+      name: 'Answering Agent',
+      position: { x: 200, y: 0 },
+      config: {
+        instructions:
+          'Answer the question. Call the lookup tool when you need a fact you do not already know.',
+        modelId: 'text-model-v1',
+        allowedTools: ['lookup'],
+        maxTurns: 4,
+        timeoutMs: 120000,
+      },
+    },
+    {
+      id: 'node_output',
+      type: 'text_output',
+      name: 'Answer',
+      position: { x: 400, y: 0 },
+      config: {},
+    },
+  ],
+  edges: [
+    {
+      id: 'edge_input_agent',
+      source: 'node_input',
+      sourceHandle: 'text',
+      target: 'node_agent',
+      targetHandle: 'input',
+    },
+    {
+      id: 'edge_agent_output',
+      source: 'node_agent',
+      sourceHandle: 'text',
+      target: 'node_output',
+      targetHandle: 'text',
+    },
+  ],
+};
+
+/**
+ * `referenceImage` is `aigcMedia` plus the Reference Image path of
+ * `backend/test/fixtures/definitions/aigc_media.json`: an `image_input` node whose
+ * `image` port feeds `image_generation.reference` (docs/09 §1 item 13). Its config
+ * mirrors that fixture's `node_reference`. The Image Input NodeRun's own output is the
+ * `source: ASSET` ImageRef that Observe previews through `/api/assets/{id}/content`
+ * (reference-image.spec.ts); the Mock Task Adapter forwards that same reference to the
+ * Mock Provider as a credential-free ImageRef.
+ */
+export const referenceImage: CreateDefinitionRequest = {
+  name: 'AIGC Media Generation with Reference Image (E2E)',
+  description: 'A text prompt and an uploaded Reference Image drive Image Generation',
+  nodes: [
+    {
+      id: 'node_input',
+      type: 'text_input',
+      name: 'Prompt',
+      position: { x: 0, y: 0 },
+      config: {
+        inputKey: 'prompt',
+        label: 'Prompt',
+        required: true,
+        minLength: 1,
+        maxLength: 2000,
+      },
+    },
+    {
+      id: 'node_reference',
+      type: 'image_input',
+      name: 'Reference',
+      position: { x: 0, y: 150 },
+      config: {
+        inputKey: 'reference',
+        label: 'Reference Image',
+        required: true,
+        acceptedMediaTypes: ['image/png', 'image/jpeg'],
+        maxSizeBytes: 5242880,
+      },
+    },
+    {
+      id: 'node_image',
+      type: 'image_generation',
+      name: 'Image',
+      position: { x: 200, y: 0 },
+      config: { modelId: 'image-model-v1', width: 512 },
+    },
+    {
+      id: 'node_output',
+      type: 'media_output',
+      name: 'Result',
+      position: { x: 400, y: 0 },
+      config: {},
+    },
+  ],
+  edges: [
+    {
+      id: 'edge_input_image',
+      source: 'node_input',
+      sourceHandle: 'text',
+      target: 'node_image',
+      targetHandle: 'prompt',
+    },
+    {
+      id: 'edge_reference_image',
+      source: 'node_reference',
+      sourceHandle: 'image',
+      target: 'node_image',
+      targetHandle: 'reference',
+    },
+    {
+      id: 'edge_input_caption',
+      source: 'node_input',
+      sourceHandle: 'text',
+      target: 'node_output',
+      targetHandle: 'caption',
+    },
+    {
+      id: 'edge_image_output',
+      source: 'node_image',
+      sourceHandle: 'image',
+      target: 'node_output',
+      targetHandle: 'image',
     },
   ],
 };
