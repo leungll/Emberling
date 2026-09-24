@@ -169,22 +169,22 @@ func corruptedRecordDispatch(t *testing.T, ctx context.Context, svc *service.Exe
 	return outcome.NodeRunID, outcome.AttemptID
 }
 
-// TestReconciler_ExpiredAttemptWithDriftedNodeType_RecordsErrorAndContinuesScan proves the
-// 09 §3.9 "首次扫描遇到一条损坏记录" row together with 09 §3.4 / 06 §4's more specific
-// recovery rule: a scanned Attempt whose Node Type the reconciling process's Registry no
-// longer carries must still resolve to a deterministic FAILED outcome with a retained
-// NODE_FAILED Event (error code NODE_TYPE_NOT_REGISTERED), the same way Execute's own
-// unregistered-Node-Type path already behaves -- not bubble a bare Go error that would
+// TestReconciler_ExpiredAttemptWithDriftedNodeType_FailsWithRetainedEventAndContinuesScan
+// proves the 09 §3.9 "首次扫描遇到一条损坏记录" row together with 09 §3.4 / 06 §4's more
+// specific recovery rule: a scanned Attempt whose Node Type the reconciling process's
+// Registry no longer carries must still resolve to a deterministic FAILED outcome with a
+// retained NODE_FAILED Event (error code NODE_TYPE_NOT_REGISTERED), the same way Execute's
+// own unregistered-Node-Type path already behaves -- not bubble a bare Go error that would
 // abort TimeoutAttempt's guard transaction and leave the row permanently stuck. The
 // sibling healthy Attempt, discovered in the very same batch, must still be timed out
 // normally via the ordinary TIMEOUT path, and RunOnce's own returned error must stay nil
 // so readiness's FirstScan check (cmd/emberling/main.go: `_, err := rec.RunOnce(ctx); return
-// err`) is never blocked by a single corrupted record. Because the drifted record is now
-// fully (not partially) resolved, it counts as an ordinary AttemptsTimedOut, not a
-// Report.Errors entry -- the NODE_FAILED Event and Trace are its durable record, matching
-// how the healthy record's own TIMEOUT failure is never itself a Report.Errors entry
-// either.
-func TestReconciler_ExpiredAttemptWithDriftedNodeType_RecordsErrorAndContinuesScan(t *testing.T) {
+// err`) is never blocked by a single corrupted record. The §3.9 row's "record that error"
+// is satisfied by the durable NODE_FAILED Event and Trace, not by a Report.Errors entry:
+// because the drifted record is fully (not partially) resolved, it counts as an ordinary
+// AttemptsTimedOut and Report.Errors stays empty, matching how the healthy record's own
+// TIMEOUT failure is never itself a Report.Errors entry either.
+func TestReconciler_ExpiredAttemptWithDriftedNodeType_FailsWithRetainedEventAndContinuesScan(t *testing.T) {
 	pool := testdb.Open(t)
 	uow := postgres.NewUnitOfWork(pool)
 	ctx := context.Background()
