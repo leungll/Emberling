@@ -81,9 +81,10 @@ check-node-version:
 	fi; \
 	echo "    pnpm $$(pnpm --version)"
 
-## dev: start PostgreSQL, the Mock Provider, the Backend and Studio.
+## dev: start PostgreSQL, the Mock Provider, the Backend and Studio. The Mock Provider sits
+## behind the `mock` profile in deploy/compose.yaml, so the profile is selected here.
 dev:
-	docker compose -f deploy/compose.yaml up
+	docker compose -f deploy/compose.yaml --profile mock up
 
 ## test: Go unit tests and Studio component tests.
 test:
