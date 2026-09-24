@@ -50,8 +50,9 @@ jobs:
           cache-dependency-path: backend/go.sum
 
       - name: Enable corepack
-        # Studio is not in the repository yet; corepack is enabled only when it lands, so
-        # this step cannot fail a backend-only checkout.
+        # Corepack provides the pnpm version pinned by studio/package.json#packageManager,
+        # which the Node.js step below needs on PATH for its pnpm cache. It is guarded on
+        # studio/ so the step still passes on a checkout without Studio.
         run: |
           if [ -d studio ]; then
             corepack enable
