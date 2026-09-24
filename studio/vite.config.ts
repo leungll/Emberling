@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath, URL } from 'node:url';
 
 import tailwindcss from '@tailwindcss/vite';
@@ -16,6 +17,23 @@ const API_PROXY = {
     changeOrigin: true,
     // SSE must stream; buffering the proxy response would delay Event delivery.
     ws: false,
+    configure: (proxy: {
+      on(
+        event: 'proxyRes',
+        fn: (proxyRes: IncomingMessage, req: unknown, res: ServerResponse) => void,
+      ): void;
+    }) => {
+      // A Backend that dies mid-stream (crash, restart) aborts the upstream response; the
+      // proxy only pipes it, so without this the browser's SSE connection would stay open
+      // on a dead upstream and Observe would never see the drop that triggers its
+      // reconnect-from-last-seq (runObserver.ts). Ending the client response instead makes
+      // EventSource reconnect, exactly as it does against the Backend directly.
+      proxy.on('proxyRes', (proxyRes, _req, res) => {
+        proxyRes.on('close', () => {
+          if (!res.writableEnded) res.end();
+        });
+      });
+    },
   },
 };
 
