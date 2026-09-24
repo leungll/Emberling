@@ -428,6 +428,36 @@ describe('EditPage — Backend validation errors', () => {
   });
 });
 
+describe('EditPage — adding nodes', () => {
+  it('gives two nodes added back-to-back distinct ids even within the same millisecond', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    // Pin the clock: a node id derived from the wall clock would collide here.
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    const user = userEvent.setup();
+
+    try {
+      renderStudio('/studio/wf_123');
+      await screen.findByTestId('rf__node-node_gen');
+
+      const addTextGeneration = () =>
+        user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
+      await addTextGeneration();
+      await addTextGeneration();
+
+      await waitFor(() => expect(document.querySelectorAll('.react-flow__node')).toHaveLength(3));
+      const ids = [...document.querySelectorAll('.react-flow__node')].map((node) =>
+        node.getAttribute('data-id'),
+      );
+      expect(new Set(ids).size).toBe(3);
+      expect(ids.filter((id) => id?.startsWith('node_text_generation_'))).toHaveLength(2);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+});
+
 describe('EditPage — Undo and Redo', () => {
   const undoButton = () => screen.getByRole('button', { name: 'Undo' });
   const redoButton = () => screen.getByRole('button', { name: 'Redo' });

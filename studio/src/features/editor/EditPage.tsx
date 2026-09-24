@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { toCanvasEdges } from './canvasEdges';
+import { newNodeId } from './nodeIds';
 import { NodePalette } from './NodePalette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { RecentExecutionBar } from './RecentExecutionBar';
@@ -462,7 +463,7 @@ export function EditPage() {
 
   const addNode = useCallback(
     (metadata: NodeMetadata) => {
-      const id = `node_${metadata.type}_${Date.now()}`;
+      const id = newNodeId(metadata.type);
       const position = { x: 80 + nodes.length * 40, y: 80 + nodes.length * 30 };
       checkpoint(graph);
       setNodes((prev) => [
