@@ -363,6 +363,27 @@ func agentNodeRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runID
 	return execNodeRunByNodeID(t, nodeRuns, "node_agent")
 }
 
+// assertNoDownstreamNodeRun asserts that the node downstream of the Agent (node_output in
+// agentLoopDefinition) has no NodeRun at all. Downstream READY NodeRuns are created only
+// when the Agent NodeRun succeeds (docs/06 §1.7: a failed Agent fails its NodeRun and the
+// Run; nothing after it is scheduled), so after any Agent failure this must hold.
+func assertNoDownstreamNodeRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runID string) {
+	t.Helper()
+	var nodeRuns []domain.NodeRun
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		nodeRuns, err = tx.NodeRuns().ListByRun(ctx, runID)
+		return err
+	}); err != nil {
+		t.Fatalf("list node runs of %s: %v", runID, err)
+	}
+	for _, nr := range nodeRuns {
+		if nr.NodeID == "node_output" {
+			t.Errorf("downstream node_output has NodeRun %s (status %s) after the Agent failed; want none", nr.ID, nr.Status)
+		}
+	}
+}
+
 func agentRunOfNodeRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, nodeRunID string) (domain.AgentRun, bool) {
 	t.Helper()
 	var agentRun domain.AgentRun

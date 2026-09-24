@@ -392,6 +392,7 @@ func assertAgentTerminated(t *testing.T, h *agentHarness, runID string, outcome 
 	if persisted := agentRunRow(h.ctx, t, h.uow, runID); persisted.Status != domain.RunFailed {
 		t.Errorf("run status = %s, want FAILED", persisted.Status)
 	}
+	assertNoDownstreamNodeRun(h.ctx, t, h.uow, runID)
 
 	events := listEvents(h.ctx, t, h.uow, runID)
 	types := agentEventTypesFor(events, nodeRun.ID)
