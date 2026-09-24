@@ -175,6 +175,12 @@ type testEnvOptions struct {
 	// WorkHooks is handed to the work.Pool, so a test can observe or hold the worker path
 	// with a barrier instead of sleeping.
 	WorkHooks work.Hooks
+
+	// ExtraModelProviders are registered into the Model Registry after the Mock Model
+	// Provider, so a catalogue test can add a registration the deterministic Provider does
+	// not ship (e.g. one storing a nil Capabilities slice) and observe how GET /api/models
+	// serialises it.
+	ExtraModelProviders []registry.ModelProvider
 }
 
 // defaultTestCallbackMaxPayloadBytes bounds POST /api/callbacks bodies in every testEnv
@@ -242,6 +248,11 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	provider := mockmodel.NewProvider()
 	if err := modelRegistry.Register(context.Background(), provider); err != nil {
 		t.Fatalf("register mock model provider: %v", err)
+	}
+	for _, extra := range opts.ExtraModelProviders {
+		if err := modelRegistry.Register(context.Background(), extra); err != nil {
+			t.Fatalf("register extra model provider: %v", err)
+		}
 	}
 	dispatcher := &fakeAsyncDispatcher{}
 	for _, reg := range []registry.NodeRegistration{

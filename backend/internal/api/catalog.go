@@ -29,9 +29,21 @@ func nodeMetadataForResponse(metadata domain.NodeMetadata) domain.NodeMetadata {
 	return metadata
 }
 
-// models serves GET /models.
+// models serves GET /models. capabilities is a JSON array under the docs/08-interface-spec.md
+// §2 contract, even when a registration stores a nil slice.
 func (d Deps) models(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, listEnvelope[domain.ModelMetadata]{Items: d.Catalog.Models()})
+	items := d.Catalog.Models()
+	for i := range items {
+		items[i] = modelMetadataForResponse(items[i])
+	}
+	writeJSON(w, http.StatusOK, listEnvelope[domain.ModelMetadata]{Items: items})
+}
+
+func modelMetadataForResponse(metadata domain.ModelMetadata) domain.ModelMetadata {
+	if metadata.Capabilities == nil {
+		metadata.Capabilities = []string{}
+	}
+	return metadata
 }
 
 // tools serves GET /tools.

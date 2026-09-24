@@ -23,3 +23,17 @@ func TestNodeMetadataResponse_EmptyCollections_AreArrays(t *testing.T) {
 		t.Fatal("response projection mutated registered metadata")
 	}
 }
+
+func TestModelMetadataResponse_NilCapabilities_IsArray(t *testing.T) {
+	metadata := domain.ModelMetadata{ID: "model", ConfigSchema: json.RawMessage(`{"type":"object"}`)}
+	encoded, err := json.Marshal(modelMetadataForResponse(metadata))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"capabilities":[]`) {
+		t.Errorf("response %s does not contain %s", encoded, `"capabilities":[]`)
+	}
+	if metadata.Capabilities != nil {
+		t.Fatal("response projection mutated registered metadata")
+	}
+}

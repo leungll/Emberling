@@ -4,10 +4,15 @@ package contract
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/leungll/Emberling/backend/internal/domain"
+	"github.com/leungll/Emberling/backend/internal/registry"
 )
 
 // TestAPI_CreateDefinition_ValidDefinition_Returns201WithFrozenRunInputSchema covers
@@ -359,5 +364,57 @@ func TestAPI_CreateDefinition_AIGCGraph_WithMediaOutput_Validates(t *testing.T) 
 	}
 	for typ := range wantEmpty {
 		t.Errorf("GET /api/node-types response does not list %s: %s", typ, catalogBody)
+	}
+}
+
+// nilCapabilityModelProvider is a registry.ModelProvider whose single registration stores
+// a nil Capabilities slice. It exists only to prove GET /api/models normalises that to `[]`
+// on the wire; it is never asked to Generate.
+type nilCapabilityModelProvider struct{}
+
+func (nilCapabilityModelProvider) Models(context.Context) ([]registry.ModelRegistration, error) {
+	return []registry.ModelRegistration{{ModelMetadata: domain.ModelMetadata{
+		ID:           "contract-test-nil-capabilities-model",
+		DisplayName:  "Nil Capabilities Model",
+		ConfigSchema: json.RawMessage(`{"type":"object"}`),
+	}}}, nil
+}
+
+func (nilCapabilityModelProvider) Generate(context.Context, registry.ModelRequest) (registry.ModelResponse, error) {
+	return registry.ModelResponse{}, errors.New("nilCapabilityModelProvider: Generate must not be called")
+}
+
+// TestAPI_ListModels_NilCapabilities_SerialisesEmptyArray covers GET /models
+// (docs/08-interface-spec.md §2): ModelMetadata.capabilities is an array, so a
+// registration that stores a nil slice must serialise as exactly `[]`, never `null`. The
+// check reads the raw bytes because decoding into map[string]any would erase the
+// distinction.
+func TestAPI_ListModels_NilCapabilities_SerialisesEmptyArray(t *testing.T) {
+	env := newTestEnvWithOptions(t, testEnvOptions{
+		ExtraModelProviders: []registry.ModelProvider{nilCapabilityModelProvider{}},
+	})
+
+	resp, body := env.doJSON(t, http.MethodGet, "/api/models", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/models status = %d, want %d, body=%s", resp.StatusCode, http.StatusOK, body)
+	}
+	rawCatalog := decodeBody[map[string]json.RawMessage](t, body)
+	rawItems := decodeBody[[]map[string]json.RawMessage](t, rawCatalog["items"])
+	found := false
+	for _, item := range rawItems {
+		var id string
+		if err := json.Unmarshal(item["id"], &id); err != nil {
+			t.Fatalf("GET /api/models item id is not a string: %v, item=%s", err, item["id"])
+		}
+		if id != "contract-test-nil-capabilities-model" {
+			continue
+		}
+		found = true
+		if got := string(bytes.TrimSpace(item["capabilities"])); got != "[]" {
+			t.Errorf("GET /api/models %s.capabilities = %s, want []", id, got)
+		}
+	}
+	if !found {
+		t.Fatalf("GET /api/models response does not list the nil-capability registration: %s", body)
 	}
 }
