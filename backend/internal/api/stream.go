@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -160,6 +161,16 @@ func (d Deps) streamEvents(w http.ResponseWriter, r *http.Request, runID string,
 			flusher.Flush()
 		}
 
+		// docs/08 §5 handoff invariant: there is no one-shot "replay then live" switch.
+		// The subscriber registered above the loop, so an Event committed between this
+		// iteration's (empty) query and the wait below leaves a pending wake token in
+		// sub.wake (buffer of one) and the next iteration re-queries from the same cursor;
+		// the poll tick is the bounded fallback. The hook only lets a test hold the loop
+		// in exactly that window to prove it.
+		if d.StreamHooks.BeforeWait != nil {
+			d.StreamHooks.BeforeWait(ctx, runID, cursor)
+		}
+
 		select {
 		case <-ctx.Done():
 			return
@@ -167,6 +178,16 @@ func (d Deps) streamEvents(w http.ResponseWriter, r *http.Request, runID string,
 		case <-ticker.C:
 		}
 	}
+}
+
+// StreamHooks are optional observation points inside streamEvents. Production wiring
+// leaves every field nil (a no-op); contract tests inject a barrier to pause the cursor
+// loop at a specific point without sleeping.
+type StreamHooks struct {
+	// BeforeWait runs once per loop iteration after the cursor query (and any frames it
+	// produced) and immediately before the loop blocks on the notifier wake or poll tick.
+	// cursor is the seq the next query will start after.
+	BeforeWait func(ctx context.Context, runID string, cursor int64)
 }
 
 // writeSSEEvent writes one Event as a single SSE frame. The frame's data is the same

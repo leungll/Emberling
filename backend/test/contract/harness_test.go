@@ -176,6 +176,10 @@ type testEnvOptions struct {
 	// with a barrier instead of sleeping.
 	WorkHooks work.Hooks
 
+	// StreamHooks is handed to api.Deps, so a test can hold the SSE cursor loop at its
+	// query-to-wait switch with a barrier instead of sleeping.
+	StreamHooks api.StreamHooks
+
 	// ExtraModelProviders are registered into the Model Registry after the Mock Model
 	// Provider, so a catalogue test can add a registration the deterministic Provider does
 	// not ship (e.g. one storing a nil Capabilities slice) and observe how GET /api/models
@@ -365,6 +369,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		Notifier:                notifier,
 		Clock:                   clock,
 		PollInterval:            pollInterval,
+		StreamHooks:             opts.StreamHooks,
 		Logger:                  opts.Logger,
 		CallbackMaxPayloadBytes: callbackMaxPayloadBytes,
 		AssetMaxUploadBytes:     assetMaxUploadBytes,

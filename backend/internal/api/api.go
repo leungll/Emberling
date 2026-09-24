@@ -50,6 +50,10 @@ type Deps struct {
 	// missing notification).
 	PollInterval time.Duration
 
+	// StreamHooks are observation points inside the SSE cursor loop. The zero value is
+	// a no-op; only a test that must hold the loop at its query-to-wait switch sets it.
+	StreamHooks StreamHooks
+
 	// CallbackMaxPayloadBytes bounds POST /api/callbacks bodies via http.MaxBytesReader
 	// (config.PendingCallback.MaxPayloadBytes in cmd/emberling; contract tests set a
 	// small value here to exercise the 413 PAYLOAD_TOO_LARGE path without a large body).
