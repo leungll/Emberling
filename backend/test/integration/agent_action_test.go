@@ -205,13 +205,13 @@ func agentPointers(run domain.AgentRun) [3]int {
 // the Tool result, the appended Context Version, the Action's SUCCEEDED status and the
 // next READY Turn together.
 //
-// The in-process loop is stopped immediately after that result transaction commits, so
-// the next Turn is observed exactly as it was committed: READY, with its immutable
-// Request, and therefore recoverable work rather than a continuation held in memory.
+// The result transaction hands the next Turn to the work enqueuer, which this harness
+// only records, so the next Turn is observed exactly as it was committed: READY, with its
+// immutable Request, and therefore recoverable work rather than a continuation held in
+// memory.
 func TestAgentAction_ToolCallSuccess_CommitsResultContextAndNextReadyTurn(t *testing.T) {
 	tool := &agentRecordingTool{delegate: lookup.Executor{}}
-	stop := &agentStopNotifier{}
-	h := newAgentHarness(t, agentHarnessOptions{LookupExecutor: tool, Notifier: stop})
+	h := newAgentHarness(t, agentHarnessOptions{LookupExecutor: tool})
 	generated := agentScriptToolCallThenFinal(h, mockmodel.Scenario{
 		ToolName: lookup.ToolName, ToolArguments: json.RawMessage(agentToolArguments),
 	})
@@ -219,13 +219,8 @@ func TestAgentAction_ToolCallSuccess_CommitsResultContextAndNextReadyTurn(t *tes
 	run := h.createRun(def.WorkflowID, def.Version, `{"question":"`+agentQuestion+`"}`)
 	outcome := h.claimAgentNode(run.ID)
 
-	ctx, cancel := context.WithCancel(h.ctx)
-	defer cancel()
-	stop.cancel = cancel
-	tool.during = func(context.Context, registry.ToolAction) { stop.arm() }
-
-	if err := h.svc.Execute(ctx, outcome); !errors.Is(err, context.Canceled) {
-		t.Fatalf("execute agent node run = %v, want context.Canceled from the stopped chain", err)
+	if err := h.svc.Execute(h.ctx, outcome); err != nil {
+		t.Fatalf("execute agent node run: %v", err)
 	}
 	if got := tool.count(); got != 1 {
 		t.Fatalf("tool calls = %d, want exactly 1", got)

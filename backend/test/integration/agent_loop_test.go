@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,9 +75,41 @@ type agentHarnessOptions struct {
 	// Notifier replaces the no-op EventNotifier. It is the only hook this service exposes
 	// between a committed transaction and the in-process advancement that follows it.
 	Notifier service.EventNotifier
-	// Queue replaces the no-op WorkEnqueuer, so a test can hand post-COMMIT work to a real
-	// bounded work.Queue drained by a work.Pool, or refuse it outright.
+	// Queue replaces the default agentInlineTurns enqueuer, so a test can hand post-COMMIT
+	// work to a real bounded work.Queue drained by a work.Pool, or refuse it outright.
 	Queue service.WorkEnqueuer
+}
+
+// agentInlineTurns is the harness's default WorkEnqueuer. A synchronous Tool round no
+// longer chains the next Turn on the same goroutine (06 §1.3): it commits the READY Turn
+// and offers it to the work queue. This enqueuer records those offers so that execute can
+// drain them on the test's own goroutine through the same Turn advance use case a
+// work.Pool worker calls, which keeps single-goroutine tests deterministic. Run-level
+// Advance offers are dropped, as the no-op enqueuer always did: tests drive NodeRuns
+// explicitly.
+type agentInlineTurns struct {
+	mu      sync.Mutex
+	pending []string
+}
+
+func (*agentInlineTurns) EnqueueAdvance(string) bool { return false }
+
+func (q *agentInlineTurns) EnqueueAgentTurn(_, turnID string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.pending = append(q.pending, turnID)
+	return true
+}
+
+func (q *agentInlineTurns) pop() (string, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.pending) == 0 {
+		return "", false
+	}
+	turnID := q.pending[0]
+	q.pending = q.pending[1:]
+	return turnID, true
 }
 
 // agentHarness wires one real PostgreSQL-backed ExecutionService with the `agent` Node
@@ -92,6 +125,8 @@ type agentHarness struct {
 	ids      *execForcedIDs
 	provider *mockmodel.Provider
 	svc      *service.ExecutionService
+	// turns is the default inline enqueuer, or nil when opts.Queue replaced it.
+	turns *agentInlineTurns
 }
 
 func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
@@ -146,6 +181,12 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 	compiler := runtime.NewCompiler(nodeRegistry, clock)
 
 	ids := newExecForcedIDs()
+	var turns *agentInlineTurns
+	queue := opts.Queue
+	if queue == nil {
+		turns = &agentInlineTurns{}
+		queue = turns
+	}
 	svc := service.NewExecutionService(service.Deps{
 		UoW:      uow,
 		Nodes:    nodeRegistry,
@@ -155,7 +196,7 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		Clock:    clock,
 		IDs:      ids,
 		Notifier: opts.Notifier,
-		Queue:    opts.Queue,
+		Queue:    queue,
 		// An ASYNC Tool's claim transaction issues an Attempt-scoped callback credential,
 		// which needs a signing secret and a callback origin.
 		Callback: service.CallbackConfig{
@@ -169,6 +210,7 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		t: t, ctx: ctx,
 		uow: uow, pool: pool, compiler: compiler,
 		clock: clock, ids: ids, provider: provider, svc: svc,
+		turns: turns,
 	}
 }
 
@@ -208,11 +250,50 @@ func (h *agentHarness) advance(runID string) service.AdvanceOutcome {
 	return outcome
 }
 
+// execute runs one claimed work item and, for an Agent NodeRun, every Turn the loop
+// commits afterwards: each Tool round ends by offering its next READY Turn to the queue,
+// and execute drains those offers the way a worker would, until the loop terminates.
 func (h *agentHarness) execute(outcome service.AdvanceOutcome) {
 	h.t.Helper()
 	if err := h.svc.Execute(h.ctx, outcome); err != nil {
 		h.t.Fatalf("execute node_run=%s: %v", outcome.NodeRunID, err)
 	}
+	if err := h.drainTurns(h.ctx); err != nil {
+		h.t.Fatalf("drain agent turns of node_run=%s: %v", outcome.NodeRunID, err)
+	}
+}
+
+// drainTurns advances every READY Turn the inline enqueuer has recorded, in the order
+// the loop committed them, through the same use case a work.Pool worker enters for an
+// AGENT_TURN item. It returns the first error, so a test that cancels ctx at one committed
+// boundary observes the cancelled step exactly as the worker would.
+func (h *agentHarness) drainTurns(ctx context.Context) error {
+	h.t.Helper()
+	if h.turns == nil {
+		return nil
+	}
+	for {
+		turnID, ok := h.turns.pop()
+		if !ok {
+			return nil
+		}
+		if err := h.svc.AdvanceAgentTurn(ctx, turnID, domain.ClaimImmediate); err != nil {
+			return err
+		}
+	}
+}
+
+// dropPendingTurns forgets every recorded offer without advancing it: the queue item a
+// process that died right after COMMIT would have lost, leaving only the persisted READY
+// Turn for the Reconciler to rediscover.
+func (h *agentHarness) dropPendingTurns() {
+	h.t.Helper()
+	if h.turns == nil {
+		return
+	}
+	h.turns.mu.Lock()
+	defer h.turns.mu.Unlock()
+	h.turns.pending = nil
 }
 
 // claimAgentNode drives the fixture Run up to (and including) the transaction that claims

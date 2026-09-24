@@ -198,9 +198,10 @@ func agentFrozenRequestDefinition(workflowID string) domain.Definition {
 // current State Version's value, the frozen model parameters, the frozen Final Output
 // Schema, and the Tool specs in frozen allowlist order.
 //
-// The in-process loop is stopped as soon as the second Turn's Decision commits, so the
-// Agent Run's pointers are still exactly the ones that request was built from; comparing
-// against pointers a later Turn had already moved would prove nothing.
+// The second Turn is advanced by hand from the harness's recorded enqueue and stopped as
+// soon as its Decision commits, so the Agent Run's pointers are still exactly the ones
+// that request was built from; comparing against pointers a later Turn had already moved
+// would prove nothing.
 func TestAgentTurn_ModelRequest_MatchesFrozenInstructionsToolsSchemaAndVersions(t *testing.T) {
 	lookupTool := &agentRecordingTool{delegate: lookup.Executor{}}
 	vaultTool := &agentRecordingTool{delegate: lookup.Executor{}}
@@ -230,8 +231,11 @@ func TestAgentTurn_ModelRequest_MatchesFrozenInstructionsToolsSchemaAndVersions(
 			stop.arm()
 		}
 	}
-	if err := h.svc.Execute(stopCtx, outcome); !errors.Is(err, context.Canceled) {
-		t.Fatalf("execute agent node run = %v, want context.Canceled from the stopped chain", err)
+	if err := h.svc.Execute(stopCtx, outcome); err != nil {
+		t.Fatalf("execute agent node run: %v", err)
+	}
+	if err := h.drainTurns(stopCtx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("advance the enqueued second turn = %v, want context.Canceled from the stopped chain", err)
 	}
 	h.provider.BeforeReturn = nil
 

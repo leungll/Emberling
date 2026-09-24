@@ -563,10 +563,17 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 	if err != nil || outcome.nextTurnID == "" {
 		return err
 	}
-	// The next Turn is committed READY work before this call is made: the in-process chain
-	// is a latency optimisation, and the Reconciler rediscovers the same Turn if the
-	// process dies here (invariant #6).
-	return s.AdvanceAgentTurn(ctx, outcome.nextTurnID, domain.ClaimImmediate)
+	// The next Turn is committed READY work by the time this line runs, and it is handed
+	// to the bounded work queue rather than advanced by calling AdvanceAgentTurn from here
+	// (06 §1.3: advancement does not use unbounded synchronous recursion; each committed
+	// READY item is a new queue item and a new transaction). The synchronous Tool path and
+	// the asynchronous resume therefore continue the loop the same way, and this goroutine
+	// returns with a flat stack after every round instead of nesting one Turn's use case
+	// inside the previous Turn's. A refused enqueue, or a process that dies before the
+	// worker dequeues the item, leaves the READY Turn to the Reconciler's rediscovery
+	// (invariant #6, 06 §2.1).
+	s.enqueueAgentTurn(call.runID, outcome.nextTurnID)
+	return nil
 }
 
 // agentToolOutcomeSource says which path delivers a Tool Attempt's outcome and therefore

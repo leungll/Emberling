@@ -122,24 +122,19 @@ func agentTurnNoExists(ctx context.Context, t *testing.T, uow store.UnitOfWork, 
 }
 
 // agentStopAfterToolRound drives the fixture Run through exactly one successful Tool round
-// and stops the in-process loop the instant the result transaction commits. What is left
-// is the crash-after-COMMIT state of docs/09 §3.3 "Tool result 与下一条 READY Turn 提交后
-// 崩溃": Turn 1 COMPLETED, its Action SUCCEEDED, Turn 2 committed READY and nobody
-// advancing it.
-func agentStopAfterToolRound(h *agentHarness, tool *agentRecordingTool, stop *agentStopNotifier, runID string) service.AdvanceOutcome {
+// and leaves the next Turn where the result transaction committed it. The service hands
+// that Turn to the work enqueuer after COMMIT rather than advancing it on this goroutine,
+// and the harness enqueuer only records it, so what is left is the crash-after-COMMIT
+// state of docs/09 §3.3 "Tool result 与下一条 READY Turn 提交后崩溃": Turn 1 COMPLETED, its
+// Action SUCCEEDED, Turn 2 committed READY and nobody advancing it.
+func agentStopAfterToolRound(h *agentHarness, runID string) service.AdvanceOutcome {
 	h.t.Helper()
 	outcome := h.claimAgentNode(runID)
-
-	stopCtx, cancel := context.WithCancel(h.ctx)
-	defer cancel()
-	stop.cancel = cancel
-	// Armed during the Tool call, so the notification that stops the chain is the result
-	// transaction's own: Turn 2 is committed READY and nothing advances it.
-	tool.during = func(context.Context, registry.ToolAction) { stop.arm() }
-	if err := h.svc.Execute(stopCtx, outcome); !errors.Is(err, context.Canceled) {
-		h.t.Fatalf("execute agent node run = %v, want context.Canceled from the stopped chain", err)
+	if err := h.svc.Execute(h.ctx, outcome); err != nil {
+		h.t.Fatalf("execute agent node run: %v", err)
 	}
-	tool.during = nil
+	// The recorded enqueue is the work item a dead process would have lost.
+	h.dropPendingTurns()
 	return outcome
 }
 
@@ -208,14 +203,12 @@ func agentToolCallScenario() mockmodel.Scenario {
 // Reconciler of a restarted Backend must carry the second round through to the Run's
 // terminal status -- claiming the existing Turn rather than creating another one.
 func TestReconciler_ReadyTurnAfterRestart_ClaimsWithReconcilerSourceAndContinues(t *testing.T) {
-	tool := &agentRecordingTool{delegate: lookup.Executor{}}
-	stop := &agentStopNotifier{}
-	crashed := newAgentHarness(t, agentHarnessOptions{LookupExecutor: tool, Notifier: stop})
+	crashed := newAgentHarness(t, agentHarnessOptions{})
 	agentScriptToolCallThenFinal(crashed, agentToolCallScenario())
 	def := crashed.saveDefinition(agentLoopDefinition("wf-agent-reconcile-turn"))
 	run := crashed.createRun(def.WorkflowID, def.Version, `{"question":"`+agentQuestion+`"}`)
 
-	outcome := agentStopAfterToolRound(crashed, tool, stop, run.ID)
+	outcome := agentStopAfterToolRound(crashed, run.ID)
 
 	ready := listReadyTurns(crashed.ctx, t, crashed.uow)
 	if len(ready) != 1 || ready[0].TurnNo != 2 {
@@ -324,13 +317,13 @@ func TestReconciler_ReadyToolCallActionAfterRestart_ExecutesWithoutModelCall(t *
 		t.Errorf("decision of the recovered turn = %s, want the committed %s: a Decision is never regenerated", again.ID, decision.ID)
 	}
 
+	// The rediscovered Action's result transaction committed Turn 2 READY and handed it
+	// to the enqueuer, which this harness only records; further Reconciler passes are what
+	// carry the loop and then the Run to completion.
+	agentRunOnceUntil(t, restarted, run.ID, domain.RunCompleted)
 	agentRun, _ := agentRunOfNodeRun(restarted.ctx, t, restarted.uow, outcome.NodeRunID)
 	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationFinalResponse {
 		t.Fatalf("agent run termination = %v, want FINAL_RESPONSE: the loop must run to completion", agentTermination(agentRun))
-	}
-	agentRunOnce(restarted, rec)
-	if got := agentRunRow(restarted.ctx, t, restarted.uow, run.ID).Status; got != domain.RunCompleted {
-		t.Errorf("run status after recovery = %s, want COMPLETED", got)
 	}
 }
 
@@ -648,14 +641,12 @@ func TestReconciler_ExpiredDeadlineWithRunningToolAction_FailsActionWithTimeoutS
 // that derived rounds from the NodeRun would try to fill. Nothing may fill it: the correct
 // behaviour is to leave the Agent Run alone until its deadline.
 func TestReconciler_AgentScans_NeverCreateTurnFromRunningNodeRun(t *testing.T) {
-	tool := &agentRecordingTool{delegate: lookup.Executor{}}
-	stop := &agentStopNotifier{}
-	h := newAgentHarness(t, agentHarnessOptions{LookupExecutor: tool, Notifier: stop})
+	h := newAgentHarness(t, agentHarnessOptions{})
 	agentScriptToolCallThenFinal(h, agentToolCallScenario())
 	def := h.saveDefinition(agentLoopDefinition("wf-agent-reconcile-noderun"))
 	run := h.createRun(def.WorkflowID, def.Version, `{"question":"`+agentQuestion+`"}`)
 
-	outcome := agentStopAfterToolRound(h, tool, stop, run.ID)
+	outcome := agentStopAfterToolRound(h, run.ID)
 	ready := listReadyTurns(h.ctx, t, h.uow)
 	if len(ready) != 1 || ready[0].TurnNo != 2 {
 		t.Fatalf("ready turns after the stopped round = %+v, want exactly Turn 2", ready)
