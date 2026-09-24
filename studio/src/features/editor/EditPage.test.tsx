@@ -428,6 +428,27 @@ describe('EditPage — Backend validation errors', () => {
   });
 });
 
+describe('EditPage — load errors', () => {
+  it('shows a failed definition load on the shared FAILED palette as body text', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () =>
+        jsonResponse(404, { error: { code: 'NOT_FOUND', message: 'definition wf_123 not found' } }),
+    });
+
+    renderStudio('/studio/wf_123');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('NOT_FOUND: definition wf_123 not found');
+    // 04 §4 palette, the same tokens and sizes as the Validation errors row: the FAILED red
+    // is shared across the surfaces, the message is body text (≥14px) in the foreground
+    // colour, with no off-palette Tailwind red.
+    expect(alert.className).toContain('bg-[var(--status-failed-bg)]');
+    expect(alert.className).toContain('border-[var(--status-failed-dot)]/40');
+    expect(alert).toHaveClass('text-sm', 'text-[var(--foreground)]');
+    expect(alert.className).not.toMatch(/text-red-|text-xs/);
+  });
+});
+
 describe('EditPage — adding nodes', () => {
   it('gives two nodes added back-to-back distinct ids even within the same millisecond', async () => {
     stubRoutes({

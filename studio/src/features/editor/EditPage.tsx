@@ -622,7 +622,11 @@ export function EditPage() {
       />
 
       {loadError ? (
-        <p role="alert" className="border-b border-[var(--border)] px-4 py-2 text-xs text-red-500">
+        <p
+          role="alert"
+          // 04 §4: same FAILED tokens and body-text size as the Validation errors row below.
+          className="border-b border-[var(--status-failed-dot)]/40 bg-[var(--status-failed-bg)] px-4 py-2.5 text-sm text-[var(--foreground)]"
+        >
           {loadError}
         </p>
       ) : null}
