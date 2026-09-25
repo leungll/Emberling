@@ -13,10 +13,15 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /out/service ./cmd/${CMD}
+RUN mkdir -p /out/assets
 
 # distroless/static has no shell and no package manager: the runtime image carries the
 # binary and nothing that could read a mounted Secret interactively.
 FROM gcr.io/distroless/static:nonroot
 COPY --from=build /out/service /usr/local/bin/service
+# The asset storage root must exist and be owned by nonroot in the image: an empty named
+# volume mounted here inherits that ownership, otherwise it is root-owned and the
+# readiness write check fails.
+COPY --from=build --chown=nonroot:nonroot /out/assets /var/lib/emberling/assets
 USER nonroot:nonroot
 ENTRYPOINT ["/usr/local/bin/service"]

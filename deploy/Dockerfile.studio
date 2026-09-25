@@ -3,7 +3,7 @@
 # config (studio/vite.config.ts's `preview` block) the dev server also uses, so Studio's
 # `/api` routing never diverges between local dev and this compose stack. This is an
 # acceptance-stack image for `make dev`/E2E, not a hardened public deployment target.
-ARG NODE_VERSION=22
+ARG NODE_VERSION=24.20.0
 FROM node:${NODE_VERSION}-slim
 WORKDIR /app
 RUN corepack enable
@@ -12,4 +12,4 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 EXPOSE 5173
-CMD ["pnpm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173"]
+CMD ["pnpm", "run", "preview", "--host", "0.0.0.0", "--port", "5173"]

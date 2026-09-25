@@ -25,8 +25,10 @@ services:
       # Local development only. This value never leaves the compose network, and the
       # deployed configuration supplies credentials through the environment instead.
       POSTGRES_HOST_AUTH_METHOD: trust
+    # postgres:18 keeps data in a major-version subdirectory under /var/lib/postgresql and
+    # refuses to start when a volume is mounted at the pre-18 path /var/lib/postgresql/data.
     volumes:
-      - emberling-postgres-data:/var/lib/postgresql/data
+      - emberling-postgres-data:/var/lib/postgresql
     ports:
       - "55432:5432"
     healthcheck:
