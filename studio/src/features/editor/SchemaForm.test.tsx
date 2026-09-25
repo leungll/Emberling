@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SchemaForm } from './SchemaForm';
-import type { JsonSchema, ModelMetadata, UiSchema } from '@/api/types';
+import type { JsonSchema, ModelMetadata, ToolMetadata, UiSchema } from '@/api/types';
 
 const configSchema: JsonSchema = {
   type: 'object',
@@ -129,7 +129,7 @@ const agentUiSchema: UiSchema = {
       capability: 'structured_decision',
     },
     { path: 'instructions', order: 20, group: 'BASIC', widget: 'TEXTAREA' },
-    { path: 'allowedTools', order: 30, group: 'BASIC', widget: 'DEFAULT' },
+    { path: 'allowedTools', order: 30, group: 'BASIC', widget: 'TOOL_SELECTOR' },
     { path: 'maxTurns', order: 40, group: 'BASIC', widget: 'DEFAULT' },
     { path: 'timeoutMs', order: 50, group: 'BASIC', widget: 'DEFAULT' },
     { path: 'modelConfig', order: 60, group: 'MODEL_PARAMETERS', widget: 'DEFAULT' },
@@ -151,12 +151,37 @@ const models: ModelMetadata[] = [
   },
 ];
 
+// Mirrors the Backend Tool Registry (backend/internal/tools/lookup, remotelookup).
+const recordSchema: JsonSchema = {
+  type: 'object',
+  properties: { key: { type: 'string' }, record: { type: 'string' } },
+};
+const tools: ToolMetadata[] = [
+  {
+    name: 'lookup',
+    description: 'Read a deterministic record',
+    inputSchema: { type: 'object', properties: { key: { type: 'string', minLength: 1 } } },
+    outputSchema: recordSchema,
+    sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+    executionKind: 'SYNC',
+  },
+  {
+    name: 'remote_lookup',
+    description: 'Read a deterministic record through an asynchronous Provider task',
+    inputSchema: { type: 'object', properties: { key: { type: 'string', minLength: 1 } } },
+    outputSchema: recordSchema,
+    sideEffect: { kind: 'EXTERNAL', idempotency: 'UNKNOWN' },
+    executionKind: 'ASYNC',
+  },
+];
+
 function renderAgentForm(value = {}, onChange = vi.fn()) {
   render(
     <SchemaForm
       configSchema={agentSchema}
       uiSchema={agentUiSchema}
       models={models}
+      tools={tools}
       value={value}
       onChange={onChange}
     />,
@@ -189,17 +214,70 @@ describe('SchemaForm — schema-driven widgets', () => {
   });
 
   it('edits a string array as a list of items and emits a JSON array', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SchemaForm
+        configSchema={{
+          type: 'object',
+          properties: { tags: { type: 'array', items: { type: 'string' } } },
+        }}
+        uiSchema={{ fields: [] }}
+        value={{ tags: ['alpha'] }}
+        onChange={onChange}
+      />,
+    );
+
+    const group = screen.getByRole('group', { name: /Tags/i });
+    expect(within(group).getByDisplayValue('alpha')).toBeInTheDocument();
+
+    await user.click(within(group).getByRole('button', { name: /Add item/i }));
+    expect(onChange).toHaveBeenLastCalledWith({ tags: ['alpha', ''] });
+
+    await user.click(within(group).getByRole('button', { name: /Remove item 1/i }));
+    expect(onChange).toHaveBeenLastCalledWith({ tags: [] });
+  });
+
+  it('offers Registry Tools with their purpose, execution, side effect and I/O in the Tool Selector', async () => {
     const onChange = renderAgentForm({ allowedTools: ['lookup'] });
     const user = userEvent.setup();
 
     const group = screen.getByRole('group', { name: /Allowed Tools/i });
-    expect(within(group).getByDisplayValue('lookup')).toBeInTheDocument();
+    expect(within(group).queryByRole('textbox')).toBeNull();
 
-    await user.click(within(group).getByRole('button', { name: /Add item/i }));
-    expect(onChange).toHaveBeenLastCalledWith({ allowedTools: ['lookup', ''] });
+    const lookup = within(group).getByRole('checkbox', { name: 'lookup' });
+    expect(lookup).toBeChecked();
+    expect(lookup).toHaveAccessibleDescription(/Read a deterministic record/);
+    expect(lookup).toHaveAccessibleDescription(/Sync/);
+    expect(lookup).toHaveAccessibleDescription(/No side effect · SAFE/);
+    expect(lookup).toHaveAccessibleDescription(/Input: key/);
+    expect(lookup).toHaveAccessibleDescription(/Output: key, record/);
 
-    await user.click(within(group).getByRole('button', { name: /Remove item 1/i }));
+    const remote = within(group).getByRole('checkbox', { name: 'remote_lookup' });
+    expect(remote).not.toBeChecked();
+    expect(remote).toHaveAccessibleDescription(/asynchronous Provider task/);
+    expect(remote).toHaveAccessibleDescription(/Async/);
+    expect(remote).toHaveAccessibleDescription(/External write · UNKNOWN/);
+
+    await user.click(remote);
+    // Registry order is kept so the saved allowlist does not depend on click order.
+    expect(onChange).toHaveBeenLastCalledWith({ allowedTools: ['lookup', 'remote_lookup'] });
+
+    await user.click(lookup);
     expect(onChange).toHaveBeenLastCalledWith({ allowedTools: [] });
+  });
+
+  it('keeps an unregistered saved Tool selected instead of silently dropping it', async () => {
+    const onChange = renderAgentForm({ allowedTools: ['retired_tool'] });
+    const user = userEvent.setup();
+
+    const group = screen.getByRole('group', { name: /Allowed Tools/i });
+    const retired = within(group).getByRole('checkbox', { name: 'retired_tool' });
+    expect(retired).toBeChecked();
+    expect(retired).toHaveAccessibleDescription(/not registered/i);
+
+    await user.click(within(group).getByRole('checkbox', { name: 'lookup' }));
+    expect(onChange).toHaveBeenLastCalledWith({ allowedTools: ['lookup', 'retired_tool'] });
   });
 
   it('renders an array whose items declare an enum as a multi-select of checkboxes', async () => {

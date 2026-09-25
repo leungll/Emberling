@@ -27,6 +27,7 @@ import {
   listDefinitions,
   listModels,
   listNodeTypes,
+  listTools,
   saveDefinition,
   validateDefinition,
 } from '@/api/client';
@@ -38,6 +39,7 @@ import type {
   Node,
   NodeMetadata,
   RunSnapshot,
+  ToolMetadata,
   ValidationError,
 } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
@@ -159,6 +161,7 @@ export function EditPage() {
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const [nodeTypes, setNodeTypes] = useState<NodeMetadata[]>([]);
   const [models, setModels] = useState<ModelMetadata[]>([]);
+  const [tools, setTools] = useState<ToolMetadata[]>([]);
   const [recentRun, setRecentRun] = useState<RunSnapshot | null>(null);
   const [recentRunLoaded, setRecentRunLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -212,6 +215,13 @@ export function EditPage() {
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setLoadError(describeError(error, 'Could not load models'));
+      });
+
+    listTools(controller.signal)
+      .then(setTools)
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setLoadError(describeError(error, 'Could not load tools'));
       });
 
     // A brand-new Definition has nothing to fetch yet; it stays an empty, unsaved graph
@@ -729,6 +739,7 @@ export function EditPage() {
             node={selectedNode}
             metadata={selectedNode ? metadataByType.get(selectedNode.type) : undefined}
             models={models}
+            tools={tools}
             fieldErrors={selectedNodeFieldErrors}
             // An edit that leaves the graph as it is (the same name, a config equal to the
             // current one) is not an edit: it must not add a do-nothing Undo entry.

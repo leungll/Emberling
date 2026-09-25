@@ -210,6 +210,45 @@ func TestNodeRegistry_Register_ModelSelectorWithoutCapabilityRejected(t *testing
 	}
 }
 
+// toolSelectorRegistration adds string-array and number-array properties to the valid
+// fixture so TOOL_SELECTOR can be placed on each shape in turn.
+func toolSelectorRegistration(path string) NodeRegistration {
+	reg := validSyncNodeRegistration()
+	reg.Metadata.ConfigSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"inputKey": {"type": "string", "minLength": 1},
+			"tools": {"type": "array", "items": {"type": "string", "minLength": 1}},
+			"weights": {"type": "array", "items": {"type": "number"}}
+		},
+		"additionalProperties": false
+	}`)
+	reg.Metadata.UISchema.Fields = []domain.UIField{
+		{Path: path, Order: 10, Group: domain.UIGroupBasic, Widget: domain.UIWidgetToolSelector},
+	}
+	return reg
+}
+
+func TestNodeRegistry_Register_ToolSelectorOnStringArraySucceeds(t *testing.T) {
+	if err := NewNodeRegistry().Register(toolSelectorRegistration("tools")); err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
+}
+
+func TestNodeRegistry_Register_ToolSelectorWithoutArrayPropertyRejected(t *testing.T) {
+	err := NewNodeRegistry().Register(toolSelectorRegistration("inputKey"))
+	if err == nil || !strings.Contains(err.Error(), "TOOL_SELECTOR requires an array of strings") {
+		t.Fatalf("Register() error = %v, want TOOL_SELECTOR non-array-property error", err)
+	}
+}
+
+func TestNodeRegistry_Register_ToolSelectorWithNonStringItemsRejected(t *testing.T) {
+	err := NewNodeRegistry().Register(toolSelectorRegistration("weights"))
+	if err == nil || !strings.Contains(err.Error(), "TOOL_SELECTOR requires an array of strings") {
+		t.Fatalf("Register() error = %v, want TOOL_SELECTOR non-string-items error", err)
+	}
+}
+
 func TestNodeRegistry_Register_TextAreaWithoutStringPropertyRejected(t *testing.T) {
 	reg := validSyncNodeRegistration()
 	reg.Metadata.UISchema.Fields = []domain.UIField{

@@ -52,7 +52,7 @@ func Registration() registry.NodeRegistration {
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "modelId", Order: 10, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityStructuredDecision},
 				{Path: "instructions", Order: 20, Group: domain.UIGroupBasic, Widget: domain.UIWidgetTextArea},
-				{Path: "allowedTools", Order: 30, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},
+				{Path: "allowedTools", Order: 30, Group: domain.UIGroupBasic, Widget: domain.UIWidgetToolSelector},
 				{Path: "maxTurns", Order: 40, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},
 				{Path: "timeoutMs", Order: 50, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},
 				{Path: "modelConfig", Order: 60, Group: domain.UIGroupModelParameters, Widget: domain.UIWidgetDefault},

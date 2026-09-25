@@ -167,7 +167,8 @@ export interface SideEffectPolicy {
 
 export type UiGroup = 'BASIC' | 'MODEL' | 'MODEL_PARAMETERS';
 
-export type UiWidget = 'DEFAULT' | 'TEXTAREA' | 'PROMPT_EDITOR' | 'SELECT' | 'MODEL_SELECTOR';
+export type UiWidget =
+  'DEFAULT' | 'TEXTAREA' | 'PROMPT_EDITOR' | 'SELECT' | 'MODEL_SELECTOR' | 'TOOL_SELECTOR';
 
 /**
  * UI-only layout metadata. It never carries defaults or validation rules: those belong

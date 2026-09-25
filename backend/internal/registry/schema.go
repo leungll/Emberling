@@ -137,6 +137,16 @@ func propertyHasType(property map[string]any, want string) bool {
 	return false
 }
 
+// propertyHasStringItems reports whether a property subschema is an array whose items are
+// strings, the only shape a TOOL_SELECTOR value (a list of Tool names) can take.
+func propertyHasStringItems(property map[string]any) bool {
+	if !propertyHasType(property, "array") {
+		return false
+	}
+	items, ok := property["items"].(map[string]any)
+	return ok && propertyHasType(items, "string")
+}
+
 // propertyHasEnum reports whether a property subschema declares a non-empty enum, which
 // is what the SELECT widget renders (07 §1.1).
 func propertyHasEnum(property map[string]any) bool {

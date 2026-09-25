@@ -1,6 +1,6 @@
 import { executionKindLabel } from './nodeSummary';
 import { SchemaForm } from './SchemaForm';
-import type { JsonObject, ModelMetadata, Node, NodeMetadata } from '@/api/types';
+import type { JsonObject, ModelMetadata, Node, NodeMetadata, ToolMetadata } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,8 @@ interface PropertiesPanelProps {
   metadata: NodeMetadata | undefined;
   /** Model Registry catalog; feeds the config form's Model Selector fields. */
   models?: ModelMetadata[];
+  /** Tool Registry catalog; feeds the config form's Tool Selector fields. */
+  tools?: ToolMetadata[];
   /** Backend validation messages for the selected node's config, keyed by field path. */
   fieldErrors?: Record<string, string[]>;
   onRename: (name: string) => void;
@@ -27,6 +29,7 @@ export function PropertiesPanel({
   node,
   metadata,
   models = [],
+  tools = [],
   fieldErrors = {},
   onRename,
   onConfigChange,
@@ -85,6 +88,7 @@ export function PropertiesPanel({
                   uiSchema={metadata.uiSchema}
                   value={node.config}
                   models={models}
+                  tools={tools}
                   fieldErrors={fieldErrors}
                   onChange={onConfigChange}
                 />

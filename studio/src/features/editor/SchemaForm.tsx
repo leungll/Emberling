@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { executionKindLabel } from './nodeSummary';
 import {
   groupFields,
   groupLabel,
@@ -8,7 +9,14 @@ import {
   setConfigField,
   type ResolvedField,
 } from './schemaFields';
-import type { JsonObject, JsonSchema, JsonValue, ModelMetadata, UiSchema } from '@/api/types';
+import type {
+  JsonObject,
+  JsonSchema,
+  JsonValue,
+  ModelMetadata,
+  ToolMetadata,
+  UiSchema,
+} from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +28,8 @@ interface SchemaFormProps {
   onChange: (next: JsonObject) => void;
   /** Model Registry catalog (`GET /models`); feeds MODEL_SELECTOR fields. */
   models?: ModelMetadata[];
+  /** Tool Registry catalog (`GET /tools`); feeds TOOL_SELECTOR fields. */
+  tools?: ToolMetadata[];
   /** Backend validation messages keyed by top-level config field. */
   fieldErrors?: Record<string, string[]>;
   disabled?: boolean;
@@ -38,6 +48,7 @@ export function SchemaForm({
   value,
   onChange,
   models = [],
+  tools = [],
   fieldErrors = {},
   disabled = false,
 }: SchemaFormProps) {
@@ -62,6 +73,7 @@ export function SchemaForm({
               field={field}
               value={value[field.path]}
               models={models}
+              tools={tools}
               errors={fieldErrors[field.path] ?? []}
               disabled={disabled}
               onChange={(next) => onChange(setConfigField(value, field.path, next))}
@@ -85,10 +97,11 @@ function SchemaField({
   field,
   value,
   models,
+  tools,
   errors,
   onChange,
   disabled,
-}: FieldProps & { models: ModelMetadata[]; errors: string[] }) {
+}: FieldProps & { models: ModelMetadata[]; tools: ToolMetadata[]; errors: string[] }) {
   const id = `config-${field.path}`;
   const descriptionId = field.schema.description ? `${id}-description` : undefined;
   const errorId = errors.length > 0 ? `${id}-errors` : undefined;
@@ -101,7 +114,10 @@ function SchemaField({
     'aria-invalid': errors.length > 0 ? true : undefined,
   };
   const ownsLabel =
-    field.widget === 'checkbox' || field.widget === 'list' || field.widget === 'multiselect';
+    field.widget === 'checkbox' ||
+    field.widget === 'list' ||
+    field.widget === 'multiselect' ||
+    field.widget === 'tools';
 
   return (
     <div className="space-y-1">
@@ -184,6 +200,16 @@ function SchemaField({
 
       {field.widget === 'list' ? (
         <StringListField field={field} value={value} onChange={onChange} disabled={disabled} />
+      ) : null}
+
+      {field.widget === 'tools' ? (
+        <ToolSelector
+          field={field}
+          value={value}
+          tools={tools}
+          onChange={onChange}
+          disabled={disabled}
+        />
       ) : null}
 
       {field.widget === 'multiselect' ? (
@@ -363,6 +389,106 @@ function EnumListField({ field, value, onChange, disabled }: FieldProps) {
           {option}
         </label>
       ))}
+    </fieldset>
+  );
+}
+
+function schemaPropertyNames(schema: JsonSchema): string {
+  const names = Object.keys(schema.properties ?? {});
+  return names.length > 0 ? names.join(', ') : '—';
+}
+
+/**
+ * Allowlist picker over Tool Registry entries (04 §2.4), showing each Tool's purpose,
+ * execution kind, side effect and input/output fields. Output keeps Registry order,
+ * independent of click order. A saved Tool name the Registry no longer serves stays
+ * selected and is labelled as such: dropping it would silently change the Definition, and
+ * the Backend decides whether it is still valid.
+ */
+function ToolSelector({
+  field,
+  value,
+  tools,
+  onChange,
+  disabled,
+}: FieldProps & { tools: ToolMetadata[] }) {
+  const saved = stringItems(value);
+  const selected = new Set(saved);
+  const registered = new Set(tools.map((tool) => tool.name));
+  const unregistered = saved.filter((name) => !registered.has(name));
+  const id = `config-${field.path}`;
+
+  const toggle = (name: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(name);
+    else next.delete(name);
+    onChange([
+      ...tools.map((tool) => tool.name).filter((toolName) => next.has(toolName)),
+      ...unregistered.filter((savedName) => next.has(savedName)),
+    ]);
+  };
+
+  return (
+    <fieldset id={id} className="space-y-2">
+      <legend className="text-xs font-medium">
+        {field.label}
+        <RequiredMark required={field.required} />
+      </legend>
+      {tools.length === 0 && unregistered.length === 0 ? (
+        <p className="text-xs text-[var(--muted-foreground)]">No Tools are registered.</p>
+      ) : null}
+      {tools.map((tool) => {
+        const detailsId = `${id}-${tool.name}-details`;
+        return (
+          <div key={tool.name} className="rounded-md border border-[var(--border)] p-2">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                disabled={disabled}
+                aria-describedby={detailsId}
+                checked={selected.has(tool.name)}
+                onChange={(e) => toggle(tool.name, e.target.checked)}
+              />
+              {tool.name}
+            </label>
+            <div
+              id={detailsId}
+              className="mt-1 space-y-0.5 pl-6 text-xs text-[var(--muted-foreground)]"
+            >
+              <p>{tool.description}</p>
+              <p>
+                {executionKindLabel(tool.executionKind)} ·{' '}
+                {tool.sideEffect.kind === 'EXTERNAL' ? 'External write' : 'No side effect'} ·{' '}
+                {tool.sideEffect.idempotency}
+              </p>
+              <p>
+                Input: {schemaPropertyNames(tool.inputSchema)} · Output:{' '}
+                {schemaPropertyNames(tool.outputSchema)}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+      {unregistered.map((name) => {
+        const detailsId = `${id}-${name}-details`;
+        return (
+          <div key={name} className="rounded-md border border-[var(--border)] p-2">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                disabled={disabled}
+                aria-describedby={detailsId}
+                checked={selected.has(name)}
+                onChange={(e) => toggle(name, e.target.checked)}
+              />
+              {name}
+            </label>
+            <p id={detailsId} className="mt-1 pl-6 text-xs text-[var(--status-failed-fg)]">
+              Not registered in the Tool Registry.
+            </p>
+          </div>
+        );
+      })}
     </fieldset>
   );
 }

@@ -106,11 +106,15 @@ const (
 	UIWidgetPromptEditor  UIWidget = "PROMPT_EDITOR"
 	UIWidgetSelect        UIWidget = "SELECT"
 	UIWidgetModelSelector UIWidget = "MODEL_SELECTOR"
+	// UIWidgetToolSelector offers a string-array field as a choice among Tool Registry
+	// entries. Like MODEL_SELECTOR it only narrows presentation: the Definition validation
+	// chain still decides whether each saved Tool name resolves.
+	UIWidgetToolSelector UIWidget = "TOOL_SELECTOR"
 )
 
 func (w UIWidget) IsValid() bool {
 	switch w {
-	case UIWidgetDefault, UIWidgetTextArea, UIWidgetPromptEditor, UIWidgetSelect, UIWidgetModelSelector:
+	case UIWidgetDefault, UIWidgetTextArea, UIWidgetPromptEditor, UIWidgetSelect, UIWidgetModelSelector, UIWidgetToolSelector:
 		return true
 	default:
 		return false

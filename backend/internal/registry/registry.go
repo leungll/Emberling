@@ -95,7 +95,8 @@ func validateNodeBinding(metadata domain.NodeMetadata, binding NodeBinding) []er
 // validateNodeUIFields checks every UIField against the compiled ConfigSchema (07 §1.1, 04
 // §2.1-2.3): each Path must resolve to a declared top-level property, paths must be
 // unique, SELECT needs enum, MODEL_SELECTOR needs a string property and a non-empty
-// capability, and TEXTAREA/PROMPT_EDITOR need a string property.
+// capability, TOOL_SELECTOR needs an array of strings, and TEXTAREA/PROMPT_EDITOR need a
+// string property.
 func validateNodeUIFields(nodeType string, configSchema []byte, ui domain.NodeUISchema) []error {
 	var errs []error
 	seen := make(map[string]struct{}, len(ui.Fields))
@@ -127,6 +128,10 @@ func validateNodeUIFields(nodeType string, configSchema []byte, ui domain.NodeUI
 			}
 			if field.Capability == "" {
 				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget MODEL_SELECTOR requires a non-empty capability", nodeType, field.Path))
+			}
+		case domain.UIWidgetToolSelector:
+			if !propertyHasStringItems(property) {
+				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget TOOL_SELECTOR requires an array of strings", nodeType, field.Path))
 			}
 		case domain.UIWidgetTextArea, domain.UIWidgetPromptEditor:
 			if !propertyHasType(property, "string") {

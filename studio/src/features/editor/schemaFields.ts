@@ -14,6 +14,7 @@ export type FieldWidget =
   | 'checkbox'
   | 'select'
   | 'model'
+  | 'tools'
   | 'multiselect'
   | 'list'
   | 'json';
@@ -66,6 +67,7 @@ function resolveWidget(schema: JsonSchema, uiWidget: string | undefined): FieldW
 
   const widget = (uiWidget ?? '').toUpperCase();
   if (widget === 'MODEL_SELECTOR') return 'model';
+  if (widget === 'TOOL_SELECTOR') return 'tools';
   if (widget === 'TEXTAREA' || widget === 'PROMPT_EDITOR') return 'textarea';
 
   switch (schema.type) {

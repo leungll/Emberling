@@ -38,7 +38,7 @@ const DEFINITION = {
 function stubFetch() {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
-    if (url === '/api/node-types' || url === '/api/models') {
+    if (url === '/api/node-types' || url === '/api/models' || url === '/api/tools') {
       return Promise.resolve(jsonResponse(200, { items: [] }));
     }
     // The Recent Execution bar's list lookup (04 §2.6): no matching item means no Run yet,
@@ -154,6 +154,37 @@ const MODELS = [
   },
 ];
 
+/** The allowlist field of backend/internal/nodes/agent/node.go's registration. */
+const AGENT = {
+  type: 'agent',
+  displayName: 'Agent',
+  category: 'Agent',
+  executionKind: 'MANAGED_AGENT',
+  inputs: [{ name: 'input', dataType: 'json', required: true }],
+  outputs: [{ name: 'output', dataType: 'json', required: true }],
+  configSchema: {
+    type: 'object',
+    properties: {
+      allowedTools: { type: 'array', items: { type: 'string', minLength: 1 } },
+    },
+  },
+  uiSchema: {
+    fields: [{ path: 'allowedTools', order: 30, group: 'BASIC', widget: 'TOOL_SELECTOR' }],
+  },
+  sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+};
+
+const TOOLS = [
+  {
+    name: 'lookup',
+    description: 'Read a deterministic record by key.',
+    executionKind: 'SYNC',
+    inputSchema: { type: 'object', properties: { key: { type: 'string' } } },
+    outputSchema: { type: 'object', properties: { key: { type: 'string' } } },
+    sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+  },
+];
+
 function definitionWithNode(version: number, nodeName: string) {
   return {
     ...DEFINITION,
@@ -176,10 +207,11 @@ type Handler = (init: RequestInit | undefined) => Response | Promise<Response>;
 function stubRoutes(routes: Record<string, Handler>) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const key = `${init?.method ?? 'GET'} ${String(input)}`;
-    if (key === 'GET /api/node-types') {
+    if (key === 'GET /api/node-types' && !routes[key]) {
       return Promise.resolve(jsonResponse(200, { items: [TEXT_GENERATION] }));
     }
     if (key === 'GET /api/models') return Promise.resolve(jsonResponse(200, { items: MODELS }));
+    if (key === 'GET /api/tools') return Promise.resolve(jsonResponse(200, { items: TOOLS }));
     // The Recent Execution bar's list lookup (04 §2.6): defaults to no Run unless a test
     // overrides this key in `routes` to exercise the bar itself.
     if (key === 'GET /api/definitions' && !routes[key]) {
@@ -685,6 +717,33 @@ describe('EditPage — Undo and Redo', () => {
     // 04 §2.6: Run is disabled while unsaved changes exist; the third node was never saved.
     expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
+  });
+
+  it("offers the Tool Registry catalog in an Agent node's Allowed Tools", async () => {
+    stubRoutes({
+      'GET /api/node-types': () => jsonResponse(200, { items: [AGENT] }),
+      'GET /api/definitions/wf_123': () =>
+        jsonResponse(200, {
+          ...DEFINITION,
+          nodes: [
+            {
+              id: 'node_agent',
+              type: 'agent',
+              name: 'Agent',
+              position: { x: 0, y: 0 },
+              config: { allowedTools: [] },
+            },
+          ],
+        }),
+    });
+
+    renderStudio('/studio/wf_123');
+    await selectCanvasNode('node_agent');
+
+    const group = screen.getByRole('group', { name: /Allowed Tools/i });
+    expect(
+      await within(group).findByRole('checkbox', { name: 'lookup' }),
+    ).toHaveAccessibleDescription(/Read a deterministic record/);
   });
 
   it('records no Undo entry for an edit that leaves the graph unchanged', async () => {
