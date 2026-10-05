@@ -1,15 +1,25 @@
 # Emberling
 
-> **每次执行都会留下一点火种。**  
-> Emberling 将它们沉淀为持久化执行事实——为故障恢复保留现场，也为系统演进积累证据。
+**Emberling 是面向长时间运行 AI 应用的 AI-native Execution Runtime。**
 
-**以 AI-native Execution Runtime 为核心的 Agent Runtime Platform。**
+它将 Workflow 和 Agent 的执行过程保存为持久化事实，让中断后的任务能够从已提交的状态继续，并留下可查询的决定、动作和结果。
 
-Emberling 负责跨模型调用、Tool Action、异步 callback 和进程重启运行有状态 AI 应用。它不是 AI Workflow 工具；Studio 只是 Runtime 之上的轻量开发界面。
+当 Agent 需要运行代码、执行 Shell 或操作文件时，还需要隔离的运行环境。Emberling 管理逻辑执行，外部 Sandbox 承载代码执行；AX 是这一 roadmap 方向的首个验证对象。
+
+```text
+Emberling = durable logical execution
+AX        = isolated physical execution
+```
+
+Emberling 让 Agent 的逻辑执行持久化；AX 提供隔离的运行环境，并在挂起时保留工作目录。
 
 [English](./README.md)
 
 ![Emberling Studio 与 Execution Trace](./assets/ux-studio-observe.svg)
+
+> **每次执行都会留下一点火种。**
+>
+> Emberling 将它们沉淀为持久化执行事实——为故障恢复保留现场，也为系统演进积累证据。
 
 ---
 
@@ -141,6 +151,8 @@ MVP 的标志性里程碑很容易描述，却很难伪造：
 ---
 
 ## 演进路线
+
+隔离执行扩展 AI 应用能够完成的任务，同时将决定、动作和结果保留在 Emberling 的执行账本中。AX 接入仍属 roadmap 实验，尚未作为 MVP 能力交付。
 
 后续能力继续复用同一套 Execution Runtime。系统可以根据已完成的 Run 生成新的候选 Definition，但已经启动的 Run 始终使用创建时绑定的版本，不受后续配置变更影响。
 

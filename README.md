@@ -1,15 +1,25 @@
 # Emberling
 
-> **Every execution leaves an ember.**  
-> Emberling preserves those embers as durable execution facts—so interrupted work can recover and every run can become evidence for what comes next.
+**Emberling is an AI-native Execution Runtime for long-running AI applications.**
 
-**An Agent Runtime Platform built around an AI-native Execution Runtime.**
+It persists Workflow and Agent execution as durable facts, allowing interrupted work to continue from committed state while preserving a queryable record of Decisions, Actions and results.
 
-Emberling runs stateful AI applications across model calls, Tool actions, external callbacks and process restarts. It is not an AI workflow tool: the Studio is only a thin development surface over the Runtime.
+When an Agent needs to run code, execute Shell commands or work with files, it also needs an isolated environment. Emberling manages logical execution; external Sandboxes run the code. AX is the first integration target on this roadmap.
+
+```text
+Emberling = durable logical execution
+AX        = isolated physical execution
+```
+
+Emberling persists an Agent's logical execution; AX isolates its execution environment and preserves the workspace when suspended.
 
 [中文](./README.zh-CN.md)
 
 ![Emberling Studio and execution trace](./assets/ux-studio-observe.svg)
+
+> **Every execution leaves an ember.**
+>
+> Emberling preserves those embers as durable execution facts—so interrupted work can recover and every run can become evidence for what comes next.
 
 ---
 
@@ -141,6 +151,8 @@ This is waiting recovery with explicit side-effect boundaries—not a claim of g
 ---
 
 ## Evolution roadmap
+
+Isolated execution extends what AI applications can do while keeping their Decisions, Actions and results in Emberling's execution ledger. The AX integration remains a roadmap experiment, not a shipped MVP capability.
 
 Later capabilities continue to build on the same Execution Runtime. The system may use completed Runs to produce candidate Definitions, but a Run remains bound to the version selected when it was created.
 
