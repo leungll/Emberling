@@ -82,7 +82,7 @@ Use `pgx` and explicit SQL. Transaction ownership belongs in `service` through t
 - Store recovery-critical values in Execution State or immutable Artifact references. Event payloads remain bounded summaries.
 - Keep Provider credentials, authorization headers, callback tokens, signing secrets, and internal storage keys out of business fields, Events, Trace, logs, and errors.
 
-Every schema change includes its migration, Store mapping, relevant projection updates, and PostgreSQL integration tests. Do not rewrite a migration that has already been shared; add a forward migration.
+Every schema change includes its migration, Store mapping, relevant projection updates, and PostgreSQL integration tests. Do not rewrite a migration that has already been shared; add a forward migration. `make check` verifies every migration against `backend/migrations/checksums.sha256`; register a new migration with `make migrations-checksum`, which only appends.
 
 ## Extensions and external calls
 
@@ -126,7 +126,7 @@ If the full gate cannot run, report the exact command, failure, and unverified s
 Write straightforward, idiomatic Go and TypeScript. Optimize for correctness and maintainability before abstraction.
 
 - Keep functions focused on one transaction or one pure decision.
-- Keep each source file to one use case or one pure-decision topic, following the existing split in `service/agent_turn.go`, `agent_final.go` and `agent_timeout.go`. Treat roughly 800 non-test lines as a signal to check whether new code belongs there. Do not add a new use case to a file over 1,200 lines: first split it by use case in a separate commit that only moves code within the same package, changes no behavior or transaction boundary, and passes `make check`. Never split into `helpers.go`, `util.go` or `common.go`, and never use a split to introduce new abstractions.
+- Keep each source file to one use case or one pure-decision topic, following the existing split in `service/agent_turn.go`, `agent_final.go` and `agent_timeout.go`. Treat roughly 800 non-test lines as a signal to check whether new code belongs there. Do not add a new use case to a file over 1,200 lines: first split it by use case in a separate commit that only moves code within the same package, changes no behavior or transaction boundary, and passes `make check`. `make check` enforces the 1,200-line limit; files already over it are listed in `scripts/file-size-baseline.txt`, which may only shrink. Never split into `helpers.go`, `util.go` or `common.go`, and never use a split to introduce new abstractions.
 - Use domain-specific names; avoid generic `Manager`, `Helper`, `Util`, and `Common` packages.
 - Wrap errors with operation and stable identifiers, while excluding secrets and oversized payloads.
 - Propagate `context.Context` through I/O boundaries and honor cancellation of the request or worker, without inventing Run cancellation semantics.

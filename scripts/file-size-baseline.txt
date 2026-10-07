@@ -1,0 +1,3 @@
+# Source files allowed over the 1,200-line limit, as `<max_lines> <path>`.
+# Entries may only be lowered or removed; scripts/check-file-size.sh enforces this.
+1899 backend/internal/service/execution.go

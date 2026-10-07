@@ -19,7 +19,8 @@ BACKEND := backend
 STUDIO  := studio
 
 .PHONY: bootstrap dev test test-integration test-e2e lint check \
-        check-go-version check-node-version fmt-check vet check-doc-refs
+        check-go-version check-node-version fmt-check vet check-doc-refs \
+        check-migrations migrations-checksum check-file-size
 
 ## bootstrap: verify toolchain versions and install dependencies. Starts no service.
 bootstrap: check-go-version check-node-version
@@ -169,8 +170,24 @@ check-doc-refs:
 		exit "$$status"; \
 	fi
 
+## check-migrations: shared migrations are immutable. Every backend/migrations/*.sql file
+## must match its checksum in backend/migrations/checksums.sha256.
+check-migrations:
+	@echo "==> backend: migration checksums"
+	@sh scripts/check-migrations.sh check
+
+## migrations-checksum: register new migrations by appending their checksums. Existing
+## manifest lines are never rewritten.
+migrations-checksum:
+	@sh scripts/check-migrations.sh register
+
+## check-file-size: source files stay within the line limit; the baseline may only shrink.
+check-file-size:
+	@echo "==> source: file size"
+	@sh scripts/check-file-size.sh
+
 ## check: the full repository gate.
-check: fmt-check lint check-doc-refs test test-integration
+check: fmt-check lint check-doc-refs check-migrations check-file-size test test-integration
 	@if [ -d $(STUDIO) ]; then \
 		echo "==> studio: build"; \
 		cd $(STUDIO) && pnpm build; \
