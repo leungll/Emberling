@@ -243,7 +243,12 @@ func (r *execFakeRunRepo) LatestByWorkflow(context.Context, string) (*domain.Run
 	return nil, errExecFakeNotImplemented
 }
 
-type execFakeNodeRunRepo struct{ nr domain.NodeRun }
+// execFakeNodeRunRepo serves nr as the one NodeRun a claim can act on; others are listed
+// alongside it for the Advance scan but are never claimed or written.
+type execFakeNodeRunRepo struct {
+	nr     domain.NodeRun
+	others []domain.NodeRun
+}
 
 func (r *execFakeNodeRunRepo) Create(context.Context, domain.NodeRun) error {
 	return errExecFakeNotImplemented
@@ -255,7 +260,7 @@ func (r *execFakeNodeRunRepo) ListByRun(_ context.Context, runID string) ([]doma
 	if runID != r.nr.RunID {
 		return nil, nil
 	}
-	return []domain.NodeRun{r.nr}, nil
+	return append(append([]domain.NodeRun{}, r.others...), r.nr), nil
 }
 func (r *execFakeNodeRunRepo) ClaimReady(_ context.Context, nodeRunID string, _ time.Time) (bool, error) {
 	return nodeRunID == r.nr.ID, nil
@@ -407,6 +412,82 @@ func TestAdvance_SuccessfulClaim_NotifiesEventsCommitted(t *testing.T) {
 	if got := notifier.calls[0]; got.runID != runID || got.lastSeq != 4 {
 		t.Fatalf("EventsCommitted call: want (runID=%q, lastSeq=4), got (runID=%q, lastSeq=%d)", runID, got.runID, got.lastSeq)
 	}
+}
+
+// TestAdvance_SettledOrWaitingNodeRun_OffersNoClaim pins how the Advance scan treats
+// the NodeRun statuses that are neither READY nor RUNNING: a WAITING_CALLBACK, SUCCEEDED
+// or FAILED NodeRun is never claimed, and a SUCCEEDED upstream does not stop its READY
+// downstream from being claimed.
+func TestAdvance_SettledOrWaitingNodeRun_OffersNoClaim(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	const runID = "run_advance_scan"
+	def := domain.Definition{
+		WorkflowID: "wf_advance_scan",
+		Version:    1,
+		Nodes: []domain.Node{
+			{ID: "n1", Type: "text_input", Config: json.RawMessage(`{"inputKey":"brief","required":false}`)},
+			{ID: "n2", Type: "text_output", Config: json.RawMessage(`{}`)},
+		},
+		Edges: []domain.Edge{
+			{ID: "e1", Source: "n1", SourceHandle: "text", Target: "n2", TargetHandle: "text"},
+		},
+	}
+	nodes := registry.NewNodeRegistry()
+	if err := nodes.Register(textinput.Registration()); err != nil {
+		t.Fatalf("register text_input: %v", err)
+	}
+	if err := nodes.Register(textoutput.Registration()); err != nil {
+		t.Fatalf("register text_output: %v", err)
+	}
+	advance := func(t *testing.T, nodeRuns *execFakeNodeRunRepo) AdvanceOutcome {
+		t.Helper()
+		tx := &execFakeTx{
+			defs: &execFakeDefinitionRepo{def: def},
+			runs: &execFakeRunRepo{
+				run: domain.Run{ID: runID, WorkflowID: def.WorkflowID, DefinitionVersion: def.Version, Status: domain.RunRunning, Input: json.RawMessage(`{}`)},
+			},
+			nodeRuns: nodeRuns,
+			attempts: &execFakeNodeAttemptRepo{},
+			events:   &execFakeEventRepo{},
+		}
+		svc := NewExecutionService(Deps{
+			UoW:      &execFakeUoW{tx: tx},
+			Nodes:    nodes,
+			Compiler: runtime.NewCompiler(nodes, execFixedClock{now: now}),
+			Clock:    execFixedClock{now: now},
+			IDs:      execFakeIDs{},
+		})
+		outcome, err := svc.Advance(context.Background(), runID)
+		if err != nil {
+			t.Fatalf("advance: %v", err)
+		}
+		return outcome
+	}
+
+	for _, status := range []domain.NodeRunStatus{domain.NodeRunWaitingCallback, domain.NodeRunSucceeded, domain.NodeRunFailed} {
+		t.Run(string(status), func(t *testing.T) {
+			// The fake would let a claim on this NodeRun win, so only the scan keeps it unclaimed.
+			outcome := advance(t, &execFakeNodeRunRepo{
+				nr: domain.NodeRun{ID: "nr_n1", RunID: runID, NodeID: "n1", NodeType: "text_input", Status: status, ReadyAt: now},
+			})
+			if outcome.Claimed {
+				t.Fatalf("advance over a lone %s NodeRun: want no claim, got %+v", status, outcome)
+			}
+		})
+	}
+
+	t.Run("SUCCEEDED upstream with READY downstream", func(t *testing.T) {
+		outcome := advance(t, &execFakeNodeRunRepo{
+			nr: domain.NodeRun{ID: "nr_n2", RunID: runID, NodeID: "n2", NodeType: "text_output", Status: domain.NodeRunReady, ReadyAt: now},
+			others: []domain.NodeRun{{
+				ID: "nr_n1", RunID: runID, NodeID: "n1", NodeType: "text_input", Status: domain.NodeRunSucceeded,
+				ReadyAt: now, Output: json.RawMessage(`{"text":"hello"}`),
+			}},
+		})
+		if !outcome.Claimed || outcome.NodeRunID != "nr_n2" {
+			t.Fatalf("advance: want the READY downstream nr_n2 claimed, got %+v", outcome)
+		}
+	})
 }
 
 // setTaskPolicy gives the async task node an ExecutionPolicy that permits a second

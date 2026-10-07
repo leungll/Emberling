@@ -129,7 +129,7 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 			nr := nodeRuns[i]
 			existing[nr.NodeID] = runtime.NodeRunState{NodeID: nr.NodeID, Status: nr.Status}
 			byNodeID[nr.NodeID] = nr
-			switch nr.Status { //nolint:exhaustive // WAITING_CALLBACK, SUCCEEDED and FAILED NodeRuns neither offer a claim nor block one
+			switch nr.Status {
 			case domain.NodeRunReady:
 				readyIDs = append(readyIDs, nr.NodeID)
 			case domain.NodeRunRunning:
@@ -138,6 +138,8 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 				} else {
 					runningBlocking = true
 				}
+			case domain.NodeRunWaitingCallback, domain.NodeRunSucceeded, domain.NodeRunFailed:
+				// These NodeRuns neither offer a claim nor block one in this scan.
 			}
 		}
 
