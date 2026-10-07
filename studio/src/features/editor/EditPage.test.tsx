@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditPage } from './EditPage';
 import { useStudioStore } from '@/stores/studio-store';
+import { requestUrl } from '@/test/requestUrl';
 
 /** Surfaces the router's own search string, since MemoryRouter never touches window.location. */
 function LocationProbe() {
@@ -37,7 +38,7 @@ const DEFINITION = {
 
 function stubFetch() {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = String(input);
+    const url = requestUrl(input);
     if (url === '/api/node-types' || url === '/api/models' || url === '/api/tools') {
       return Promise.resolve(jsonResponse(200, { items: [] }));
     }
@@ -206,7 +207,7 @@ type Handler = (init: RequestInit | undefined) => Response | Promise<Response>;
 
 function stubRoutes(routes: Record<string, Handler>) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const key = `${init?.method ?? 'GET'} ${String(input)}`;
+    const key = `${init?.method ?? 'GET'} ${requestUrl(input)}`;
     if (key === 'GET /api/node-types' && !routes[key]) {
       return Promise.resolve(jsonResponse(200, { items: [TEXT_GENERATION] }));
     }
@@ -227,8 +228,11 @@ function stubRoutes(routes: Record<string, Handler>) {
 
 function callsTo(fetchMock: ReturnType<typeof stubRoutes>, method: string, url: string) {
   return fetchMock.mock.calls
-    .filter(([input, init]) => String(input) === url && (init?.method ?? 'GET') === method)
-    .map(([, init]) => JSON.parse(String(init?.body ?? 'null')) as Record<string, unknown>);
+    .filter(([input, init]) => requestUrl(input) === url && (init?.method ?? 'GET') === method)
+    .map(
+      ([, init]) =>
+        JSON.parse((init?.body as string | undefined) ?? 'null') as Record<string, unknown>,
+    );
 }
 
 function PathProbe() {

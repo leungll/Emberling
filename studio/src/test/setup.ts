@@ -52,13 +52,13 @@ class ResizeObserverStub {
         (target) =>
           ({ target, contentRect: target.getBoundingClientRect() }) as ResizeObserverEntry,
       );
-      this.callback(entries, this as unknown as ResizeObserver);
+      this.callback(entries, this);
     });
   }
 }
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
-  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+  globalThis.ResizeObserver = ResizeObserverStub;
 }
 
 // jsdom does not implement CSS transform geometry (DOMMatrix/DOMMatrixReadOnly).

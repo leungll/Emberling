@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { executionKindLabel } from './nodeSummary';
 import {
+  enumOptionValue,
   groupFields,
   groupLabel,
   modelOptions,
@@ -131,7 +132,7 @@ function SchemaField({
       {field.widget === 'select' ? (
         <Select
           {...control}
-          value={value === undefined || value === null ? '' : String(value)}
+          value={value === undefined || value === null ? '' : enumOptionValue(value)}
           onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
         >
           <option value="">Select…</option>
@@ -246,13 +247,13 @@ function RequiredMark({ required }: { required: boolean }) {
   );
 }
 
-type ControlProps = {
+interface ControlProps {
   id: string;
   required: boolean;
   disabled: boolean;
   'aria-describedby': string | undefined;
   'aria-invalid': boolean | undefined;
-};
+}
 
 /**
  * Lists only Model Registry entries. A saved Model ID the Registry no longer

@@ -20,7 +20,7 @@
 export type JsonValue =
   string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
-export type JsonObject = { [key: string]: JsonValue };
+export type JsonObject = Record<string, JsonValue>;
 
 /**
  * Minimal JSON Schema shape covering the subset the Backend emits for `configSchema`,

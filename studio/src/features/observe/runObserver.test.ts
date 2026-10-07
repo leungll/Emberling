@@ -81,11 +81,11 @@ class FakeServer {
   log: RunEvent[] = [];
   streams: FakeStream[] = [];
   getRunCalls = 0;
-  listEventsCalls: Array<{ afterSeq: number; limit: number }> = [];
+  listEventsCalls: { afterSeq: number; limit: number }[] = [];
   /** When set, getRun captures the facts at call time but resolves only once released. */
   holdSnapshot: Promise<void> | null = null;
   onListEvents: (() => void) | null = null;
-  timers: Array<{ callback: () => void; ms: number; cleared: boolean }> = [];
+  timers: { callback: () => void; ms: number; cleared: boolean }[] = [];
 
   commit(type: EventType, nodeRunId: string | null = null, payload: JsonObject = {}): RunEvent {
     const e: RunEvent = {
@@ -153,10 +153,12 @@ class FakeServer {
         if (this.holdSnapshot) await this.holdSnapshot;
         return snap;
       },
-      listEvents: async (_runId, afterSeq, limit) => {
+      listEvents: (_runId, afterSeq, limit) => {
         this.listEventsCalls.push({ afterSeq, limit });
         this.onListEvents?.();
-        return structuredClone(this.log.filter((e) => e.seq > afterSeq).slice(0, limit));
+        return Promise.resolve(
+          structuredClone(this.log.filter((e) => e.seq > afterSeq).slice(0, limit)),
+        );
       },
       subscribe: (_runId, options) => {
         const stream = new FakeStream(this, options);

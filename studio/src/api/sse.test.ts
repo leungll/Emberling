@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { EVENT_TYPES, subscribeRunEvents, type EventSourceLike } from './sse';
+import { EVENT_TYPES, subscribeRunEvents, type EventSourceLike, type SseErrorInfo } from './sse';
 import type { EventType, RunEvent } from './types';
 
 const CONNECTING = 0;
@@ -18,7 +18,7 @@ class FakeEventStream implements EventSourceLike {
   onerror: ((event: Event) => void) | null = null;
   onmessage: ((event: MessageEvent) => void) | null = null;
   closed = false;
-  private readonly listeners = new Map<string, Array<(event: MessageEvent) => void>>();
+  private readonly listeners = new Map<string, ((event: MessageEvent) => void)[]>();
 
   constructor(readonly url: string) {}
 
@@ -70,7 +70,7 @@ function event(seq: number, type: EventType = 'NODE_COMPLETED'): RunEvent {
 function subscribe(afterSeq = 0) {
   const received: RunEvent[] = [];
   const onOpen = vi.fn();
-  const onError = vi.fn();
+  const onError = vi.fn<(info: SseErrorInfo) => void>();
   let stream!: FakeEventStream;
 
   const subscription = subscribeRunEvents('run_123', {

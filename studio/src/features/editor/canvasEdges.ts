@@ -43,7 +43,11 @@ export function toCanvasEdges(
   metadataByType: ReadonlyMap<string, NodeMetadata>,
 ): FlowEdge<CanvasEdgeData>[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const label = (id: string) => nodeById.get(id)?.name || id;
+  // An unnamed node (missing or empty name) is labelled by its id.
+  const label = (id: string) => {
+    const name = nodeById.get(id)?.name;
+    return name === undefined || name === '' ? id : name;
+  };
   return edges.map((edge) => {
     const incompatible = isIncompatible(
       portType(nodeById.get(edge.source), metadataByType, 'outputs', edge.sourceHandle),

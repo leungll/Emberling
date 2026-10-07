@@ -1,7 +1,8 @@
 import { Link } from 'react-router';
 
 import type { Run } from '@/api/types';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { runStatusLabel, runStatusTone, type StatusTone } from '@/lib/status';
 import { cn } from '@/lib/utils';
 

@@ -43,7 +43,10 @@ const COMPACT_GAP_Y = 24;
 
 export type CompactSide = 'top' | 'right' | 'bottom' | 'left';
 
-type Point = { x: number; y: number };
+interface Point {
+  x: number;
+  y: number;
+}
 
 function columnX(column: number): number {
   return column * (COMPACT_NODE_WIDTH + COMPACT_GAP_X);
@@ -171,12 +174,14 @@ function searchColumns(
   columns: number,
   avoidCrossings: boolean,
 ): Map<string, number> | null {
-  const items = rows.flatMap((level, row) =>
-    level.map((node) => ({ id: node.id, row, size: level.length })),
-  );
+  // Each item carries its row's nodes and the row's taken columns, so the search never
+  // indexes back into `rows` by number.
+  const items = rows.flatMap((level, row) => {
+    const taken = new Set<number>();
+    return level.map((node) => ({ id: node.id, row, peers: level, taken }));
+  });
   const rowOf = new Map(items.map((item) => [item.id, item.row]));
   const column = new Map<string, number>();
-  const used = rows.map(() => new Set<number>());
   let steps = 0;
 
   const crosses = (id: string, row: number, c: number): boolean => {
@@ -197,9 +202,11 @@ function searchColumns(
   };
 
   const place = (k: number): boolean => {
-    if (k === items.length) return true;
+    const item = items[k];
+    if (item === undefined) return true;
     if (++steps > MAX_SEARCH_STEPS) return false;
-    const { id, row, size } = items[k]!;
+    const { id, row, peers, taken } = item;
+    const size = peers.length;
     const meanParentColumn = (nodeId: string): number | undefined => {
       const placed = (parents.get(nodeId) ?? []).flatMap((p) => {
         const c = column.get(p);
@@ -213,24 +220,26 @@ function searchColumns(
     if (size === 1) {
       preferred = meanParentColumn(id) ?? (columns - 1) / 2;
     } else {
-      const ranked = rows[row]!.map((node, i) => ({
-        id: node.id,
-        i,
-        key: meanParentColumn(node.id) ?? i,
-      })).sort((a, b) => a.key - b.key || a.i - b.i);
+      const ranked = peers
+        .map((node, i) => ({
+          id: node.id,
+          i,
+          key: meanParentColumn(node.id) ?? i,
+        }))
+        .sort((a, b) => a.key - b.key || a.i - b.i);
       const rank = ranked.findIndex((entry) => entry.id === id);
       preferred = (rank * (columns - 1)) / (size - 1);
     }
     const candidates = Array.from({ length: columns }, (_, c) => c)
-      .filter((c) => !used[row]!.has(c))
+      .filter((c) => !taken.has(c))
       .sort((a, b) => Math.abs(a - preferred) - Math.abs(b - preferred) || a - b);
     for (const c of candidates) {
       if (avoidCrossings && crosses(id, row, c)) continue;
       column.set(id, c);
-      used[row]!.add(c);
+      taken.add(c);
       if (place(k + 1)) return true;
       column.delete(id);
-      used[row]!.delete(c);
+      taken.delete(c);
       if (steps > MAX_SEARCH_STEPS) return false;
     }
     return false;

@@ -100,8 +100,7 @@ export function RunInputDialog({
   const handleFileChange = (field: RunInputField, file: File | undefined) => {
     setAssetErrors((prev) => ({ ...prev, [field.key]: null }));
     setAssets((prev) => {
-      const next = { ...prev };
-      delete next[field.key];
+      const { [field.key]: _removed, ...next } = prev;
       return next;
     });
     if (!file) return;

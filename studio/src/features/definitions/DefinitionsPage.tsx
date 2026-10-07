@@ -153,7 +153,7 @@ export function DefinitionsPage() {
           // Unlike a mock-only dialog that would POST immediately, this keeps
           // master's existing deferred-creation contract: no Definition exists yet, so
           // nothing here calls the Backend.
-          navigate('/studio/new', { state: { name, description } });
+          void navigate('/studio/new', { state: { name, description } });
         }}
       />
     </div>

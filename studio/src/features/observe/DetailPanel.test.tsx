@@ -340,7 +340,7 @@ describe('DetailPanel — ImageRef preview', () => {
     );
 
     await screen.findByText('Output');
-    const img = (await screen.findByRole('img')) as HTMLImageElement;
+    const img = await screen.findByRole<HTMLImageElement>('img');
     expect(img.src).toBe('https://cdn.example.com/generated/cat.png');
     // The raw reference (the URI itself, given as-is — never a proxy) is shown as text too,
     // distinct from the collapsed raw JSON below (which also contains this substring).
@@ -702,7 +702,7 @@ describe('DetailPanel — Waiting Diagnostics', () => {
     expect(fieldValue('Waiting Since')).toBe('—');
   });
 
-  it('shows no Waiting Diagnostics for a NodeRun that is not WAITING_CALLBACK', async () => {
+  it('shows no Waiting Diagnostics for a NodeRun that is not WAITING_CALLBACK', () => {
     const succeeded: NodeRun = { ...WAITING_NODE_RUN, status: 'SUCCEEDED', output: { text: 'ok' } };
     vi.stubGlobal(
       'fetch',

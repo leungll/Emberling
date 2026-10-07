@@ -126,7 +126,7 @@ export function resolveFields(
         required: required.has(path),
         widget,
         group: ui?.group ?? DEFAULT_GROUP,
-        enumValues: (enumSource ?? []).map((value) => String(value)),
+        enumValues: (enumSource ?? []).map(enumOptionValue),
         capability: widget === 'model' ? ui?.capability : undefined,
       },
     });
@@ -162,14 +162,21 @@ export function modelOptions(
   return models.filter((model) => model.capabilities.includes(capability));
 }
 
+/**
+ * The option value an enum entry renders as. Objects and arrays use their JSON form so an
+ * option never reads "[object Object]" or a comma-joined list.
+ */
+export function enumOptionValue(value: JsonValue): string {
+  return typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value);
+}
+
 /** Returns `config` with `path` set, or removed when `next` is undefined. */
 export function setConfigField(
   config: JsonObject,
   path: string,
   next: JsonValue | undefined,
 ): JsonObject {
-  const copy = { ...config };
-  if (next === undefined) delete copy[path];
-  else copy[path] = next;
-  return copy;
+  if (next !== undefined) return { ...config, [path]: next };
+  const { [path]: _removed, ...rest } = config;
+  return rest;
 }

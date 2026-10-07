@@ -129,7 +129,7 @@ export function ObservePage() {
       })
         .then((run) => {
           setRunAgainOpen(false);
-          navigate(`/runs/${run.id}`);
+          void navigate(`/runs/${run.id}`);
         })
         .catch((error: unknown) => {
           setRunAgainError(describeError(error, 'Could not create run'));

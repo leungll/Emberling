@@ -175,9 +175,7 @@ function RunValues({ snapshot }: { snapshot: RunSnapshot }) {
       {snapshot.run.output !== null ? (
         <JsonBlock label="Output" value={snapshot.run.output} />
       ) : null}
-      {snapshot.run.error ? (
-        <JsonBlock label="Error" value={snapshot.run.error as unknown} />
-      ) : null}
+      {snapshot.run.error ? <JsonBlock label="Error" value={snapshot.run.error} /> : null}
     </section>
   );
 }
@@ -320,7 +318,7 @@ function NodeRunValues({ nodeRun }: { nodeRun: NodeRun }) {
     <>
       {nodeRun.input !== null ? <JsonBlock label="Input" value={nodeRun.input} /> : null}
       {nodeRun.output !== null ? <JsonBlock label="Output" value={nodeRun.output} /> : null}
-      {nodeRun.error ? <JsonBlock label="Error" value={nodeRun.error as unknown} /> : null}
+      {nodeRun.error ? <JsonBlock label="Error" value={nodeRun.error} /> : null}
     </>
   );
 }
@@ -508,7 +506,7 @@ function AgentRunSummary({ trace }: { trace: AgentTrace | null }) {
             <Field label="Terminated at" value={formatTimestamp(trace.agentRun.terminatedAt)} />
           ) : null}
           {trace.agentRun.error ? (
-            <JsonBlock label="Agent error" value={trace.agentRun.error as unknown} />
+            <JsonBlock label="Agent error" value={trace.agentRun.error} />
           ) : null}
         </>
       ) : null}
@@ -570,10 +568,8 @@ function AgentTurnCard({
           <Badge variant={agentActionStatusVariant(turn.action.status)}>{turn.action.status}</Badge>
         </div>
       ) : null}
-      {turn.action?.error ? (
-        <JsonBlock label="Action error" value={turn.action.error as unknown} />
-      ) : null}
-      {turn.error ? <JsonBlock label="Turn error" value={turn.error as unknown} /> : null}
+      {turn.action?.error ? <JsonBlock label="Action error" value={turn.action.error} /> : null}
+      {turn.error ? <JsonBlock label="Turn error" value={turn.error} /> : null}
       {turn.toolAttempts.map((attempt) => (
         <div
           key={attempt.id}

@@ -10,6 +10,7 @@ import {
   compactTopologyPositions,
 } from './topology';
 import type { Definition, NodeMetadata, NodeRun } from '@/api/types';
+import { requestUrl } from '@/test/requestUrl';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -119,7 +120,7 @@ function nodeRun(id: string, nodeId: string, status: NodeRun['status']): NodeRun
 
 function stubFetch() {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = new URL(String(input), 'http://studio.test');
+    const url = new URL(requestUrl(input), 'http://studio.test');
     if (url.pathname === '/api/definitions/wf_1/versions/3') {
       return Promise.resolve(jsonResponse(200, BOUND_DEFINITION));
     }
@@ -252,7 +253,7 @@ describe('ObserveCanvas', () => {
     // The latest version's own node never appears, and that version is never fetched.
     expect(screen.queryByTestId('rf__node-node_new')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/definitions/wf_1/versions/3', expect.anything());
-    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/versions/5'))).toBe(
+    expect(fetchMock.mock.calls.some(([input]) => requestUrl(input).includes('/versions/5'))).toBe(
       false,
     );
   });
@@ -362,7 +363,7 @@ describe('ObserveCanvas', () => {
     // The pane, not the outer wrapper, is what React Flow attaches `onPaneClick` to.
     const pane = document.querySelector('.react-flow__pane');
     expect(pane).not.toBeNull();
-    fireEvent.click(pane as Element);
+    fireEvent.click(pane!);
     expect(onSelectNodeRun).toHaveBeenCalledWith(null);
   });
 

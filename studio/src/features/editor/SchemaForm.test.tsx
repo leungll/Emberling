@@ -58,6 +58,27 @@ describe('SchemaForm', () => {
     expect(screen.getByRole('option', { name: 'high' })).toBeInTheDocument();
   });
 
+  it('labels non-string enum options by their JSON form and selects a saved object option', () => {
+    render(
+      <SchemaForm
+        configSchema={{
+          type: 'object',
+          properties: { preset: { type: 'object', enum: [{ size: 1 }, [1, 2], 3, true] } },
+        }}
+        uiSchema={{ fields: [] }}
+        value={{ preset: { size: 1 } }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    // An object or array option never reads "[object Object]" or a comma-joined list.
+    expect(screen.getByRole('option', { name: '{"size":1}' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '[1,2]' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '3' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'true' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Preset/i)).toHaveValue('{"size":1}');
+  });
+
   it('honours the uiSchema widget without overriding the schema type', () => {
     renderForm();
 

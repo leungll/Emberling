@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ObservePage } from './ObservePage';
+import { requestUrl } from '@/test/requestUrl';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -22,7 +23,7 @@ class FakeEventSource {
   onerror: ((event: Event) => void) | null = null;
   onmessage: ((event: MessageEvent) => void) | null = null;
   closed = false;
-  private readonly listeners = new Map<string, Array<(event: MessageEvent) => void>>();
+  private readonly listeners = new Map<string, ((event: MessageEvent) => void)[]>();
 
   constructor(readonly url: string) {
     FakeEventSource.instances.push(this);
@@ -145,7 +146,7 @@ describe('ObservePage — live pipeline', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
-        const url = new URL(String(input), 'http://studio.test');
+        const url = new URL(requestUrl(input), 'http://studio.test');
         if (url.pathname === '/api/runs/run_live') {
           return Promise.resolve(jsonResponse(200, snapshot()));
         }
@@ -202,9 +203,8 @@ describe('ObservePage — Run Again', () => {
   it('opens the Run Input Dialog prefilled with the historical input and submits the same version', async () => {
     vi.stubGlobal('EventSource', FakeEventSource);
 
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      void init;
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = requestUrl(input);
       if (url === '/api/runs/run_old') {
         return Promise.resolve(jsonResponse(200, { run: OLD_RUN, nodeRuns: [], lastSeq: 0 }));
       }
@@ -244,9 +244,9 @@ describe('ObservePage — Run Again', () => {
     // The dialog opens bound to the old version and prefilled with the old input.
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('wf_123 · v3')).toBeInTheDocument();
-    const promptField = (await within(dialog).findByLabelText('Prompt', {
+    const promptField = await within(dialog).findByLabelText<HTMLInputElement>('Prompt', {
       exact: false,
-    })) as HTMLInputElement;
+    });
     expect(promptField.value).toBe('old prompt value');
     // The field is named by the bound version's Input node label, and its helper gives the
     // input key the value is submitted under.
@@ -257,10 +257,12 @@ describe('ObservePage — Run Again', () => {
 
     // The submitted body reuses the historical Run's own workflowId and definitionVersion,
     // never a newer one, and carries the (possibly edited) input through untouched.
-    const createRunCall = fetchMock.mock.calls.find(([reqUrl]) => String(reqUrl) === '/api/runs');
+    const createRunCall = fetchMock.mock.calls.find(
+      ([reqUrl]) => requestUrl(reqUrl) === '/api/runs',
+    );
     expect(createRunCall).toBeDefined();
     const [, init] = createRunCall as [RequestInfo | URL, RequestInit];
-    expect(JSON.parse(String(init.body))).toEqual({
+    expect(JSON.parse(init.body as string)).toEqual({
       workflowId: 'wf_123',
       definitionVersion: 3,
       input: { prompt: 'old prompt value' },
@@ -281,7 +283,7 @@ describe('ObservePage — Run view layout', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
-        const url = String(input);
+        const url = requestUrl(input);
         if (url === '/api/runs/run_old') {
           return Promise.resolve(jsonResponse(200, { run: OLD_RUN, nodeRuns: [], lastSeq: 0 }));
         }

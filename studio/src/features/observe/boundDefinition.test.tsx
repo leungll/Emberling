@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useBoundDefinition } from './boundDefinition';
 import type { Definition } from '@/api/types';
+import { requestUrl } from '@/test/requestUrl';
 
 function definition(workflowId: string, version: number, name: string): Definition {
   return {
@@ -37,7 +38,7 @@ describe('useBoundDefinition', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
-        const url = new URL(String(input), 'http://studio.test');
+        const url = new URL(requestUrl(input), 'http://studio.test');
         if (url.pathname === '/api/node-types') {
           return Promise.resolve(jsonResponse({ items: [] }));
         }

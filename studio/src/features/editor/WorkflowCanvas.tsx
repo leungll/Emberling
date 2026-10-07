@@ -93,7 +93,7 @@ export function WorkflowCanvas<N extends FlowNode = RegisteredFlowNode>({
   nodeTypes = REGISTERED_NODE_TYPES,
   history,
 }: WorkflowCanvasProps<N>) {
-  const instance = useRef<ReactFlowInstance<N, FlowEdge> | null>(null);
+  const instance = useRef<ReactFlowInstance<N> | null>(null);
   const [mode, setMode] = useState<InteractionMode>('select');
   const [showGrid, setShowGrid] = useState(true);
 
@@ -145,7 +145,7 @@ export function WorkflowCanvas<N extends FlowNode = RegisteredFlowNode>({
       data-read-only={readOnly}
       data-port-hints={readOnly && zoom < PORT_HINT_MIN_ZOOM ? 'hidden' : 'shown'}
     >
-      <ReactFlow<N, FlowEdge>
+      <ReactFlow<N>
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}

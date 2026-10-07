@@ -78,7 +78,7 @@ export function WorkflowStepper({
         const numbered = status === undefined || status === 'READY';
         const tone = status ? nodeRunStatusTone(status) : 'neutral';
         const agent = node.type === AGENT_NODE_TYPE;
-        const selected = nodeRun !== undefined && nodeRun.id === selectedNodeRunId;
+        const selected = nodeRun?.id === selectedNodeRunId;
         const turnNo = agent && nodeRun ? latestTurnNo(events, nodeRun.id) : null;
         const helper = nodeRun
           ? agent

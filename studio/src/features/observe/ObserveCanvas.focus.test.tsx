@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ObserveCanvas } from './ObserveCanvas';
 import type { Definition, NodeMetadata, NodeRun } from '@/api/types';
 import type { RegisteredFlowNode } from '@/features/editor/RegisteredNode';
+import { requestUrl } from '@/test/requestUrl';
 
 /**
  * The READ-ONLY TOPOLOGY card always shows the whole graph (fitted by `WorkflowCanvas`
@@ -79,7 +80,7 @@ function stubFetch() {
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
-      const url = new URL(String(input), 'http://studio.test');
+      const url = new URL(requestUrl(input), 'http://studio.test');
       if (url.pathname === '/api/definitions/wf_1/versions/3') {
         return Promise.resolve(jsonResponse(200, DEFINITION));
       }

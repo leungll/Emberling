@@ -250,7 +250,7 @@ describe('RunInputDialog — Input node labels and typography', () => {
     renderDialog();
     const dialog = screen.getByRole('dialog');
     for (const element of dialog.querySelectorAll('*')) {
-      expect(element.className.toString()).not.toMatch(/text-\[(10|11)px\]|text-xs/);
+      expect(element.getAttribute('class') ?? '').not.toMatch(/text-\[(10|11)px\]|text-xs/);
     }
     expect(screen.getByRole('button', { name: 'Create run' })).toHaveClass('text-sm');
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('text-sm');

@@ -524,7 +524,7 @@ export function EditPage() {
         setUnsavedChanges(false);
         // The Definition now exists: hand off to the saved-version route, which loads it
         // fresh rather than trusting this response as the new source of truth.
-        navigate(`/studio/${created.workflowId}`, { replace: true });
+        void navigate(`/studio/${created.workflowId}`, { replace: true });
         return;
       }
       if (!definition) return;
@@ -583,7 +583,7 @@ export function EditPage() {
         });
         setRunDialogOpen(false);
         // Creating a Run switches Studio into observe mode.
-        navigate(`/runs/${run.id}`);
+        void navigate(`/runs/${run.id}`);
       } catch (error) {
         setRunError(describeError(error, 'Could not create run'));
       } finally {

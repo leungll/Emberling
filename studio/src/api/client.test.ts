@@ -106,7 +106,7 @@ describe('api client', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/definitions/wf_123');
     expect(init.method).toBe('PUT');
-    expect(JSON.parse(String(init.body)).baseVersion).toBe(4);
+    expect((JSON.parse(init.body as string) as { baseVersion: number }).baseVersion).toBe(4);
   });
 
   it('uploads an Asset as multipart/form-data under the "file" part and returns the AssetRef', async () => {

@@ -84,7 +84,7 @@ export function eventTone(type: EventType): StatusTone {
  * `providerId` and `externalTaskId` are deliberately absent. They are Callback Binding
  * facts projected by the Node Detail query and are not copied into Event payloads.
  */
-const PAYLOAD_FIELDS: ReadonlyArray<{ key: string; format: (value: string) => string }> = [
+const PAYLOAD_FIELDS: readonly { key: string; format: (value: string) => string }[] = [
   { key: 'attemptNo', format: (value) => `attempt ${value}` },
   { key: 'turnNo', format: (value) => `turn ${value}` },
   { key: 'callbackBindingId', format: (value) => `binding ${value}` },
