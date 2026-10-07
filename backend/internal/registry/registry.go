@@ -138,6 +138,8 @@ func validateNodeUIFields(nodeType string, configSchema []byte, ui domain.NodeUI
 			if !propertyHasType(property, "string") {
 				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget %s requires a string property", nodeType, field.Path, field.Widget))
 			}
+		case domain.UIWidgetDefault:
+			// Studio picks the editor from the property's own type; no constraint applies.
 		}
 	}
 	return errs

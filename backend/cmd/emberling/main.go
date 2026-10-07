@@ -57,6 +57,10 @@ const defaultShutdownTimeout = 10 * time.Second
 // the callback delivery itself.
 const defaultTaskDispatchTimeout = 10 * time.Second
 
+// readHeaderTimeout bounds how long a client may take to send request headers. It does
+// not limit a request body or a long-lived SSE response.
+const readHeaderTimeout = 10 * time.Second
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -233,7 +237,7 @@ func run(logger *slog.Logger) error {
 		AssetMaxUploadBytes:     int64(cfg.AssetStorage.MaxUploadBytes),
 	})
 
-	httpServer := &http.Server{Addr: cfg.HTTP.Addr, Handler: router}
+	httpServer := &http.Server{Addr: cfg.HTTP.Addr, Handler: router, ReadHeaderTimeout: readHeaderTimeout}
 	serveErrs := make(chan error, 1)
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -288,7 +292,7 @@ func openPool(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
 		// The parse error can quote the connection string, which carries the password.
 		return nil, errors.New("open database pool: " + config.KeyDatabaseURL + " is not a valid connection string")
 	}
-	poolCfg.MaxConns = int32(cfg.Database.MaxConns)
+	poolCfg.MaxConns = int32(cfg.Database.MaxConns) //nolint:gosec // config validation bounds MaxConns to (0, math.MaxInt32]
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {

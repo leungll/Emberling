@@ -386,7 +386,7 @@ func asyncEventsOfType(events []domain.Event, typ domain.EventType) []domain.Eve
 	return out
 }
 
-func asyncNodeRun(t *testing.T, ctx context.Context, uow store.UnitOfWork, runID, nodeID string) domain.NodeRun {
+func asyncNodeRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runID, nodeID string) domain.NodeRun {
 	t.Helper()
 	return execNodeRunByNodeID(t, listNodeRuns(ctx, t, uow, runID), nodeID)
 }
@@ -550,7 +550,7 @@ func TestNodeResume_CallbackWins_WritesNodeCallbackReceivedInSameTransaction(t *
 
 	// The Run carries on normally: the downstream Output Node became READY in the same
 	// transaction and can now be executed.
-	if got := asyncNodeRun(t, h.ctx, h.uow, run.ID, "output").Status; got != domain.NodeRunReady {
+	if got := asyncNodeRun(h.ctx, t, h.uow, run.ID, "output").Status; got != domain.NodeRunReady {
 		t.Fatalf("downstream Output NodeRun after the callback: want READY, got %s", got)
 	}
 }

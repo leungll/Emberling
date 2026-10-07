@@ -102,6 +102,31 @@ func TestAggregate_AllSucceededWithoutOutput_NotCompleted(t *testing.T) {
 	}
 }
 
+// TestAggregate_SucceededDoesNotMaskOtherStatuses pins that a SUCCEEDED NodeRun never
+// decides the aggregate on its own: alongside FAILED, READY or WAITING_CALLBACK the Run
+// takes that status's aggregate.
+func TestAggregate_SucceededDoesNotMaskOtherStatuses(t *testing.T) {
+	cases := []struct {
+		other domain.NodeRunStatus
+		want  domain.RunStatus
+	}{
+		{domain.NodeRunFailed, domain.RunFailed},
+		{domain.NodeRunReady, domain.RunRunning},
+		{domain.NodeRunWaitingCallback, domain.RunPaused},
+	}
+	for _, tc := range cases {
+		in := RunAggregateInput{
+			NodeStatuses:   map[string]domain.NodeRunStatus{"a": domain.NodeRunSucceeded, "b": tc.other},
+			AllNodeIDs:     []string{"a", "b"},
+			OutputNodeID:   "b",
+			OutputProduced: true,
+		}
+		if got := AggregateRunStatus(in); got != tc.want {
+			t.Errorf("AggregateRunStatus(SUCCEEDED + %s) = %q, want %q", tc.other, got, tc.want)
+		}
+	}
+}
+
 // TestAggregate_MissingNodeRunsNothingActive_IsRunning asserts the other half of the
 // "every node has a NodeRun" precondition for COMPLETED: when AllNodeIDs names a node
 // that has no NodeRun at all yet (not merely one that hasn't succeeded), and every node

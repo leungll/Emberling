@@ -98,7 +98,7 @@ func TestAgentAsyncToolCallback_HandlerReturnsAtResumeCommit_WorkerRunsNextTurn(
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsyncWith(t, "wf-agent-cb-worker", tool, agentHarnessOptions{Queue: queue})
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("handle callback = %+v, %v, want accepted", got, err)
 	}
@@ -147,7 +147,7 @@ func TestAgentAsyncToolCallback_RequestCancelledAtResumeCommit_WorkerStillComple
 		return remotelookup.New("http://mock-provider.invalid", nil).OnCallback(ctx, state, payload)
 	}
 
-	got, err := agentDeliver(h, requestCtx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(requestCtx, h, token, agentCallbackSucceeded)
 	cancel()
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("handle callback = %+v, %v, want accepted", got, err)
@@ -169,7 +169,7 @@ func TestAgentAsyncToolCallback_QueueRefusesTurn_ReconcilerAdvancesReadyTurn(t *
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsyncWith(t, "wf-agent-cb-refused", tool, agentHarnessOptions{Queue: enqueuer})
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("handle callback = %+v, %v, want accepted despite the refused enqueue", got, err)
 	}
@@ -229,7 +229,7 @@ func TestAgentAsyncToolCallback_TimeoutCommitsDuringOnCallback_CallbackSupersede
 				return remotelookup.New("http://mock-provider.invalid", nil).OnCallback(ctx, state, payload)
 			}
 
-			got, err := agentDeliver(h, h.ctx, token, tc.payload)
+			got, err := agentDeliver(h.ctx, h, token, tc.payload)
 			if timeoutErr != nil {
 				t.Fatalf("timeout agent run inside OnCallback: %v", timeoutErr)
 			}
@@ -281,7 +281,7 @@ func TestAgentAsyncToolCallback_CallbackAfterDeadlineBeforeTimeout_EndsAsTimeout
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-race-reverse", tool, nil)
 
 	h.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("callback after the deadline = %+v, %v, want accepted", got, err)
 	}

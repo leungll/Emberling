@@ -7,7 +7,8 @@ package main
 
 import (
 	"context"
-	"log"
+	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,7 +28,12 @@ const defaultAddr = ":9101"
 // callbacks to finish once a shutdown signal arrives.
 const shutdownTimeout = 10 * time.Second
 
+// readHeaderTimeout bounds how long a client may take to send request headers.
+const readHeaderTimeout = 10 * time.Second
+
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
 	addr := os.Getenv("MOCKPROVIDER_ADDR")
 	if addr == "" {
 		addr = defaultAddr
@@ -35,15 +41,15 @@ func main() {
 
 	dispatcher := mockprovider.NewDispatcher(nil)
 	server := mockprovider.NewServer(dispatcher)
-	httpServer := &http.Server{Addr: addr, Handler: server}
+	httpServer := &http.Server{Addr: addr, Handler: server, ReadHeaderTimeout: readHeaderTimeout}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Printf("mockprovider: listening on %s", addr)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Info("mockprovider: listening", slog.String("addr", addr))
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serveErr <- err
 			return
 		}
@@ -52,10 +58,10 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		log.Printf("mockprovider: shutdown signal received")
+		logger.Info("mockprovider: shutdown signal received")
 	case err := <-serveErr:
 		if err != nil {
-			log.Printf("mockprovider: listen error: %v", err)
+			logger.Error("mockprovider: listen error", slog.String("error", err.Error()))
 		}
 	}
 
@@ -63,9 +69,9 @@ func main() {
 	defer cancel()
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		log.Printf("mockprovider: http shutdown error: %v", err)
+		logger.Error("mockprovider: http shutdown error", slog.String("error", err.Error()))
 	}
 	if err := dispatcher.Shutdown(shutdownCtx); err != nil {
-		log.Printf("mockprovider: dispatcher shutdown error: %v", err)
+		logger.Error("mockprovider: dispatcher shutdown error", slog.String("error", err.Error()))
 	}
 }

@@ -37,6 +37,8 @@ func AggregateRunStatus(in RunAggregateInput) domain.RunStatus {
 			hasReadyOrRunning = true
 		case domain.NodeRunWaitingCallback:
 			hasWaiting = true
+		case domain.NodeRunSucceeded:
+			// Decides nothing on its own; allSucceeded checks completion below.
 		}
 	}
 

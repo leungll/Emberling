@@ -3,6 +3,7 @@ package runtime
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -91,8 +92,8 @@ func (c *Compiler) compiledConfigSchema(nodeType string, raw json.RawMessage) (*
 // Schema.Validate) into a flat, deterministically-orderable list of ValidationError,
 // prefixing each leaf's JSON-pointer instance location with basePath.
 func schemaValidationErrors(err error, basePath string) []ValidationError {
-	verr, ok := err.(*jsonschema.ValidationError)
-	if !ok {
+	var verr *jsonschema.ValidationError
+	if !errors.As(err, &verr) {
 		return []ValidationError{{Code: CodeValidationFailed, Message: err.Error(), Path: basePath}}
 	}
 	out := verr.BasicOutput()

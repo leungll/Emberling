@@ -6,6 +6,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -226,6 +227,10 @@ func (c Config) Validate() error {
 		if item.value <= 0 {
 			return &InvalidConfigError{Key: item.key, Reason: "must be a positive integer"}
 		}
+	}
+	// pgxpool sizes its pool with an int32.
+	if c.Database.MaxConns > math.MaxInt32 {
+		return &InvalidConfigError{Key: KeyDatabaseMaxConns, Reason: "must not exceed 2147483647"}
 	}
 
 	for _, item := range []struct {

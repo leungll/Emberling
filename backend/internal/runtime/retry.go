@@ -61,7 +61,11 @@ func DecideRetry(in RetryInput) RetryDecision {
 			if in.ResultUncertain {
 				return RetryDecision{Retry: false, Reason: "external call result is uncertain and idempotency is unknown"}
 			}
+		case domain.IdempotencySafe:
+			// Declared safe to repeat: no idempotency precondition applies.
 		}
+	case domain.SideEffectNone:
+		// No external effect can be duplicated, so idempotency imposes no precondition.
 	}
 
 	return RetryDecision{Retry: true, NextDelay: backoffDelay(in.Policy.Backoff, in.AttemptNo)}

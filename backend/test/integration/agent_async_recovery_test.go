@@ -232,7 +232,7 @@ func TestAgentAsyncToolRecovery_PendingCredentialMismatch_ReconcilerLeavesAction
 		t.Fatalf("pending consumedAt = %v, want nil: the refusing transaction rolled back", row.ConsumedAt)
 	}
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate || got.Pending {
 		t.Fatalf("authenticated callback = %+v, %v, want accepted", got, err)
 	}
@@ -338,7 +338,7 @@ func TestAgentAsyncToolRecovery_RestartWhileWaiting_NoReexecutionThenCallbackCom
 		t.Fatalf("tool attempts = %d, want the original one only", len(attempts))
 	}
 
-	got, err := agentDeliver(restarted, restarted.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(restarted.ctx, restarted, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate || got.Pending || got.RunID != run.ID {
 		t.Fatalf("callback after the restart = %+v, %v, want accepted for run %s", got, err, run.ID)
 	}
@@ -411,7 +411,7 @@ func TestAgentAsyncToolRecovery_RestartPastDeadline_ReconcilerTimesOutAgent(t *t
 	}
 
 	after := agentSnapshot(t, restarted, run, outcome)
-	got, err := agentDeliver(restarted, restarted.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(restarted.ctx, restarted, token, agentCallbackSucceeded)
 	if err != nil || !got.Duplicate {
 		t.Fatalf("late callback = %+v, %v, want a duplicate", got, err)
 	}
@@ -447,7 +447,7 @@ func TestAgentAsyncToolRecovery_ReconcilerTimeoutDuringOnCallback_CallbackSupers
 		return remotelookup.New("http://mock-provider.invalid", nil).OnCallback(ctx, state, payload)
 	}
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || !got.Duplicate {
 		t.Fatalf("callback = %+v, %v, want an accepted duplicate that lost to the timeout", got, err)
 	}
@@ -489,7 +489,7 @@ func TestAgentAsyncToolRecovery_CallbackCommitsBeforeReconcilerTimeout_Reconcile
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-recover-race-callback-first", tool, nil)
 
 	h.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("callback after the deadline = %+v, %v, want accepted", got, err)
 	}
@@ -529,7 +529,7 @@ func TestAgentAsyncToolRecovery_CallbackAtMaxTurns_EndsAsMaxTurns(t *testing.T) 
 	h.execute(outcome)
 	token := tool.lastToken(t)
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("callback = %+v, %v, want accepted", got, err)
 	}

@@ -82,7 +82,7 @@ func TestAgentAsyncToolCallback_StatePatch_CommitsStateVersionWithResult(t *test
 	}
 	eventsBefore := len(listEvents(h.ctx, t, h.uow, run.ID))
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("callback = %+v, %v, want accepted", got, err)
 	}
@@ -132,7 +132,7 @@ func TestAgentAsyncToolCallback_StatePatchFailsSchema_FailsInvalidActionKeepsRes
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentAsyncPatchedDispatch(t, "wf-agent-cb-state-patch-schema", stateSchema, `{"count":"not-a-number"}`, tool)
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("callback = %+v, %v, want accepted", got, err)
 	}
@@ -175,7 +175,7 @@ func TestAgentAsyncToolCallback_FailureTxEventInsertFails_RollsBackTermination(t
 		return remotelookup.New("http://mock-provider.invalid", nil).OnCallback(ctx, state, payload)
 	}
 
-	if _, err := agentDeliver(h, h.ctx, token, agentCallbackFailed); !errors.Is(err, domain.ErrConflict) {
+	if _, err := agentDeliver(h.ctx, h, token, agentCallbackFailed); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("handle callback = %v, want the conflict from the duplicated Event ID", err)
 	}
 
@@ -202,7 +202,7 @@ func TestAgentAsyncToolCallback_FailureTxEventInsertFails_RollsBackTermination(t
 		t.Errorf("rolled-back failure left a Context Version, State Version or next Turn behind")
 	}
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackFailed)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackFailed)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("re-delivery = %+v, %v, want accepted", got, err)
 	}
@@ -223,7 +223,7 @@ func TestAgentAsyncToolRecovery_AfterCallbackFailure_RestartRecoversNothing(t *t
 	if !ok {
 		t.Fatalf("no Decision committed for turn %s", outcome.AgentTurnID)
 	}
-	if got, err := agentDeliver(crashed, crashed.ctx, token, agentCallbackFailed); err != nil || !got.Accepted || got.Duplicate {
+	if got, err := agentDeliver(crashed.ctx, crashed, token, agentCallbackFailed); err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("failure callback = %+v, %v, want accepted", got, err)
 	}
 	assertAgentActionFailed(t, crashed, run.ID, outcome, domain.TerminationToolError, domain.FailureCallback)
@@ -235,7 +235,7 @@ func TestAgentAsyncToolRecovery_AfterCallbackFailure_RestartRecoversNothing(t *t
 	if report.ReadyAgentActionsFound != 0 || report.ReadyAgentTurnsFound != 0 || report.ExpiredAgentRunsFound != 0 || report.ConsumablePendingFound != 0 {
 		t.Errorf("reconciler report = %+v, want no Agent work after the Tool failed", report)
 	}
-	late, err := agentDeliver(restarted, restarted.ctx, token, agentCallbackSucceeded)
+	late, err := agentDeliver(restarted.ctx, restarted, token, agentCallbackSucceeded)
 	if err != nil || !late.Accepted || !late.Duplicate {
 		t.Errorf("late success callback = %+v, %v, want an accepted duplicate", late, err)
 	}
@@ -273,7 +273,7 @@ func TestAgentAsyncToolRecovery_DispatchResponseLost_FailsAtDeadlineNeverRedispa
 	tool.during = func(ctx context.Context, action registry.ToolAction) {
 		// The Provider accepted the task and called back before Execute returned; the
 		// callback has no Binding yet, so it can only be stored as Pending.
-		got, err := agentDeliver(crashed, ctx, action.Callback.Token, agentCallbackSucceeded)
+		got, err := agentDeliver(ctx, crashed, action.Callback.Token, agentCallbackSucceeded)
 		if err != nil || !got.Pending {
 			t.Errorf("early callback = %+v, %v, want stored as Pending", got, err)
 		}

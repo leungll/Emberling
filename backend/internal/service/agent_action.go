@@ -163,7 +163,7 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 
 	result, execErr := call.executor.Execute(callCtx, call.action)
 	if execErr != nil {
-		if agentDeadlineExceeded(execErr, callCtx) {
+		if agentDeadlineExceeded(callCtx, execErr) {
 			// The Agent deadline expired during the call, so this is not the Tool's
 			// failure: the termination is TIMEOUT, never TOOL_ERROR.
 			return s.TimeoutAgentRun(ctx, call.agentRunID)

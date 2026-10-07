@@ -104,7 +104,7 @@ func (s *ExecutionService) AdvanceAgentTurn(ctx context.Context, turnID string, 
 
 	response, genErr := call.provider.Generate(callCtx, call.request)
 	if genErr != nil {
-		if agentDeadlineExceeded(genErr, callCtx) {
+		if agentDeadlineExceeded(callCtx, genErr) {
 			// The deadline, not the Provider, ended this call: the termination is TIMEOUT,
 			// and MODEL_ERROR would misreport it.
 			return s.TimeoutAgentRun(ctx, call.agentRunID)

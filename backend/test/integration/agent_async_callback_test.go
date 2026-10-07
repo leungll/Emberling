@@ -54,7 +54,7 @@ func agentDispatchedAsyncWith(t *testing.T, workflowID string, tool *agentAsyncT
 	return h, run, outcome, tool.lastToken(t)
 }
 
-func agentDeliver(h *agentHarness, ctx context.Context, token, payload string) (service.CallbackOutcome, error) {
+func agentDeliver(ctx context.Context, h *agentHarness, token, payload string) (service.CallbackOutcome, error) {
 	return h.svc.HandleCallback(ctx, service.HandleCallback{
 		Token:          token,
 		ExternalTaskID: agentAsyncExternalTaskID,
@@ -132,7 +132,7 @@ func TestAgentAsyncToolCallback_Success_ResumesLoopWithNextReadyTurn(t *testing.
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-success", tool, nil)
 	eventsBefore := len(listEvents(h.ctx, t, h.uow, run.ID))
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil {
 		t.Fatalf("handle callback: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestAgentAsyncToolCallback_ResumeTxEventInsertFails_RollsBackEverything(t *
 		return remotelookup.New("http://mock-provider.invalid", nil).OnCallback(ctx, state, payload)
 	}
 
-	if _, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded); !errors.Is(err, domain.ErrConflict) {
+	if _, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("handle callback = %v, want the conflict from the duplicated Event ID", err)
 	}
 
@@ -261,7 +261,7 @@ func TestAgentAsyncToolCallback_ResumeTxEventInsertFails_RollsBackEverything(t *
 	}
 
 	// The waiting state is intact, so the Provider's re-delivery resumes normally.
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("re-delivery = %+v, %v, want accepted", got, err)
 	}
@@ -280,7 +280,7 @@ func TestAgentAsyncToolCallback_ProviderFailure_FailsThroughSharedToolFailure(t 
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-provider-failure", tool, nil)
 	eventsBefore := len(listEvents(h.ctx, t, h.uow, run.ID))
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackFailed)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackFailed)
 	if err != nil {
 		t.Fatalf("handle callback: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestAgentAsyncToolCallback_ResultViolatesOutputSchema_FailsWithCallbackSour
 		return registry.ToolResult{Output: json.RawMessage(`{"key":"k1"}`)}, nil
 	}
 
-	if _, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded); err != nil {
+	if _, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded); err != nil {
 		t.Fatalf("handle callback: %v", err)
 	}
 
@@ -350,7 +350,7 @@ func TestAgentAsyncToolCallback_DuplicateDelivery_WritesNothingConsumesNoSeq(t *
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-duplicate", tool, nil)
 
-	first, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	first, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !first.Accepted || first.Duplicate {
 		t.Fatalf("first delivery = %+v, %v, want accepted", first, err)
 	}
@@ -358,7 +358,7 @@ func TestAgentAsyncToolCallback_DuplicateDelivery_WritesNothingConsumesNoSeq(t *
 	callbacksBefore := tool.callbackCount()
 
 	for _, payload := range []string{agentCallbackSucceeded, agentCallbackFailed} {
-		got, err := agentDeliver(h, h.ctx, token, payload)
+		got, err := agentDeliver(h.ctx, h, token, payload)
 		if err != nil {
 			t.Fatalf("duplicate delivery: %v", err)
 		}
@@ -395,7 +395,7 @@ func TestAgentAsyncToolCallback_LateAfterAgentTimeout_RejectedWithoutMutation(t 
 		t.Fatalf("precondition: attempt %s run %s, want FAILED after the timeout", before.attemptStatus, before.runStatus)
 	}
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil {
 		t.Fatalf("late callback: %v", err)
 	}
@@ -439,14 +439,14 @@ func TestAgentAsyncToolCallback_WrongOrExpiredToken_RejectedWithoutMutation(t *t
 	before := agentSnapshot(t, h, run, outcome)
 	forged := token[:len(token)-2] + "xx"
 	for name, candidate := range map[string]string{"forged": forged, "other attempt": otherToken, "empty": ""} {
-		if _, err := agentDeliver(h, h.ctx, candidate, agentCallbackSucceeded); !errors.Is(err, service.ErrInvalidCallbackCredential) {
+		if _, err := agentDeliver(h.ctx, h, candidate, agentCallbackSucceeded); !errors.Is(err, service.ErrInvalidCallbackCredential) {
 			t.Errorf("%s token: err = %v, want ErrInvalidCallbackCredential", name, err)
 		}
 	}
 
 	// The credential outlives the Agent deadline by the Pending TTL and no longer.
 	h.clock.Advance(agentTimeoutMs*time.Millisecond + 2*time.Hour)
-	if _, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded); !errors.Is(err, service.ErrInvalidCallbackCredential) {
+	if _, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded); !errors.Is(err, service.ErrInvalidCallbackCredential) {
 		t.Errorf("expired token: err = %v, want ErrInvalidCallbackCredential", err)
 	}
 
@@ -530,7 +530,7 @@ func TestAgentAsyncToolCallback_EarlyPendingCallback_ConsumedOnceAfterDispatch(t
 
 	// The Provider re-delivers live: the Attempt is resolved, so nothing more is written.
 	seqBefore := agentRunRow(h.ctx, t, h.uow, run.ID).LastSeq
-	got, err := agentDeliver(h, h.ctx, tool.lastToken(t), agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, tool.lastToken(t), agentCallbackSucceeded)
 	if err != nil || !got.Duplicate {
 		t.Fatalf("live re-delivery = %+v, %v, want duplicate", got, err)
 	}
@@ -551,7 +551,7 @@ func TestAgentAsyncToolCallback_UninterpretablePayload_LeavesActionWaiting(t *te
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-rejected", tool, nil)
 	before := agentSnapshot(t, h, run, outcome)
 
-	_, err := agentDeliver(h, h.ctx, token, `{"status":"SOMETHING_ELSE"}`)
+	_, err := agentDeliver(h.ctx, h, token, `{"status":"SOMETHING_ELSE"}`)
 	var rejected *service.CallbackPayloadRejectedError
 	if !errors.As(err, &rejected) {
 		t.Fatalf("handle callback = %v, want CallbackPayloadRejectedError", err)
@@ -563,7 +563,7 @@ func TestAgentAsyncToolCallback_UninterpretablePayload_LeavesActionWaiting(t *te
 		t.Fatalf("state after a rejected payload = %+v, want unchanged %+v", after, before)
 	}
 
-	got, err := agentDeliver(h, h.ctx, token, agentCallbackSucceeded)
+	got, err := agentDeliver(h.ctx, h, token, agentCallbackSucceeded)
 	if err != nil || !got.Accepted || got.Duplicate {
 		t.Fatalf("valid delivery after a rejected one = %+v, %v, want accepted", got, err)
 	}

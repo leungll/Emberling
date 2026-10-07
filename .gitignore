@@ -6,6 +6,7 @@ docs/
 .claude/
 
 # Dependencies and build/test output.
+.bin/
 node_modules/
 studio/dist/
 studio/test-results/

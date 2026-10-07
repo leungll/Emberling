@@ -64,7 +64,7 @@ func toAssetMetadataDTO(a domain.Asset) assetMetadataDTO {
 func (d Deps) uploadAsset(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, d.AssetMaxUploadBytes+multipartFramingSlack)
 
-	if err := r.ParseMultipartForm(assetMultipartMemoryBytes); err != nil {
+	if err := r.ParseMultipartForm(assetMultipartMemoryBytes); err != nil { //nolint:gosec // G120: r.Body is wrapped by http.MaxBytesReader above
 		// The parse error is not surfaced: it can quote part headers and body fragments.
 		writeError(w, d.Logger, mapMultipartError(err), "")
 		return

@@ -292,11 +292,11 @@ func TestReconciler_ExpiredPendingCallback_DeletedNotConsumed(t *testing.T) {
 
 // maxEventSeq returns the highest Seq among events, or 0 for an empty slice.
 func maxEventSeq(events []domain.Event) int64 {
-	var max int64
+	var highest int64
 	for _, ev := range events {
-		if ev.Seq > max {
-			max = ev.Seq
+		if ev.Seq > highest {
+			highest = ev.Seq
 		}
 	}
-	return max
+	return highest
 }

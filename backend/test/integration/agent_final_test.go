@@ -220,7 +220,7 @@ func TestAgentFinal_NoSchemaStringOutput_CompletesNodeRunAndRun(t *testing.T) {
 	completed := agentEventIndex(types, domain.EventAgentActionCompleted)
 	agentDone := agentEventIndex(types, domain.EventAgentCompleted)
 	nodeDone := agentEventIndex(types, domain.EventNodeCompleted)
-	if started < 0 || !(started < completed && completed < agentDone && agentDone < nodeDone) {
+	if started < 0 || !(started < completed && completed < agentDone && agentDone < nodeDone) { //nolint:staticcheck // QF1001: the negated chain reads as "not in this order"
 		t.Errorf("events = %v, want AGENT_ACTION_STARTED < AGENT_ACTION_COMPLETED < AGENT_COMPLETED < NODE_COMPLETED", types)
 	}
 	if agentCountEventType(types, domain.EventAgentStateUpdated) != 0 {
@@ -280,7 +280,7 @@ func TestAgentFinal_WithStatePatch_CreatesStateVersionAndEvent(t *testing.T) {
 	completed := agentEventIndex(types, domain.EventAgentActionCompleted)
 	updated := agentEventIndex(types, domain.EventAgentStateUpdated)
 	agentDone := agentEventIndex(types, domain.EventAgentCompleted)
-	if !(completed < updated && updated < agentDone) {
+	if !(completed < updated && updated < agentDone) { //nolint:staticcheck // QF1001: the negated chain reads as "not in this order"
 		t.Errorf("events = %v, want AGENT_ACTION_COMPLETED < AGENT_STATE_UPDATED < AGENT_COMPLETED", types)
 	}
 	payload := agentEventPayload(t, events, domain.EventAgentStateUpdated)
@@ -364,7 +364,7 @@ func TestAgentFinal_OutputFailsSchema_FailsInvalidActionNoVersions(t *testing.T)
 	failed := agentEventIndex(types, domain.EventAgentActionFailed)
 	agentFailed := agentEventIndex(types, domain.EventAgentFailed)
 	nodeFailed := agentEventIndex(types, domain.EventNodeFailed)
-	if failed < 0 || !(failed < agentFailed && agentFailed < nodeFailed) {
+	if failed < 0 || !(failed < agentFailed && agentFailed < nodeFailed) { //nolint:staticcheck // QF1001: the negated chain reads as "not in this order"
 		t.Errorf("events = %v, want AGENT_ACTION_FAILED < AGENT_FAILED < NODE_FAILED", types)
 	}
 	payload := agentEventPayload(t, listEvents(h.ctx, t, h.uow, run.ID), domain.EventAgentActionFailed)

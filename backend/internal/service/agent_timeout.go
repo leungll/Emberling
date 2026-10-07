@@ -23,7 +23,7 @@ func agentTimeoutError() domain.ExecutionError {
 // reports its own error after the bounded context was already done. A parent context that
 // was cancelled -- process shutdown -- is deliberately not a timeout: it leaves the
 // committed work recoverable instead of terminating the Agent Run.
-func agentDeadlineExceeded(callErr error, callCtx context.Context) bool {
+func agentDeadlineExceeded(callCtx context.Context, callErr error) bool {
 	return errors.Is(callErr, context.DeadlineExceeded) || errors.Is(callCtx.Err(), context.DeadlineExceeded)
 }
 

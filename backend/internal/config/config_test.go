@@ -142,6 +142,27 @@ func TestConfig_NonPositiveBound_ReturnsInvalidConfigError(t *testing.T) {
 	}
 }
 
+// TestConfig_DatabaseMaxConnsAboveInt32_IsRejected pins the upper bound on the pool size:
+// pgxpool takes it as an int32, so a larger value must fail validation instead of
+// wrapping on conversion.
+func TestConfig_DatabaseMaxConnsAboveInt32_IsRejected(t *testing.T) {
+	env := completeEnv()
+	env[config.KeyDatabaseMaxConns] = "2147483648"
+
+	_, err := config.Load(lookup(env))
+
+	var invalid *config.InvalidConfigError
+	if !errors.As(err, &invalid) || invalid.Key != config.KeyDatabaseMaxConns {
+		t.Fatalf("Load with %s above int32: want InvalidConfigError for that key, got %v",
+			config.KeyDatabaseMaxConns, err)
+	}
+
+	env[config.KeyDatabaseMaxConns] = "2147483647"
+	if _, err := config.Load(lookup(env)); err != nil {
+		t.Fatalf("Load with %s at the int32 maximum: %v", config.KeyDatabaseMaxConns, err)
+	}
+}
+
 func TestConfig_NonHTTPCallbackURL_IsRejected(t *testing.T) {
 	env := completeEnv()
 	env[config.KeyCallbackBaseURL] = "emberling.example"

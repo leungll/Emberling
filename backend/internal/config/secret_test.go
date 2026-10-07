@@ -19,7 +19,7 @@ func TestSecret_String_Redacts(t *testing.T) {
 	for name, rendered := range map[string]string{
 		"String":    secret.String(),
 		"%v":        fmt.Sprintf("%v", secret),
-		"%s":        fmt.Sprintf("%s", secret),
+		"%s":        fmt.Sprintf("%s", secret), //nolint:staticcheck // S1025: the test exercises the %s verb, not String()
 		"%#v":       fmt.Sprintf("%#v", secret),
 		"in struct": fmt.Sprintf("%v", struct{ S config.Secret }{secret}),
 	} {

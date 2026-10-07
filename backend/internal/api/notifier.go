@@ -26,7 +26,7 @@ func NewHub() *Hub {
 // Subscribe registers a new listener for runID. The caller must invoke the returned
 // unsubscribe func exactly once (typically deferred) when the connection ends, so a
 // disconnected client's subscriber is dropped rather than accumulating forever.
-func (h *Hub) Subscribe(runID string) (*subscriber, func()) {
+func (h *Hub) Subscribe(runID string) (*subscriber, func()) { //nolint:revive // unexported-return: only this package reads a subscriber's wake channel
 	sub := &subscriber{wake: make(chan struct{}, 1)}
 
 	h.mu.Lock()

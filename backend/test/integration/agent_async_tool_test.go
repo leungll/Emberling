@@ -495,7 +495,7 @@ func TestAgentAsyncTool_DispatchLosesToAgentTimeout_WritesNothing(t *testing.T) 
 		// Only the injected clock passes the deadline; the call's real context stays live,
 		// so the Tool returns its dispatch and the dispatch transaction really runs.
 		h.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
-		timeoutErr = h.svc.TimeoutAgentRun(h.ctx, agentRunID)
+		timeoutErr = h.svc.TimeoutAgentRun(h.ctx, agentRunID) //nolint:contextcheck // the timeout is a separate Reconciler entry, not part of the Tool call
 	}
 	h, run, outcome := newAgentAsyncHarness(t, "wf-agent-async-dispatch-loses", tool)
 	agentRunID = outcome.AgentRunID

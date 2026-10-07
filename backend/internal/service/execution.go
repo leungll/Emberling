@@ -518,7 +518,7 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 			nr := nodeRuns[i]
 			existing[nr.NodeID] = runtime.NodeRunState{NodeID: nr.NodeID, Status: nr.Status}
 			byNodeID[nr.NodeID] = nr
-			switch nr.Status {
+			switch nr.Status { //nolint:exhaustive // WAITING_CALLBACK, SUCCEEDED and FAILED NodeRuns neither offer a claim nor block one
 			case domain.NodeRunReady:
 				readyIDs = append(readyIDs, nr.NodeID)
 			case domain.NodeRunRunning:

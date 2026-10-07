@@ -92,7 +92,7 @@ func corruptedRecordNodes(t *testing.T, executor registry.NodeExecutor, side dom
 // text_output), matching saveAsyncDefinition's shape (service_async_test.go) but
 // parameterized on workflowID/nodeType so this test can create two distinct Definitions
 // in the same database.
-func corruptedRecordDefinition(t *testing.T, ctx context.Context, uow store.UnitOfWork, clock *execClock, workflowID, nodeType string, executor registry.NodeExecutor, side domain.SideEffectPolicy, policy domain.ExecutionPolicy) domain.Definition {
+func corruptedRecordDefinition(ctx context.Context, t *testing.T, uow store.UnitOfWork, clock *execClock, workflowID, nodeType string, executor registry.NodeExecutor, side domain.SideEffectPolicy, policy domain.ExecutionPolicy) domain.Definition {
 	t.Helper()
 	task := domain.Node{ID: "task", Type: nodeType, Name: "Dispatch", Config: json.RawMessage(`{}`)}
 	if policy.MaxAttempts > 0 || policy.TimeoutMs > 0 {
@@ -138,7 +138,7 @@ func corruptedRecordDefinition(t *testing.T, ctx context.Context, uow store.Unit
 // equivalent of asyncHarness.dispatchAsyncNode (service_async_test.go), generalized over
 // which service and Node Type drive the claim since this test uses two different
 // Definitions, each with its own Node Type.
-func corruptedRecordDispatch(t *testing.T, ctx context.Context, svc *service.ExecutionService, run domain.Run, nodeType string, externalTaskID string) (nodeRunID, attemptID string) {
+func corruptedRecordDispatch(ctx context.Context, t *testing.T, svc *service.ExecutionService, run domain.Run, nodeType string, externalTaskID string) (nodeRunID, attemptID string) {
 	t.Helper()
 	var outcome service.AdvanceOutcome
 	for i := 0; i < 10; i++ {
@@ -214,8 +214,8 @@ func TestReconciler_ExpiredAttemptWithDriftedNodeType_FailsWithRetainedEventAndC
 	})
 
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
-	defHealthy := corruptedRecordDefinition(t, ctx, uow, clock, "wf_reconcile_healthy_"+suffix, corruptedRecordHealthyType, exec, side, policy)
-	defDrifted := corruptedRecordDefinition(t, ctx, uow, clock, "wf_reconcile_drifted_"+suffix, corruptedRecordDriftedType, exec, side, policy)
+	defHealthy := corruptedRecordDefinition(ctx, t, uow, clock, "wf_reconcile_healthy_"+suffix, corruptedRecordHealthyType, exec, side, policy)
+	defDrifted := corruptedRecordDefinition(ctx, t, uow, clock, "wf_reconcile_drifted_"+suffix, corruptedRecordDriftedType, exec, side, policy)
 
 	runHealthy, err := svc.CreateRun(ctx, service.CreateRun{
 		WorkflowID: defHealthy.WorkflowID, DefinitionVersion: defHealthy.Version,
@@ -233,9 +233,9 @@ func TestReconciler_ExpiredAttemptWithDriftedNodeType_FailsWithRetainedEventAndC
 	}
 
 	exec.setExternalTaskID("provider-task-healthy")
-	healthyNodeRunID, healthyAttemptID := corruptedRecordDispatch(t, ctx, svc, runHealthy, corruptedRecordHealthyType, "provider-task-healthy")
+	healthyNodeRunID, healthyAttemptID := corruptedRecordDispatch(ctx, t, svc, runHealthy, corruptedRecordHealthyType, "provider-task-healthy")
 	exec.setExternalTaskID("provider-task-drifted")
-	driftedNodeRunID, driftedAttemptID := corruptedRecordDispatch(t, ctx, svc, runDrifted, corruptedRecordDriftedType, "provider-task-drifted")
+	driftedNodeRunID, driftedAttemptID := corruptedRecordDispatch(ctx, t, svc, runDrifted, corruptedRecordDriftedType, "provider-task-drifted")
 
 	// Both Attempts are now DISPATCHED with a deadline; advance past it so ListExpired
 	// finds both in the same scan.

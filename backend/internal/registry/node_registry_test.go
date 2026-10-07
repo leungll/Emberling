@@ -269,6 +269,19 @@ func TestNodeRegistry_Register_PromptEditorWithoutStringPropertyRejected(t *test
 	}
 }
 
+// TestNodeRegistry_Register_DefaultWidgetOnNonStringPropertySucceeds pins that the
+// DEFAULT widget places no type constraint on its property: Studio picks the editor from
+// the property's own type.
+func TestNodeRegistry_Register_DefaultWidgetOnNonStringPropertySucceeds(t *testing.T) {
+	reg := validSyncNodeRegistration()
+	reg.Metadata.UISchema.Fields = []domain.UIField{
+		{Path: "required", Order: 10, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},
+	}
+	if err := NewNodeRegistry().Register(reg); err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
+}
+
 func TestNodeRegistry_Get_UnknownTypeReturnsFalse(t *testing.T) {
 	r := NewNodeRegistry()
 	if _, ok := r.Get("does_not_exist"); ok {

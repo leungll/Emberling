@@ -73,6 +73,37 @@ func TestDecideRetry_NoneSafe_AlwaysRetryable(t *testing.T) {
 	}
 }
 
+// TestDecideRetry_IdempotencyPreconditionsApplyOnlyToExternal pins the retry outcome of
+// every SideEffectPolicy combination whose idempotency precondition does not apply: a
+// NONE side effect has no external effect to duplicate, so neither a missing key nor an
+// uncertain result blocks a retry, and an EXTERNAL call declared SAFE to repeat retries
+// even when its result is uncertain.
+func TestDecideRetry_IdempotencyPreconditionsApplyOnlyToExternal(t *testing.T) {
+	cases := []struct {
+		name       string
+		sideEffect domain.SideEffectPolicy
+	}{
+		{"none safe", domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe}},
+		{"none keyed", domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencyKeyed}},
+		{"none unknown", domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencyUnknown}},
+		{"external safe", domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencySafe}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := DecideRetry(RetryInput{
+				Policy:            domain.ExecutionPolicy{MaxAttempts: 3, Backoff: domain.BackoffFixed},
+				SideEffect:        tc.sideEffect,
+				AttemptNo:         1,
+				HasIdempotencyKey: false,
+				ResultUncertain:   true,
+			})
+			if !got.Retry {
+				t.Errorf("DecideRetry() = %+v, want Retry=true", got)
+			}
+		})
+	}
+}
+
 // TestDecideRetry_MaxAttemptsExhausted_NoRetry asserts DecideRetry refuses once
 // AttemptNo has reached the policy's MaxAttempts, regardless of SideEffectPolicy.
 func TestDecideRetry_MaxAttemptsExhausted_NoRetry(t *testing.T) {

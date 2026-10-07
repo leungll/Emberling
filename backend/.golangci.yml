@@ -1,0 +1,77 @@
+# golangci-lint v2 configuration for the backend module. `make lint` runs it for the
+# default build and again with the integration build tag.
+#
+# sqlclosecheck is deliberately absent: it does not detect leaked pgx rows, so it would
+# give false assurance. rowserrcheck (scoped to pgx) checks that row iteration errors are
+# inspected.
+version: "2"
+run:
+  timeout: 10m
+  relative-path-mode: gomod
+linters:
+  default: none
+  enable: [govet, staticcheck, errcheck, ineffassign, unused, exhaustive, errorlint,
+           rowserrcheck, bodyclose, noctx, contextcheck, nolintlint, forbidigo, gosec, revive]
+  settings:
+    errcheck:
+      # Close errors on readers and files are not actionable at the call sites in this
+      # module; write paths that must observe a Close error check it explicitly.
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+    exhaustive:
+      default-signifies-exhaustive: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    rowserrcheck:
+      packages: [github.com/jackc/pgx/v5]
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: '^fmt\.Print.*$'
+          msg: use log/slog
+        - pattern: '^log\.(Print|Fatal|Panic).*$'
+          msg: use log/slog
+        - pattern: '^os\.(Getenv|LookupEnv)$'
+          msg: read configuration through internal/config
+    gosec:
+      # G101: hard-coded credential heuristics fire on field and constant names such as
+      #       "token" or "secret" that hold no secret value.
+      # G304: file paths come from configuration and the Artifact store's own keys, not
+      #       from request input.
+      # G706: log-injection heuristic; structured slog attributes are escaped by the handler.
+      excludes: [G101, G304, G706]
+    revive:
+      rules:
+        - name: context-as-argument
+        - name: redefines-builtin-id
+        - name: unexported-return
+        - name: error-return
+        - name: error-naming
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: var-declaration
+        - name: unreachable-code
+  exclusions:
+    rules:
+      # Configuration loading and process entry points are the only readers of the
+      # environment.
+      - path: '(^|/)(internal/config|cmd)/'
+        linters: [forbidigo]
+        text: 'os\.(Getenv|LookupEnv)'
+      # The test database helper reads the test database URL directly.
+      - path: '^test/testdb/'
+        linters: [forbidigo]
+        text: 'os\.Getenv'
+      # Tests drive in-process httptest servers with short-lived requests.
+      - path: '_test\.go$'
+        linters: [bodyclose, noctx, gosec]
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false

@@ -119,6 +119,8 @@ Run the narrowest relevant test while iterating, then run the repository gate be
 make check
 ```
 
+`make check` runs golangci-lint with `backend/.golangci.yml` (installed by `make bootstrap`) and runs Go tests with the race detector. A `//nolint` directive must name the specific linter and give a reason.
+
 If the full gate cannot run, report the exact command, failure, and unverified surface. Never claim a check passed when it was skipped or unavailable.
 
 ## Code quality

@@ -15,15 +15,22 @@ PNPM_VERSION := 11.25.0
 # pinned toolchain instead of failing the build.
 GO := GOTOOLCHAIN=auto go
 
+# golangci-lint is pinned and installed by `make bootstrap` into a repo-local tool
+# directory instead of backend/go.mod. It must be built with the module's Go baseline,
+# or it refuses to load a module that requires a newer Go.
+GOLANGCI_LINT_VERSION := 2.14.0
+TOOLS_BIN             := $(abspath .bin)
+GOLANGCI_LINT         := $(TOOLS_BIN)/golangci-lint
+
 BACKEND := backend
 STUDIO  := studio
 
 .PHONY: bootstrap dev test test-integration test-e2e lint check \
-        check-go-version check-node-version fmt-check vet check-doc-refs \
+        check-go-version check-node-version fmt-check lint-go install-golangci-lint check-doc-refs \
         check-migrations migrations-checksum check-file-size
 
 ## bootstrap: verify toolchain versions and install dependencies. Starts no service.
-bootstrap: check-go-version check-node-version
+bootstrap: check-go-version check-node-version install-golangci-lint
 	@echo "==> backend: downloading Go module dependencies"
 	@cd $(BACKEND) && $(GO) mod download
 	@if [ -d $(STUDIO) ]; then \
@@ -32,6 +39,17 @@ bootstrap: check-go-version check-node-version
 		cd $(STUDIO) && pnpm install --frozen-lockfile; \
 	else \
 		echo "studio: not present, skipped"; \
+	fi
+
+install-golangci-lint:
+	@echo "==> toolchain: golangci-lint v$(GOLANGCI_LINT_VERSION)"
+	@if [ -x $(GOLANGCI_LINT) ] && $(GOLANGCI_LINT) version 2>/dev/null | \
+		grep -q "version $(GOLANGCI_LINT_VERSION) built with go$(GO_VERSION) "; then \
+		echo "    already installed"; \
+	else \
+		GOTOOLCHAIN=go$(GO_VERSION) GOBIN=$(TOOLS_BIN) go install \
+			github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(GOLANGCI_LINT_VERSION); \
+		echo "    installed into $(TOOLS_BIN)"; \
 	fi
 
 check-go-version:
@@ -90,7 +108,7 @@ dev:
 ## test: Go unit tests and Studio component tests.
 test:
 	@echo "==> backend: unit tests"
-	@cd $(BACKEND) && $(GO) test ./...
+	@cd $(BACKEND) && $(GO) test -race ./...
 	@if [ -d $(STUDIO) ]; then \
 		echo "==> studio: component tests"; \
 		cd $(STUDIO) && pnpm test --run; \
@@ -108,7 +126,7 @@ test-integration:
 		echo "testcontainers can run postgres:18. Refusing to skip."; \
 		exit 1; \
 	fi
-	@cd $(BACKEND) && $(GO) test -tags integration -count=1 ./test/... ./internal/...
+	@cd $(BACKEND) && $(GO) test -race -timeout 20m -tags integration -count=1 ./test/... ./internal/...
 
 ## test-e2e: Playwright acceptance of the three MVP scenarios.
 test-e2e:
@@ -118,8 +136,8 @@ test-e2e:
 		echo "studio: not present, skipped"; \
 	fi
 
-## lint: go vet, formatting check and Studio lint.
-lint: fmt-check vet
+## lint: formatting check, golangci-lint (which includes go vet) and Studio lint.
+lint: fmt-check lint-go
 	@if [ -d $(STUDIO) ]; then \
 		echo "==> studio: lint"; \
 		cd $(STUDIO) && pnpm lint; \
@@ -137,10 +155,15 @@ fmt-check:
 		exit 1; \
 	fi
 
-vet:
-	@echo "==> backend: go vet"
-	@cd $(BACKEND) && $(GO) vet ./...
-	@cd $(BACKEND) && $(GO) vet -tags integration ./...
+# Runs backend/.golangci.yml for the default build and for the integration build tag.
+lint-go:
+	@echo "==> backend: golangci-lint"
+	@if ! [ -x $(GOLANGCI_LINT) ]; then \
+		echo "golangci-lint is not installed in $(TOOLS_BIN). Run: make bootstrap"; \
+		exit 1; \
+	fi
+	@cd $(BACKEND) && $(GOLANGCI_LINT) run ./...
+	@cd $(BACKEND) && $(GOLANGCI_LINT) run --build-tags integration ./...
 
 # Tracked files must state invariants in their own words instead of citing the unpublished
 # design documents by number, filename or section, referring to a rule by its number in a
