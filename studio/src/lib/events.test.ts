@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { eventTone } from './events';
 
 describe('eventTone', () => {
-  it('colours each Event by the transition it records (04 §4)', () => {
+  it('colours each Event by the transition it records', () => {
     expect(eventTone('RUN_CREATED')).toBe('succeeded');
     expect(eventTone('NODE_COMPLETED')).toBe('succeeded');
     expect(eventTone('RUN_COMPLETED')).toBe('succeeded');

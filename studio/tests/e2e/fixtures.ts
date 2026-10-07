@@ -29,8 +29,7 @@ export interface CreateDefinitionRequest {
 }
 
 /**
- * Definition payloads for the MVP acceptance scenarios (docs/04-ux.md §6, docs/09
- * §1). `global-setup.ts` creates each of these directly through `POST /api/definitions`
+ * Definition payloads for the MVP acceptance scenarios. `global-setup.ts` creates each of these directly through `POST /api/definitions`
  * (never through the UI - only Run creation is driven from Studio), so a spec file only
  * has to open the Run Input Dialog and observe.
  *
@@ -192,7 +191,7 @@ export const aigcMedia: CreateDefinitionRequest = {
  * (minus `workflowId`), retargeted at the asynchronous `remote_lookup` Tool, matching
  * `backend/test/contract/e2e_agent_mock_directive_test.go`'s
  * `createAgentAsyncRunFromDirective` (same fixture, same `lookup` -> `remote_lookup` swap).
- * `agent-async-tool.spec.ts` drives it end-to-end via the M5 slice 5.3b mock directive
+ * `agent-async-tool.spec.ts` drives it end-to-end via the Mock Model tool-call directive
  * (`mock:tool-call:remote_lookup:<json-arguments>`), reachable purely over HTTP.
  */
 export const agentLookup: CreateDefinitionRequest = {
@@ -310,7 +309,7 @@ export const agentSyncLookup: CreateDefinitionRequest = {
 /**
  * `referenceImage` is `aigcMedia` plus the Reference Image path of
  * `backend/test/fixtures/definitions/aigc_media.json`: an `image_input` node whose
- * `image` port feeds `image_generation.reference` (docs/09 §1 item 13). Its config
+ * `image` port feeds `image_generation.reference`. Its config
  * mirrors that fixture's `node_reference`. The Image Input NodeRun's own output is the
  * `source: ASSET` ImageRef that Observe previews through `/api/assets/{id}/content`
  * (reference-image.spec.ts); the Mock Task Adapter forwards that same reference to the

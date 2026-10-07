@@ -1,11 +1,11 @@
 //go:build integration
 
-// Package integration: this file covers the Agent execution facts of
-// docs/05-data-model.md §1.8 "Agent Execution Facts" against a real PostgreSQL —
+// Package integration: this file covers the Agent execution facts against a real
+// PostgreSQL —
 // the frozen Agent Run configuration, the identity constraints that stop a second
 // Agent Run, Turn, Action or Tool Attempt from existing, the conditional claims that
-// pick one winner between immediate advancement and the Reconciler
-// (docs/06-execution-model.md §1.7), and the Agent Run recovery pointers.
+// pick one winner between immediate advancement and the Reconciler, and the Agent Run
+// recovery pointers.
 package integration
 
 import (
@@ -77,9 +77,9 @@ func TestAgentRunStore_InsertAndGet_RoundTripsFrozenConfig(t *testing.T) {
 	}
 }
 
-// One Agent NodeRun has at most one Agent Run (05 §1.8: "一个 Agent NodeRun 只能创建一个
-// Agent Run"). The guarantee is a UNIQUE constraint, not a process-local check, so a
-// duplicated initialisation transaction loses in the database.
+// One Agent NodeRun has at most one Agent Run. The guarantee is a UNIQUE constraint, not
+// a process-local check, so a duplicated initialisation transaction loses in the
+// database.
 func TestAgentRunStore_SecondRunForSameNodeRun_RejectedByConstraint(t *testing.T) {
 	ctx := context.Background()
 	pool := testdb.Open(t)
@@ -96,9 +96,10 @@ func TestAgentRunStore_SecondRunForSameNodeRun_RejectedByConstraint(t *testing.T
 	}
 }
 
-// AdvancePointers is how a Tool result transaction moves the recovery position (05 §1.8:
-// "进程重启后，Runtime 只从当前指针和持久化工作项恢复 Agent Loop"). A caller working from
-// a stale pointer must not overwrite the committed one.
+// AdvancePointers is how a Tool result transaction moves the recovery position (after a
+// process restart, the Runtime resumes the Agent Loop only from the current pointers and
+// persisted work items). A caller working from a stale pointer must not overwrite the
+// committed one.
 func TestAgentRunStore_UpdatePointers_ConditionalOnCurrentVersion(t *testing.T) {
 	ctx := context.Background()
 	pool := testdb.Open(t)
@@ -166,7 +167,7 @@ func TestAgentRunStore_Terminate_SecondTermination_ReportsNoClaim(t *testing.T) 
 }
 
 // TestStoreAgentRuns_ListExpired_ReturnsOnlyUnterminatedPastDeadline covers the Agent
-// deadline row of the Reconciler scan table (06 §2.1): the timeout use case may only be
+// deadline row of the Reconciler scan table: the timeout use case may only be
 // handed Agent Runs whose deadline has passed and that nothing has terminated yet. A
 // terminated Agent Run is a committed outcome, and an Agent Run still inside its deadline
 // is live work; listing either one would let recovery terminate a Run it has no authority
@@ -242,8 +243,9 @@ func listExpiredAgentRuns(ctx context.Context, t *testing.T, uow store.UnitOfWor
 // ---------------------------------------------------------------------------
 
 // Immediate advancement and the Reconciler race for the same READY Turn; only the
-// transaction whose UPDATE affects one row may call the model (06 §1.7: "影响 0 行的即时
-// 推进或 Reconciler 必须停止，不能再次请求模型").
+// transaction whose UPDATE affects one row may call the model (an immediate advancement or
+// Reconciler pass whose UPDATE affects zero rows must stop and must not call the model
+// again).
 func TestAgentTurnStore_ClaimReady_TwoClaimersOneWins(t *testing.T) {
 	ctx := context.Background()
 	pool := testdb.Open(t)
@@ -324,7 +326,7 @@ func TestAgentTurnStore_DuplicateTurnNo_RejectedByConstraint(t *testing.T) {
 	createAgentTurn(ctx, t, uow, newAgentTurn("turn_1", "ar_1", 1))
 
 	// UNIQUE (agent_run_id, turn_no) is what stops immediate advancement, a callback and
-	// the Reconciler from producing a duplicate round (05 §1.8).
+	// the Reconciler from producing a duplicate round.
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.AgentTurns().Create(ctx, newAgentTurn("turn_1_dup", "ar_1", 1))
 	})
@@ -339,7 +341,7 @@ func TestAgentTurnStore_DuplicateTurnNo_RejectedByConstraint(t *testing.T) {
 }
 
 // ListByAgentRunID is the read the Agent Trace projection expands one Agent Run's rounds
-// from (docs/08-interface-spec.md §3.4: "按持久化顺序展开"). It must return the Turns of
+// from, expanded in persisted order. It must return the Turns of
 // that Agent Run only, ordered by turn_no, whatever order the rows were inserted in --
 // the Reconciler and immediate advancement create rounds from different processes, so
 // insertion order is not the Agent Loop's order.
@@ -492,7 +494,7 @@ func TestAgentActionStore_SecondActionForSameTurn_RejectedByConstraint(t *testin
 	f := seedRun(ctx, t, uow)
 	seedDecidedTurn(ctx, t, uow, f, "ar_1", "turn_1", "decision_1", "action_1")
 
-	// Each Turn has at most one Decision and one Action (05 §1.8), so a second
+	// Each Turn has at most one Decision and one Action, so a second
 	// advancement path cannot create a competing work item for the same Turn.
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.AgentActions().Create(ctx, newAgentAction("action_2", "turn_1", "decision_1"))
@@ -559,7 +561,7 @@ func TestToolAttemptStore_DuplicateAttemptNo_RejectedByConstraint(t *testing.T) 
 	createToolAttempt(ctx, t, uow, newToolAttempt("tool_attempt_1", "action_1", 1))
 
 	// UNIQUE (action_id, attempt_no): a duplicated dispatch transaction cannot record a
-	// second call under the same Attempt number (05 §1.8).
+	// second call under the same Attempt number.
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.ToolAttempts().Create(ctx, newToolAttempt("tool_attempt_dup", "action_1", 1))
 	})
@@ -795,7 +797,7 @@ func TestAgentActionStore_WaitingActionResolvesOnce_LateWriteStale(t *testing.T)
 	}
 }
 
-// TestAgentActionStore_MarkFailedFromReady_RejectedAsTimeoutOnly covers 06 §1.7: failing an
+// TestAgentActionStore_MarkFailedFromReady_RejectedAsTimeoutOnly covers that failing an
 // Action that no executor ever claimed is the Agent timeout's transition alone
 // (MarkTimedOut). MarkFailed refuses READY as its expected state before any SQL runs, and
 // the READY row is left untouched.
@@ -874,7 +876,7 @@ func TestAgentStateVersionStore_DuplicateVersion_RejectedByConstraint(t *testing
 	f := seedRun(ctx, t, uow)
 	createAgentRun(ctx, t, uow, newAgentRun("ar_1", f.nodeRunID))
 
-	// State Version 0 is fixed to the empty object (05 §1.8).
+	// State Version 0 is fixed to the empty object.
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.AgentStateVersions().Create(ctx, domain.AgentStateVersion{
 			ID: "statev_0", AgentRunID: "ar_1", Version: 0,

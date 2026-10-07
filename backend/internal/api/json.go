@@ -7,9 +7,8 @@ import (
 	"net/http"
 )
 
-// listEnvelope wraps every list response in the {"items": [...]} shape
-// docs/08-interface-spec.md §3 uses uniformly for definitions, node-types, models, tools
-// and events.
+// listEnvelope wraps every list response in the {"items": [...]} shape the REST interface
+// uses uniformly for definitions, node-types, models, tools and events.
 type listEnvelope[T any] struct {
 	Items []T `json:"items"`
 }

@@ -1,10 +1,10 @@
 // Package asset stores Asset binary content on a local persistent volume. It owns the
-// write order 10-ops §3 fixes — stream the content into a staging object while hashing
+// fixed write order — stream the content into a staging object while hashing
 // and counting it, then turn that object into an immutable one — and nothing else: it
 // never opens a database transaction, decides a Runtime step or learns what an Asset is
 // referenced by.
 //
-// A storage key is an internal system Secret (10-ops §4). It is returned to the service
+// A storage key is an internal system Secret. It is returned to the service
 // layer so the Store can persist it, and it must not travel any further outward.
 package asset
 
@@ -55,7 +55,7 @@ type Store struct {
 
 // NewStore returns a Store over root, rejecting any content above maxBytes. It touches no
 // filesystem: the root is created and proven writable by VerifyReadWrite, which is
-// readiness step 4 (10-ops §1).
+// readiness step 4.
 func NewStore(root string, maxBytes int64) *Store {
 	return &Store{root: root, maxBytes: maxBytes}
 }
@@ -112,7 +112,7 @@ func (s *Store) VerifyReadWrite(ctx context.Context) error {
 //
 // The content becomes reachable at its key in one step, after it is complete and fsynced:
 // a crash mid-upload leaves a staging file, never a truncated Asset. An existing key is
-// never overwritten — replacing content means creating a new Asset (10-ops §3) — so a
+// never overwritten — replacing content means creating a new Asset — so a
 // repeated key yields domain.ErrConflict with the committed content untouched.
 func (s *Store) Write(ctx context.Context, assetID string, r io.Reader) (StoredContent, error) {
 	if err := ctx.Err(); err != nil {
@@ -207,7 +207,7 @@ func (s *Store) Open(ctx context.Context, storageKey string) (io.ReadCloser, err
 }
 
 // Remove deletes the content stored under key. It is the orphan-cleanup path for content
-// whose Metadata transaction did not commit (10-ops §3), so an already absent key is not
+// whose Metadata transaction did not commit, so an already absent key is not
 // an error: the desired end state is the same.
 func (s *Store) Remove(storageKey string) error {
 	if err := validateStorageKey(storageKey); err != nil {
@@ -302,7 +302,7 @@ func syncDir(dir string) error {
 }
 
 // redactPath strips the filesystem path out of an os path or link error. The storage root
-// and every storage key are system Secrets (10-ops §4), and these errors are wrapped into
+// and every storage key are system Secrets, and these errors are wrapped into
 // values that reach logs and API error handling. The underlying cause is preserved, so
 // errors.Is against os.ErrNotExist and os.ErrExist still works.
 func redactPath(err error) error {

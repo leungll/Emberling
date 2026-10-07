@@ -7,7 +7,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// ToolRegistration is one stable Tool Name (07 §1.5). One Registry lookup must return the
+// ToolRegistration is one stable Tool Name. One Registry lookup must return the
 // Metadata and the Executor together; Studio and the API read Metadata only.
 type ToolRegistration struct {
 	Metadata domain.ToolMetadata

@@ -203,7 +203,7 @@ func assertJSONEqual(t *testing.T, label string, got, want json.RawMessage) {
 }
 
 // ---------------------------------------------------------------------------
-// DefinitionService.Create (docs/08-interface-spec.md §3.1; §1.2 frozen RunInputSchema)
+// DefinitionService.Create (frozen RunInputSchema)
 // ---------------------------------------------------------------------------
 
 func TestDefinitionService_Create_ValidDefinition_StoresFrozenRunInputSchema(t *testing.T) {
@@ -254,7 +254,7 @@ func TestDefinitionService_Create_ValidDefinition_StoresFrozenRunInputSchema(t *
 }
 
 // ---------------------------------------------------------------------------
-// DefinitionService.Save version conflicts (docs/09-testing-and-acceptance.md §3.4)
+// DefinitionService.Save version conflicts
 // ---------------------------------------------------------------------------
 
 func TestDefinitionService_Save_StaleBaseVersion_ReturnsVersionConflict(t *testing.T) {
@@ -365,8 +365,8 @@ func TestDefinitionService_Save_ConcurrentSameBaseVersion_OnlyOneWins(t *testing
 	}
 }
 
-// TestDefinitionService_Save_CompileFailure_DoesNotCreateVersion covers
-// docs/09-testing-and-acceptance.md §3.4: "Save 校验失败 | 不创建 Definition version，不改变最新版本".
+// TestDefinitionService_Save_CompileFailure_DoesNotCreateVersion covers a Save that fails
+// validation: it creates no Definition version and leaves the latest version unchanged.
 // A cyclic graph reaches the Graph compile stage (both Node Types are registered) and
 // fails with DAG_HAS_CYCLE, so this exercises the same rollback path a real authoring
 // mistake would.
@@ -418,8 +418,7 @@ func TestDefinitionService_Save_CompileFailure_DoesNotCreateVersion(t *testing.T
 }
 
 // ---------------------------------------------------------------------------
-// DefinitionService.List (docs/08-interface-spec.md §3.1: name, description,
-// latestVersion, updatedAt, lastRun)
+// DefinitionService.List (name, description, latestVersion, updatedAt, lastRun)
 // ---------------------------------------------------------------------------
 
 func TestDefinitionService_List_ReturnsLatestVersionDescription(t *testing.T) {
@@ -471,7 +470,7 @@ func TestDefinitionService_List_ReturnsLatestVersionDescription(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// QueryService.Snapshot (Snapshot-to-SSE handoff contract; docs/08-interface-spec.md §5)
+// QueryService.Snapshot (Snapshot-to-SSE handoff contract)
 // ---------------------------------------------------------------------------
 
 func TestQueryService_Snapshot_LastSeqMatchesLatestEvent(t *testing.T) {

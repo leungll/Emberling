@@ -28,12 +28,11 @@ import (
 // drive the same Run concurrently: at most one of them ever wins a given claim.
 //
 // ResumeNode is the same idempotent resume use case HandleCallback and Provider Poll
-// enter (invariant #5): the Reconciler calls it to replay an early callback that was
-// stored as a Pending Callback (docs/06-execution-model.md §2.1/§3, design decision C3),
-// never a second, Reconciler-owned resume path.
+// enter: the Reconciler calls it to replay an early callback that was stored as a Pending
+// Callback, never a second, Reconciler-owned resume path.
 //
 // The Agent use cases are the same ones immediate advancement calls, entered with
-// domain.ClaimReconciler instead of domain.ClaimImmediate (06 §2.1). Each one owns its own
+// domain.ClaimReconciler instead of domain.ClaimImmediate. Each one owns its own
 // conditional claim and chains the rest of the Agent Loop itself, so the Reconciler hands
 // over one rediscovered work item and makes no Agent state change of its own.
 type Advancer interface {
@@ -102,7 +101,7 @@ type Report struct {
 	ExpiredAttemptsFound  int
 	AttemptsTimedOut      int
 	// ReadyAgentTurnsFound and ReadyAgentActionsFound are the persisted Agent work items
-	// of 06 §2.1 this pass rediscovered; Advanced counts the ones whose use case returned
+	// this pass rediscovered; Advanced counts the ones whose use case returned
 	// without error (a lost conditional claim is a success, not an error: another path
 	// owned that item).
 	ReadyAgentTurnsFound   int
@@ -121,7 +120,7 @@ type Report struct {
 	// already handled, so it is not an error).
 	PendingCallbacksResumed int
 	// ExpiredPendingDeleted is how many Pending Callback rows DeleteExpired removed this
-	// pass (05 §1.7 retention).
+	// pass (Pending Callback TTL retention).
 	ExpiredPendingDeleted int64
 	Errors                []error
 }
@@ -210,9 +209,8 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 	return report, nil
 }
 
-// scanAgentWork performs the three Agent rows of the scan table of
-// docs/06-execution-model.md §2.1, each bounded by the same BatchLimit as every other
-// scan:
+// scanAgentWork performs the three Agent rows of the Reconciler scan table, each bounded
+// by the same BatchLimit as every other scan:
 //
 //   - Agent Runs past their deadline -> the Agent timeout use case.
 //   - READY Agent Turns -> the Turn advance use case. RUNNING Turns are deliberately not
@@ -230,7 +228,7 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 //
 // A RUNNING Agent NodeRun is never scanned: the next Turn is persisted by the transaction
 // that completed the previous round, so recovery advances that existing READY work instead
-// of deriving a duplicate round from the NodeRun (06 §2.1).
+// of deriving a duplicate round from the NodeRun.
 //
 // Each use case takes its own conditional claim, so a lost race with immediate advancement
 // is a normal outcome, not an error; only a real failure is collected into the report.
@@ -295,20 +293,20 @@ func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *R
 }
 
 // resumePending replays one stored early callback through the same idempotent ResumeNode
-// use case a live callback or Provider Poll enters (invariant #5). ListConsumableForWaiting
+// use case a live callback or Provider Poll enters. ListConsumableForWaiting
 // only returns rows whose Binding already routes to a still-DISPATCHED Attempt of a still
 // WAITING_CALLBACK NodeRun -- a Node Attempt, or a Tool Attempt of a WAITING_CALLBACK Agent
-// Action, which ResumeNode routes by the Binding's target type (06 §2.1: the Reconciler
+// Action, which ResumeNode routes by the Binding's target type (the Reconciler
 // only rediscovers work and enters the existing use case; it has no Tool-specific path) --
 // so service.ErrNoCallbackBinding is not an expected outcome here
 // -- it is treated as an error rather than silently dropped. A payload the registered
-// Executor cannot interpret leaves the NodeRun untouched (06 §1.6): it is logged at warn,
+// Executor cannot interpret leaves the NodeRun untouched: it is logged at warn,
 // without the payload, hash or token, and left for the next tick or for retention to
 // eventually delete once it expires -- the Reconciler does not invent a rejection limit
-// beyond the Pending Callback's own TTL (docs/09-testing-and-acceptance.md gap; see
-// package-level report notes). A row whose stored credential does not match the Attempt
-// ResumeNode was about to advance (docs/06-execution-model.md §3, service's own
-// consumePendingCallback check) is classified the same way: it is not this Reconciler's
+// beyond the Pending Callback's own TTL (an acceptance-criteria gap; see package-level
+// report notes). A row whose stored credential does not match the Attempt ResumeNode
+// was about to advance (service's own consumePendingCallback check) is classified the
+// same way: it is not this Reconciler's
 // fault or an operational error, the row is left for its real owner or for expiry, and the
 // pass continues.
 func (r *Reconciler) resumePending(ctx context.Context, row store.PendingForWaiting, report *Report) error {

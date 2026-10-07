@@ -1,7 +1,7 @@
 // Package remotelookup implements the `remote_lookup` Tool: the ASYNC counterpart of the
 // built-in `lookup` Tool. It dispatches one task to the deterministic Mock Provider's
 // POST /v1/tasks and reports the record later through the shared callback endpoint
-// (docs/07-extensibility.md §1.5: an async Tool returns an external task id and resumes the
+// (an async Tool returns an external task id and resumes the
 // same Tool Attempt through a callback).
 //
 // It performs exactly one registered operation. It owns no retry, timeout, callback
@@ -90,8 +90,8 @@ const outputSchema = `{
 //
 // The dispatch creates an external task, so the call has an EXTERNAL side effect. Its
 // idempotency is UNKNOWN: the Runtime hands an Agent Tool no idempotency key, so a replayed
-// dispatch could create a second task, and nothing here may claim KEYED
-// (docs/07-extensibility.md §1.2). The MVP never retries an Agent Tool anyway.
+// dispatch could create a second task, and nothing here may claim KEYED.
+// The MVP never retries an Agent Tool anyway.
 func Registration(baseURL string, client *http.Client) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
@@ -187,8 +187,7 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 	}
 	if accepted.ExternalTaskID == "" {
 		// The Provider accepted a task this Runtime can never route a callback to; the
-		// Runtime fails the Action explicitly rather than treating it as recoverable
-		// (docs/09-testing-and-acceptance.md §3.7).
+		// Runtime fails the Action explicitly rather than treating it as recoverable.
 		return registry.ToolExecutionResult{}, dispatchError("decode response", response.StatusCode, "accepted response carries no externalTaskId")
 	}
 

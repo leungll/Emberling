@@ -1,8 +1,8 @@
 //go:build integration
 
-// Asynchronous Agent Tool acceptance at the HTTP level (09 §1 DoD row 8: an Agent waiting
-// on an asynchronous Tool survives a restart and commits the Tool result, Context, State
-// and Events exactly once). One Run of the agent_lookup fixture, with remote_lookup as its
+// Asynchronous Agent Tool acceptance at the HTTP level (an Agent waiting on an
+// asynchronous Tool survives a restart and commits the Tool result, Context, State and
+// Events exactly once). One Run of the agent_lookup fixture, with remote_lookup as its
 // only Tool, is driven through the real work Pool and the in-process Mock Provider:
 // Definition -> Run -> Agent Turn -> TOOL_CALL -> Provider /v1/tasks -> WAITING_CALLBACK
 // -> Backend restart -> Provider callback -> resume -> FINAL -> Run COMPLETED.
@@ -26,14 +26,15 @@ import (
 )
 
 // TestE2E_AgentAsyncTool_RestartWhileWaitingCallback_CallbackResumesOriginalActionOnce
-// covers 06 §1.7 and 06 §4 ("Agent 异步 Tool 等待时重启: callback 恢复原 Tool Attempt")
-// end to end. While the Action waits, the Snapshot shows the Run PAUSED, the Agent Trace
-// shows the DISPATCHED Attempt with dispatchedAt and a token-free Binding, and SSE has
-// delivered AGENT_ACTION_WAITING and RUN_PAUSED from one transaction. After a restart the
-// Provider's callback resumes that very Attempt on the second Backend, which calls the
-// model exactly once more and completes the Run. The full SSE replay shows every Event
-// once, in contiguous seq order, and no response anywhere carries the callback token or
-// its hash (08 §3.4, CLAUDE.md "Persistence and transactions").
+// covers a restart while an Agent waits on an asynchronous Tool, after which the callback
+// resumes the original Tool Attempt, end to end. While the Action waits, the Snapshot
+// shows the Run PAUSED, the Agent Trace shows the DISPATCHED Attempt with dispatchedAt
+// and a token-free Binding, and SSE has delivered AGENT_ACTION_WAITING and RUN_PAUSED
+// from one transaction. After a restart the Provider's callback resumes that very Attempt
+// on the second Backend, which calls the model exactly once more and completes the Run.
+// The full SSE replay shows every Event once, in contiguous seq order, and no response
+// anywhere carries the callback token or its hash (CLAUDE.md "Persistence and
+// transactions").
 func TestE2E_AgentAsyncTool_RestartWhileWaitingCallback_CallbackResumesOriginalActionOnce(t *testing.T) {
 	fx := newProviderFixture(t)
 	first := fx.startBackend(t, nil)
@@ -171,7 +172,7 @@ func TestE2E_AgentAsyncTool_RestartWhileWaitingCallback_CallbackResumesOriginalA
 	// The authoritative history, replayed from seq 0 on the second Backend, spans both
 	// processes. The resume transaction writes AGENT_ACTION_COMPLETED (CALLBACK), the next
 	// Turn's AGENT_TURN_READY and RUN_RESUMED together; no NODE_CALLBACK_RECEIVED is
-	// written for a Tool target (05 §2.2).
+	// written for a Tool target.
 	events := second.replayEvents(t, runID, agentE2EWait)
 	assertAscendingSeq(t, events)
 	for _, ev := range events {

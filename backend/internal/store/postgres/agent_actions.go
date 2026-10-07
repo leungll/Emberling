@@ -49,8 +49,8 @@ func (r *agentActionRepository) GetByTurnID(ctx context.Context, turnID string) 
 	return r.queryOne(ctx, "agent_actions.GetByTurnID", query, turnID)
 }
 
-// ClaimReady conditionally moves READY to RUNNING (06 §1.7) and stamps started_at, which
-// 05 §1.8 keeps empty until an executor takes the Action. The winner owns the execution
+// ClaimReady conditionally moves READY to RUNNING and stamps started_at, which
+// stays empty until an executor takes the Action. The winner owns the execution
 // right: a TOOL_CALL calls the Tool only after this transaction commits, and a FINAL is
 // closed out inside the same transaction.
 func (r *agentActionRepository) ClaimReady(ctx context.Context, actionID string, now time.Time) (bool, error) {
@@ -69,7 +69,7 @@ func (r *agentActionRepository) ClaimReady(ctx context.Context, actionID string,
 	return affected == 1, nil
 }
 
-// ListReady returns persisted READY Actions for Reconciler rediscovery (06 §2.1). The
+// ListReady returns persisted READY Actions for Reconciler rediscovery. The
 // Reconciler advances the original Action; it never re-requests the model or creates a
 // second Decision.
 func (r *agentActionRepository) ListReady(ctx context.Context, limit int) ([]domain.AgentAction, error) {

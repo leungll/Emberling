@@ -10,14 +10,14 @@ import (
 )
 
 // defaultEventsLimit and maxEventsLimit bound QueryService.Events pagination
-// (docs/08-interface-spec.md §5: "受服务端限制的 limit").
+// (the limit is bounded by the server).
 const (
 	defaultEventsLimit = 200
 	maxEventsLimit     = 1000
 )
 
 // QueryService serves the read-only Snapshot, Event replay and Node/Attempt detail
-// queries the API and SSE handlers need (docs/08-interface-spec.md §3.3, §3.4, §5). It
+// queries the API and SSE handlers need. It
 // never mutates Execution State.
 type QueryService struct {
 	deps Deps
@@ -30,15 +30,15 @@ func NewQueryService(deps Deps) *QueryService {
 
 // RunSnapshot is the Run, its NodeRuns and the LastSeq they are mutually consistent with
 // — the Snapshot-to-SSE handoff contract: a client resumes the Event stream at exactly
-// LastSeq (docs/08-interface-spec.md §3.3, §5).
+// LastSeq.
 type RunSnapshot struct {
 	Run      domain.Run
 	NodeRuns []domain.NodeRun
 	LastSeq  int64
 }
 
-// NodeRunDetail is one NodeRun together with its Attempts, ordered by AttemptNo
-// (docs/08-interface-spec.md §3.4). CallbackBindings carries the Callback Binding of
+// NodeRunDetail is one NodeRun together with its Attempts, ordered by AttemptNo.
+// CallbackBindings carries the Callback Binding of
 // every Attempt that has one, keyed by Attempt ID, so the API layer can project
 // {id, providerId, externalTaskId, createdAt} without a second round trip; a sync
 // Attempt (or an async Attempt not yet dispatched) simply has no entry.
@@ -76,8 +76,8 @@ func (s *QueryService) Snapshot(ctx context.Context, runID string) (RunSnapshot,
 }
 
 // Events replays committed Events with seq > afterSeq, ascending. limit is clamped to
-// [1, maxEventsLimit] and defaults to defaultEventsLimit when <= 0
-// (docs/08-interface-spec.md §5). It returns domain.ErrNotFound when the Run does not
+// [1, maxEventsLimit] and defaults to defaultEventsLimit when <= 0.
+// It returns domain.ErrNotFound when the Run does not
 // exist, distinguishing "no Run" from "Run exists, no Events yet".
 func (s *QueryService) Events(ctx context.Context, runID string, afterSeq int64, limit int) ([]domain.Event, error) {
 	switch {
@@ -142,8 +142,8 @@ func (s *QueryService) NodeRunDetail(ctx context.Context, runID, nodeRunID strin
 	return detail, nil
 }
 
-// AgentTrace is one Agent NodeRun's Agent Run together with its Turns in persisted order
-// (docs/08-interface-spec.md §3.4). It is a read-only expansion of committed facts: the
+// AgentTrace is one Agent NodeRun's Agent Run together with its Turns in persisted order.
+// It is a read-only expansion of committed facts: the
 // service reads, the API projects, and neither may mutate or truncate the authoritative
 // Execution State the Runtime recovers from.
 type AgentTrace struct {

@@ -1,13 +1,13 @@
 //go:build integration
 
-// Synchronous Agent Loop advancement through the work queue (06 §1.3, 06 §2.1). A Tool
-// round that finishes on the worker's own goroutine commits the next READY Turn and hands
-// it to the bounded in-process work queue as an AGENT_TURN item; it does not advance that
-// Turn by re-entering the Turn use case from inside the previous one. The queue item is
-// only a latency optimisation: a process that dies between the commit and the dequeue
-// leaves a persisted READY Turn that the Reconciler of the next process rediscovers and
-// advances through the same use case. They share the harnesses of agent_loop_test.go and
-// the Pool helpers of agent_async_callback_worker_test.go.
+// Synchronous Agent Loop advancement through the work queue. A Tool round that finishes
+// on the worker's own goroutine commits the next READY Turn and hands it to the bounded
+// in-process work queue as an AGENT_TURN item; it does not advance that Turn by
+// re-entering the Turn use case from inside the previous one. The queue item is only a
+// latency optimisation: a process that dies between the commit and the dequeue leaves a
+// persisted READY Turn that the Reconciler of the next process rediscovers and advances
+// through the same use case. They share the harnesses of agent_loop_test.go and the Pool
+// helpers of agent_async_callback_worker_test.go.
 package integration
 
 import (
@@ -90,11 +90,12 @@ func agentScriptToolCallsThenFinal(h *agentHarness, rounds int32, toolCall mockm
 	return &generated
 }
 
-// TestAgentLoop_SyncTurns_EachNextTurnEnqueuedNotRecursed covers 06 §1.3 for the
-// synchronous Tool path: a three-Turn Agent Run (TOOL_CALL, TOOL_CALL, FINAL) driven by
-// one work.Pool worker completes with Turn 2 and Turn 3 each offered to the work queue by
-// the round before it and claimed as an AGENT_TURN item, so the Turn use case is entered
-// once per Turn from a flat stack rather than nested inside the previous Turn's call.
+// TestAgentLoop_SyncTurns_EachNextTurnEnqueuedNotRecursed covers queued Turn advancement
+// for the synchronous Tool path: a three-Turn Agent Run (TOOL_CALL, TOOL_CALL, FINAL)
+// driven by one work.Pool worker completes with Turn 2 and Turn 3 each offered to the
+// work queue by the round before it and claimed as an AGENT_TURN item, so the Turn use
+// case is entered once per Turn from a flat stack rather than nested inside the previous
+// Turn's call.
 func TestAgentLoop_SyncTurns_EachNextTurnEnqueuedNotRecursed(t *testing.T) {
 	queue := work.NewQueue(16)
 	enqueuer := &agentRecordingEnqueuer{queue: queue, forwardTurns: true}
@@ -173,11 +174,11 @@ func TestAgentLoop_SyncTurns_EachNextTurnEnqueuedNotRecursed(t *testing.T) {
 }
 
 // TestAgentLoop_WorkerLostBetweenTurns_ReconcilerRediscoversPersistedReadyTurn covers the
-// crash window of 06 §1.3 and docs/09 §3.3 "Tool result 与下一条 READY Turn 提交后崩溃" on
-// the synchronous path: the result transaction commits and its queue item is never
-// dequeued because the worker is gone. The committed READY Turn is the only continuation
-// that survives, and the Reconciler of a restarted Backend claims that Turn -- not a new
-// one -- through the same Turn use case and finishes the Run.
+// crash window after the Tool result and the next READY Turn commit, on the synchronous
+// path: the result transaction commits and its queue item is never dequeued because the
+// worker is gone. The committed READY Turn is the only continuation that survives, and
+// the Reconciler of a restarted Backend claims that Turn -- not a new one -- through the
+// same Turn use case and finishes the Run.
 func TestAgentLoop_WorkerLostBetweenTurns_ReconcilerRediscoversPersistedReadyTurn(t *testing.T) {
 	queue := work.NewQueue(16)
 	enqueuer := &agentRecordingEnqueuer{queue: queue, forwardTurns: false}

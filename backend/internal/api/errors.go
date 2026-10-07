@@ -10,7 +10,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/service"
 )
 
-// Error codes from docs/08-interface-spec.md §6. Each constant is used at exactly the
+// Error codes from the interface contract. Each constant is used at exactly the
 // call site(s) named in the route table, never inferred generically.
 const (
 	codeValidationFailed          = "VALIDATION_FAILED"
@@ -29,8 +29,8 @@ const (
 	codeInvalidCallbackPayload    = "INVALID_CALLBACK_PAYLOAD"
 )
 
-// status422Codes names the runtime.ValidationError codes docs/08-interface-spec.md §6
-// groups under HTTP 422 ("Definition 语义无效"): an invalid graph shape, not an invalid
+// status422Codes names the runtime.ValidationError codes the interface contract groups
+// under HTTP 422 (semantically invalid Definition): an invalid graph shape, not an invalid
 // config value. Every other code (config schema and semantic instance failures) is HTTP
 // 400. This must match internal/runtime/errors.go's own two const blocks exactly; it is
 // duplicated here (rather than imported as a set) because runtime deliberately exposes
@@ -103,7 +103,7 @@ func writeErrorEnvelope(w http.ResponseWriter, status int, code, message string,
 }
 
 // writeError is the single place that maps a service/runtime/domain error to the HTTP
-// error envelope docs/08-interface-spec.md §6 defines. notFoundCode names the
+// error envelope the interface contract defines. notFoundCode names the
 // resource-specific 404 code to use when err is (or wraps) domain.ErrNotFound; every
 // other classification is inferred from err's own type, never from the call site.
 //
@@ -123,9 +123,9 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error, notFoundC
 
 	var inputErr *service.RunInputInvalidError
 	if errors.As(err, &inputErr) {
-		// docs/08-interface-spec.md §6 groups runtime.CodeValidationFailed under HTTP
-		// 400 ("请求内容无效"); execution.go's own doc comment on RunInputInvalidError
-		// says the same thing explicitly. This is HTTP 400, not 422.
+		// The interface contract groups runtime.CodeValidationFailed under HTTP 400
+		// (invalid request content); execution.go's own doc comment on
+		// RunInputInvalidError says the same thing explicitly. This is HTTP 400, not 422.
 		writeErrorEnvelope(w, http.StatusBadRequest, firstCode(inputErr.Errors, codeValidationFailed),
 			"run input failed validation against the definition's frozen runInputSchema",
 			map[string]any{"errors": toValidationErrorDTOs(inputErr.Errors)})
@@ -154,10 +154,10 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error, notFoundC
 		return
 	}
 
-	// 08 §6 maps an oversized Asset upload to 413 and every invalid request content to
-	// 400; an unsupported image type and content that does not match what the caller
-	// declared are both the latter, so they reuse VALIDATION_FAILED rather than adding a
-	// public code the interface spec does not define.
+	// The interface contract maps an oversized Asset upload to 413 and every invalid
+	// request content to 400; an unsupported image type and content that does not match
+	// what the caller declared are both the latter, so they reuse VALIDATION_FAILED
+	// rather than adding a public code the interface spec does not define.
 	if errors.Is(err, domain.ErrAssetTooLarge) {
 		writeErrorEnvelope(w, http.StatusRequestEntityTooLarge, codePayloadTooLarge,
 			"asset content exceeds the maximum upload size", nil)

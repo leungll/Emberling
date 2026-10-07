@@ -239,7 +239,7 @@ export interface AssetRef {
   sha256: string;
 }
 
-/** Immutable reference to a Backend-produced Artifact (08 §2.2 ImageRef `ARTIFACT` branch). */
+/** Immutable reference to a Backend-produced Artifact (the ImageRef `ARTIFACT` branch). */
 export interface ArtifactRef {
   artifactId: string;
   mediaType: string;
@@ -252,7 +252,7 @@ export type ImageSource = 'ASSET' | 'ARTIFACT' | 'EXTERNAL';
 /**
  * Mirrors `backend/internal/domain/imageref.go`. `source` selects exactly one of `asset`,
  * `artifact`, or `uri`; the other reference fields stay unset for that branch. Never carries
- * a signed URL, Secret, or credential (08 §2.2).
+ * a signed URL, Secret, or credential.
  */
 export interface ImageRef {
   source: ImageSource;

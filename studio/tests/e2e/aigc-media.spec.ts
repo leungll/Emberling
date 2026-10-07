@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
 
 /**
- * AIGC Media Generation (04-ux.md §6 items 1,2,4-10; docs/09 §1 DoD item 2): the Image
+ * AIGC Media Generation: the Image
  * Generation NodeRun must visibly pass through WAITING_CALLBACK before the Run completes.
  *
  * The Run input is the literal string `mock:delay:2000`. It reaches

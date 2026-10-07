@@ -5,8 +5,8 @@ import { expect, test } from '@playwright/test';
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
 
 /**
- * Agent with an asynchronous Tool (04-ux.md §6 items 1,2,4-7,12-16). M5 slice 5.3b
- * (`backend/internal/adapters/mockmodel/provider.go`'s `resolveToolCallDirective`) extended
+ * Agent with an asynchronous Tool. The Mock Model tool-call directive
+ * (`backend/internal/adapters/mockmodel/provider.go`'s `resolveToolCallDirective`) extends
  * the `mock:tool-call:<name>` directive to `mock:tool-call:<name>:<json-arguments>`, so the
  * in-process Mock Model Provider can emit a TOOL_CALL Decision with a real, schema-
  * satisfying argument set purely from a Run's own input - no test-only `Script` hook

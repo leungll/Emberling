@@ -1,5 +1,5 @@
 // Package mockprovider is the deterministic HTTP Mock Provider used for integration and
-// failure tests (07 §1 "Mock external systems through the deterministic Mock Provider").
+// failure tests ("Mock external systems through the deterministic Mock Provider").
 // It stands in for a real external model/tool Provider: it never calls a live third-party
 // endpoint, and it never reaches into this repository's internal Runtime packages
 // (registry, domain, adapters) — a real external Provider would not share Go types with
@@ -127,8 +127,8 @@ const (
 	// or credential failure.
 	outcomeFailed
 	// outcomeWrongToken delivers the callback with a deliberately mismatched
-	// X-Emberling-Callback-Token, so a test can exercise 08 §4's 401 rule (token invalid:
-	// payload not saved, no recovery use case entered).
+	// X-Emberling-Callback-Token, so a test can exercise the callback contract's 401 rule
+	// (token invalid: payload not saved, no recovery use case entered).
 	outcomeWrongToken
 )
 
@@ -172,10 +172,10 @@ func (o *outcome) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// failedPayload is the callback payload delivered for outcome "failed". 08 §4 fixes the
-// callback envelope (`externalTaskId` plus an opaque `payload`) but prescribes no shape for
-// the payload itself, so this package defines one, deterministic and stable enough for a
-// caller's AsyncNodeExecutor to branch on.
+// failedPayload is the callback payload delivered for outcome "failed". The callback
+// contract fixes the callback envelope (`externalTaskId` plus an opaque `payload`) but
+// prescribes no shape for the payload itself, so this package defines one, deterministic
+// and stable enough for a caller's AsyncNodeExecutor to branch on.
 var failedPayload = json.RawMessage(
 	`{"status":"FAILED","error":{"code":"PROVIDER_TASK_FAILED","message":"mock provider: task failed by scenario"}}`,
 )
@@ -197,7 +197,7 @@ type taskRequest struct {
 	// caller supplies it to test callback matching against a task ID it already knows.
 	ExternalTaskID string `json:"externalTaskId,omitempty"`
 	// CallbackURL and CallbackToken are required: they are exactly what a real Provider
-	// receives from Emberling at dispatch time (08 §4) and must echo back unmodified.
+	// receives from Emberling at dispatch time and must echo back unmodified.
 	CallbackURL   string          `json:"callbackUrl"`
 	CallbackToken string          `json:"callbackToken"`
 	Payload       json.RawMessage `json:"payload,omitempty"`
@@ -207,7 +207,7 @@ type taskRequest struct {
 	// payload pass-through keeps working unchanged.
 	Outcome outcome `json:"outcome,omitempty"`
 	// IdempotencyKey, when set, deduplicates retried dispatches of the same logical task
-	// (06 §3: an EXTERNAL+KEYED retry is only allowed while it reuses the same Provider
+	// (an EXTERNAL+KEYED retry is only allowed while it reuses the same Provider
 	// idempotency key). A replayed key returns the first task's externalTaskId and
 	// schedules no further callback. Keys are scoped to one server instance.
 	IdempotencyKey string `json:"idempotencyKey,omitempty"`
@@ -219,7 +219,7 @@ type taskResponse struct {
 }
 
 // callbackBody is the JSON body mockprovider POSTs to CallbackURL. Its shape is fixed by
-// 08 §4's Callback Contract: `externalTaskId` plus an opaque `payload`.
+// the Callback Contract: `externalTaskId` plus an opaque `payload`.
 type callbackBody struct {
 	ExternalTaskID string          `json:"externalTaskId"`
 	Payload        json.RawMessage `json:"payload"`
@@ -237,7 +237,7 @@ type generateRequest struct {
 	ToolName string `json:"toolName,omitempty"`
 }
 
-// decision mirrors the fixed Decision envelope's two kinds (07 §1.4) in this package's own
+// decision mirrors the fixed Decision envelope's two kinds in this package's own
 // wire format: FINAL carries Output, TOOL_CALL carries ToolName and Arguments.
 type decision struct {
 	Kind      string          `json:"kind"`

@@ -1,7 +1,7 @@
-// Package textgeneration implements the built-in Text Generation Node (02 §3.2). It calls
-// a registered ModelProvider synchronously through the fixed Decision envelope (07 §1.4)
+// Package textgeneration implements the built-in Text Generation Node. It calls
+// a registered ModelProvider synchronously through the fixed Decision envelope
 // and republishes the model's FINAL output on the `text` port; it owns no NodeRun state,
-// retry or Event of its own (07 §1.1).
+// retry or Event of its own.
 package textgeneration
 
 import (
@@ -58,8 +58,8 @@ func Registration(resolver ModelResolver) registry.NodeRegistration {
 				{Path: "systemPrompt", Order: 30, Group: domain.UIGroupBasic, Widget: domain.UIWidgetTextArea},
 			}},
 			// A synchronous model call has no external_task_id to serve as an idempotency
-			// key, so a timeout or dropped response leaves the call result unproven (07
-			// §1.2: EXTERNAL + UNKNOWN forbids automatic re-dispatch).
+			// key, so a timeout or dropped response leaves the call result unproven
+			// (EXTERNAL + UNKNOWN forbids automatic re-dispatch).
 			SideEffect: domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
 		},
 		Binding: registry.ExecutorBinding{Executor: Executor{resolver: resolver}},
@@ -72,8 +72,7 @@ type Executor struct {
 }
 
 // ValidateSemantics checks what ConfigSchema cannot express: the model exists, declares
-// text_generation capability, and modelConfig satisfies that model's own ConfigSchema (07
-// §1.4).
+// text_generation capability, and modelConfig satisfies that model's own ConfigSchema.
 func (e Executor) ValidateSemantics(_ context.Context, config map[string]any) error {
 	modelID, _ := config["modelId"].(string)
 	if modelID == "" {

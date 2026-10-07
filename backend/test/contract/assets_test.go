@@ -1,10 +1,10 @@
 //go:build integration
 
-// Package contract: this file covers the Asset routes of docs/08-interface-spec.md §3.2 —
+// Package contract: this file covers the Asset routes of the REST API —
 // multipart upload, Metadata read and the controlled download that replaces a signed URL.
 // The guarantee every test here protects is that an AssetRef is only ever returned for an
 // Asset whose content and Metadata are both committed, and that the internal storage key
-// never crosses the HTTP boundary (10-ops §4).
+// never crosses the HTTP boundary.
 package contract
 
 import (
@@ -189,7 +189,7 @@ func TestAssets_Get_Metadata_NoStorageKey(t *testing.T) {
 	}
 	for key := range metadata {
 		if strings.Contains(strings.ToLower(key), "storage") {
-			t.Errorf("metadata exposes an internal storage field %q (10-ops §4): %s", key, raw)
+			t.Errorf("metadata exposes an internal storage field %q: %s", key, raw)
 		}
 	}
 	// A storage key is "<shard>/<assetId>", so its value cannot hide under another field
@@ -247,7 +247,7 @@ func TestAssets_Unknown_404(t *testing.T) {
 
 // TestAssets_Restart_MetadataAndContentStillReadable is the Asset track's recovery proof.
 // An Asset is two committed facts -- the `assets` row and the binary under its storage key
-// -- and neither lives in the process (10-ops §3). A restarted Backend is a new process
+// -- and neither lives in the process. A restarted Backend is a new process
 // image over the same database and the same storage volume, so an AssetRef handed out
 // before the restart must still resolve afterwards, byte for byte.
 //
@@ -291,7 +291,7 @@ func TestAssets_Restart_MetadataAndContentStillReadable(t *testing.T) {
 		t.Errorf("ETag after restart: got %q, want %q", got, want)
 	}
 	if strings.Contains(string(raw), "/"+assetID) {
-		t.Errorf("metadata response after restart carries a storage key value (10-ops §4): %s", raw)
+		t.Errorf("metadata response after restart carries a storage key value: %s", raw)
 	}
 }
 

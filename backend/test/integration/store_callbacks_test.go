@@ -17,8 +17,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Callback Binding (05 §1.6: external_task_id 全局唯一; binding、Attempt DISPATCHED
-// 与等待状态必须在同一事务提交)
+// Callback Binding (external_task_id is globally unique; the binding, the DISPATCHED
+// Attempt and the waiting state commit in the same transaction)
 // ---------------------------------------------------------------------------
 
 func TestCallbackBindings_DuplicateExternalTaskID_Rejected(t *testing.T) {
@@ -131,8 +131,8 @@ func TestCallbackBindings_ListByTargets_ReturnsOnlyRequestedAttempts(t *testing.
 }
 
 // ---------------------------------------------------------------------------
-// Pending Callback (05 §1.7: 重复到达只更新 duplicate_count 和最后接收时间,
-// 不覆盖首次有效 payload; 消费使用条件更新)
+// Pending Callback (a repeated arrival only updates duplicate_count and the last received
+// time without overwriting the first valid payload; consumption is a conditional update)
 // ---------------------------------------------------------------------------
 
 func TestPendingCallbacks_SecondArrival_IncrementsDuplicateCountAndKeepsFirstPayload(t *testing.T) {
@@ -345,7 +345,7 @@ func TestPendingCallbacks_ListConsumableForWaiting_ReturnsOnlyRowsWithDispatched
 		t.Fatalf("Record expired pending: %v", err)
 	}
 
-	// (5) No binding at all: 06 §4 keeps it for audit only, it never routes.
+	// (5) No binding at all: it is kept for audit only, it never routes.
 	if _, err := recordPending(ctx, uow, newPending("task_unbound", `{"ok":true}`, "sha256:u", "sha256:t")); err != nil {
 		t.Fatalf("Record unbound pending: %v", err)
 	}
@@ -379,13 +379,13 @@ func TestPendingCallbacks_ListConsumableForWaiting_ReturnsOnlyRowsWithDispatched
 }
 
 // TestPendingCallbacks_ListConsumableForWaiting_ToolBranch_RequiresDispatchedAttemptWaitingActionAndNodeRun
-// covers the TOOL_ATTEMPT branch of the Reconciler's Pending Callback discovery (06 §2.1,
-// 05 §1.7). A stored early callback bound to a Tool Attempt may be replayed only while all
-// three facts the resume transaction conditionally updates still hold: the Tool Attempt is
-// DISPATCHED, its Agent Action is WAITING_CALLBACK and the Agent NodeRun that owns the
-// Action is WAITING_CALLBACK. A row whose dispatch transaction never committed, or whose
-// Action was already resolved, must never be handed to resume. The returned route names
-// the Agent NodeRun and the Tool Attempt.
+// covers the TOOL_ATTEMPT branch of the Reconciler's Pending Callback discovery. A stored
+// early callback bound to a Tool Attempt may be replayed only while all three facts the
+// resume transaction conditionally updates still hold: the Tool Attempt is DISPATCHED,
+// its Agent Action is WAITING_CALLBACK and the Agent NodeRun that owns the Action is
+// WAITING_CALLBACK. A row whose dispatch transaction never committed, or whose Action was
+// already resolved, must never be handed to resume. The returned route names the Agent
+// NodeRun and the Tool Attempt.
 func TestPendingCallbacks_ListConsumableForWaiting_ToolBranch_RequiresDispatchedAttemptWaitingActionAndNodeRun(t *testing.T) {
 	ctx := context.Background()
 	uow := postgres.NewUnitOfWork(testdb.Open(t))
@@ -437,7 +437,7 @@ func TestPendingCallbacks_ListConsumableForWaiting_ToolBranch_RequiresDispatched
 }
 
 // TestPendingCallbacks_ListConsumableForWaiting_MixedTargets_OrderedGloballyByReceivedAt
-// covers the bound on one Reconciler batch (06 §2.1): the Node and Tool branches form one
+// covers the bound on one Reconciler batch: the Node and Tool branches form one
 // result set under a single ORDER BY received_at and LIMIT, so the oldest rediscovered
 // callback is replayed first whatever its target type, and a small batch never starves
 // Tool callbacks behind Node ones.
@@ -478,7 +478,7 @@ func TestPendingCallbacks_ListConsumableForWaiting_MixedTargets_OrderedGloballyB
 }
 
 // ---------------------------------------------------------------------------
-// Conditional resume (06 §3.2: UPDATE node_runs SET status='SUCCEEDED'
+// Conditional resume (UPDATE node_runs SET status='SUCCEEDED'
 // WHERE id=$1 AND status='WAITING_CALLBACK')
 // ---------------------------------------------------------------------------
 

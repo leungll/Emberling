@@ -32,7 +32,7 @@ export interface ResolvedField {
   capability: string | undefined;
 }
 
-// 04 §2.3: a field the uiSchema omits keeps the ConfigSchema default control and lands at
+// A field the uiSchema omits keeps the ConfigSchema default control and lands at
 // the end of the Basic group, so the fallback must be the same key the Backend uses.
 const DEFAULT_GROUP = 'BASIC';
 
@@ -120,7 +120,7 @@ export function resolveFields(
         path,
         schema,
         // Display label only; `path` (the API field) is untouched. A registered Model
-        // Selector without its own title reads "Model" as in the 04 §2.3 MODEL group,
+        // Selector without its own title reads "Model" as in the MODEL property group,
         // decided by the uiSchema widget, never by the field's name.
         label: schema.title ?? (widget === 'model' ? 'Model' : humanize(path)),
         required: required.has(path),
@@ -151,8 +151,8 @@ export function groupFields(fields: ResolvedField[]): [string, ResolvedField[]][
 }
 
 /**
- * Model Selector options: Model Registry entries that declare the uiSchema capability
- * (04 §2.3). A field without a capability lists every registered model.
+ * Model Selector options: Model Registry entries that declare the uiSchema capability.
+ * A field without a capability lists every registered model.
  */
 export function modelOptions(
   models: ModelMetadata[],

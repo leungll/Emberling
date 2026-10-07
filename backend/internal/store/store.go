@@ -12,7 +12,7 @@ import (
 
 // UnitOfWork owns transaction boundaries. Repositories never open their own transaction:
 // they receive the active one through Tx, so a state change and the Event that proves it
-// commit together (invariant #4).
+// commit together.
 type UnitOfWork interface {
 	// WithinTx runs fn inside one database transaction. Returning a non-nil error rolls
 	// the whole transaction back, including every Event appended inside it.
@@ -22,8 +22,8 @@ type UnitOfWork interface {
 	// consistent snapshot for every statement it issues (PostgreSQL REPEATABLE READ),
 	// not a fresh snapshot per statement. Use it wherever two or more reads must agree
 	// with each other even if a concurrent transaction commits between them — the
-	// Snapshot-to-SSE handoff contract (docs/08-interface-spec.md §5: "lastSeq 与
-	// Snapshot 在同一个一致性读取中取得") needs exactly this, because Run.LastSeq and
+	// Snapshot-to-SSE handoff contract (lastSeq and the Snapshot are taken in the same
+	// consistent read) needs exactly this, because Run.LastSeq and
 	// NodeRuns are read as two separate statements. A caller must not write inside fn:
 	// PostgreSQL rejects it.
 	WithinReadTx(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error
@@ -49,7 +49,7 @@ type Tx interface {
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
-// a stored version can never be rewritten (invariant #8).
+// a stored version can never be rewritten.
 type DefinitionRepository interface {
 	// Save creates the Workflow if absent and inserts the given version. A brand new
 	// Workflow accepts only version 1. An existing Workflow accepts only
@@ -62,8 +62,7 @@ type DefinitionRepository interface {
 
 	// ListWorkflows returns every Workflow with its latest version's Description, most
 	// recently updated first. It backs the Definitions-list endpoint
-	// (docs/08-interface-spec.md §3.1: name, description, latestVersion, updatedAt,
-	// lastRun).
+	// (name, description, latestVersion, updatedAt, lastRun).
 	ListWorkflows(ctx context.Context) ([]WorkflowSummary, error)
 }
 
@@ -76,7 +75,7 @@ type WorkflowSummary struct {
 }
 
 // AssetRecord is one assets row: the Asset Metadata plus the internal storage key that
-// locates its binary. The key is a system Secret (10-ops §4), which is why it is a Store
+// locates its binary. The key is a system Secret, which is why it is a Store
 // field rather than a domain.Asset field: it travels between this repository and the
 // Asset storage layer only, and never reaches an Event, Trace or API response.
 type AssetRecord struct {
@@ -85,8 +84,7 @@ type AssetRecord struct {
 }
 
 // AssetRepository persists Asset Metadata. It has no update or delete method: an
-// asset_id points at immutable content, so replacing content means creating a new Asset
-// (10-ops §3).
+// asset_id points at immutable content, so replacing content means creating a new Asset.
 type AssetRepository interface {
 	// Create inserts one Asset. The table's PRIMARY KEY decides duplicates, so a second
 	// insert of the same asset_id yields domain.ErrConflict and leaves the committed row
@@ -158,8 +156,9 @@ type NodeRunRepository interface {
 	ClaimRetry(ctx context.Context, nodeRunID string, now time.Time) (bool, error)
 
 	// ScheduleRetry records the next backoff deadline for a NodeRun that stays RUNNING
-	// after a retryable Attempt failure (06 §1.4: "允许重试 | FAILED | 保持RUNNING |
-	// next_attempt_at、NODE_RETRYING"). It requires the NodeRun to still be RUNNING and
+	// after a retryable Attempt failure (retry allowed: the Attempt is FAILED, the NodeRun
+	// stays RUNNING with next_attempt_at set, and NODE_RETRYING is written). It requires
+	// the NodeRun to still be RUNNING and
 	// returns domain.ErrStaleClaim otherwise.
 	ScheduleRetry(ctx context.Context, nodeRunID string, nextAttemptAt, now time.Time) error
 
@@ -223,8 +222,8 @@ type NodeAttemptRepository interface {
 	MarkFailed(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError) error
 
 	// ListExpired returns non-terminal Attempts (STARTED or DISPATCHED) whose deadline_at
-	// has passed. It backs Reconciler timeout rediscovery (06 §2: "Reconciler 必须能够
-	// 扫描过期的 STARTED 或 DISPATCHED Attempt"). The limit bounds the scan batch.
+	// has passed. It backs Reconciler timeout rediscovery (the Reconciler must be able to
+	// scan expired STARTED or DISPATCHED Attempts). The limit bounds the scan batch.
 	ListExpired(ctx context.Context, before time.Time, limit int) ([]domain.NodeAttempt, error)
 
 	// Latest returns the highest attempt_no Attempt of a NodeRun, or nil if none exists.
@@ -232,12 +231,12 @@ type NodeAttemptRepository interface {
 }
 
 // CallbackBindingRepository persists the only authoritative route from an external task
-// identity back to the Attempt that dispatched it (05 §1.6). A binding is immutable:
+// identity back to the Attempt that dispatched it. A binding is immutable:
 // there is no update method, because re-pointing an external identity at another Attempt
 // would make callback routing ambiguous.
 type CallbackBindingRepository interface {
 	// Create inserts a binding. It commits in the same transaction as the Attempt's
-	// DISPATCHED status and the NodeRun's WAITING_CALLBACK status (05 §3.1 unit 6).
+	// DISPATCHED status and the NodeRun's WAITING_CALLBACK status.
 	// A second binding for an already bound external_task_id yields domain.ErrConflict.
 	Create(ctx context.Context, binding domain.CallbackBinding) error
 
@@ -253,7 +252,7 @@ type CallbackBindingRepository interface {
 }
 
 // PendingCallbackRepository holds authenticated callbacks that arrived before their
-// binding committed (05 §1.7). It stores facts only: matching a Pending Callback to an
+// binding committed. It stores facts only: matching a Pending Callback to an
 // Attempt, including comparing its CallbackTokenHash with the target Attempt's, is the
 // service layer's decision.
 type PendingCallbackRepository interface {
@@ -279,12 +278,12 @@ type PendingCallbackRepository interface {
 	// DISPATCHED Tool Attempt of a WAITING_CALLBACK Agent Action whose Agent NodeRun is
 	// WAITING_CALLBACK. It is how the
 	// Reconciler rediscovers an early callback whose consumption never ran, because the
-	// in-process post-commit check is a latency optimisation and not the recovery source
-	// (invariant #6). The limit bounds the scan batch.
+	// in-process post-commit check is a latency optimisation and not the recovery source.
+	// The limit bounds the scan batch.
 	ListConsumableForWaiting(ctx context.Context, now time.Time, limit int) ([]PendingForWaiting, error)
 
 	// DeleteExpired removes records past their expiry so an unmatched early callback
-	// cannot occupy the database indefinitely (05 §1.7). The limit bounds the batch; it
+	// cannot occupy the database indefinitely. The limit bounds the batch; it
 	// returns how many rows were removed.
 	DeleteExpired(ctx context.Context, now time.Time, limit int) (int64, error)
 }
@@ -303,7 +302,7 @@ type PendingForWaiting struct {
 }
 
 // AgentRunRepository persists the frozen configuration and the recovery pointers of one
-// Agent NodeRun's Agent Run (05 §1.8). The configuration columns have no update method:
+// Agent NodeRun's Agent Run. The configuration columns have no update method:
 // recovery must not re-read current Model parameters, Tool allowlist or Schemas.
 type AgentRunRepository interface {
 	// Create inserts the Agent Run. UNIQUE (node_run_id) is what makes a duplicated
@@ -329,9 +328,9 @@ type AgentRunRepository interface {
 
 	// ListExpired returns Agent Runs that have not terminated and whose frozen deadline
 	// is at or before `before`, so the Reconciler can rediscover the Agent timeout work
-	// an in-process timer never performed (06 §2.1, "Agent deadline 已到 -> timeout 用
-	// 例"). Terminated Agent Runs are excluded: their outcome is already committed. The
-	// limit bounds the scan batch.
+	// an in-process timer never performed (an Agent deadline that has passed enters the
+	// timeout use case). Terminated Agent Runs are excluded: their outcome is already
+	// committed. The limit bounds the scan batch.
 	ListExpired(ctx context.Context, before time.Time, limit int) ([]domain.AgentRun, error)
 }
 
@@ -352,8 +351,8 @@ type AgentTurnRepository interface {
 	Get(ctx context.Context, turnID string) (domain.AgentTurn, error)
 
 	// ListByAgentRunID returns every Turn of one Agent Run in persisted order (turn_no
-	// ascending). It backs the read-only Agent Trace projection
-	// (docs/08-interface-spec.md §3.4), which expands the rounds an Agent Run actually
+	// ascending). It backs the read-only Agent Trace projection,
+	// which expands the rounds an Agent Run actually
 	// committed rather than inferring them from Events.
 	ListByAgentRunID(ctx context.Context, agentRunID string) ([]domain.AgentTurn, error)
 
@@ -363,14 +362,14 @@ type AgentTurnRepository interface {
 	// exists.
 	GetByRunAndTurnNo(ctx context.Context, agentRunID string, turnNo int) (domain.AgentTurn, error)
 
-	// ClaimReady conditionally moves a Turn from READY to RUNNING and stamps started_at
-	// (06 §1.7). It reports true only for the caller whose UPDATE affected one row; that
+	// ClaimReady conditionally moves a Turn from READY to RUNNING and stamps started_at.
+	// It reports true only for the caller whose UPDATE affected one row; that
 	// caller alone may call the model, and only after the transaction commits. A false
 	// result is not an error.
 	ClaimReady(ctx context.Context, turnID string, now time.Time) (bool, error)
 
 	// ListReady returns persisted READY Turns the Reconciler can rediscover after a
-	// crash (06 §2.1). A RUNNING Turn is deliberately excluded: the MVP never re-issues
+	// crash. A RUNNING Turn is deliberately excluded: the MVP never re-issues
 	// a model request that may already be in flight. The limit bounds the scan batch.
 	ListReady(ctx context.Context, limit int) ([]domain.AgentTurn, error)
 
@@ -385,7 +384,7 @@ type AgentTurnRepository interface {
 	MarkFailed(ctx context.Context, turnID string, now time.Time, execErr domain.ExecutionError) error
 
 	// MarkTimedOut conditionally fails a Turn that is still READY or RUNNING. It exists
-	// for the Agent timeout transaction alone (06 §1.7): the deadline ends the current
+	// for the Agent timeout transaction alone: the deadline ends the current
 	// Turn whether or not anyone ever claimed it, which is the one case in which a Turn
 	// that never became RUNNING must still be closed. It reports false when the row was
 	// no longer READY or RUNNING, which is not an error.
@@ -412,13 +411,13 @@ type AgentActionRepository interface {
 	GetByTurnID(ctx context.Context, turnID string) (domain.AgentAction, error)
 
 	// ClaimReady conditionally moves an Action from READY to RUNNING and stamps
-	// started_at (06 §1.7). The winner owns the execution right: for a TOOL_CALL it
+	// started_at. The winner owns the execution right: for a TOOL_CALL it
 	// creates the STARTED Tool Attempt and calls the Tool after COMMIT; for a FINAL it
 	// closes the Action out inside the same transaction. A false result is not an error.
 	ClaimReady(ctx context.Context, actionID string, now time.Time) (bool, error)
 
 	// ListReady returns persisted READY Actions the Reconciler can rediscover after a
-	// crash (06 §2.1). It advances the original Action; it never asks the model again.
+	// crash. It advances the original Action; it never asks the model again.
 	// The limit bounds the scan batch.
 	ListReady(ctx context.Context, limit int) ([]domain.AgentAction, error)
 
@@ -435,12 +434,12 @@ type AgentActionRepository interface {
 	MarkFailed(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time, execErr domain.ExecutionError) error
 
 	// MarkWaiting conditionally moves a RUNNING Action to WAITING_CALLBACK and stamps
-	// waiting_at, in the transaction that records an ASYNC Tool's dispatch (06 §1.7). It
+	// waiting_at, in the transaction that records an ASYNC Tool's dispatch. It
 	// returns domain.ErrStaleClaim when the row is not RUNNING.
 	MarkWaiting(ctx context.Context, actionID string, now time.Time) error
 
 	// MarkTimedOut conditionally fails an Action that is still READY, RUNNING or
-	// WAITING_CALLBACK. Only the Agent timeout transaction uses it (06 §1.7): the
+	// WAITING_CALLBACK. Only the Agent timeout transaction uses it: the
 	// deadline ends the current Action in whichever of those states it is, including the
 	// READY one no executor ever claimed. It reports false when the row had already
 	// reached a terminal status, which is not an error.
@@ -471,8 +470,8 @@ type ToolAttemptRepository interface {
 	MarkDispatched(ctx context.Context, attemptID string, now time.Time) error
 
 	// MarkTimedOut conditionally fails an Attempt that is still STARTED or DISPATCHED.
-	// The Agent deadline covers the synchronous call and the wait for a callback alike
-	// (05 §1.8), so the Agent timeout transaction closes both, and only it may close a
+	// The Agent deadline covers the synchronous call and the wait for a callback alike,
+	// so the Agent timeout transaction closes both, and only it may close a
 	// DISPATCHED one. It reports false when the Attempt already completed, which is what
 	// lets a result that committed first keep its outcome.
 	MarkTimedOut(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) (bool, error)

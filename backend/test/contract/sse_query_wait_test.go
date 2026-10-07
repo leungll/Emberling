@@ -15,11 +15,11 @@ import (
 )
 
 // TestAPI_Stream_EventCommittedBetweenQueryAndWait_DeliveredOnceInOrder covers the
-// query-to-wait switch window docs/09 §3.6 lists under DoD 17: the stream's cursor query
-// returns nothing, and before the loop blocks waiting for a notification or poll tick, a
-// new Event commits through the normal service path. There is no one-shot "replay then
-// live" switch (docs/08 §5), so that Event must still arrive - exactly once, at the next
-// contiguous seq - and a later reconnect with Last-Event-ID must not replay it.
+// query-to-wait switch window: the stream's cursor query returns nothing, and before the
+// loop blocks waiting for a notification or poll tick, a new Event commits through the
+// normal service path. There is no one-shot "replay then live" switch, so that Event must
+// still arrive - exactly once, at the next contiguous seq - and a later reconnect with
+// Last-Event-ID must not replay it.
 //
 // Every remaining Event of the Run (through RUN_COMPLETED) commits while the loop is held,
 // and PollInterval is 10 minutes, so nothing later can paper over a lost in-window wake:

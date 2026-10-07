@@ -13,8 +13,8 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
-// agentDecisionCommittedPayload is AGENT_DECISION_COMMITTED (docs/05-data-model.md §2.3:
-// turnId, actionId, kind, Tool name or Final summary). Exactly one of ToolName and
+// agentDecisionCommittedPayload is AGENT_DECISION_COMMITTED (Event fields: turnId,
+// actionId, kind, Tool name or Final summary). Exactly one of ToolName and
 // FinalOutput is present, following the Decision's kind.
 type agentDecisionCommittedPayload struct {
 	AgentRunID string              `json:"agentRunId"`
@@ -28,7 +28,7 @@ type agentDecisionCommittedPayload struct {
 	FinalOutput *dataSummary `json:"finalOutput,omitempty"`
 }
 
-// agentFailedPayload is AGENT_FAILED (docs/05-data-model.md §2.3: turnId, termination,
+// agentFailedPayload is AGENT_FAILED (Event fields: turnId, termination,
 // error).
 type agentFailedPayload struct {
 	AgentRunID  string                  `json:"agentRunId"`
@@ -38,7 +38,7 @@ type agentFailedPayload struct {
 }
 
 // agentTurnResponse is the bounded record of what the Provider answered, written on the
-// Turn together with its COMPLETED status (docs/05-data-model.md §2, AgentTurn.Response).
+// Turn together with its COMPLETED status (AgentTurn.Response).
 // It is the normalised response summary and nothing else: no Provider-private response
 // structure, no credential or header, and not a second copy of the Decision, which is its
 // own immutable row.
@@ -51,7 +51,7 @@ type agentTurnResponse struct {
 
 // agentModelCall is what the claim transaction hands to the model call it authorised. It
 // exists so that everything the Provider needs is read inside the transaction that took
-// the claim, and the call itself happens strictly after COMMIT (invariant #4).
+// the claim, and the call itself happens strictly after COMMIT.
 type agentModelCall struct {
 	runID      string
 	nodeRunID  string
@@ -60,7 +60,7 @@ type agentModelCall struct {
 	provider   registry.ModelProvider
 	request    registry.ModelRequest
 	// deadline is the Agent Run's single frozen deadline, which covers the model call as
-	// well as every Tool call (docs/06-execution-model.md §1.7).
+	// well as every Tool call.
 	deadline time.Time
 }
 
@@ -83,8 +83,8 @@ var errAgentTurnSuperseded = errors.New("execution: agent turn superseded")
 //     its immutable Decision and single READY Action, or the Turn's FAILED status with
 //     the Agent Run's termination and the Agent NodeRun's failure.
 //
-// A crash between 1 and 3 leaves a RUNNING Turn with no Decision. That is deliberate
-// (docs/06-execution-model.md §2.1): the model request may already have been billed, so
+// A crash between 1 and 3 leaves a RUNNING Turn with no Decision. That is deliberate:
+// the model request may already have been billed, so
 // recovery rediscovers READY Turns only and never re-issues this one.
 //
 // Executing the committed Action is a separate, separately claimed step; this use case
@@ -97,7 +97,7 @@ func (s *ExecutionService) AdvanceAgentTurn(ctx context.Context, turnID string, 
 
 	// The Agent Run's deadline bounds the model call, so a Provider cannot hold this
 	// goroutine past the point at which the Agent Run may no longer continue
-	// (docs/06-execution-model.md §1.7: the deadline covers model calls, Tool calls and
+	// (the deadline covers model calls, Tool calls and
 	// waiting for a callback alike).
 	callCtx, cancel := context.WithDeadline(ctx, call.deadline)
 	defer cancel()
@@ -105,13 +105,13 @@ func (s *ExecutionService) AdvanceAgentTurn(ctx context.Context, turnID string, 
 	response, genErr := call.provider.Generate(callCtx, call.request)
 	if genErr != nil {
 		if agentDeadlineExceeded(genErr, callCtx) {
-			// The deadline, not the Provider, ended this call: the termination is TIMEOUT
-			// (docs/06-execution-model.md §1.7), and MODEL_ERROR would misreport it.
+			// The deadline, not the Provider, ended this call: the termination is TIMEOUT,
+			// and MODEL_ERROR would misreport it.
 			return s.TimeoutAgentRun(ctx, call.agentRunID)
 		}
 		// A Provider error is the Agent's MODEL_ERROR termination: the Adapter has already
-		// normalised it, and Emberling does not silently re-ask the model
-		// (docs/07-extensibility.md §1.4). The Provider's own message is kept; it carries
+		// normalised it, and Emberling does not silently re-ask the model.
+		// The Provider's own message is kept; it carries
 		// no credential, because an Adapter must not put one there.
 		return s.failAgentTurn(ctx, *call, domain.TerminationModelError, domain.ExecutionError{
 			Code: "MODEL_ERROR", Message: genErr.Error(),
@@ -424,7 +424,7 @@ func (s *ExecutionService) commitAgentDecision(ctx context.Context, call agentMo
 	}
 	// The Action is committed READY work before this call is made, so a process that dies
 	// here loses only latency: the Reconciler rediscovers the same Action and advances the
-	// same Decision (invariant #6). claimSource is IMMEDIATE because this is the path that
+	// same Decision. claimSource is IMMEDIATE because this is the path that
 	// just committed it.
 	if actionType == domain.AgentActionFinal {
 		return s.CompleteAgentFinal(ctx, actionID, domain.ClaimImmediate)
@@ -478,8 +478,8 @@ func (s *ExecutionService) failAgentTurn(ctx context.Context, call agentModelCal
 // terminateAgentLocked writes one Agent Run's terminal facts inside a transaction whose
 // Run aggregate lock the caller already holds: the RUNNING Turn fails, the Agent Run
 // records its termination, AGENT_FAILED is appended, and the shared Agent NodeRun failure
-// tail fails the NodeRun and re-aggregates the Run (docs/06-execution-model.md, Tool
-// failure transaction, reused for a model failure).
+// tail fails the NodeRun and re-aggregates the Run (the Tool failure transaction,
+// reused for a model failure).
 //
 // Both conditional updates can lose: a Turn that is no longer RUNNING, or an Agent Run
 // something else already terminated, mean another path owns this outcome. Either rolls the

@@ -1,5 +1,5 @@
 // These two tests pin this fixture to the Runtime rule it exists to exercise: the basic
-// Decision shape check the model result transaction performs (07 §1.4). They live beside
+// Decision shape check the model result transaction performs. They live beside
 // the Provider rather than in runtime so that changing a Scenario's envelope fails here,
 // where the fixture is defined. Importing internal/runtime from a _test.go file does not
 // widen this Adapter's production dependencies (test/architecture/dependencies_test.go

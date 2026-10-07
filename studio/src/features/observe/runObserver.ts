@@ -29,7 +29,7 @@ export interface RunObserverDeps {
   clearTimer: (handle: unknown) => void;
 }
 
-/** Requested page size for JSON history; the Backend caps it (08 §5). */
+/** Requested page size for JSON history; the Backend caps it. */
 export const EVENT_PAGE_LIMIT = 200;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
@@ -43,7 +43,7 @@ const defaultDeps: RunObserverDeps = {
 };
 
 /**
- * Keeps one Run's Snapshot and Event list in sync with the Backend (04 §3.4, 08 §5).
+ * Keeps one Run's Snapshot and Event list in sync with the Backend.
  *
  * Pipeline: read the Snapshot, load Events up to its `lastSeq` as bounded JSON pages, then
  * open SSE at the last applied seq. Events are applied strictly in seq order: `seq` at or
@@ -117,7 +117,7 @@ export function observeRun(
   function onStreamEvent(event: RunEvent): void {
     if (disposed() || finished) return;
     if (!accept(event)) {
-      // 08 §5: on a gap keep the cursor and re-query; never skip the missing Event.
+      // On a gap keep the cursor and re-query; never skip the missing Event.
       requestSync();
       return;
     }

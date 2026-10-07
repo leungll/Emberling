@@ -23,7 +23,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Unit of Work atomicity (invariant #4; 09 §3.1 "状态更新后、Event COMMIT 前失败")
+// Unit of Work atomicity (the state-and-Event atomicity rule; failure after the state
+// update, before the Event COMMIT)
 // ---------------------------------------------------------------------------
 
 func TestUnitOfWork_EventInsertFails_RollsBackState(t *testing.T) {
@@ -75,7 +76,8 @@ func TestUnitOfWork_EventInsertFails_RollsBackState(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Conditional claim (invariants #5 and #7; 09 §3.1 "READY → RUNNING 发生并发抢占")
+// Conditional claim (the single-winner conditional-update rule; concurrent
+// READY -> RUNNING claims)
 // ---------------------------------------------------------------------------
 
 func TestNodeRuns_ConcurrentClaimReady_ExactlyOneWinner(t *testing.T) {
@@ -141,7 +143,7 @@ func TestNodeRuns_ConcurrentClaimReady_ExactlyOneWinner(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Run aggregate lock and seq allocation (invariants #1 and #4)
+// Run aggregate lock and seq allocation
 // ---------------------------------------------------------------------------
 
 func TestRunLock_ConcurrentAppend_SeqStrictlyIncreasingAndUnique(t *testing.T) {
@@ -263,7 +265,7 @@ func TestEvents_AppendWithoutLock_NotPossible(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Immutable Definition (invariant #8; 09 §3.4)
+// Immutable Definition (the immutable-Definition binding rule)
 // ---------------------------------------------------------------------------
 
 func TestDefinitions_SaveSameVersionTwice_ReturnsVersionConflict(t *testing.T) {
@@ -324,7 +326,7 @@ func TestDefinitions_StoredVersion_IsImmutable(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Identity constraints (05 §1.4 and §1.5)
+// Identity constraints
 // ---------------------------------------------------------------------------
 
 func TestNodeRuns_DuplicateNodeIDInRun_RejectedByConstraint(t *testing.T) {
@@ -384,7 +386,7 @@ func TestNodeAttempts_DuplicateAttemptNo_RejectedByConstraint(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Migrations and MVP status sets (09 §3.9; 05 §4.2)
+// Migrations and MVP status sets
 // ---------------------------------------------------------------------------
 
 func TestMigrations_ApplyOnFreshDatabase_Succeeds(t *testing.T) {
@@ -458,7 +460,8 @@ func TestRunStatusCheckConstraint_RejectsPhase2Value(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Reconciler rediscovery (invariant #7; 09 §3.9 "启动扫描发现 READY ... 工作")
+// Reconciler rediscovery (the persisted-work recovery rule; the startup scan finds
+// READY work)
 // ---------------------------------------------------------------------------
 
 func TestNodeRuns_ListReadyOrRetryable_FindsPersistedWorkAfterRestart(t *testing.T) {

@@ -53,7 +53,7 @@ func TestProvider_Models_RegistersTextModelV1WithBothCapabilities(t *testing.T) 
 }
 
 // TestProvider_Models_RegistersImageModelV1WithImageGenerationCapability covers the second
-// registration this Provider now serves: a Model ID the image_generation Node Type (07 §1.3)
+// registration this Provider now serves: a Model ID the image_generation Node Type
 // can validate against. This Provider never calls Generate for it -- image_generation
 // dispatches through a TaskDispatcher (mocktask), not a ModelProvider -- so only the
 // registration itself is asserted here.
@@ -179,11 +179,12 @@ func TestProvider_Generate_MockToolCallDirectiveReturnsToolCallDecision(t *testi
 	}
 }
 
-// TestProvider_Generate_MockToolCallDirectiveWithArguments_SetsDecisionArguments covers the
-// M5 slice 5.3b extension: "mock:tool-call:<name>:<json-arguments>" lets a caller reach a
-// non-empty TOOL_CALL over the public HTTP surface (Run input), not only through the
-// in-process Script hook. remote_lookup (internal/tools/remotelookup) requires a non-empty
-// "key", so a directive that cannot carry arguments can never dispatch that Tool.
+// TestProvider_Generate_MockToolCallDirectiveWithArguments_SetsDecisionArguments covers
+// the tool-call directive with arguments: "mock:tool-call:<name>:<json-arguments>" lets a
+// caller reach a non-empty TOOL_CALL over the public HTTP surface (Run input), not only
+// through the in-process Script hook. remote_lookup (internal/tools/remotelookup)
+// requires a non-empty "key", so a directive that cannot carry arguments can never
+// dispatch that Tool.
 func TestProvider_Generate_MockToolCallDirectiveWithArguments_SetsDecisionArguments(t *testing.T) {
 	p := NewProvider()
 	request := registry.ModelRequest{ModelID: ModelID, Messages: []registry.ModelMessage{
@@ -230,8 +231,8 @@ func TestProvider_Generate_MockToolCallDirectiveNoToolName_ReturnsError(t *testi
 }
 
 // TestProvider_Generate_MockToolCallDirectiveWithPriorToolMessage_ReturnsFinal covers the
-// second-turn behaviour the Agent Loop's persisted safe points force on this fixture (06
-// §1.7): Context Version 0's "user" message is the directive text, and it never gets
+// second-turn behaviour the Agent Loop's persisted safe points force on this fixture:
+// Context Version 0's "user" message is the directive text, and it never gets
 // rewritten, so it is still the last "user" role message once a "tool" role message has
 // been appended after the Tool result comes back. Without special handling this Provider
 // would read the same directive again and loop TOOL_CALL forever; instead it must answer
@@ -380,8 +381,8 @@ func TestProvider_Requests_ReturnsACopyNotTheInternalSlice(t *testing.T) {
 	}
 }
 
-// TestProvider_Generate_ScenarioOmitTokenUsage_NormalisesToNil covers 09 §3.3's negative
-// half of the Token usage row: a Provider that reports no usage at all must normalise to
+// TestProvider_Generate_ScenarioOmitTokenUsage_NormalisesToNil covers the negative
+// half of the Token usage acceptance row: a Provider that reports no usage at all must normalise to
 // TokenUsage == nil, not to a zeroed domain.TokenUsage. The distinction is a persisted
 // fact -- agent_turns.token_usage is nullable, and a zeroed struct would claim the model
 // call consumed exactly zero tokens rather than that the Provider said nothing.
@@ -424,7 +425,7 @@ func TestProvider_Generate_ScenarioOmitTokenUsage_NormalisesToNil(t *testing.T) 
 }
 
 // TestProvider_Generate_ReportedTokenUsageIsNonNegativeAndTotalsExactly covers the
-// positive half of the same 09 §3.3 row for the boundary the length-derived count makes
+// positive half of the same Token usage row for the boundary the length-derived count makes
 // reachable: an empty prompt and an empty output. There is no separate usage
 // normalisation function anywhere in internal/registry or this package -- a Provider's
 // returned *domain.TokenUsage is the normalised value and the Runtime stores it as-is

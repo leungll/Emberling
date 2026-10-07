@@ -1,12 +1,13 @@
 //go:build integration
 
-// Reconciler proof for docs/09-testing-and-acceptance.md §3.9 Backend readiness, row
-// "首次扫描遇到一条损坏记录" (the first scan encounters one corrupted record): the scan must
-// not abort, and must still process the other Run in the same batch. What "corrupted"
-// means for an expired Attempt whose Node Type the Registry no longer carries is governed
-// by the more specific recovery contract in 09 §3.4 ("恢复已有 Run 时 Node、Model、Tool 或
-// Provider 实现缺失 -> 受影响的 NodeRun、Turn 或 Action 明确失败，并保留对应 Event 与
-// Trace") and 06 §4 ("缺失或不兼容时必须确定性失败并保留 Trace"): the record is not merely
+// Reconciler proof for the Backend readiness scenario in which the first scan encounters
+// one corrupted record: the scan must not abort, and must still process the other Run in
+// the same batch. What "corrupted" means for an expired Attempt whose Node Type the
+// Registry no longer carries is governed by the more specific recovery contract (when a
+// Node, Model, Tool or Provider implementation is missing while recovering an existing Run,
+// the affected NodeRun, Turn or Action fails explicitly and its Event and Trace are
+// retained; a missing or incompatible registration must fail deterministically and keep
+// its Trace): the record is not merely
 // logged and left stuck, it is deterministically failed with a retained NODE_FAILED Event,
 // exactly like every other recovery entry point that meets a dropped registration. So the
 // scan "continuing" here means both Attempts in the batch reach a resolved terminal state
@@ -42,7 +43,7 @@ import (
 
 // corruptedRecordHealthyType and corruptedRecordDriftedType are two distinct async Node
 // Types, so a Registry that only drops one of them (a process restart that lost an
-// extension's registration, docs/07-extensibility.md §1) can corrupt exactly one Run's
+// extension's registration) can corrupt exactly one Run's
 // Attempt while leaving the other's fully recoverable.
 const (
 	corruptedRecordHealthyType = "async_dispatch_healthy"
@@ -170,20 +171,21 @@ func corruptedRecordDispatch(t *testing.T, ctx context.Context, svc *service.Exe
 }
 
 // TestReconciler_ExpiredAttemptWithDriftedNodeType_FailsWithRetainedEventAndContinuesScan
-// proves the 09 §3.9 "首次扫描遇到一条损坏记录" row together with 09 §3.4 / 06 §4's more
-// specific recovery rule: a scanned Attempt whose Node Type the reconciling process's
-// Registry no longer carries must still resolve to a deterministic FAILED outcome with a
-// retained NODE_FAILED Event (error code NODE_TYPE_NOT_REGISTERED), the same way Execute's
-// own unregistered-Node-Type path already behaves -- not bubble a bare Go error that would
-// abort TimeoutAttempt's guard transaction and leave the row permanently stuck. The
-// sibling healthy Attempt, discovered in the very same batch, must still be timed out
-// normally via the ordinary TIMEOUT path, and RunOnce's own returned error must stay nil
-// so readiness's FirstScan check (cmd/emberling/main.go: `_, err := rec.RunOnce(ctx); return
-// err`) is never blocked by a single corrupted record. The §3.9 row's "record that error"
-// is satisfied by the durable NODE_FAILED Event and Trace, not by a Report.Errors entry:
-// because the drifted record is fully (not partially) resolved, it counts as an ordinary
-// AttemptsTimedOut and Report.Errors stays empty, matching how the healthy record's own
-// TIMEOUT failure is never itself a Report.Errors entry either.
+// proves the first-scan corrupted-record scenario together with the more specific
+// recovery rule for missing registrations: a scanned Attempt whose Node Type the
+// reconciling process's Registry no longer carries must still resolve to a deterministic
+// FAILED outcome with a retained NODE_FAILED Event (error code NODE_TYPE_NOT_REGISTERED),
+// the same way Execute's own unregistered-Node-Type path already behaves -- not bubble a
+// bare Go error that would abort TimeoutAttempt's guard transaction and leave the row
+// permanently stuck. The sibling healthy Attempt, discovered in the very same batch, must
+// still be timed out normally via the ordinary TIMEOUT path, and RunOnce's own returned
+// error must stay nil so readiness's FirstScan check (cmd/emberling/main.go: `_, err :=
+// rec.RunOnce(ctx); return err`) is never blocked by a single corrupted record. The
+// scenario's "record that error" is satisfied by the durable NODE_FAILED Event and Trace,
+// not by a Report.Errors entry: because the drifted record is fully (not partially)
+// resolved, it counts as an ordinary AttemptsTimedOut and Report.Errors stays empty,
+// matching how the healthy record's own TIMEOUT failure is never itself a Report.Errors
+// entry either.
 func TestReconciler_ExpiredAttemptWithDriftedNodeType_FailsWithRetainedEventAndContinuesScan(t *testing.T) {
 	pool := testdb.Open(t)
 	uow := postgres.NewUnitOfWork(pool)
@@ -287,7 +289,7 @@ func TestReconciler_ExpiredAttemptWithDriftedNodeType_FailsWithRetainedEventAndC
 
 	// The drifted Run's Attempt/NodeRun/Run were also advanced, via TimeoutAttempt's
 	// NODE_TYPE_NOT_REGISTERED path (execution.go's TimeoutAttempt, mirroring Execute):
-	// 09 §3.4 / 06 §4 require a deterministic failure with a retained Event, not a record
+	// recovery requires a deterministic failure with a retained Event, not a record
 	// left stuck DISPATCHED/WAITING_CALLBACK forever.
 	if got := getAttempt(ctx, t, uow, driftedAttemptID).Status; got != domain.NodeAttemptFailed {
 		t.Fatalf("drifted Attempt status: want FAILED, got %s", got)

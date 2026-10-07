@@ -57,7 +57,7 @@ func TestMockTaskAdapter_Dispatch_ReturnsExternalTask(t *testing.T) {
 // TestMockTaskAdapter_Dispatch_SuccessPayloadIsAnImageRef pins what the fabricated success
 // callback carries: a valid domain.ImageRef, never a Provider-private object. The
 // EXTERNAL branch's uri is the Mock Provider's own image route, so it is stable,
-// credential-free and readable for as long as that Provider is serving (08 §2.2, 05 §1.2).
+// credential-free and readable for as long as that Provider is serving.
 func TestMockTaskAdapter_Dispatch_SuccessPayloadIsAnImageRef(t *testing.T) {
 	cases := map[string]struct {
 		options   map[string]any
@@ -138,7 +138,7 @@ func TestMockTaskAdapter_SuccessPayload_IsDeterministic(t *testing.T) {
 
 // TestMockTaskAdapter_Dispatch_ErrorsNeverContainToken: the one-time plaintext callback
 // token must not reach an error message, a log line or anything else outside the request
-// body itself (07 §1.3, 10 §2).
+// body itself.
 func TestMockTaskAdapter_Dispatch_ErrorsNeverContainToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// A Provider that echoes the request back inside its error body: even then the
@@ -274,7 +274,7 @@ func TestMockTaskAdapter_Dispatch_RejectsMissingCallback(t *testing.T) {
 
 // TestMockTaskAdapter_Dispatch_ForwardsReferenceImageRef: an optional Reference Image
 // reaches the Provider as the same credential-free domain.ImageRef the `reference` port
-// carries (08 §2.2). The Adapter never resolves it: no Asset content, storage key or
+// carries. The Adapter never resolves it: no Asset content, storage key or
 // signed URL is fetched or invented on the way out.
 func TestMockTaskAdapter_Dispatch_ForwardsReferenceImageRef(t *testing.T) {
 	var raw []byte

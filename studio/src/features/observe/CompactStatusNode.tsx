@@ -44,11 +44,11 @@ const SHORT_STATUS: Record<NodeRunStatus, string> = {
 const HIDDEN_HANDLE = { opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, border: 0 };
 
 /**
- * The READ-ONLY TOPOLOGY card's node (04 §3.3 mock): node name and NodeRun status only,
+ * The READ-ONLY TOPOLOGY card's node (as in the Run view mock): node name and NodeRun status only,
  * on the status-coloured border. Everything shown is the Definition node's own name and
  * the status the Backend reported for its NodeRun; a node without one reads "idle".
  * Ports, port hints and config summaries belong to the Edit canvas card (RegisteredNode).
- * Status colours are never overridden (04 §4): selection adds the status tint and an
+ * Status colours are never overridden: selection adds the status tint and an
  * outer ring on top of the same status border.
  */
 export function CompactStatusNode({ data, selected }: NodeProps<CompactStatusFlowNode>) {
@@ -90,7 +90,7 @@ export function CompactStatusNode({ data, selected }: NodeProps<CompactStatusFlo
       >
         {status ? (
           <>
-            {/* The one-word status is visual; assistive tech reads the full 04 §4 label. */}
+            {/* The one-word status is visual; assistive tech reads the full status label. */}
             <span aria-hidden="true">{SHORT_STATUS[status] ?? status}</span>
             <span className="sr-only">{nodeRunStatusLabel(status)}</span>
           </>

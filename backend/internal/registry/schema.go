@@ -54,7 +54,7 @@ func ValidateValue(schema *jsonschema.Schema, value any) error {
 // into value, for every property value does not already set. It exists so a resolved
 // Model's modelConfig can be frozen with its full, normalised shape -- every declared
 // default applied -- rather than the possibly-partial object a Definition author
-// submitted (docs/07-extensibility.md model ConfigSchema). Only top-level `properties`
+// submitted (the model ConfigSchema contract). Only top-level `properties`
 // defaults are applied; a nested object's own defaults are that object's concern, not
 // this helper's.
 //
@@ -148,7 +148,7 @@ func propertyHasStringItems(property map[string]any) bool {
 }
 
 // propertyHasEnum reports whether a property subschema declares a non-empty enum, which
-// is what the SELECT widget renders (07 §1.1).
+// is what the SELECT widget renders.
 func propertyHasEnum(property map[string]any) bool {
 	values, ok := property["enum"].([]any)
 	return ok && len(values) > 0

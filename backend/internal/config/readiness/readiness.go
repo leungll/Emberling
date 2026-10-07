@@ -1,4 +1,4 @@
-// Package readiness runs the fixed Backend startup gate from 10-ops §1 and answers the
+// Package readiness runs the fixed Backend startup gate and answers the
 // liveness and readiness probes. It contains no knowledge of PostgreSQL, storage or the
 // Registry: the process wires concrete checks in, so the ordering rule stays independent
 // of the components it gates.
@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-// Step names the startup gates in the order 10-ops §1 fixes. The order is part of the
+// Step names the startup gates in their fixed order. The order is part of the
 // contract: the Reconciler may not start before storage is verified, and the process may
 // not accept requests before the first scan is known to be running.
 type Step string
@@ -101,7 +101,7 @@ type Observer interface {
 
 // Probe holds the process readiness state behind the liveness and readiness endpoints.
 // Liveness reports whether the process can keep working; it never fails because a Run
-// failed or because work is backing up (10-ops §1).
+// failed or because work is backing up.
 type Probe struct {
 	mu           sync.RWMutex
 	ready        bool

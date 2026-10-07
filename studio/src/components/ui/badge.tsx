@@ -10,7 +10,7 @@ const badgeVariants = cva(
       variant: {
         default: 'border-transparent bg-[var(--secondary)] text-[var(--secondary-foreground)]',
         outline: 'border-[var(--border)] text-[var(--foreground)]',
-        // Status colours follow 04 §4 and are shared by Definitions, Canvas, Timeline and
+        // Status colours follow the shared status palette and are shared by Definitions, Canvas, Timeline and
         // Detail. Tokens are defined per theme (light/dark) in index.css.
         neutral: 'border-transparent bg-[var(--status-neutral-bg)] text-[var(--status-neutral-fg)]',
         running: 'border-transparent bg-[var(--status-running-bg)] text-[var(--status-running-fg)]',
@@ -26,7 +26,7 @@ const badgeVariants = cva(
 
 export type BadgeProps = HTMLAttributes<HTMLSpanElement> &
   VariantProps<typeof badgeVariants> & {
-    /** Renders the leading status dot used by the Definitions table and Canvas (04 §4). */
+    /** Renders the leading status dot used by the Definitions table and Canvas. */
     dot?: boolean;
   };
 

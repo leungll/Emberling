@@ -14,18 +14,18 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
-// This file owns the execution of one committed TOOL_CALL Agent Action
-// (docs/06-execution-model.md §1.7): the transaction pair that claims the Action, calls
+// This file owns the execution of one committed TOOL_CALL Agent Action:
+// the transaction pair that claims the Action, calls
 // the Tool strictly after COMMIT, and commits the Tool result together with the appended
 // Context, the optional new State Version and the next round -- or the shared Tool
 // failure transaction when the call did not produce a usable result.
 //
 // The FINAL Action is not executed here. It has its own completion use case, and a FINAL
-// Action this path is handed is left untouched: docs/09-testing-and-acceptance.md §3.3
-// forbids a committed RUNNING Final Action, so claiming one here would leave exactly the
+// Action this path is handed is left untouched: a committed RUNNING Final Action is
+// forbidden, so claiming one here would leave exactly the
 // row that must never exist.
 
-// agentActionStartedPayload is AGENT_ACTION_STARTED (docs/05-data-model.md §2.3: turnId,
+// agentActionStartedPayload is AGENT_ACTION_STARTED (Event fields: turnId,
 // actionId, optional toolAttemptId, claimSource). ToolAttemptID is optional in the Event
 // contract because a FINAL Action creates no Tool Attempt.
 type agentActionStartedPayload struct {
@@ -36,7 +36,7 @@ type agentActionStartedPayload struct {
 	ClaimSource   domain.ClaimSource `json:"claimSource"`
 }
 
-// agentActionCompletedPayload is AGENT_ACTION_COMPLETED (docs/05-data-model.md §2.3).
+// agentActionCompletedPayload is AGENT_ACTION_COMPLETED.
 // completionSource is what distinguishes this synchronous execution from the callback and
 // Provider-poll paths that reach the same Action.
 //
@@ -51,7 +51,7 @@ type agentActionCompletedPayload struct {
 	CompletionSource domain.CompletionSource `json:"completionSource"`
 }
 
-// agentActionFailedPayload is AGENT_ACTION_FAILED (docs/05-data-model.md §2.3).
+// agentActionFailedPayload is AGENT_ACTION_FAILED.
 type agentActionFailedPayload struct {
 	AgentRunID    string                `json:"agentRunId"`
 	TurnID        string                `json:"turnId"`
@@ -61,7 +61,7 @@ type agentActionFailedPayload struct {
 	Error         domain.ExecutionError `json:"error"`
 }
 
-// agentStateUpdatedPayload is AGENT_STATE_UPDATED (docs/05-data-model.md §2.3: turnId,
+// agentStateUpdatedPayload is AGENT_STATE_UPDATED (Event fields: turnId,
 // contextVersion, previousStateVersion, stateVersion). It is written only by the
 // transaction that really created a new State Version. The State value is not part of it:
 // the State Version row is the authority, and a State can carry arbitrary user content.
@@ -75,13 +75,12 @@ type agentStateUpdatedPayload struct {
 
 // agentToolCallMessage is the content of the `assistant` message appended to the Context
 // after a successful Tool call: the committed TOOL_CALL Decision, in the shape the next
-// model request replays (docs/05-data-model.md §2, "一条 assistant message 保存已提交的
-// TOOL_CALL Decision").
+// model request replays (one assistant message stores the committed TOOL_CALL Decision).
 //
-// Design decision (docs/05 fixes that the Decision is saved, not its encoding): the state
-// patch is not part of it. The patch is applied to the State chain, which has its own
-// authoritative versions; copying it into the transcript would present a second, possibly
-// divergent record of the same fact to the model.
+// Design decision (the data model fixes that the Decision is saved, not its encoding):
+// the state patch is not part of it. The patch is applied to the State chain, which has
+// its own authoritative versions; copying it into the transcript would present a second,
+// possibly divergent record of the same fact to the model.
 type agentToolCallMessage struct {
 	Kind      domain.DecisionKind `json:"kind"`
 	ToolName  string              `json:"toolName"`
@@ -90,7 +89,7 @@ type agentToolCallMessage struct {
 
 // agentToolCall is what the claim transaction hands to the Tool call it authorised.
 // Everything the call and its result transaction need is read inside the transaction that
-// took the claim, so the call itself happens strictly after COMMIT (invariant #4) and no
+// took the claim, so the call itself happens strictly after COMMIT and no
 // Run lock is held while external code runs.
 type agentToolCall struct {
 	runID      string
@@ -108,7 +107,7 @@ type agentToolCall struct {
 	// the Executor returns (CLAUDE.md "Extensions and external calls").
 	async bool
 	// deadline is the Agent Run's single frozen deadline, which covers every Turn and
-	// every Tool call (docs/05-data-model.md §1.8).
+	// every Tool call.
 	deadline time.Time
 }
 
@@ -166,11 +165,10 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 	if execErr != nil {
 		if agentDeadlineExceeded(execErr, callCtx) {
 			// The Agent deadline expired during the call, so this is not the Tool's
-			// failure: the termination is TIMEOUT, never TOOL_ERROR
-			// (docs/06-execution-model.md §1.7, docs/09-testing-and-acceptance.md §3.3).
+			// failure: the termination is TIMEOUT, never TOOL_ERROR.
 			return s.TimeoutAgentRun(ctx, call.agentRunID)
 		}
-		// The MVP does not retry an Agent Tool (docs/06-execution-model.md §1.7), so the
+		// The MVP does not retry an Agent Tool, so the
 		// Tool's own error is the Action's outcome.
 		return s.failAgentToolCall(ctx, *call, domain.ExecutionError{
 			Code: "TOOL_ERROR", Message: execErr.Error(),
@@ -215,7 +213,7 @@ func agentToolOutput(result registry.ToolExecutionResult, toolName string) (json
 	}
 }
 
-// agentActionWaitingPayload is AGENT_ACTION_WAITING (docs/05-data-model.md §2.3: turnId,
+// agentActionWaitingPayload is AGENT_ACTION_WAITING (Event fields: turnId,
 // actionId, toolAttemptId, callbackBindingId). It names the Binding, never the external
 // task's credential.
 type agentActionWaitingPayload struct {
@@ -226,7 +224,7 @@ type agentActionWaitingPayload struct {
 	CallbackBindingID string `json:"callbackBindingId"`
 }
 
-// recordAgentToolDispatch is transaction 3 for an ASYNC Tool (06 §1.7). A dispatch that
+// recordAgentToolDispatch is transaction 3 for an ASYNC Tool. A dispatch that
 // names its external task commits, in one transaction under the Run aggregate lock, the
 // Tool Attempt's DISPATCHED status, the Callback Binding that routes the callback to that
 // Attempt, the Action's and the Agent NodeRun's WAITING_CALLBACK status, the Run's
@@ -251,7 +249,7 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 	case result.ExternalTask == nil || result.ExternalTask.ProviderID == "" || result.ExternalTask.ExternalTaskID == "":
 		// A dispatch no callback can be routed to must fail explicitly: waiting on it
 		// would leave the Action to the deadline and present a lost task as recoverable
-		// work (docs/09-testing-and-acceptance.md §3.7).
+		// work.
 		return s.failAgentToolCall(ctx, call, domain.ExecutionError{
 			Code:    "DISPATCH_WITHOUT_EXTERNAL_TASK",
 			Message: fmt.Sprintf("tool %q dispatched without a provider and external task id", call.toolName),
@@ -273,7 +271,7 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 		}
 		now := s.deps.Clock.Now()
 
-		// The conditional updates decide the single winner (invariant #7): an Attempt,
+		// The conditional updates decide the single winner: an Attempt,
 		// Action or NodeRun no longer in its pre-dispatch status means the Agent timeout
 		// already closed it while the Tool was dispatching. This caller then writes
 		// nothing; the external task is left to the Provider, since Emberling promises no
@@ -324,7 +322,7 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 			return err
 		}
 
-		// Run status is derived from NodeRun state (invariant #2): with the Agent NodeRun
+		// Run status is derived from NodeRun state: with the Agent NodeRun
 		// waiting, the Run becomes PAUSED once nothing else is running.
 		if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
 			return err
@@ -351,10 +349,10 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 
 	// A callback that reached the endpoint before this Binding committed was stored as a
 	// Pending Callback. Now that the Binding routes it, it is replayed through the same
-	// resume use case a live callback enters (06 §1.6 step 3), which consumes the row in
-	// the transaction that acts on it (05 §1.7). A failure here leaves the Action waiting,
+	// resume use case a live callback enters, which consumes the row in
+	// the transaction that acts on it. A failure here leaves the Action waiting,
 	// bounded by the Agent deadline. The replay ends at its commit: the next READY Turn goes
-	// to the work queue (06 §2.1), so this dispatcher never nests a whole further Turn
+	// to the work queue, so this dispatcher never nests a whole further Turn
 	// chain -- model call, Tool calls -- inside its own call stack.
 	s.consumeEarlyCallback(ctx, task.ExternalTaskID, call.attemptID, committedAt)
 	return nil
@@ -464,12 +462,12 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 
 		// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
 		// exists so a Tool call carries the same audit and callback target model as a Node
-		// Attempt (docs/05-data-model.md §2). A synchronous call saves no callback token.
+		// Attempt. A synchronous call saves no callback token.
 		attemptID := s.deps.IDs.NewID(domain.IDPrefixToolAttempt)
 
 		// An ASYNC Tool gets an Attempt-scoped callback credential issued here, before the
 		// call, so its hash is committed before any Provider can deliver a callback
-		// (06 §1.6: the credential is persisted in the claim transaction). Only the hash
+		// (the credential is persisted in the claim transaction). Only the hash
 		// is stored; the plaintext token reaches the Executor through CallbackContext and
 		// nowhere else. As on the Node path, the credential outlives the Agent deadline by
 		// the Pending Callback TTL, so a callback racing the timeout transaction competes
@@ -554,7 +552,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 }
 
 // completeAgentToolCall is transaction 3's success half: the whole successful round
-// commits together (docs/06-execution-model.md §1.7) -- the Tool result, the Action's
+// commits together -- the Tool result, the Action's
 // SUCCEEDED status, the appended Context Version, the new State Version when the Decision's
 // patch really changed the State, the Agent Run's pointers, and either the next READY Turn
 // or the termination the round or time limit demands.
@@ -565,19 +563,19 @@ func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agent
 	}
 	// The next Turn is committed READY work by the time this line runs, and it is handed
 	// to the bounded work queue rather than advanced by calling AdvanceAgentTurn from here
-	// (06 §1.3: advancement does not use unbounded synchronous recursion; each committed
+	// (advancement does not use unbounded synchronous recursion; each committed
 	// READY item is a new queue item and a new transaction). The synchronous Tool path and
 	// the asynchronous resume therefore continue the loop the same way, and this goroutine
 	// returns with a flat stack after every round instead of nesting one Turn's use case
 	// inside the previous Turn's. A refused enqueue, or a process that dies before the
 	// worker dequeues the item, leaves the READY Turn to the Reconciler's rediscovery
-	// (invariant #6, 06 §2.1).
+	// (the persisted-work recovery rule).
 	s.enqueueAgentTurn(call.runID, outcome.nextTurnID)
 	return nil
 }
 
 // agentToolOutcomeSource says which path delivers a Tool Attempt's outcome and therefore
-// which statuses the conditional updates must find (06 §1.7): the synchronous call
+// which statuses the conditional updates must find: the synchronous call
 // resolves a STARTED Attempt of a RUNNING Action, while a callback or Provider poll
 // resolves a DISPATCHED Attempt of a WAITING_CALLBACK Action and also returns the waiting
 // Agent NodeRun to RUNNING when the loop continues. Requiring the expected "from" status
@@ -589,15 +587,15 @@ type agentToolOutcomeSource struct {
 	failureSource    domain.FailureSource
 	// resumesWaiting is true for the asynchronous resume: the Agent NodeRun is
 	// WAITING_CALLBACK and the Run may be PAUSED, so continuing the loop moves the NodeRun
-	// back to RUNNING and re-derives the Run status (invariant #2).
+	// back to RUNNING and re-derives the Run status.
 	resumesWaiting bool
 	// consumePending is the external task id of a stored early callback this outcome is
-	// the replay of, or "". The row is consumed in the same transaction that acts on it
-	// (05 §1.7), so an early callback can advance an Action at most once.
+	// the replay of, or "". The row is consumed in the same transaction that acts on it,
+	// so an early callback can advance an Action at most once.
 	consumePending string
 	payloadHash    string
 	// attemptTokenHash is the Tool Attempt's own callback credential hash, which a
-	// replayed Pending Callback must match (06 §3). It is compared, never written.
+	// replayed Pending Callback must match. It is compared, never written.
 	attemptTokenHash *string
 }
 
@@ -654,7 +652,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		// The resume re-derives the Run status, which needs the compiled plan of the Run's
-		// immutable Definition version (invariant #8); it is resolved before the lock.
+		// immutable Definition version; it is resolved before the lock.
 		var plan *runtime.CompiledDefinition
 		var run domain.Run
 		if src.resumesWaiting {
@@ -700,7 +698,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 
 		// The state patch is decided before anything else is written: a patch that cannot
 		// be applied must leave no Context Version, no State Version and no moved pointer
-		// behind (docs/05-data-model.md §1.4).
+		// behind.
 		previousState, err := tx.AgentStateVersions().GetByRunAndVersion(ctx, agentRun.ID, agentRun.CurrentStateVersion)
 		if err != nil {
 			return err
@@ -771,7 +769,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		}
 
 		// The round and time limits are checked before the next Turn is created, so no Turn
-		// is ever left that nobody is allowed to execute (docs/06-execution-model.md §1.7).
+		// is ever left that nobody is allowed to execute.
 		nextTurnNo := agentRun.CurrentTurnNo + 1
 		termination := domain.AgentTermination("")
 		var execError domain.ExecutionError
@@ -820,7 +818,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 
 		if src.resumesWaiting {
 			// The loop continues, so the Agent NodeRun leaves WAITING_CALLBACK in the same
-			// transaction that creates the next Turn (06 §1.7). A NodeRun no longer waiting
+			// transaction that creates the next Turn. A NodeRun no longer waiting
 			// means another path already resolved it.
 			if err := tx.NodeRuns().Transition(ctx, nodeRun.ID, domain.NodeRunWaitingCallback, domain.NodeRunRunning, now); err != nil {
 				if errors.Is(err, domain.ErrStaleClaim) {
@@ -861,7 +859,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		}
 		if src.resumesWaiting {
 			// With the Agent NodeRun RUNNING again, a PAUSED Run becomes RUNNING and
-			// RUN_RESUMED commits with it (invariant #2, invariant #3).
+			// RUN_RESUMED commits in the same transaction.
 			if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
 				return err
 			}
@@ -900,7 +898,7 @@ func (s *ExecutionService) runPlan(ctx context.Context, tx store.Tx, runID strin
 	return run, plan, nil
 }
 
-// aggregateRunLocked derives the Run status from its NodeRuns (invariant #2) under the Run
+// aggregateRunLocked derives the Run status from its NodeRuns under the Run
 // aggregate lock the caller holds, writes the Run transition Event when the status
 // changes, and persists the status together with the seq watermark.
 func (s *ExecutionService) aggregateRunLocked(ctx context.Context, tx store.Tx, lock *store.RunLock, run domain.Run, plan *runtime.CompiledDefinition, now time.Time) error {
@@ -929,7 +927,7 @@ func (s *ExecutionService) aggregateRunLocked(ctx context.Context, tx store.Tx, 
 // appendToolRoundContext creates the Context Version one successful Tool round produces:
 // every message of the previous version, unchanged and in order, followed by the committed
 // TOOL_CALL Decision as an `assistant` message and the Tool result as a `tool` message
-// linked to the call by the stable Action ID and Tool Name (docs/05-data-model.md §2).
+// linked to the call by the stable Action ID and Tool Name.
 // History is never reordered or rewritten.
 func (s *ExecutionService) appendToolRoundContext(
 	ctx context.Context,
@@ -996,8 +994,8 @@ func (s *ExecutionService) appendToolRoundContext(
 	return messages, nil
 }
 
-// failAgentToolCall is the shared Tool failure use case
-// (docs/06-execution-model.md §1.7): one transaction that takes the failure completion
+// failAgentToolCall is the shared Tool failure use case:
+// one transaction that takes the failure completion
 // right from the current Tool Attempt and Action status and then commits, atomically, the
 // Tool Attempt's FAILED status, the Action's FAILED status, the Agent Run's TOOL_ERROR
 // termination, the Agent NodeRun's failure, the Run's re-aggregation and the three Events.

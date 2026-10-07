@@ -12,14 +12,14 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
-// This file owns the Final completion use case (docs/06-execution-model.md §1.7): the one
+// This file owns the Final completion use case: the one
 // transaction that closes a committed FINAL Agent Action out and, with it, the Agent Run
 // and the Agent NodeRun. A FINAL Action calls nothing external, so unlike the Tool path
 // there is no COMMIT to wait for between claiming the Action and finishing it -- and
-// docs/09-testing-and-acceptance.md §3.3 requires exactly that: the database never holds a
-// committed RUNNING Final Action.
+// the acceptance criteria require exactly that: the database never holds a committed
+// RUNNING Final Action.
 
-// agentCompletedPayload is AGENT_COMPLETED (docs/05-data-model.md §2.3: turnId,
+// agentCompletedPayload is AGENT_COMPLETED (Event fields: turnId,
 // termination, output summary). The output itself is not in it: an Agent's answer can be
 // as large as the document it was derived from, and the authoritative copy is the Agent
 // NodeRun's output and the Final Context Version (CLAUDE.md "Persistence and
@@ -35,7 +35,7 @@ type agentCompletedPayload struct {
 // completion path: immediate advancement after the Decision commits and the Reconciler's
 // rediscovery of a READY Final Action both enter here, differing only in claimSource.
 //
-// Everything happens in one transaction (docs/06-execution-model.md §1.7):
+// Everything happens in one transaction:
 //
 //  1. Lock the Run and read the Action, its committed Decision, the Agent Run and the
 //     current Context and State Versions.
@@ -119,7 +119,7 @@ func (s *ExecutionService) CompleteAgentFinal(ctx context.Context, actionID stri
 			// Another advancement path already owns this Action's outcome.
 			return nil
 		}
-		// A FINAL Action never has a Tool Attempt (docs/05-data-model.md §1.4), so
+		// A FINAL Action never has a Tool Attempt, so
 		// AGENT_ACTION_STARTED names none.
 		if err := s.appendEvent(ctx, tx, lock, run.ID, &nodeRun.ID, domain.EventAgentActionStarted, now, agentActionStartedPayload{
 			AgentRunID:  agentRun.ID,
@@ -145,7 +145,7 @@ func (s *ExecutionService) CompleteAgentFinal(ctx context.Context, actionID stri
 		}
 		if validationErr != nil {
 			// A committed, deterministic fact is invalid. The same Final Action is never
-			// retried and the model is never asked again (docs/09 §3.3).
+			// retried and the model is never asked again.
 			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
 				domain.FailureSyncExecution, domain.TerminationInvalidAction,
 				domain.ExecutionError{Code: "INVALID_ACTION", Message: validationErr.Error()}, now); err != nil {
@@ -253,7 +253,7 @@ func (s *ExecutionService) CompleteAgentFinal(ctx context.Context, actionID stri
 	return nil
 }
 
-// appendFinalContext creates the Final Context Version (docs/05-data-model.md §2): every
+// appendFinalContext creates the Final Context Version: every
 // message of the previous version, unchanged and in order, followed by one `assistant`
 // message carrying the canonical Final output. History is never reordered or rewritten.
 func (s *ExecutionService) appendFinalContext(
@@ -302,9 +302,8 @@ func (s *ExecutionService) appendFinalContext(
 // its Agent Run as FINAL_RESPONSE, and is the mirror image of failAgentNodeRun: it is
 // deliberately not completeNode, which is keyed on a Node Attempt (to find the NodeRun and
 // to stamp nodeCompletedPayload) and opens its own transaction -- an Agent NodeRun has no
-// Attempt, and docs/06-execution-model.md §1.7 requires the Agent NodeRun's result to
-// commit with the Action's. The downstream scheduling and Run aggregation that follow are
-// the shared ones, not a second copy.
+// Attempt, and the Agent NodeRun's result must commit with the Action's. The downstream
+// scheduling and Run aggregation that follow are the shared ones, not a second copy.
 //
 // TokenUsage is deliberately absent: the authoritative per-model-call usage is recorded on
 // each Agent Turn, and no design document defines an Agent-level aggregate.

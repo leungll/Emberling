@@ -2,8 +2,7 @@
 
 // Package integration: this file covers the store additions the service layer needs for
 // completion writes, retry bookkeeping, Attempt dispatch/result writes and Reconciler
-// scanning (docs/06-execution-model.md §1.3-§1.5, §2; docs/09-testing-and-acceptance.md
-// §3.1-§3.3).
+// scanning.
 package integration
 
 import (

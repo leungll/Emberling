@@ -186,7 +186,7 @@ describe('ObservePage — live pipeline', () => {
     const caption = await screen.findByRole('button', { name: /node_caption/ });
     expect(within(caption).getByText('Ready')).toBeInTheDocument();
     // The Image NodeRun finished (SUCCEEDED), so the Run Rail drops it: only Active
-    // NodeRuns are grouped there (docs/04-ux.md §3, Run Rail).
+    // NodeRuns are grouped there.
     expect(screen.queryByRole('button', { name: /node_image/ })).not.toBeInTheDocument();
 
     // The Run completes: the stream is closed and not reopened.

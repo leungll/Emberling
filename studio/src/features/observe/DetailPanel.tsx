@@ -79,7 +79,7 @@ export function DetailPanel({
 
   const eventView = selectedEvent ? <EventDetail event={selectedEvent} /> : null;
 
-  // 04 §3.4 Agent view: Turn timeline beside the NodeRun detail.
+  // Agent view: Turn timeline beside the NodeRun detail.
   if (selectedNodeRun && agentNodeRunId) {
     return (
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
@@ -276,7 +276,7 @@ function NodeRunHeading({ nodeRun, nodeName }: { nodeRun: NodeRun; nodeName?: st
           {nodeRun.nodeType} · {nodeRun.id}
         </p>
       </div>
-      {/* The raw NodeRun status sits beside its 04 §4 wording. */}
+      {/* The raw NodeRun status sits beside its display wording. */}
       <Badge
         variant={nodeRunStatusVariant(nodeRun.status)}
         className="shrink-0 px-4 py-1.5"
@@ -336,7 +336,7 @@ function latestEventText(latestEvent: RunEvent | null): string {
   return latestEvent ? `${latestEvent.type} · seq ${latestEvent.seq}` : '—';
 }
 
-/** Amber WAITING DIAGNOSTICS block of a WAITING_CALLBACK NodeRun (04 §3.2). */
+/** Amber WAITING DIAGNOSTICS block of a WAITING_CALLBACK NodeRun. */
 function WaitingDiagnostics({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section
@@ -371,7 +371,7 @@ function NodeRunDetailView({
 
       {nodeRun.status === 'WAITING_CALLBACK' ? (
         <>
-          {/* 04 §3.2: every waiting field is a persisted fact; a value the Backend has not
+          {/* Every waiting field is a persisted fact; a value the Backend has not
               reported yet reads "—" and is never guessed. */}
           <WaitingDiagnostics title="Waiting Diagnostics">
             <div className="grid grid-cols-2 gap-x-8 gap-y-3">
@@ -620,7 +620,7 @@ function Field({
   stacked?: boolean;
 }) {
   // `strong` rows are the waiting diagnostics: a fixed label column with the value beside
-  // it, as in the 04 §3.2 mock; plain rows spread label and value across the width. An
+  // it, as in the waiting diagnostics mock; plain rows spread label and value across the width. An
   // ID squeezed beside its label would wrap its last one or two characters onto a line of
   // their own, so `stacked` gives it the whole width instead.
   return (
@@ -664,7 +664,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const IMAGE_SOURCES: readonly ImageSource[] = ['ASSET', 'ARTIFACT', 'EXTERNAL'];
 
-/** Mirrors `backend/internal/domain/imageref.go`'s `Source` discriminant (08 §2.2). */
+/** Mirrors `backend/internal/domain/imageref.go`'s `Source` discriminant. */
 function isImageRefValue(value: unknown): value is ImageRef {
   return (
     typeof value === 'object' &&
@@ -688,9 +688,10 @@ function collectImageRefs(value: unknown): ImageRef[] {
 }
 
 /**
- * `<img>` preview plus the raw reference text (04 §3, "图片显示预览和原始引用"). EXTERNAL
+ * `<img>` preview plus the raw reference text: an image shows both a preview and its raw
+ * reference. EXTERNAL
  * renders the given URI directly; ASSET reuses the existing `/assets/{id}/content` route.
- * ARTIFACT has no documented content endpoint (08), so it shows only the raw reference —
+ * ARTIFACT has no documented content endpoint, so it shows only the raw reference —
  * never a guessed or invented proxy URL.
  */
 function ImagePreview({ image }: { image: ImageRef }) {
@@ -735,7 +736,7 @@ function ImagePreview({ image }: { image: ImageRef }) {
 
 /**
  * Above this serialized length a value counts as a "large field" that collapses by default
- * (04 §3, "大字段默认折叠"); everything at or under it stays visible, since only large
+ * (large fields are collapsed by default); everything at or under it stays visible, since only large
  * fields are documented to default-collapse — a small value like `{"brief":"x"}` must not
  * require an extra click to read.
  */

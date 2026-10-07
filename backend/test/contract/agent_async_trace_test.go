@@ -20,7 +20,7 @@ import (
 // through the real Mock Provider with an ASYNC Tool whose callback is lost, so the Agent
 // NodeRun stays WAITING_CALLBACK. The Agent Trace must show the DISPATCHED Tool Attempt
 // with its Callback Binding summarised as provider and external task identity only: the
-// callback token and its persisted hash never leave the Backend (08 §3.4).
+// callback token and its persisted hash never leave the Backend.
 func TestAPI_AgentTrace_DispatchedToolAttempt_ShowsSafeBindingNoTokenHash(t *testing.T) {
 	fixture := newProviderFixture(t)
 	env := fixture.startBackend(t, nil)

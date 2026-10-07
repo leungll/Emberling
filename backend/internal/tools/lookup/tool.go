@@ -1,10 +1,10 @@
 // Package lookup implements the built-in `lookup` Tool of the MVP Tool Registry
-// (docs/08-interface-spec.md §2.2: "Read a deterministic record"). It is the synchronous
+// ("Read a deterministic record"). It is the synchronous
 // Tool the Agent Loop is validated against: one registered operation, no I/O, no state of
 // its own, and a result derived only from the arguments it is given.
 //
-// It owns no retry, timeout, callback routing, state transition or Event
-// (docs/07-extensibility.md §1.5): a failed lookup is reported upward as an error and the
+// It owns no retry, timeout, callback routing, state transition or Event:
+// a failed lookup is reported upward as an error and the
 // Agent Runtime decides what happens next.
 package lookup
 
@@ -23,7 +23,7 @@ const ToolName = "lookup"
 
 // MissingKey is the one key for which this Tool fails deterministically. Tool failure
 // tests need a failing call that is still a real, registered Tool call (the TOOL_ERROR
-// path of docs/06-execution-model.md §1.7), and a scripted key gives them one without a
+// path of the Agent termination table), and a scripted key gives them one without a
 // second registration or an injected fault.
 const MissingKey = "missing"
 
@@ -81,8 +81,7 @@ type record struct {
 }
 
 // Execute reads the record named by `key` and returns it. Being a SYNC Tool it always
-// returns a completed result or an error; it never dispatches and never retries
-// (docs/07-extensibility.md §1.5).
+// returns a completed result or an error; it never dispatches and never retries.
 func (Executor) Execute(_ context.Context, action registry.ToolAction) (registry.ToolExecutionResult, error) {
 	var args arguments
 	if err := json.Unmarshal(action.Arguments, &args); err != nil {

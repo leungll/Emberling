@@ -50,7 +50,7 @@ import { type EditorGraph, useStudioStore } from '@/stores/studio-store';
 
 /**
  * Router state a "New Definition" navigation from Definitions carries. POST /definitions
- * creates the first version with no baseVersion (08 §3.1), but since
+ * creates the first version with no baseVersion, but since
  * backend/internal/runtime/graph.go rejects a graph with no Output Node, that POST is
  * deferred until the first Save.
  */
@@ -60,7 +60,7 @@ interface NewDefinitionState {
 }
 
 /**
- * The unsaved name/description of a not-yet-created Definition. 08 §1: MVP defines no
+ * The unsaved name/description of a not-yet-created Definition. MVP defines no
  * server-side DRAFT state, so this only ever lives in this component's memory; it never
  * becomes a Definition version until the first Save.
  */
@@ -154,8 +154,8 @@ export function EditPage() {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   // React Flow reports each node's rendered size through a `dimensions` NodeChange once it
-  // has measured the DOM; that measurement decides visibility and `fitView` (WorkflowCanvas
-  // §6 canvas defect). It is kept out of `nodes`/`positions` so it never marks the
+  // has measured the DOM; that measurement decides visibility and `fitView` in
+  // WorkflowCanvas. It is kept out of `nodes`/`positions` so it never marks the
   // Definition dirty, but it still has to be fed back into the controlled `nodes` prop or
   // every render looks unmeasured again and the canvas never becomes visible.
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
@@ -234,7 +234,7 @@ export function EditPage() {
           setLoadError(describeError(error, 'Could not load definition'));
         });
 
-      // The Recent Execution bar (04 §2.6) reads the Definition list's `lastRun` summary,
+      // The Recent Execution bar reads the Definition list's `lastRun` summary,
       // then one `GET /runs/:id` for duration/Event count when a Run exists. A brand-new
       // draft cannot have a Run yet, so this only runs for an existing workflowId. A
       // failure here only empties the bar; it must never block or error the rest of Edit.
@@ -369,7 +369,7 @@ export function EditPage() {
     [selectedNodeId, selectNode],
   );
 
-  // Undo/Redo only swap local graphs; they never call the server (04 §2.5).
+  // Undo/Redo only swap local graphs; they never call the server.
   const undo = useCallback(() => {
     const restored = useStudioStore.getState().undo(graph);
     if (restored) restoreGraph(restored);
@@ -543,7 +543,7 @@ export function EditPage() {
         // The Backend never includes the newer version in a 409 body (it names no
         // resource to avoid leaking one Definition's content into another's error path),
         // so naming it to the user needs a fresh read. Local edits are untouched either
-        // way (04 §2.6): nothing here may overwrite them.
+        // way: nothing here may overwrite them.
         try {
           setConflict(await getDefinition(workflowId));
         } catch (reloadError) {
@@ -602,8 +602,8 @@ export function EditPage() {
   );
 
   // Backend validation errors that name the selected node's config, keyed by the
-  // top-level field they point at (04 §2's "clicking an entry focuses the offending
-  // node"): SchemaForm renders each list under its field, so the field itself does not
+  // top-level field they point at (clicking an entry focuses the offending
+  // node): SchemaForm renders each list under its field, so the field itself does not
   // need its own lookup UI.
   const selectedNodeFieldErrors = useMemo(() => {
     if (!validationErrors || !selectedNodeId) return {};
@@ -634,7 +634,7 @@ export function EditPage() {
       {loadError ? (
         <p
           role="alert"
-          // 04 §4: same FAILED tokens and body-text size as the Validation errors row below.
+          // Same FAILED tokens and body-text size as the Validation errors row below.
           className="border-b border-[var(--status-failed-dot)]/40 bg-[var(--status-failed-bg)] px-4 py-2.5 text-sm text-[var(--foreground)]"
         >
           {loadError}
@@ -651,7 +651,7 @@ export function EditPage() {
         <ul
           role="list"
           aria-label="Validation errors"
-          // 04 §4: the FAILED red is shared with Canvas, Timeline and Detail, so the row uses
+          // The FAILED red is shared with Canvas, Timeline and Detail, so the row uses
           // the status-failed tokens; the message is body text (≥14px) and the Backend path a
           // helper label (≥12px).
           className="space-y-1.5 border-b border-[var(--status-failed-dot)]/40 bg-[var(--status-failed-bg)] px-4 py-2.5"

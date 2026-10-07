@@ -98,9 +98,8 @@ func (r *agentRecordingTool) lastAction(t *testing.T) registry.ToolAction {
 // committed transaction and the advancement it chains next. Arming it from inside a model
 // or Tool call makes the very next notification the one that transaction publishes, so
 // the cancelled context reaches the chained step and nothing before it. What it
-// reproduces is the crash-after-COMMIT shape of docs/09-testing-and-acceptance.md: the
-// facts are committed, the in-process continuation never happens, and what is left behind
-// must be recoverable READY work.
+// reproduces is the crash-after-COMMIT shape: the facts are committed, the in-process
+// continuation never happens, and what is left behind must be recoverable READY work.
 type agentStopNotifier struct {
 	cancel context.CancelFunc
 	armed  atomic.Bool
@@ -200,10 +199,9 @@ func agentPointers(run domain.AgentRun) [3]int {
 // ---------------------------------------------------------------------------
 
 // TestAgentAction_ToolCallSuccess_CommitsResultContextAndNextReadyTurn covers the whole
-// successful Tool round of docs/06-execution-model.md §1.7: the claim transaction creates
-// the STARTED Tool Attempt and AGENT_ACTION_STARTED, and the result transaction commits
-// the Tool result, the appended Context Version, the Action's SUCCEEDED status and the
-// next READY Turn together.
+// successful Tool round: the claim transaction creates the STARTED Tool Attempt and
+// AGENT_ACTION_STARTED, and the result transaction commits the Tool result, the appended
+// Context Version, the Action's SUCCEEDED status and the next READY Turn together.
 //
 // The result transaction hands the next Turn to the work enqueuer, which this harness
 // only records, so the next Turn is observed exactly as it was committed: READY, with its
@@ -378,10 +376,9 @@ func TestAgentAction_ToolCallSuccess_CommitsResultContextAndNextReadyTurn(t *tes
 }
 
 // TestAgentAction_ToolCallWithStatePatch_CreatesStateVersionAndEvent covers the optional
-// half of the same transaction (docs/05-data-model.md §2.3, docs/09 §1): a patch that
-// really changes the State creates one new State Version and writes AGENT_STATE_UPDATED
-// recording the previous and next State Version and the Context Version committed with
-// them.
+// half of the same transaction: a patch that really changes the State creates one new
+// State Version and writes AGENT_STATE_UPDATED recording the previous and next State
+// Version and the Context Version committed with them.
 func TestAgentAction_ToolCallWithStatePatch_CreatesStateVersionAndEvent(t *testing.T) {
 	h := newAgentHarness(t, agentHarnessOptions{})
 	agentScriptToolCallThenFinal(h, mockmodel.Scenario{
@@ -425,7 +422,7 @@ func TestAgentAction_ToolCallWithStatePatch_CreatesStateVersionAndEvent(t *testi
 }
 
 // TestAgentAction_ReadyToRunningRace_OnlyOneClaimWins proves the conditional Action claim
-// is what elects the single executor (invariant #7). The in-process loop is stopped right
+// is what elects the single executor. The in-process loop is stopped right
 // after the Decision commits, which leaves the READY Action the Reconciler would
 // rediscover; two advancement paths then enter ExecuteAgentAction for it, and the loser
 // must stop without a second Tool Attempt and without a second real Tool call.
@@ -532,10 +529,11 @@ func TestAgentAction_ReadyToRunningRace_OnlyOneClaimWins(t *testing.T) {
 	}
 }
 
-// TestAgentAction_ToolCalledAfterCommit_NotBeforeCommit proves invariant #4 for the Tool
-// call: everything the claim transaction owes -- the RUNNING Action, the STARTED Tool
-// Attempt and AGENT_ACTION_STARTED -- is visible from a second connection while the Tool
-// is running, and the result transaction's facts are not.
+// TestAgentAction_ToolCalledAfterCommit_NotBeforeCommit proves the
+// commit-before-execution rule for the Tool call: everything the claim transaction
+// owes -- the RUNNING Action, the STARTED Tool Attempt and AGENT_ACTION_STARTED -- is
+// visible from a second connection while the Tool is running, and the result
+// transaction's facts are not.
 func TestAgentAction_ToolCalledAfterCommit_NotBeforeCommit(t *testing.T) {
 	tool := &agentRecordingTool{delegate: lookup.Executor{}}
 	h := newAgentHarness(t, agentHarnessOptions{LookupExecutor: tool})
@@ -582,11 +580,10 @@ func TestAgentAction_ToolCalledAfterCommit_NotBeforeCommit(t *testing.T) {
 // Invalid action: the Tool is never called
 // ---------------------------------------------------------------------------
 
-// assertAgentActionFailed is the shared assertion of the Action failure transaction
-// (docs/06-execution-model.md §1.7 and docs/09-testing-and-acceptance.md §1): the Action
-// fails, the Agent Run records why it stopped, the Agent NodeRun fails with the Run, and
-// the committed Decision is left untouched -- all in one transaction, with no new Context
-// or State Version and no next Turn.
+// assertAgentActionFailed is the shared assertion of the Action failure transaction: the
+// Action fails, the Agent Run records why it stopped, the Agent NodeRun fails with the
+// Run, and the committed Decision is left untouched -- all in one transaction, with no
+// new Context or State Version and no next Turn.
 func assertAgentActionFailed(
 	t *testing.T,
 	h *agentHarness,
@@ -681,11 +678,11 @@ func assertAgentActionFailed(
 	return action
 }
 
-// TestAgentAction_ToolNotInAllowlist_FailsInvalidActionWithoutToolCall covers
-// docs/09-testing-and-acceptance.md §1: a committed Decision naming a Tool outside the
-// Agent Run's frozen allowlist fails the Action as INVALID_ACTION. The registered Tool
-// must not be called (the allowlist is a Run-level authority decision, not a Registry
-// lookup), no Tool Attempt is created, and the model is not asked again.
+// TestAgentAction_ToolNotInAllowlist_FailsInvalidActionWithoutToolCall covers the
+// allowlist check: a committed Decision naming a Tool outside the Agent Run's frozen
+// allowlist fails the Action as INVALID_ACTION. The registered Tool must not be called
+// (the allowlist is a Run-level authority decision, not a Registry lookup), no Tool
+// Attempt is created, and the model is not asked again.
 func TestAgentAction_ToolNotInAllowlist_FailsInvalidActionWithoutToolCall(t *testing.T) {
 	allowed := &agentRecordingTool{delegate: lookup.Executor{}}
 	forbidden := &agentRecordingTool{delegate: lookup.Executor{}}
@@ -719,13 +716,13 @@ func TestAgentAction_ToolNotInAllowlist_FailsInvalidActionWithoutToolCall(t *tes
 }
 
 // TestAgentAction_ToolUnregisteredAfterDecisionCommitted_FailsToolErrorWithoutNewDecision
-// covers the mid-run half of docs/09-testing-and-acceptance.md §3.4 "已提交 Decision 指向的
-// Tool 缺失": the TOOL_CALL Decision and its READY Action are committed while `lookup`
-// still resolved, and a restarted Backend without that Tool then claims the Action. The
-// Tool is in the frozen allowlist, so this is registry drift and not an invalid Decision:
-// the Action fails as TOOL_ERROR with code TOOL_NOT_REGISTERED -- never INVALID_ACTION --
-// no Tool Attempt is created, the model is not re-asked, and the committed Decision is the
-// only one that ever exists.
+// covers the mid-run half of "a committed Decision names a missing Tool": the TOOL_CALL
+// Decision and its READY Action are committed while `lookup` still resolved, and a
+// restarted Backend without that Tool then claims the Action. The Tool is in the frozen
+// allowlist, so this is registry drift and not an invalid Decision: the Action fails as
+// TOOL_ERROR with code TOOL_NOT_REGISTERED -- never INVALID_ACTION -- no Tool Attempt is
+// created, the model is not re-asked, and the committed Decision is the only one that
+// ever exists.
 func TestAgentAction_ToolUnregisteredAfterDecisionCommitted_FailsToolErrorWithoutNewDecision(t *testing.T) {
 	stop := &agentStopNotifier{}
 	first := newAgentHarness(t, agentHarnessOptions{Notifier: stop})
@@ -898,11 +895,11 @@ func TestAgentAction_SyncToolFailure_TerminatesToolErrorNoPatchNoNextTurn(t *tes
 // Round and time limits
 // ---------------------------------------------------------------------------
 
-// TestAgentAction_MaxTurnsReachedAfterToolSuccess_TerminatesWithoutNewTurn covers
-// docs/06-execution-model.md §1.7: after a successful Tool the Runtime must check
-// max_turns *before* creating the next Turn. At the bound, the same transaction that
-// commits the Tool result terminates the Agent Run as MAX_TURNS and fails the Agent
-// NodeRun, leaving no Turn nobody may execute.
+// TestAgentAction_MaxTurnsReachedAfterToolSuccess_TerminatesWithoutNewTurn covers the
+// max_turns bound: after a successful Tool the Runtime must check max_turns *before*
+// creating the next Turn. At the bound, the same transaction that commits the Tool result
+// terminates the Agent Run as MAX_TURNS and fails the Agent NodeRun, leaving no Turn
+// nobody may execute.
 func TestAgentAction_MaxTurnsReachedAfterToolSuccess_TerminatesWithoutNewTurn(t *testing.T) {
 	tool := &agentRecordingTool{delegate: lookup.Executor{}}
 	h := newAgentHarness(t, agentHarnessOptions{LookupExecutor: tool})
@@ -1026,11 +1023,11 @@ func TestAgentAction_DeadlinePassedAfterToolSuccess_TerminatesTimeoutWithoutNewT
 // Result transaction failure
 // ---------------------------------------------------------------------------
 
-// TestAgentAction_ResultTxFailure_RollsBackAttemptActionVersionsAndTurn covers
-// docs/09-testing-and-acceptance.md §1: when the result transaction cannot commit, every
-// write in it rolls back together. What is left is exactly the state the claim
-// transaction committed -- a STARTED Tool Attempt under a RUNNING Action -- with no
-// Context Version, no State Version and no next Turn, so nothing half-applied is visible.
+// TestAgentAction_ResultTxFailure_RollsBackAttemptActionVersionsAndTurn covers rollback
+// of the result transaction: when the result transaction cannot commit, every write in it
+// rolls back together. What is left is exactly the state the claim transaction
+// committed -- a STARTED Tool Attempt under a RUNNING Action -- with no Context Version,
+// no State Version and no next Turn, so nothing half-applied is visible.
 //
 // The failure is manufactured the same way as the Node path's rollback test: the Event ID
 // the result transaction is about to insert is pre-occupied, so the Event insert violates

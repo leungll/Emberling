@@ -47,7 +47,7 @@ var ErrInvalidCallbackCredential = errors.New("execution: invalid callback crede
 var ErrNoCallbackBinding = errors.New("execution: no callback binding for external task")
 
 // CallbackPayloadRejectedError reports that the registered Executor could not interpret
-// the callback payload. Per 06 §1.6 this is deliberately not a state change: the NodeRun
+// the callback payload. This is deliberately not a state change: the NodeRun
 // stays WAITING_CALLBACK and the Provider still gets a 200, because re-delivering a
 // payload this Executor cannot parse would not help.
 type CallbackPayloadRejectedError struct {
@@ -93,7 +93,7 @@ func (r ResumeNode) hash() string {
 // ResumeOutcome is ResumeNode's result. Duplicate reports that another resume, timeout or
 // poll already took the completion right, so this delivery wrote nothing and consumed no
 // Event seq. FailureSource is only meaningful when Failed is true; it is not persisted in
-// NODE_FAILED (docs/05-data-model.md §2.3 gives that payload error + attemptNo only).
+// NODE_FAILED (that Event payload carries error + attemptNo only).
 type ResumeOutcome struct {
 	RunID         string
 	NodeRunID     string
@@ -122,9 +122,9 @@ type CallbackOutcome struct {
 }
 
 // ResumeNode is the single idempotent resume use case shared by callback intake, Provider
-// polling and the Reconciler (invariant #5). It never calls the Provider or the Executor
+// polling and the Reconciler. It never calls the Provider or the Executor
 // while holding the Run lock: OnCallback runs between the routing reads and the single
-// state-changing transaction (invariant #4, 06 §1.6 "恢复事务内不执行节点、不调用 Provider").
+// state-changing transaction, which executes no Node and calls no Provider.
 func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (ResumeOutcome, error) {
 	var (
 		binding  domain.CallbackBinding
@@ -157,7 +157,7 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 		if attempt.Status != domain.NodeAttemptDispatched {
 			// The Binding points at an Attempt that is no longer awaiting a result: a
 			// duplicate, a late delivery, or a callback for an Attempt a newer retry
-			// replaced. Nothing is written and no Event seq is consumed (09 §3.2).
+			// replaced. Nothing is written and no Event seq is consumed.
 			return nil
 		}
 		nodeRun, err = tx.NodeRuns().Get(ctx, attempt.NodeRunID)
@@ -181,7 +181,7 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 	switch binding.TargetType {
 	case domain.CallbackTargetNodeAttempt:
 	case domain.CallbackTargetToolAttempt:
-		// An asynchronous Agent Tool enters the same resume use case (invariant #5); only
+		// An asynchronous Agent Tool enters the same resume use case; only
 		// the target it resolves and the transaction that commits the outcome differ.
 		return s.resumeToolAttempt(ctx, req, binding)
 	default:
@@ -236,7 +236,7 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 			source:      failureSource,
 			fromAttempt: domain.NodeAttemptDispatched,
 			fromNodeRun: domain.NodeRunWaitingCallback,
-			// 06 §2.2: a Provider that reports its task failed resolves the Attempt and the
+			// A Provider that reports its task failed resolves the Attempt and the
 			// NodeRun; MVP does not re-dispatch an external task that already waited.
 			terminal:       true,
 			consumePending: s.pendingToConsume(req),
@@ -351,7 +351,7 @@ func (s *ExecutionService) HandleCallback(ctx context.Context, req HandleCallbac
 	}
 
 	if !bound {
-		// 06 §1.6 / 05 §1.7: the dispatch transaction may not have committed yet. The
+		// The dispatch transaction may not have committed yet. The
 		// delivery is stored under its external task id, keyed by the same token hash the
 		// Attempt row carries, so the dispatcher can tell its own callback apart from a
 		// credential that belongs to a different Attempt.
@@ -427,7 +427,7 @@ func issueCallbackToken(secret []byte, attemptID string, expiresAt time.Time) (s
 	// from and inventing one would kill a legitimate long-running Provider task. The
 	// Attempt's DISPATCHED status is the lifetime instead -- verification still binds the
 	// token to one attempt id, and the resume path rejects anything the Binding no longer
-	// routes (06 §1.6).
+	// routes.
 	var expiryMillis int64
 	if !expiresAt.IsZero() {
 		expiryMillis = expiresAt.UTC().UnixMilli()

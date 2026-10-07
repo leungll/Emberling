@@ -24,19 +24,19 @@ const multipartFramingSlack = 8 << 10
 // of that part into Asset storage, which is the only place it survives.
 const assetMultipartMemoryBytes = 1 << 20
 
-// assetFilePartName is the single accepted part of POST /assets (08 §3.2: one image per
-// upload). Another name, no part, or more than one part is a malformed request, not an
-// upload of the first thing that happens to look like a file.
+// assetFilePartName is the single accepted part of POST /assets (one image per upload).
+// Another name, no part, or more than one part is a malformed request, not an upload of
+// the first thing that happens to look like a file.
 const assetFilePartName = "file"
 
 // assetContentCacheControl lets a client cache downloaded content, privately. An Asset is
-// immutable — replacing content creates a new Asset (10-ops §3) — so a long lifetime is
+// immutable — replacing content creates a new Asset — so a long lifetime is
 // safe, while "private" keeps shared caches out of business content.
 const assetContentCacheControl = "private, max-age=31536000, immutable"
 
-// assetMetadataDTO is GET /assets/{assetId}. It is the AssetRef of 08 §3.2 plus the
-// creation time Asset Metadata records (05 §Asset). The internal storage key is absent by
-// construction: it is a system Secret (10-ops §4) and never leaves the store boundary.
+// assetMetadataDTO is GET /assets/{assetId}. It is the interface AssetRef plus the
+// creation time Asset Metadata records. The internal storage key is absent by
+// construction: it is a system Secret and never leaves the store boundary.
 type assetMetadataDTO struct {
 	AssetID   string    `json:"assetId"`
 	MediaType string    `json:"mediaType"`
@@ -57,7 +57,7 @@ func toAssetMetadataDTO(a domain.Asset) assetMetadataDTO {
 
 // uploadAsset implements POST /assets: one multipart/form-data file part named "file",
 // answered with the immutable AssetRef only after both the content and its Metadata are
-// committed (08 §3.2).
+// committed.
 //
 // The declared part size is passed to the service as a cross-check only; the recorded
 // size and digest always come from the bytes that actually landed.
@@ -117,9 +117,10 @@ func (d Deps) getAsset(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAssetMetadataDTO(asset))
 }
 
-// getAssetContent is the controlled download 08 §3.2 allows instead of a short-lived
-// signed URL: the Backend streams the content itself, so no storage location or bearer
-// token ever reaches a client. The digest is the ETag because an Asset is immutable.
+// getAssetContent is the controlled download the interface contract allows instead of a
+// short-lived signed URL: the Backend streams the content itself, so no storage location
+// or bearer token ever reaches a client. The digest is the ETag because an Asset is
+// immutable.
 func (d Deps) getAssetContent(w http.ResponseWriter, r *http.Request) {
 	asset, content, err := d.Assets.OpenContent(r.Context(), chi.URLParam(r, "assetId"))
 	if err != nil {
@@ -144,7 +145,7 @@ func (d Deps) getAssetContent(w http.ResponseWriter, r *http.Request) {
 }
 
 // mapMultipartError classifies a failure to parse an upload body. A body that outgrew the
-// request limit is 413 PAYLOAD_TOO_LARGE (08 §6); anything else is a malformed request.
+// request limit is 413 PAYLOAD_TOO_LARGE; anything else is a malformed request.
 func mapMultipartError(err error) error {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {

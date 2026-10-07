@@ -54,7 +54,7 @@ function rowY(row: number): number {
 }
 
 /**
- * Display-only positions for the READ-ONLY TOPOLOGY card (04 §3.3 mock). The Definition's
+ * Display-only positions for the READ-ONLY TOPOLOGY card of the Run view mock. The Definition's
  * own authored positions are for the Edit canvas's full-size cards and are left untouched.
  *
  * What is guaranteed: no two nodes overlap. When the bounded search succeeds, which it

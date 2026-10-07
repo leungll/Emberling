@@ -133,7 +133,7 @@ func TestValidateFinalOutput_NoSchema_RequiresString(t *testing.T) {
 	}
 	err := ValidateFinalOutput(json.RawMessage(`{"answer":"42"}`), nil)
 	if err == nil {
-		t.Fatal("ValidateFinalOutput(object, no schema) error = nil, want error: the MVP agent output port is text (08 §2.1)")
+		t.Fatal("ValidateFinalOutput(object, no schema) error = nil, want error: the MVP agent output port is text")
 	}
 	if _, ok := AsInvalidActionError(err); !ok {
 		t.Fatalf("ValidateFinalOutput() error = %v, want an *InvalidActionError", err)
@@ -155,7 +155,7 @@ func TestValidateFinalOutput_SchemaViolation_Fails(t *testing.T) {
 }
 
 func TestParseModelDecision_ChecksOnlyTheBasicShape(t *testing.T) {
-	// 07 §1.4: the model result transaction confirms the envelope shape only. A Tool
+	// The model result transaction confirms the envelope shape only. A Tool
 	// outside the allowlist and arguments the Tool InputSchema rejects must still commit
 	// as a Decision, so that ValidateToolCall fails them at execution time as
 	// INVALID_ACTION instead of the Decision never existing.

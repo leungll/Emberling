@@ -371,7 +371,7 @@ func TestServer_Tasks_WrongTokenScenario_DeliversMismatchedTokenAndDoesNotRetry(
 	}
 
 	outcomes := waitForCalls(t, notify, 1)
-	// 08 §4's 401 is this scenario's expected result, not a transport failure: the
+	// The invalid-token 401 is this scenario's expected result, not a transport failure: the
 	// Dispatcher reports one completed attempt and must not treat it as retryable.
 	if outcomes[0].Err != nil {
 		t.Fatalf("outcome.Err = %v, want nil: a rejected callback is still one completed delivery", outcomes[0].Err)

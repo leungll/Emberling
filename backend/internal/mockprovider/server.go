@@ -92,7 +92,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 // handleGenerate simulates a synchronous external text-generation call. It never logs the
-// prompt (10 §2/§4); the request body only ever lives in this handler's local scope.
+// prompt; the request body only ever lives in this handler's local scope.
 func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	var req generateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -154,8 +154,8 @@ func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTasks simulates an external Provider accepting one asynchronous task and
-// delivering its result later, as a callback POST to the caller-supplied CallbackURL (08
-// §4). It never persists callbackToken beyond forwarding it unchanged in that callback.
+// delivering its result later, as a callback POST to the caller-supplied CallbackURL. It
+// never persists callbackToken beyond forwarding it unchanged in that callback.
 func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 	var req taskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -186,7 +186,7 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		if !created {
 			// A replayed dispatch of an already-accepted task: the Provider answers with
 			// the original task id and does not start a second one, so the retry produces
-			// no second callback and no duplicate external side effect (06 §3, KEYED).
+			// no second callback and no duplicate external side effect (KEYED).
 			writeJSON(w, http.StatusOK, taskResponse{ExternalTaskID: existing})
 			return
 		}

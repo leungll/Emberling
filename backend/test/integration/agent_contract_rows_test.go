@@ -1,10 +1,10 @@
 //go:build integration
 
 // Agent Loop contract rows that the sibling agent_*_test.go files leave uncovered or only
-// partially covered (docs/09-testing-and-acceptance.md §3.3): the Tool *failure*
-// transaction's own rollback, the frozen values the next Turn's ModelRequest must carry,
-// the "Context exceeds the model limit" behaviour the MVP actually has, and the two
-// Tool-Action state-patch rows (schema failure and semantic no-op).
+// partially covered: the Tool *failure* transaction's own rollback, the frozen values the
+// next Turn's ModelRequest must carry, the "Context exceeds the model limit" behaviour
+// the MVP actually has, and the two Tool-Action state-patch rows (schema failure and
+// semantic no-op).
 //
 // They share the agentHarness, the fixture Definition and the helpers of
 // agent_loop_test.go / agent_action_test.go; nothing here duplicates a fixture that
@@ -28,12 +28,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Row 5: the Tool failure transaction fails before COMMIT
+// The Tool failure transaction fails before COMMIT
 // ---------------------------------------------------------------------------
 
 // TestAgentAction_ToolFailureTxFailure_RollsBackTerminationAndLeavesActionRecoverable
-// covers docs/09 §3.3 "Tool failure 事务在 COMMIT 前失败": every failure fact rolls back
-// together, so no partial termination, no Context/State Version and no next Turn survive.
+// covers a Tool failure transaction that fails before COMMIT: every failure fact rolls
+// back together, so no partial termination, no Context/State Version and no next Turn
+// survive.
 //
 // Its sibling TestAgentAction_ResultTxFailure_RollsBackAttemptActionVersionsAndTurn covers
 // the *success* completion transaction. This one is the mirror image and matters on its
@@ -150,7 +151,7 @@ func TestAgentAction_ToolFailureTxFailure_RollsBackTerminationAndLeavesActionRec
 }
 
 // ---------------------------------------------------------------------------
-// Row 16: the next Turn's ModelRequest carries only frozen values
+// The next Turn's ModelRequest carries only frozen values
 // ---------------------------------------------------------------------------
 
 // agentFrozenRequestModelConfig is the modelConfig the row-16 fixture freezes. It is
@@ -168,9 +169,9 @@ const agentFrozenRequestOutputSchema = `{"type":"string"}`
 const agentFrozenRequestStateSchema = `{"type":"object","additionalProperties":true}`
 
 // agentFrozenRequestDefinition is agentLoopDefinition with every value the ModelRequest
-// contract of docs/09 §3.3 names frozen to something distinguishable: two allowed Tools in
-// an order that is neither alphabetical nor the Registry's registration order, an explicit
-// modelConfig, and both Schemas.
+// contract names frozen to something distinguishable: two allowed Tools in an order that
+// is neither alphabetical nor the Registry's registration order, an explicit modelConfig,
+// and both Schemas.
 func agentFrozenRequestDefinition(workflowID string) domain.Definition {
 	def := agentLoopDefinition(workflowID)
 	config := `{
@@ -192,7 +193,7 @@ func agentFrozenRequestDefinition(workflowID string) domain.Definition {
 }
 
 // TestAgentTurn_ModelRequest_MatchesFrozenInstructionsToolsSchemaAndVersions covers
-// docs/09 §3.3 "创建下一 Turn 的 ModelRequest": after a Tool round, the second request the
+// building the next Turn's ModelRequest: after a Tool round, the second request the
 // Provider receives must be built entirely from the Agent Run's frozen snapshot and its
 // current version pointers -- Instructions, the current Context Version's messages, the
 // current State Version's value, the frozen model parameters, the frozen Final Output
@@ -263,8 +264,8 @@ func TestAgentTurn_ModelRequest_MatchesFrozenInstructionsToolsSchemaAndVersions(
 		t.Errorf("request instructions = %q, want the frozen %q", next.Instructions, agentInstructions)
 	}
 
-	// Messages are the current Context Version, in order and unrewritten. 05 §2 also
-	// forbids copying Instructions into the messages.
+	// Messages are the current Context Version, in order and unrewritten. Instructions
+	// must not be copied into the messages either.
 	stored := agentContextMessages(t, agentContextVersion(h.ctx, t, h.uow, agentRun.ID, 1).Messages)
 	if len(next.Messages) != len(stored) {
 		t.Fatalf("request messages = %d, want the current Context Version's %d", len(next.Messages), len(stored))
@@ -338,12 +339,12 @@ func agentSamePointer(got, want *string) bool {
 }
 
 // ---------------------------------------------------------------------------
-// Row 30: Context exceeds the model limit
+// Context exceeds the model limit
 // ---------------------------------------------------------------------------
 
-// TestAgentTurn_ProviderRejectsOversizedContext_FailsModelErrorWithoutTruncation covers
-// docs/09 §3.3 "Context 超过模型限制": the Turn fails explicitly and the MVP never silently
-// trims, summarises or drops a message.
+// TestAgentTurn_ProviderRejectsOversizedContext_FailsModelErrorWithoutTruncation covers a
+// Context that exceeds the model limit: the Turn fails explicitly and the MVP never
+// silently trims, summarises or drops a message.
 //
 // There is no context-limit field anywhere in registry.ModelRegistration or the Agent Run,
 // so the limit is the Provider's to enforce: it rejects the call. What this test pins is
@@ -477,19 +478,19 @@ func agentTurnByNo(ctx context.Context, t *testing.T, uow store.UnitOfWork, agen
 }
 
 // ---------------------------------------------------------------------------
-// Row 32: a Tool-Action state patch that fails the frozen State Schema
+// A Tool-Action state patch that fails the frozen State Schema
 // ---------------------------------------------------------------------------
 
-// TestAgentAction_ToolCallStatePatchFailsSchema_FailsInvalidActionNoStateVersion covers
-// docs/09 §3.3 "State patch 应用失败或结果不通过 State Schema" on the Tool-Action path (its
+// TestAgentAction_ToolCallStatePatchFailsSchema_FailsInvalidActionNoStateVersion covers a
+// State patch that fails to apply or fails the State Schema on the Tool-Action path (its
 // sibling TestAgentFinal_StatePatchFailsSchema_FailsInvalidActionNoVersions covers the
 // FINAL path): the Action fails as INVALID_ACTION, no State Version is created, the
 // current pointer does not move and no AGENT_STATE_UPDATED is written.
 //
-// The Tool itself succeeds, which is the whole point: docs/05-data-model.md §1.4 makes a
-// TOOL_CALL's patch atomic with the Tool result and the Context append, so a patch the
-// frozen State Schema rejects must undo the entire round rather than keep the half of it
-// that worked. assertAgentActionFailed pins that the Context Version is not written either.
+// The Tool itself succeeds, which is the whole point: a TOOL_CALL's patch is atomic with
+// the Tool result and the Context append, so a patch the frozen State Schema rejects must
+// undo the entire round rather than keep the half of it that worked.
+// assertAgentActionFailed pins that the Context Version is not written either.
 func TestAgentAction_ToolCallStatePatchFailsSchema_FailsInvalidActionNoStateVersion(t *testing.T) {
 	const stateSchema = `{
 		"type": "object",
@@ -502,7 +503,7 @@ func TestAgentAction_ToolCallStatePatchFailsSchema_FailsInvalidActionNoStateVers
 		ToolName:      lookup.ToolName,
 		ToolArguments: json.RawMessage(agentToolArguments),
 		// Applies cleanly as a Merge Patch, but the *whole* patched State then fails the
-		// frozen Schema, which is the check 05 §1.4 requires.
+		// frozen Schema, which is the required check.
 		StatePatch: json.RawMessage(`{"count":"not-a-number"}`),
 	})
 	def := h.saveDefinition(agentFinalDefinition("wf-agent-tool-patch-schema", "", stateSchema))
@@ -537,9 +538,9 @@ func TestAgentAction_ToolCallStatePatchFailsSchema_FailsInvalidActionNoStateVers
 	if got := agentPointers(agentRun); got != [3]int{1, 0, 0} {
 		t.Errorf("pointers (turn, context, state) = %v, want [1 0 0]", got)
 	}
-	// 05 §1.4 makes the patch atomic with the Tool result and the Context append, so the
-	// Context Version must be absent too -- the implementation decides the patch before it
-	// writes anything (internal/service/agent_action.go, completeAgentToolCall).
+	// The patch is atomic with the Tool result and the Context append, so the Context
+	// Version must be absent too -- the implementation decides the patch before it writes
+	// anything (internal/service/agent_action.go, completeAgentToolCall).
 	if agentHasContextVersion(h.ctx, t, h.uow, agentRun.ID, 1) {
 		t.Errorf("a Context Version was committed for a round that failed as INVALID_ACTION")
 	}
@@ -554,15 +555,15 @@ func TestAgentAction_ToolCallStatePatchFailsSchema_FailsInvalidActionNoStateVers
 }
 
 // ---------------------------------------------------------------------------
-// Row 33: a patch whose result equals the current State
+// A patch whose result equals the current State
 // ---------------------------------------------------------------------------
 
-// TestAgentAction_ToolCallStatePatchNoOp_NoStateVersionNoEvent covers docs/09 §3.3
-// "没有 state patch，或 patch 结果与当前 State 相同": no State Version and no
-// AGENT_STATE_UPDATED. docs/05-data-model.md §1.4 adds that the comparison is JSON
-// semantic -- "object 字段顺序不构成变化" -- so the fixture drives three Tool rounds:
-// one that really changes the State, one that restates the same values, and one that
-// restates a nested object with its keys in a different order.
+// TestAgentAction_ToolCallStatePatchNoOp_NoStateVersionNoEvent covers a missing state
+// patch, or a patch whose result equals the current State: no State Version and no
+// AGENT_STATE_UPDATED. The comparison is JSON semantic -- object field order does not
+// count as a change -- so the fixture drives three Tool rounds: one that really changes
+// the State, one that restates the same values, and one that restates a nested object
+// with its keys in a different order.
 //
 // The State Version chain has to stay at V0/V1 across all three, because a "new" version
 // identical to its predecessor is an unbounded write amplification in a loop and would

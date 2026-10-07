@@ -18,7 +18,7 @@ import (
 )
 
 // TestAPI_Health_Live_Returns200 covers /health as pure process liveness
-// (docs/10-ops.md's liveness/readiness split): it must answer 200 whether or not the
+// (the liveness/readiness split): it must answer 200 whether or not the
 // startup gate has ever run, since a process that has not yet passed Ready is still
 // alive.
 func TestAPI_Health_Live_Returns200(t *testing.T) {
@@ -38,7 +38,7 @@ func TestAPI_Health_Live_Returns200(t *testing.T) {
 }
 
 // TestAPI_Health_AfterShutdownBegins_Returns503 covers the one condition that turns
-// liveness false: BeginShutdown, independent of Ready (docs/10-ops.md).
+// liveness false: BeginShutdown, independent of Ready.
 func TestAPI_Health_AfterShutdownBegins_Returns503(t *testing.T) {
 	probe := readiness.NewProbe()
 	probe.BeginShutdown()
@@ -55,7 +55,7 @@ func TestAPI_Health_AfterShutdownBegins_Returns503(t *testing.T) {
 // TestAPI_Ready_BeforeGateRuns_Returns503DependencyUnavailable covers the readiness
 // contract before any startup check has ever executed: this is the state a real process
 // is in for the entire duration of readiness.Probe.Run, so a load balancer must not route
-// traffic here (docs/10-ops.md §1, step 7 "accept_requests" is the last of seven).
+// traffic here (step 7 "accept_requests" is the last of seven).
 func TestAPI_Ready_BeforeGateRuns_Returns503DependencyUnavailable(t *testing.T) {
 	probe := readiness.NewProbe()
 	router := api.NewRouter(api.Deps{Readiness: probe})
@@ -93,15 +93,15 @@ func TestAPI_Ready_DatabaseCheckFails_Returns503(t *testing.T) {
 	}
 }
 
-// TestAPI_Ready_RegistryCheckFails_Returns503 covers docs/09-testing-and-acceptance.md
-// §3.9's Registry row: an inconsistent Tool/Node registration (Metadata, Executor or
-// ExecutionKind mismatch) fails the registry_registration step, and the Backend must not
-// become ready. Steps 1 and 2 pass here on purpose, so the test proves the gate stopped
-// at step 3 specifically, not merely that "some" step failed. The "Backend does not
-// accept new Runs" half of the row is structural: cmd/emberling returns the StepError
-// before api.NewRouter is ever constructed, so a process that fails this step serves no
-// /api route at all; the contract-observable fact is /ready answering 503 with
-// DEPENDENCY_UNAVAILABLE and the Probe never reaching Ready.
+// TestAPI_Ready_RegistryCheckFails_Returns503 covers the readiness Registry check: an
+// inconsistent Tool/Node registration (Metadata, Executor or ExecutionKind mismatch)
+// fails the registry_registration step, and the Backend must not become ready. Steps 1
+// and 2 pass here on purpose, so the test proves the gate stopped at step 3 specifically,
+// not merely that "some" step failed. The "Backend does not accept new Runs" half of the
+// row is structural: cmd/emberling returns the StepError before api.NewRouter is ever
+// constructed, so a process that fails this step serves no /api route at all; the
+// contract-observable fact is /ready answering 503 with DEPENDENCY_UNAVAILABLE and the
+// Probe never reaching Ready.
 func TestAPI_Ready_RegistryCheckFails_Returns503(t *testing.T) {
 	errRegistry := &staticError{"tool registration metadata does not match its executor"}
 	probe := readiness.NewProbe()
@@ -164,11 +164,10 @@ func TestAPI_Ready_AfterFullGatePasses_Returns200(t *testing.T) {
 	}
 }
 
-// TestAPI_Health_Live_WithFailedRunAndBacklog_Still200 covers docs/09-testing-and-
-// acceptance.md §3.9's liveness row: business backlog or a single failed Run must never
-// turn liveness (or, post-gate, readiness) false -- an orchestrator restart is not how
-// Emberling handles business failure. The test observes both halves of the row against
-// one fully wired Backend:
+// TestAPI_Health_Live_WithFailedRunAndBacklog_Still200 covers the liveness rule that
+// business backlog or a single failed Run must never turn liveness (or, post-gate,
+// readiness) false -- an orchestrator restart is not how Emberling handles business
+// failure. The test observes both halves of the row against one fully wired Backend:
 //
 //  1. Backlog: a barrier stalls the Run's first Model call at the exact point production
 //     code invokes external code, so the Backend verifiably holds unfinished business

@@ -10,8 +10,8 @@ import (
 )
 
 // validateSemantics is the Compiler's third stage: Node-Type-specific business rules
-// beyond what ConfigSchema alone can express (docs/08-interface-spec.md §1.2: "再执行
-// ValidateSemantics()"). Nodes whose type could not be resolved, or whose config is not
+// beyond what ConfigSchema alone can express (ValidateSemantics runs after the
+// ConfigSchema check). Nodes whose type could not be resolved, or whose config is not
 // valid JSON, were already reported by an earlier stage and Compile never reaches this
 // stage in that case.
 //

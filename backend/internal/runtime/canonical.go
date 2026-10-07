@@ -7,8 +7,8 @@ import (
 )
 
 // canonicalField is one ordered key/value pair of a canonicalObject. An explicit ordered
-// list (rather than a map) lets the generated runInputSchema match
-// docs/08-interface-spec.md §1.3 byte-for-byte, including the AssetRef schema's
+// list (rather than a map) lets the generated runInputSchema match the interface
+// contract byte-for-byte, including the AssetRef schema's
 // non-alphabetical key order (assetId, mediaType, sizeBytes, sha256).
 type canonicalField struct {
 	Key   string
@@ -23,8 +23,9 @@ type canonicalObject []canonicalField
 //   - canonicalObject: rendered with the given explicit key order.
 //   - []canonicalObject: a JSON array of objects, element order preserved.
 //   - map[string]any: rendered with alphabetically sorted keys (generic fallback; the
-//     algorithm in §1.3 never needs this for the shapes runtime currently produces, but it
-//     keeps encodeCanonical defensively total over arbitrary JSON-able input).
+//     runInputSchema algorithm never needs this for the shapes runtime currently
+//     produces, but it keeps encodeCanonical defensively total over arbitrary JSON-able
+//     input).
 //   - any other value: delegated to encoding/json (string, number, bool, nil, *int,
 //     *int64, []string, json.RawMessage, ...).
 func encodeCanonical(v any) ([]byte, error) {

@@ -1,8 +1,8 @@
-# Local development topology (10-ops §1): one Backend process, Studio, PostgreSQL 18 and a
+# Local development topology: one Backend process, Studio, PostgreSQL 18 and a
 # persistent volume. Redis, external queues and distributed workers are not part of the
 # MVP and must not appear here.
 #
-# Known gap (M5 slice 5.3): the image URI a completed image_generation/media_output NodeRun
+# Known gap (AIGC image preview): the image URI a completed image_generation/media_output NodeRun
 # returns is built from EMBERLING_MODEL_PROVIDER_BASE_URL (backend/internal/adapters/
 # mocktask/adapter.go successPayload), the same value the backend container uses to reach
 # the mockprovider container. That value must be the container-DNS name
@@ -40,7 +40,7 @@ services:
 
   # Deterministic Provider fixture used by integration, failure and the three MVP
   # acceptance E2E scenarios. `docker compose --profile mock up` starts it alongside
-  # postgres, backend and studio for a full acceptance stack (09 §6).
+  # postgres, backend and studio for a full acceptance stack.
   #
   # The host-published port below makes http://localhost:9101 reachable from a browser on
   # the host, but the image URI a Run actually returns is built from
@@ -79,7 +79,7 @@ services:
       EMBERLING_MODEL_PROVIDER_API_KEY: ${EMBERLING_MODEL_PROVIDER_API_KEY:?set EMBERLING_MODEL_PROVIDER_API_KEY in your shell or .env}
       # Reachable from the mockprovider container as the compose service name, not
       # "localhost": a callback is delivered container-to-container, never through the
-      # host loopback (10-ops §1).
+      # host loopback.
       EMBERLING_CALLBACK_BASE_URL: ${EMBERLING_CALLBACK_BASE_URL:-http://backend:8080}
       EMBERLING_CALLBACK_SIGNING_SECRET: ${EMBERLING_CALLBACK_SIGNING_SECRET:?set EMBERLING_CALLBACK_SIGNING_SECRET in your shell or .env}
       EMBERLING_RECONCILE_INTERVAL: 5s

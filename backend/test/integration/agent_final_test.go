@@ -1,12 +1,11 @@
 //go:build integration
 
 // Final completion tests: the single transaction that closes one committed FINAL Action
-// out (docs/06-execution-model.md §1.7, docs/05-data-model.md §1.4). They cover what a
-// mock repository cannot prove (CLAUDE.md testing standard): the conditional READY ->
-// RUNNING claim that elects one completer, the atomic commit of Action result, Final
-// Context Version, optional State Version, FINAL_RESPONSE termination, Agent NodeRun
-// output, Run aggregation and downstream READY NodeRuns -- and the invariant that no
-// RUNNING Final Action is ever visible outside the transaction.
+// out. They cover what a mock repository cannot prove (CLAUDE.md testing standard): the
+// conditional READY -> RUNNING claim that elects one completer, the atomic commit of
+// Action result, Final Context Version, optional State Version, FINAL_RESPONSE
+// termination, Agent NodeRun output, Run aggregation and downstream READY NodeRuns -- and
+// the invariant that no RUNNING Final Action is ever visible outside the transaction.
 //
 // They share the agentHarness and the fixture Definition of agent_loop_test.go.
 package integration
@@ -65,7 +64,7 @@ func agentFinalDefinition(workflowID, outputSchema, stateSchema string) domain.D
 
 // agentScriptFinal makes the fixture model answer FINAL on every Turn with one scripted
 // scenario, and returns the counter that records how often the model was called. A second
-// call would mean a committed Decision was regenerated, which docs/09 §3.3 forbids.
+// call would mean a committed Decision was regenerated, which is forbidden.
 func agentScriptFinal(h *agentHarness, scenario mockmodel.Scenario) *atomic.Int32 {
 	var generated atomic.Int32
 	scenario.Kind = mockmodel.ScenarioFinal
@@ -102,10 +101,10 @@ func agentEventIndex(types []domain.EventType, want domain.EventType) int {
 	return -1
 }
 
-// agentReadyFinalAction drives the fixture Run to the point docs/05 §1.4 calls the FINAL
-// Action's persistence boundary: the Decision and its single READY Action are committed
-// and nothing has executed them, exactly what a crashed process leaves behind. It returns
-// the Agent claim outcome and the READY Action.
+// agentReadyFinalAction drives the fixture Run to the FINAL Action's persistence
+// boundary: the Decision and its single READY Action are committed and nothing has
+// executed them, exactly what a crashed process leaves behind. It returns the Agent claim
+// outcome and the READY Action.
 func agentReadyFinalAction(h *agentHarness, stop *agentStopNotifier, runID string) (service.AdvanceOutcome, domain.AgentAction) {
 	h.t.Helper()
 	outcome := h.claimAgentNode(runID)
@@ -136,11 +135,11 @@ func agentReadyFinalAction(h *agentHarness, stop *agentStopNotifier, runID strin
 // ---------------------------------------------------------------------------
 
 // TestAgentFinal_NoSchemaStringOutput_CompletesNodeRunAndRun covers the whole Final
-// completion transaction of docs/06-execution-model.md §1.7 for the plain case: no Output
-// Schema, no state patch. One transaction closes the Action out through RUNNING to
-// SUCCEEDED, appends the Final Context Version, records FINAL_RESPONSE and succeeds the
-// Agent NodeRun with its output on the `text` port, which makes the downstream node READY
-// and eventually completes the Run.
+// completion transaction for the plain case: no Output Schema, no state patch. One
+// transaction closes the Action out through RUNNING to SUCCEEDED, appends the Final
+// Context Version, records FINAL_RESPONSE and succeeds the Agent NodeRun with its output
+// on the `text` port, which makes the downstream node READY and eventually completes the
+// Run.
 func TestAgentFinal_NoSchemaStringOutput_CompletesNodeRunAndRun(t *testing.T) {
 	h := newAgentHarness(t, agentHarnessOptions{})
 	generated := agentScriptFinal(h, mockmodel.Scenario{Output: "done"})
@@ -247,9 +246,9 @@ func TestAgentFinal_NoSchemaStringOutput_CompletesNodeRunAndRun(t *testing.T) {
 }
 
 // TestAgentFinal_WithStatePatch_CreatesStateVersionAndEvent covers the optional half of
-// the same transaction (docs/05-data-model.md §1.4): a Final state patch that really
-// changes the State creates exactly one new State Version and one AGENT_STATE_UPDATED
-// naming the previous and next State Version and the Context Version committed with them.
+// the same transaction: a Final state patch that really changes the State creates exactly
+// one new State Version and one AGENT_STATE_UPDATED naming the previous and next State
+// Version and the Context Version committed with them.
 //
 // Order: AGENT_ACTION_COMPLETED, then AGENT_STATE_UPDATED, then AGENT_COMPLETED -- the
 // State change is part of what the Action produced, and the Agent's terminal Event closes
@@ -300,11 +299,11 @@ func TestAgentFinal_WithStatePatch_CreatesStateVersionAndEvent(t *testing.T) {
 // Deterministic validation failures
 // ---------------------------------------------------------------------------
 
-// TestAgentFinal_OutputFailsSchema_FailsInvalidActionNoVersions covers
-// docs/09-testing-and-acceptance.md §3.3: a committed Final Decision whose output does not
-// satisfy the frozen Output Schema fails the Action as INVALID_ACTION in the same
-// transaction, and commits no partial State, no Agent output and no successful termination.
-// The model is not asked again and the Decision is left exactly as it was committed.
+// TestAgentFinal_OutputFailsSchema_FailsInvalidActionNoVersions covers a committed Final
+// Decision whose output does not satisfy the frozen Output Schema: it fails the Action as
+// INVALID_ACTION in the same transaction, and commits no partial State, no Agent output
+// and no successful termination. The model is not asked again and the Decision is left
+// exactly as it was committed.
 func TestAgentFinal_OutputFailsSchema_FailsInvalidActionNoVersions(t *testing.T) {
 	h := newAgentHarness(t, agentHarnessOptions{})
 	generated := agentScriptFinal(h, mockmodel.Scenario{Output: "x"})
@@ -378,9 +377,9 @@ func TestAgentFinal_OutputFailsSchema_FailsInvalidActionNoVersions(t *testing.T)
 }
 
 // TestAgentFinal_StatePatchFailsSchema_FailsInvalidActionNoVersions is the same
-// deterministic failure for the other validated fact (docs/05-data-model.md §1.4): the
-// patch applies, but the resulting complete State does not satisfy the frozen State
-// Schema, so no State Version is created and the pointer does not move.
+// deterministic failure for the other validated fact: the patch applies, but the
+// resulting complete State does not satisfy the frozen State Schema, so no State Version
+// is created and the pointer does not move.
 func TestAgentFinal_StatePatchFailsSchema_FailsInvalidActionNoVersions(t *testing.T) {
 	h := newAgentHarness(t, agentHarnessOptions{})
 	agentScriptFinal(h, mockmodel.Scenario{Output: "done", StatePatch: json.RawMessage(`{"n":"bad"}`)})
@@ -422,9 +421,9 @@ func TestAgentFinal_StatePatchFailsSchema_FailsInvalidActionNoVersions(t *testin
 // ---------------------------------------------------------------------------
 
 // TestAgentFinal_ReadyToRunningRace_OnlyOneCompletionWins proves the conditional claim is
-// what elects the single completer when immediate advancement and the Reconciler reach the
-// same Final Action (invariant #7, docs/09 §3.3). The loser writes nothing at all: one
-// Event pair, one Final Context Version, one NodeRun completion.
+// what elects the single completer when immediate advancement and the Reconciler reach
+// the same Final Action. The loser writes nothing at all: one Event pair,
+// one Final Context Version, one NodeRun completion.
 func TestAgentFinal_ReadyToRunningRace_OnlyOneCompletionWins(t *testing.T) {
 	stop := &agentStopNotifier{}
 	h := newAgentHarness(t, agentHarnessOptions{Notifier: stop})
@@ -479,10 +478,10 @@ func TestAgentFinal_ReadyToRunningRace_OnlyOneCompletionWins(t *testing.T) {
 	}
 }
 
-// TestAgentFinal_NeverCommitsRunningFinalAction proves docs/09 §3.3's "no committed
-// RUNNING Final Action": the claim and the completion are the same transaction, so a
-// second connection watching the row while the completion runs can only ever read the
-// committed READY status or the committed SUCCEEDED one.
+// TestAgentFinal_NeverCommitsRunningFinalAction proves that no RUNNING Final Action is
+// ever committed: the claim and the completion are the same transaction, so a second
+// connection watching the row while the completion runs can only ever read the committed
+// READY status or the committed SUCCEEDED one.
 //
 // The observer polls from its own pooled connection rather than using an in-transaction
 // hook, because the service exposes none inside this transaction; a missed sample can only
@@ -537,10 +536,10 @@ func TestAgentFinal_NeverCommitsRunningFinalAction(t *testing.T) {
 	}
 }
 
-// TestAgentFinal_TxFailureBeforeCommit_ActionStaysReady covers docs/09 §3.3: when the
-// completion transaction cannot commit, every write in it rolls back together and the
-// Action is still the READY work the Reconciler rediscovers -- and completing it a second
-// time succeeds.
+// TestAgentFinal_TxFailureBeforeCommit_ActionStaysReady covers rollback of the completion
+// transaction: when the completion transaction cannot commit, every write in it rolls
+// back together and the Action is still the READY work the Reconciler rediscovers -- and
+// completing it a second time succeeds.
 //
 // The failure is manufactured the same way as the Node and Tool paths' rollback tests: the
 // Event ID the transaction is about to insert is pre-occupied.

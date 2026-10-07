@@ -1,6 +1,6 @@
-// Package textoutput implements the built-in Text Output Node (02 §3.2). It is the DAG's
+// Package textoutput implements the built-in Text Output Node. It is the DAG's
 // sole terminal node in a text scenario: its complete logical result becomes both its
-// NodeRun output and Run.output (05 §1.3, 09 §3.4).
+// NodeRun output and Run.output.
 package textoutput
 
 import (
@@ -48,8 +48,7 @@ func (Executor) ValidateSemantics(_ context.Context, _ map[string]any) error {
 }
 
 // Execute republishes the `text` input port as the node's complete logical result. The
-// service layer copies this object into Run.output when this node is the Output Node
-// (05 §1.3).
+// service layer copies this object into Run.output when this node is the Output Node.
 func (Executor) Execute(_ context.Context, input registry.NodeInput, _ map[string]any) (registry.NodeResult, error) {
 	value, present := input.Port("text")
 	if !present {

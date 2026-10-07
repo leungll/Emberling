@@ -10,18 +10,18 @@ import (
 )
 
 // callbackTokenHeader carries the Attempt-scoped credential the Runtime issued before
-// dispatch (docs/08-interface-spec.md §4). It is read once, forwarded to
+// dispatch. It is read once, forwarded to
 // service.HandleCallback for verification, and never logged or echoed back.
 const callbackTokenHeader = "X-Emberling-Callback-Token"
 
-// callbackRequest is the wire shape of POST /api/callbacks (08 §4).
+// callbackRequest is the wire shape of POST /api/callbacks.
 type callbackRequest struct {
 	ExternalTaskID string          `json:"externalTaskId"`
 	Payload        json.RawMessage `json:"payload"`
 }
 
-// callbackResponse is the single confirmation body every accepted callback answers with
-// (08 §4): Accepted is always true for a non-error response, Pending marks an early
+// callbackResponse is the single confirmation body every accepted callback answers with:
+// Accepted is always true for a non-error response, Pending marks an early
 // delivery stored before its Callback Binding committed, and Duplicate marks a
 // re-delivery, late delivery or delivery for a superseded Attempt.
 type callbackResponse struct {
@@ -31,7 +31,7 @@ type callbackResponse struct {
 }
 
 // handleCallback serves POST /api/callbacks, the single entry point Node and Tool
-// Attempt dispatches share (08 §4). It never queries a repository or advances an
+// Attempt dispatches share. It never queries a repository or advances an
 // execution itself: every routing and state decision is service.ExecutionService's
 // HandleCallback/ResumeNode use case.
 //
@@ -88,7 +88,7 @@ func (d Deps) handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		var rejected *service.CallbackPayloadRejectedError
 		if errors.As(err, &rejected) {
-			// 06 §1.6: the registered Executor could not interpret this payload. This is
+			// The registered Executor could not interpret this payload. This is
 			// deliberately not a state change -- the NodeRun stays WAITING_CALLBACK -- so
 			// the Provider still gets an idempotent-looking 200 rather than a retry signal
 			// that would only reproduce the same unparseable body.

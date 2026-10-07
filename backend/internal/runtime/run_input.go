@@ -8,8 +8,9 @@ import (
 )
 
 // ValidateRunInput validates a candidate Run.input against a Definition version's
-// already-frozen runInputSchema (docs/06-execution-model.md §1.2: "创建 Run 时...用版本中
-// 冻结的 runInputSchema 校验 input；它不能根据当前 Registry 生成另一份输入合同"). It never
+// already-frozen runInputSchema (creating a Run validates input against the version's
+// frozen runInputSchema and must not generate a different input contract from the
+// current Registry). It never
 // regenerates, mutates or re-derives frozenSchema; that generation happens once, inside
 // Compile, at Save time.
 //

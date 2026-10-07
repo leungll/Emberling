@@ -51,7 +51,7 @@ interface Banner {
 /**
  * Headline for the server's own Run status. Which banner shows is keyed only on
  * `run.status`; the waiting NodeRun names are a display filter over reported NodeRun
- * statuses and never feed back into the Run status (04 §4).
+ * statuses and never feed back into the Run status.
  */
 function banner(
   snapshot: RunSnapshot,
@@ -108,7 +108,7 @@ interface RunSummaryCardProps {
   children?: ReactNode;
 }
 
-/** RUN SUMMARY card of the Run view (04 §3.3 mock). Every value is a server fact. */
+/** RUN SUMMARY card of the Run view mock. Every value is a server fact. */
 export function RunSummaryCard({
   snapshot,
   events,
@@ -212,7 +212,7 @@ function Fact({
 }
 
 /**
- * Compact RUN SUMMARY for the Agent view's left column (04 §3.4 mock): raw server status,
+ * Compact RUN SUMMARY for the Agent view's left column (as in the Agent view mock): raw server status,
  * the waiting NodeRuns and how long the earliest has waited, the Agent deadline when one
  * was committed, and the bound version.
  */

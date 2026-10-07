@@ -11,8 +11,8 @@ import (
 )
 
 // validateConfigSchema is the Compiler's second stage: every node's config must satisfy
-// its Node Type's registered ConfigSchema (docs/08-interface-spec.md §1.2: "先按
-// ConfigSchema 校验每个节点配置"). Nodes whose type could not be resolved were already
+// its Node Type's registered ConfigSchema (each node config is checked against
+// ConfigSchema first). Nodes whose type could not be resolved were already
 // reported by the Structure stage and Compile never reaches this stage in that case, so
 // they are silently skipped here rather than double-reported.
 func (c *Compiler) validateConfigSchema(def domain.Definition) []ValidationError {

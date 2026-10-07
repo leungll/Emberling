@@ -1,12 +1,11 @@
 //go:build integration
 
-// Asynchronous Agent Tool resume tests (06 §1.6, 06 §1.7, 05 §1.7, 08 §4). A callback for
-// a TOOL_ATTEMPT Binding enters the same idempotent resume use case as a Node Attempt's:
-// routing facts are read without a lock, OnCallback runs outside every lock, and one
-// transaction under the Run aggregate lock resolves the DISPATCHED Tool Attempt and the
-// WAITING_CALLBACK Action and continues the Agent Loop exactly as the synchronous path
-// does. They share the agentHarness of agent_loop_test.go and the scripted async Tool of
-// agent_async_tool_test.go.
+// Asynchronous Agent Tool resume tests. A callback for a TOOL_ATTEMPT Binding enters the
+// same idempotent resume use case as a Node Attempt's: routing facts are read without a
+// lock, OnCallback runs outside every lock, and one transaction under the Run aggregate
+// lock resolves the DISPATCHED Tool Attempt and the WAITING_CALLBACK Action and continues
+// the Agent Loop exactly as the synchronous path does. They share the agentHarness of
+// agent_loop_test.go and the scripted async Tool of agent_async_tool_test.go.
 package integration
 
 import (
@@ -121,12 +120,13 @@ func assertAgentTokenAbsent(t *testing.T, h *agentHarness, runID, token string) 
 	}
 }
 
-// TestAgentAsyncToolCallback_Success_ResumesLoopWithNextReadyTurn covers 06 §1.7: a
-// valid callback resolves the DISPATCHED Tool Attempt and the WAITING_CALLBACK Action,
-// appends the Context, creates the next READY Turn, returns the Agent NodeRun to RUNNING
-// and the Run from PAUSED to RUNNING, all in one transaction, with completionSource
-// CALLBACK and no NODE_CALLBACK_RECEIVED. The resume ends at that commit and this harness
-// has no work queue, so the next Turn is observed as committed READY work.
+// TestAgentAsyncToolCallback_Success_ResumesLoopWithNextReadyTurn covers the successful
+// resume: a valid callback resolves the DISPATCHED Tool Attempt and the WAITING_CALLBACK
+// Action, appends the Context, creates the next READY Turn, returns the Agent NodeRun to
+// RUNNING and the Run from PAUSED to RUNNING, all in one transaction, with
+// completionSource CALLBACK and no NODE_CALLBACK_RECEIVED. The resume ends at that commit
+// and this harness has no work queue, so the next Turn is observed as committed READY
+// work.
 func TestAgentAsyncToolCallback_Success_ResumesLoopWithNextReadyTurn(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-success", tool, nil)
@@ -218,10 +218,11 @@ func TestAgentAsyncToolCallback_Success_ResumesLoopWithNextReadyTurn(t *testing.
 	assertAgentTokenAbsent(t, h, run.ID, token)
 }
 
-// TestAgentAsyncToolCallback_ResumeTxEventInsertFails_RollsBackEverything covers
-// invariant #3: when the resume transaction cannot insert its first Event, the Tool
-// Attempt, the Action, the Context, the next Turn and the Run status all stay as the
-// dispatch committed them, and a re-delivery of the same callback then succeeds.
+// TestAgentAsyncToolCallback_ResumeTxEventInsertFails_RollsBackEverything covers the
+// state-and-Event atomicity rule: when the resume transaction cannot insert its first
+// Event, the Tool Attempt, the Action, the Context, the next Turn and the Run status all
+// stay as the dispatch committed them, and a re-delivery of the same callback then
+// succeeds.
 func TestAgentAsyncToolCallback_ResumeTxEventInsertFails_RollsBackEverything(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-rollback", tool, nil)
@@ -270,8 +271,8 @@ func TestAgentAsyncToolCallback_ResumeTxEventInsertFails_RollsBackEverything(t *
 	assertContiguousSeq(t, listEvents(h.ctx, t, h.uow, run.ID))
 }
 
-// TestAgentAsyncToolCallback_ProviderFailure_FailsThroughSharedToolFailure covers
-// 06 §1.7: a Provider-reported failure enters the shared Tool failure use case with
+// TestAgentAsyncToolCallback_ProviderFailure_FailsThroughSharedToolFailure covers a
+// Provider-reported failure: it enters the shared Tool failure use case with
 // failureSource CALLBACK -- the Tool Attempt and Action fail, the Agent Run terminates as
 // TOOL_ERROR, and the Agent NodeRun and the Run fail.
 func TestAgentAsyncToolCallback_ProviderFailure_FailsThroughSharedToolFailure(t *testing.T) {
@@ -317,10 +318,10 @@ func TestAgentAsyncToolCallback_ProviderFailure_FailsThroughSharedToolFailure(t 
 	assertAgentTokenAbsent(t, h, run.ID, token)
 }
 
-// TestAgentAsyncToolCallback_ResultViolatesOutputSchema_FailsWithCallbackSource covers the
-// Tool OutputSchema check of 07 §1.5 on the callback path: an interpreted result that the
-// registered schema rejects fails the Action exactly as a synchronous invalid result does,
-// with failureSource CALLBACK.
+// TestAgentAsyncToolCallback_ResultViolatesOutputSchema_FailsWithCallbackSource covers
+// the Tool OutputSchema check on the callback path: an interpreted result that the
+// registered schema rejects fails the Action exactly as a synchronous invalid result
+// does, with failureSource CALLBACK.
 func TestAgentAsyncToolCallback_ResultViolatesOutputSchema_FailsWithCallbackSource(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-invalid-result", tool, nil)
@@ -341,10 +342,10 @@ func TestAgentAsyncToolCallback_ResultViolatesOutputSchema_FailsWithCallbackSour
 	}
 }
 
-// TestAgentAsyncToolCallback_DuplicateDelivery_WritesNothingConsumesNoSeq covers 09 §3.2:
-// a re-delivery of the same callback, or a different body for the same external task,
-// after the Attempt was resolved is an idempotent duplicate -- no state change, no Event,
-// no seq, and OnCallback is not called again.
+// TestAgentAsyncToolCallback_DuplicateDelivery_WritesNothingConsumesNoSeq covers
+// duplicate delivery: a re-delivery of the same callback, or a different body for the
+// same external task, after the Attempt was resolved is an idempotent duplicate -- no
+// state change, no Event, no seq, and OnCallback is not called again.
 func TestAgentAsyncToolCallback_DuplicateDelivery_WritesNothingConsumesNoSeq(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-duplicate", tool, nil)
@@ -378,8 +379,9 @@ func TestAgentAsyncToolCallback_DuplicateDelivery_WritesNothingConsumesNoSeq(t *
 }
 
 // TestAgentAsyncToolCallback_LateAfterAgentTimeout_RejectedWithoutMutation covers the
-// timeout side of invariant #7: once the Agent timeout transaction failed the waiting
-// Attempt, a late callback writes nothing, consumes no seq and leaves the Binding.
+// timeout side of the single-winner conditional-update rule: once the Agent timeout
+// transaction failed the waiting Attempt, a late callback writes nothing, consumes no seq
+// and leaves the Binding.
 func TestAgentAsyncToolCallback_LateAfterAgentTimeout_RejectedWithoutMutation(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-late", tool, nil)
@@ -415,9 +417,9 @@ func TestAgentAsyncToolCallback_LateAfterAgentTimeout_RejectedWithoutMutation(t 
 	}
 }
 
-// TestAgentAsyncToolCallback_WrongOrExpiredToken_RejectedWithoutMutation covers 08 §4: a
-// forged token, a valid token of a different Tool Attempt, and an expired token are all
-// refused with the credential error before anything is persisted.
+// TestAgentAsyncToolCallback_WrongOrExpiredToken_RejectedWithoutMutation covers the
+// callback-token check: a forged token, a valid token of a different Tool Attempt, and an
+// expired token are all refused with the credential error before anything is persisted.
 func TestAgentAsyncToolCallback_WrongOrExpiredToken_RejectedWithoutMutation(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-token", tool, nil)
@@ -459,11 +461,11 @@ func TestAgentAsyncToolCallback_WrongOrExpiredToken_RejectedWithoutMutation(t *t
 	}
 }
 
-// TestAgentAsyncToolCallback_EarlyPendingCallback_ConsumedOnceAfterDispatch covers
-// 06 §1.6 step 3 and 05 §1.7 for a Tool Attempt: a callback that arrives before the
-// dispatch transaction commits is stored as a Pending Callback, and once the Binding
-// commits the dispatcher replays it through the same resume use case, consuming the row
-// in the transaction that acts on it. A later live re-delivery is a duplicate.
+// TestAgentAsyncToolCallback_EarlyPendingCallback_ConsumedOnceAfterDispatch covers early
+// callback storage for a Tool Attempt: a callback that arrives before the dispatch
+// transaction commits is stored as a Pending Callback, and once the Binding commits the
+// dispatcher replays it through the same resume use case, consuming the row in the
+// transaction that acts on it. A later live re-delivery is a duplicate.
 func TestAgentAsyncToolCallback_EarlyPendingCallback_ConsumedOnceAfterDispatch(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
 	var h *agentHarness
@@ -540,10 +542,10 @@ func TestAgentAsyncToolCallback_EarlyPendingCallback_ConsumedOnceAfterDispatch(t
 	}
 }
 
-// TestAgentAsyncToolCallback_UninterpretablePayload_LeavesActionWaiting covers 06 §1.6:
-// a payload the registered Executor cannot interpret is not evidence that the external
-// task failed. Nothing is persisted, the Action keeps waiting, and a later valid callback
-// still resumes it.
+// TestAgentAsyncToolCallback_UninterpretablePayload_LeavesActionWaiting covers an
+// uninterpretable callback: a payload the registered Executor cannot interpret is not
+// evidence that the external task failed. Nothing is persisted, the Action keeps waiting,
+// and a later valid callback still resumes it.
 func TestAgentAsyncToolCallback_UninterpretablePayload_LeavesActionWaiting(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-rejected", tool, nil)

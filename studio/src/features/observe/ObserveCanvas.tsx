@@ -27,7 +27,7 @@ const FIT_MARGIN_PX = 2 * 8 + 2;
 
 interface ObserveCanvasProps {
   workflowId: string;
-  /** The Run's own bound Definition version (Runtime safety rule #8). Never the latest. */
+  /** The Run's own bound Definition version. Never the latest. */
   definitionVersion: number;
   nodeRuns: NodeRun[];
   selectedNodeRunId: string | null;
@@ -40,10 +40,10 @@ interface ObserveCanvasProps {
 }
 
 /**
- * Read-only topology snapshot of the Run's bound Definition version (04 §1.3/§1.4). Each
+ * Read-only topology snapshot of the Run's bound Definition version. Each
  * node shows the status of its own NodeRun, if one exists yet; a node with no NodeRun
- * renders idle. Selection is shared with the Timeline and Run Rail through the NodeRun id
- * (04 §3.1): a Canvas click resolves to that node's NodeRun, and selecting a NodeRun
+ * renders idle. Selection is shared with the Timeline and Run Rail through the NodeRun id:
+ * a Canvas click resolves to that node's NodeRun, and selecting a NodeRun
  * elsewhere highlights its Definition node here. The card always shows the whole graph
  * (fitted at up to 100%, and at exactly 100% for any graph no wider than the card; see
  * `compactTopologyPositions`); a selection never zooms the viewport onto one node.
@@ -174,7 +174,7 @@ export function ObserveCanvas({
 
   const onSelectDefinitionNode = (definitionNodeId: string | null) => {
     if (definitionNodeId === null) {
-      // Blank-area click returns to the Run Summary (04 §3.1).
+      // Blank-area click returns to the Run Summary.
       onSelectNodeRun(null);
       return;
     }
@@ -185,7 +185,7 @@ export function ObserveCanvas({
 
   // The card grows to the whole layout's height (the Run view's top row grows with it and
   // the page scrolls), so a deep graph is never fitted below 100%, where its 12px status
-  // text would drop under the 04 §4 helper-text floor.
+  // text would drop under the 12px helper-text floor.
   const minHeight = definition ? compactTopologyExtent(positions).height + FIT_MARGIN_PX : 0;
 
   return (

@@ -24,7 +24,7 @@ interface EventTimelineProps {
 /**
  * Committed Events ordered by `seq`. The list is exactly what the Backend sent: the
  * timeline neither reorders nor synthesises entries. The dot colour classifies each
- * Event's own type (04 §4); it is never computed from other Events or NodeRuns.
+ * Event's own type; it is never computed from other Events or NodeRuns.
  */
 export function EventTimeline({
   events,
@@ -40,7 +40,7 @@ export function EventTimeline({
   const scroller = useRef<HTMLDivElement>(null);
   const stripTail = useRef<HTMLSpanElement>(null);
 
-  // 04 §3.4: the Trace follows the newest Event until the user picks a historical one.
+  // The Trace follows the newest Event until the user picks a historical one.
   useEffect(() => {
     const element = scroller.current;
     if (!followLive || !element) return;

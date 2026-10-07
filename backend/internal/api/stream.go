@@ -15,8 +15,8 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// handleEvents serves GET /runs/{runId}/events, content-negotiated by Accept
-// (docs/08-interface-spec.md §5): text/event-stream opens an SSE connection, anything
+// handleEvents serves GET /runs/{runId}/events, content-negotiated by Accept:
+// text/event-stream opens an SSE connection, anything
 // else (the default) returns one page of JSON history.
 func (d Deps) handleEvents(w http.ResponseWriter, r *http.Request) {
 	runID := chi.URLParam(r, "runId")
@@ -38,9 +38,8 @@ func wantsSSE(r *http.Request) bool {
 }
 
 // parseAfterSeq resolves the replay cursor. Last-Event-ID (a reconnect's own last
-// delivered seq) takes priority over afterSeq, matching docs/08-interface-spec.md §5
-// exactly ("`Last-Event-ID` 优先, 避免浏览器重连时退回初次连接的旧 afterSeq"); with neither
-// present the cursor is 0.
+// delivered seq) takes priority over afterSeq, so a browser reconnect never falls back to
+// the first connection's stale afterSeq; with neither present the cursor is 0.
 func parseAfterSeq(w http.ResponseWriter, logger *slog.Logger, r *http.Request) (int64, bool) {
 	if lastEventID := r.Header.Get("Last-Event-ID"); lastEventID != "" {
 		v, err := strconv.ParseInt(lastEventID, 10, 64)
@@ -161,7 +160,7 @@ func (d Deps) streamEvents(w http.ResponseWriter, r *http.Request, runID string,
 			flusher.Flush()
 		}
 
-		// docs/08 §5 handoff invariant: there is no one-shot "replay then live" switch.
+		// Snapshot-to-SSE handoff invariant: there is no one-shot "replay then live" switch.
 		// The subscriber registered above the loop, so an Event committed between this
 		// iteration's (empty) query and the wait below leaves a pending wake token in
 		// sub.wake (buffer of one) and the next iteration re-queries from the same cursor;

@@ -188,8 +188,8 @@ func (r *nodeAttemptRepository) MarkFailed(ctx context.Context, attemptID string
 
 // ListExpired returns non-terminal Attempts (STARTED or DISPATCHED) whose deadline_at has
 // passed, using the (status, deadline_at) index. It backs Reconciler timeout rediscovery
-// (06 §2: "普通 Node 的 timeout 由当前 Node Attempt 的 deadlineAt 驱动 ... Reconciler 必须
-// 能够扫描过期的 STARTED 或 DISPATCHED Attempt").
+// (an ordinary Node's timeout is driven by the current Node Attempt's deadlineAt, and
+// the Reconciler must be able to scan expired STARTED or DISPATCHED Attempts).
 func (r *nodeAttemptRepository) ListExpired(ctx context.Context, before time.Time, limit int) ([]domain.NodeAttempt, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("store/postgres node_attempts.ListExpired: limit must be positive, got %d", limit)

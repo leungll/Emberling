@@ -13,21 +13,21 @@ import (
 )
 
 // resumeToolAttempt is ResumeNode's branch for a TOOL_ATTEMPT Callback Binding: the
-// callback of an ASYNC Agent Tool (06 §1.6, 06 §1.7). It keeps the three phases of the
+// callback of an ASYNC Agent Tool. It keeps the three phases of the
 // Node resume, and ends at its commit:
 //
 //  1. Routing facts are read from one snapshot without a lock. A Tool Attempt that is no
 //     longer DISPATCHED -- already resolved by an earlier delivery, or failed by the Agent
 //     timeout -- makes this delivery a Duplicate that writes nothing and consumes no Event
-//     seq (09 §3.2). The Binding is kept either way.
+//     seq. The Binding is kept either way.
 //  2. The registered Executor's OnCallback interprets the payload outside every
-//     transaction and every lock (invariant #4).
+//     transaction and every lock.
 //  3. One transaction under the Run aggregate lock commits the outcome through the same
 //     completion or shared Tool failure body the synchronous call uses, with the Attempt
 //     required to be DISPATCHED and the Action WAITING_CALLBACK. Losing either conditional
 //     update is again a Duplicate.
 //
-// The next READY Turn the commit created is only offered to the work queue (06 §2.1): no
+// The next READY Turn the commit created is only offered to the work queue: no
 // model or Tool call ever runs on the goroutine or under the context of the callback
 // request, which a Provider may drop at any moment. The queue is a latency optimisation
 // only; the committed READY Turn is the recovery source, so a refused enqueue is left to
@@ -112,7 +112,7 @@ func (s *ExecutionService) resumeToolAttempt(ctx context.Context, req ResumeNode
 
 	execError, interpretErr := agentCallbackOutcome(output, cbErr, reg.Metadata.OutputSchema)
 	if interpretErr != nil {
-		// 06 §1.6: a payload the Executor cannot interpret is not evidence that the
+		// A payload the Executor cannot interpret is not evidence that the
 		// external task failed. Nothing is persisted and the Action keeps waiting.
 		return outcome, &CallbackPayloadRejectedError{ExternalTaskID: req.ExternalTaskID, Err: interpretErr}
 	}
@@ -144,7 +144,7 @@ func (s *ExecutionService) resumeToolAttempt(ctx context.Context, req ResumeNode
 // failure; a result that violates the registered OutputSchema fails the Action exactly as
 // an invalid synchronous result does (TOOL_RESULT_INVALID). Any other error means the
 // payload could not be interpreted and is returned as interpretErr, which must change no
-// state (06 §1.6).
+// state.
 func agentCallbackOutcome(result registry.ToolResult, cbErr error, outputSchema []byte) (execError *domain.ExecutionError, interpretErr error) {
 	if cbErr != nil {
 		var providerFailure *registry.ProviderFailure
@@ -160,10 +160,10 @@ func agentCallbackOutcome(result registry.ToolResult, cbErr error, outputSchema 
 	return nil, nil
 }
 
-// enqueueAgentTurn offers a committed READY Agent Turn to the in-process work queue
-// (06 §2.1). It must be called only after the transaction that created the Turn has
+// enqueueAgentTurn offers a committed READY Agent Turn to the in-process work queue.
+// It must be called only after the transaction that created the Turn has
 // committed. A refusal rolls nothing back: the READY Turn stays recoverable work that the
-// Reconciler's scan rediscovers (invariant #6), so it is logged and never returned.
+// Reconciler's scan rediscovers, so it is logged and never returned.
 func (s *ExecutionService) enqueueAgentTurn(runID, turnID string) {
 	if s.deps.Queue.EnqueueAgentTurn(runID, turnID) {
 		return

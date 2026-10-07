@@ -1,11 +1,11 @@
 //go:build integration
 
-// Asynchronous Agent Tool dispatch tests (06 §1.7, 05 §1.6, 08 §4). An ASYNC Tool reuses
-// the async Node's persisted Callback Binding: the claim transaction commits the Tool
-// Attempt with its callback token hash before the Tool is called, and the dispatch
-// transaction commits the Attempt's DISPATCHED status, the Binding, the Action's and the
-// Agent NodeRun's WAITING_CALLBACK status, the Run re-aggregation and AGENT_ACTION_WAITING
-// together. They share the agentHarness of agent_loop_test.go.
+// Asynchronous Agent Tool dispatch tests. An ASYNC Tool reuses the async Node's persisted
+// Callback Binding: the claim transaction commits the Tool Attempt with its callback
+// token hash before the Tool is called, and the dispatch transaction commits the
+// Attempt's DISPATCHED status, the Binding, the Action's and the Agent NodeRun's
+// WAITING_CALLBACK status, the Run re-aggregation and AGENT_ACTION_WAITING together. They
+// share the agentHarness of agent_loop_test.go.
 package integration
 
 import (
@@ -190,9 +190,9 @@ func assertContiguousSeq(t *testing.T, events []domain.Event) {
 	}
 }
 
-// TestAgentAsyncTool_Dispatch_CommitsAttemptBindingActionNodeRunAndRunInOneTx covers
-// 06 §1.7: the dispatch transaction marks the Tool Attempt DISPATCHED, saves the Binding
-// that routes to it, puts the Action and the Agent NodeRun into WAITING_CALLBACK,
+// TestAgentAsyncTool_Dispatch_CommitsAttemptBindingActionNodeRunAndRunInOneTx covers the
+// dispatch transaction: it marks the Tool Attempt DISPATCHED, saves the Binding that
+// routes to it, puts the Action and the Agent NodeRun into WAITING_CALLBACK,
 // re-aggregates the Run and writes AGENT_ACTION_WAITING.
 func TestAgentAsyncTool_Dispatch_CommitsAttemptBindingActionNodeRunAndRunInOneTx(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
@@ -257,8 +257,8 @@ func TestAgentAsyncTool_Dispatch_CommitsAttemptBindingActionNodeRunAndRunInOneTx
 }
 
 // TestAgentAsyncTool_ExecutorInvokedOnlyAfterClaimCommit_TokenHashPersistedFirst covers
-// 05 §2 Tool Attempt and 08 §4: the callback token hash is committed before the external
-// call, and only the Executor receives the plaintext token.
+// the Tool Attempt's callback token: its hash is committed before the external call, and
+// only the Executor receives the plaintext token.
 func TestAgentAsyncTool_ExecutorInvokedOnlyAfterClaimCommit_TokenHashPersistedFirst(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
 	var seen struct {
@@ -306,7 +306,8 @@ func TestAgentAsyncTool_ExecutorInvokedOnlyAfterClaimCommit_TokenHashPersistedFi
 	}
 }
 
-// TestAgentAsyncTool_DispatchTxEventInsertFails_RollsBackEverything covers invariant #3:
+// TestAgentAsyncTool_DispatchTxEventInsertFails_RollsBackEverything covers the
+// state-and-Event atomicity rule:
 // when AGENT_ACTION_WAITING cannot be inserted, no part of the dispatch transaction is
 // left behind.
 func TestAgentAsyncTool_DispatchTxEventInsertFails_RollsBackEverything(t *testing.T) {
@@ -396,8 +397,9 @@ func TestAgentAsyncTool_ExecuteReturnsError_FailsActionWithToolError(t *testing.
 }
 
 // TestAgentAsyncTool_ExecutorReportsCompleted_FailsAsRegistrationContradictionNoBinding
-// covers 07 §1.5: an ASYNC Tool must return dispatch information or an explicit error. A
-// completed result contradicts its registration and is not repaired into a success.
+// covers the ASYNC Tool result contract: an ASYNC Tool must return dispatch information
+// or an explicit error. A completed result contradicts its registration and is not
+// repaired into a success.
 func TestAgentAsyncTool_ExecutorReportsCompleted_FailsAsRegistrationContradictionNoBinding(t *testing.T) {
 	tool := &agentAsyncTool{result: registry.ToolExecutionResult{
 		Kind:   registry.ToolResultCompleted,
@@ -415,8 +417,8 @@ func TestAgentAsyncTool_ExecutorReportsCompleted_FailsAsRegistrationContradictio
 }
 
 // TestAgentAsyncTool_DispatchedWithoutExternalTaskID_FailsExplicitlyNotRecoverable covers
-// 09 §3.7: a Provider that accepted a task but left no external task id is an explicit
-// failure at the declared recovery boundary, never a recoverable wait.
+// a Provider that accepted a task but left no external task id is an explicit failure at
+// the declared recovery boundary, never a recoverable wait.
 func TestAgentAsyncTool_DispatchedWithoutExternalTaskID_FailsExplicitlyNotRecoverable(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched("")}
 	h, run, outcome := newAgentAsyncHarness(t, "wf-agent-async-no-task-id", tool)
@@ -427,9 +429,9 @@ func TestAgentAsyncTool_DispatchedWithoutExternalTaskID_FailsExplicitlyNotRecove
 }
 
 // TestAgentAsyncTool_DeadlineExpiresWhileWaitingCallback_TimeoutWinsNotToolError covers
-// 06 §1.7: the Agent deadline covers the wait for a callback, and the timeout transaction
-// closes the DISPATCHED Attempt, the WAITING_CALLBACK Action, the Agent Run, the Agent
-// NodeRun and the Run together with TIMEOUT as the source and termination.
+// the Agent deadline covering the wait for a callback: the timeout transaction closes the
+// DISPATCHED Attempt, the WAITING_CALLBACK Action, the Agent Run, the Agent NodeRun and
+// the Run together with TIMEOUT as the source and termination.
 func TestAgentAsyncTool_DeadlineExpiresWhileWaitingCallback_TimeoutWinsNotToolError(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
 	h, run, outcome := newAgentAsyncHarness(t, "wf-agent-async-timeout", tool)
@@ -480,9 +482,10 @@ func TestAgentAsyncTool_DeadlineExpiresWhileWaitingCallback_TimeoutWinsNotToolEr
 }
 
 // TestAgentAsyncTool_DispatchLosesToAgentTimeout_WritesNothing covers the timeout race of
-// invariant #7: the Agent timeout commits while the ASYNC Tool is still dispatching, so
-// the dispatch transaction finds the Attempt no longer STARTED and writes nothing -- no
-// Binding, no AGENT_ACTION_WAITING, and the committed TIMEOUT outcome stands.
+// the single-winner conditional-update rule: the Agent timeout commits while the ASYNC
+// Tool is still dispatching, so the dispatch transaction finds the Attempt no longer
+// STARTED and writes nothing -- no Binding, no AGENT_ACTION_WAITING, and the committed
+// TIMEOUT outcome stands.
 func TestAgentAsyncTool_DispatchLosesToAgentTimeout_WritesNothing(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
 	var h *agentHarness

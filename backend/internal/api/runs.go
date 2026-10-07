@@ -19,7 +19,7 @@ type createRunRequest struct {
 	Input             json.RawMessage `json:"input"`
 }
 
-// createRunResponseDTO is the minimal Run identity docs/08-interface-spec.md §3.3 defines
+// createRunResponseDTO is the minimal Run identity the interface contract defines
 // for a successful creation, deliberately narrower than domain.Run (no input/output/error/
 // timestamps): matches Studio's CreateRunResponse field-for-field.
 type createRunResponseDTO struct {
@@ -80,7 +80,7 @@ func (d Deps) getRunSnapshot(w http.ResponseWriter, r *http.Request) {
 }
 
 // callbackBindingDTO mirrors Studio's CallbackBindingSummary (studio/src/api/types.ts):
-// exactly the four fields docs/08-interface-spec.md lines 403-408/414 allow projecting
+// exactly the four fields the interface contract allows projecting
 // from a Callback Binding. providerId and externalTaskId are the Provider's own stable
 // identifiers, never a credential; the token hash never appears here.
 type callbackBindingDTO struct {
@@ -162,13 +162,13 @@ func (d Deps) getNodeRunDetail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, nodeRunDetailResponse{NodeRun: detail.NodeRun, Attempts: attempts})
 }
 
-// ---- Agent Trace (docs/08-interface-spec.md §3.4) ----
+// ---- Agent Trace ----
 //
 // The DTOs below are deliberately narrower than the domain entities they project. An
 // Agent Run's frozen Instructions, Model config and Schemas, a Turn's model request and
 // response, a Decision's arguments, output and response summary, and a Tool Attempt's
 // input and result are all execution payloads, and the Tool Attempt's callback token hash
-// is a Secret (10-ops §4): none of them is a field here, so no future change to a domain
+// is a Secret: none of them is a field here, so no future change to a domain
 // struct can leak one through this response.
 
 // agentTraceResponse is the whole projection: the Agent Run and its Turns in persisted
@@ -242,7 +242,7 @@ type toolAttemptDTO struct {
 }
 
 // agentCallbackBindingDTO is the Tool Attempt's Binding summary: the same three
-// non-credential identifiers docs/08-interface-spec.md lines 496-500 project, without the
+// non-credential identifiers the interface contract projects, without the
 // createdAt the Node Attempt summary carries.
 type agentCallbackBindingDTO struct {
 	ID             string `json:"id"`
@@ -253,7 +253,7 @@ type agentCallbackBindingDTO struct {
 // getAgentTrace serves GET /runs/{runId}/nodes/{nodeRunId}/agent. A NodeRun that does not
 // exist, belongs to another Run, or has no Agent Run is one 404 NODE_RUN_NOT_FOUND: the
 // service returns domain.ErrNotFound for all three, and this route adds no code beyond
-// the ones docs/08-interface-spec.md §6 defines.
+// the ones the interface contract defines.
 func (d Deps) getAgentTrace(w http.ResponseWriter, r *http.Request) {
 	runID := chi.URLParam(r, "runId")
 	nodeRunID := chi.URLParam(r, "nodeRunId")

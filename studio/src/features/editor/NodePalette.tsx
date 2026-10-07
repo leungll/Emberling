@@ -84,7 +84,7 @@ export function NodePalette({ nodeTypes, onAdd, error }: NodePaletteProps) {
             <h3 className="mb-2 text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
               {category.toUpperCase()}
             </h3>
-            {/* Input and Output types are short, so they pair up two per row (04 §2.5). */}
+            {/* Input and Output types are short, so they pair up two per row. */}
             <ul
               className={
                 TWO_COLUMN_CATEGORIES.has(category) ? 'grid grid-cols-2 gap-2' : 'space-y-2'

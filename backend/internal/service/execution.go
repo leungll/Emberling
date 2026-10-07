@@ -55,7 +55,7 @@ func (s *ExecutionService) compile(ctx context.Context, def domain.Definition) (
 // against the *current* Model and Tool Registries, existence-only. Unlike
 // service.DefinitionService.resolveAgentRegistrations (called at Validate/Save time), it
 // never applies or re-freezes modelConfig defaults: a Run stays bound to the Definition
-// version's already-frozen config (invariant #8), and defaults are resolved exactly once,
+// version's already-frozen config, and defaults are resolved exactly once,
 // at Save time, never again at Run creation or recovery.
 func (s *ExecutionService) resolveAgentIdentifiers(def domain.Definition) []runtime.ValidationError {
 	var errs []runtime.ValidationError
@@ -95,7 +95,7 @@ func (s *ExecutionService) resolveAgentIdentifiers(def domain.Definition) []runt
 // RunInputInvalidError is returned by CreateRun when Input fails validation against the
 // version's frozen RunInputSchema. Nothing is persisted when this error is returned. It
 // is a plain instance/schema validation failure (runtime.CodeValidationFailed), the same
-// family docs/08-interface-spec.md §6 maps to HTTP 400 ("请求内容无效"), not 422.
+// family the interface contract maps to HTTP 400 (invalid request content), not 422.
 type RunInputInvalidError struct {
 	Errors []runtime.ValidationError
 }
@@ -107,8 +107,8 @@ func (e *RunInputInvalidError) Error() string {
 // RegistryResolutionError is returned by CreateRun when recompiling an already-frozen,
 // already-validated Definition version fails against the *current* Registry (a Node Type
 // or Model ID that resolved at Save time has since been deregistered). Design decision:
-// this is not a Definition-authoring error (docs/08-interface-spec.md §6 "Definition
-// 语义无效", HTTP 422) since the stored Definition was valid and immutable; it is a
+// this is not a Definition-authoring error (semantically invalid Definition, HTTP 422)
+// since the stored Definition was valid and immutable; it is a
 // runtime/system-state conflict between an immutable fact and the current Registry, so
 // the HTTP layer should map it to 409, not 422.
 type RegistryResolutionError struct {
@@ -125,7 +125,7 @@ func (e *RegistryResolutionError) Error() string {
 func (e *RegistryResolutionError) Unwrap() error { return e.Underlying }
 
 // dataSummary is the bounded Event payload shape used for every input/output value.
-// docs/05-data-model.md §2.3 requires payloads to carry "summary, hash, or stable
+// Event payloads must carry a "summary, hash, or stable
 // reference," not exact encoding; design decision: SHA-256 plus byte length is used
 // uniformly (never the raw bytes), since Node input/output can carry user document text
 // that must stay out of the Event log while remaining a stable, comparable fact.
@@ -211,7 +211,7 @@ type CreateRun struct {
 }
 
 // runCreatedPayload is the NODE_READY companion for RUN_CREATED
-// (docs/05-data-model.md §2.3: RUN_CREATED{workflowId, definitionVersion, input 摘要}).
+// (Event fields: RUN_CREATED{workflowId, definitionVersion, input summary}).
 type runCreatedPayload struct {
 	WorkflowID        string      `json:"workflowId"`
 	DefinitionVersion int         `json:"definitionVersion"`
@@ -224,8 +224,8 @@ type nodeReadyPayload struct {
 }
 
 // CreateRun starts one new Run of one immutable Definition version, in one transaction.
-// It never resolves "latest": the caller names the exact version (invariant #8, a Run
-// stays bound to one immutable Definition version).
+// It never resolves "latest": the caller names the exact version: a Run
+// stays bound to one immutable Definition version.
 func (s *ExecutionService) CreateRun(ctx context.Context, req CreateRun) (domain.Run, error) {
 	var created domain.Run
 
@@ -265,16 +265,16 @@ func (s *ExecutionService) CreateRun(ctx context.Context, req CreateRun) (domain
 
 		// Design decision, task-mandated: validate against def.RunInputSchema (the
 		// version's frozen, stored field), never plan.RunInputSchema freshly
-		// recomputed by this recompilation (docs/06-execution-model.md §1.2: "创建 Run
-		// 时...用版本中冻结的 runInputSchema 校验 input；它不能根据当前 Registry 生成另一份
-		// 输入合同").
+		// recomputed by this recompilation (creating a Run validates input against the
+		// version's frozen runInputSchema and must not generate a different input
+		// contract from the current Registry).
 		if verrs := runtime.ValidateRunInput(def.RunInputSchema, req.Input); len(verrs) > 0 {
 			return &RunInputInvalidError{Errors: verrs}
 		}
 
 		// The frozen runInputSchema fixes an AssetRef's shape but cannot know whether the
 		// Asset it names exists or still describes the same content; only the committed
-		// Metadata can (docs/08-interface-spec.md §3.3: "无效 `AssetRef`...不能创建 Run").
+		// Metadata can (an invalid `AssetRef` must not create a Run).
 		// The lookup runs here, inside this transaction and before the first Run, NodeRun
 		// or Event row is written, so a rejection leaves nothing behind and the Assets it
 		// reads come from the same snapshot the Run would have been created in. It takes
@@ -287,8 +287,8 @@ func (s *ExecutionService) CreateRun(ctx context.Context, req CreateRun) (domain
 
 		now := s.deps.Clock.Now()
 		runID := s.deps.IDs.NewID(domain.IDPrefixRun)
-		// docs/06-execution-model.md §1.3 orders Run/NodeRun creation before the Run lock
-		// is taken. Safe: neither row is visible to any other transaction until this one
+		// The execution model orders Run/NodeRun creation before the Run lock is taken.
+		// Safe: neither row is visible to any other transaction until this one
 		// commits (PostgreSQL MVCC), so nothing can race these inserts before the lock.
 		run := domain.Run{
 			ID:                runID,
@@ -346,9 +346,9 @@ func (s *ExecutionService) CreateRun(ctx context.Context, req CreateRun) (domain
 			}
 		}
 
-		// Run creation reaches RUNNING directly (no RUN_STARTED event exists:
-		// docs/05-data-model.md §2 "RUN_CREATED 与...对应 NODE_READY 在创建事务中提交...
-		// 因此不定义 RUN_STARTED"); UpdateAggregate still runs to persist the seq
+		// Run creation reaches RUNNING directly (no RUN_STARTED event exists: RUN_CREATED
+		// and the corresponding NODE_READY commit in the creation transaction, so
+		// RUN_STARTED is not defined); UpdateAggregate still runs to persist the seq
 		// watermark this transaction allocated.
 		if err := tx.Runs().UpdateAggregate(ctx, lock, domain.RunRunning, now); err != nil {
 			return err
@@ -372,7 +372,7 @@ func (s *ExecutionService) CreateRun(ctx context.Context, req CreateRun) (domain
 // failed.
 //
 // Errors and validation messages name the Image Input node and the asset id alone: the
-// storage key never leaves the Store boundary (10-ops §4), and it is not needed to
+// storage key never leaves the Store boundary, and it is not needed to
 // explain the rejection.
 func (s *ExecutionService) verifyRunInputAssets(ctx context.Context, tx store.Tx, def domain.Definition, input json.RawMessage) ([]runtime.ValidationError, error) {
 	refs := runtime.RunInputAssetRefs(def, input)
@@ -415,12 +415,12 @@ type AdvanceOutcome struct {
 	Deadline  *time.Time
 	// AgentRunID and AgentTurnID are set instead of AttemptID when the claimed NodeRun is
 	// a MANAGED_AGENT one: it has no Node Attempt, and the work Execute must drive after
-	// COMMIT is the READY Turn this claim created (docs/06-execution-model.md §1.7).
+	// COMMIT is the READY Turn this claim created.
 	AgentRunID  string
 	AgentTurnID string
 }
 
-// nodeStartedPayload is NODE_STARTED (docs/05-data-model.md §2.3). It has two variants: an
+// nodeStartedPayload is NODE_STARTED. It has two variants: an
 // ordinary node names the Attempt it started, an Agent node names the Agent Run the same
 // transaction created, because an Agent NodeRun has no Attempt at all.
 type nodeStartedPayload struct {
@@ -472,8 +472,8 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 		// Registry has since dropped a Node Type or Model ID it depends on -- the same
 		// registry-drift condition CreateRun reports as RegistryResolutionError. Unlike
 		// CreateRun, there is no "refuse to create" escape hatch here: the Run already
-		// exists, and docs/09-testing-and-acceptance.md §3.4 "恢复已有 Run 时 Node、Model、
-		// Tool 或 Provider 实现缺失" requires the affected NodeRun to fail explicitly, not
+		// exists, and when a Node, Model, Tool or Provider implementation is missing while
+		// recovering an existing Run, the affected NodeRun must fail explicitly, not
 		// the whole Advance call to error out forever. So a CompileError here is not
 		// returned immediately: it is only fatal if this call actually needs the compiled
 		// plan (the SelectNextToExecute path below) to make progress. The runningDueRetry
@@ -490,7 +490,7 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 			driftErr = ce
 		}
 
-		// Docs/05 §3.3 "Run 聚合串行化": the NodeRun read that decides what to claim must
+		// Run aggregate serialization: the NodeRun read that decides what to claim must
 		// happen *after* taking the Run aggregate lock, not before, so that two
 		// concurrent Advance calls for the same Run cannot both compute their claim
 		// decision from the same pre-lock snapshot and both believe a slot is free.
@@ -552,17 +552,17 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 
 		if driftErr != nil {
 			// plan is unavailable, so SelectNextToExecute's own topological tie-break
-			// cannot run. M1's only Definitions are single linear chains (no fan-out), so
-			// there is at most one READY candidate in practice; claim it through the
-			// ordinary READY->RUNNING path and let Execute's existing machinery discover
-			// and report the concrete cause (an unregistered Node Type, an unregistered
-			// Model ID inside an otherwise-valid Node Type, or any other registered-catalog
-			// failure) through FailNode, instead of guessing which candidate the
-			// CompileError is "about" here. A CompileError can only reach this branch for a
-			// Run that already exists: CreateRun ran this same deterministic Compiler
-			// against this same frozen Definition and it passed, so any failure now is
-			// registry drift by construction -- only the Registry/catalog, not the
-			// Definition, can have changed since then.
+			// cannot run. The accepted scenarios' Definitions are single linear chains
+			// (no fan-out), so there is at most one READY candidate in practice; claim it
+			// through the ordinary READY->RUNNING path and let Execute's existing
+			// machinery discover and report the concrete cause (an unregistered Node
+			// Type, an unregistered Model ID inside an otherwise-valid Node Type, or any
+			// other registered-catalog failure) through FailNode, instead of guessing
+			// which candidate the CompileError is "about" here. A CompileError can only
+			// reach this branch for a Run that already exists: CreateRun ran this same
+			// deterministic Compiler against this same frozen Definition and it passed,
+			// so any failure now is registry drift by construction -- only the
+			// Registry/catalog, not the Definition, can have changed since then.
 			if len(readyIDs) == 0 {
 				return nil
 			}
@@ -610,7 +610,7 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 		// Advance again immediately after every successful claim, so enqueuing here would
 		// let the same Run re-enter the Queue while something is already actively driving
 		// it -- harmless (claims are conditional) but wasteful, and blurs the Queue's role
-		// as "a latency optimization" (invariant #6) into a second execution path. An SSE
+		// as a latency optimization into a second execution path. An SSE
 		// cursor still needs to wake for NODE_STARTED without waiting for the next Event,
 		// which is exactly what Notifier.EventsCommitted alone provides.
 		s.notifyCommitted(notifyRunID, lastSeq)
@@ -723,7 +723,7 @@ func (s *ExecutionService) startAttempt(ctx context.Context, tx store.Tx, lock *
 		// The credential outlives the Attempt deadline by the Pending Callback TTL. Without
 		// that grace window a callback arriving while the timeout transaction is still in
 		// flight would be refused on its credential instead of competing for the completion
-		// right through the conditional update (invariant #7); after the timeout commits it
+		// right through the conditional update; after the timeout commits it
 		// is simply a stale delivery that writes nothing. An Attempt with no deadline gets a
 		// token with no expiry (zero time): there is nothing to derive one from.
 		var expiresAt time.Time
@@ -813,7 +813,7 @@ func (s *ExecutionService) nodeRuntimeMetadata(nodeType string) (domain.SideEffe
 // -----------------------------------------------------------------------------------
 
 // Execute runs the claimed Node Attempt described by outcome. It must be called only
-// after the transaction that produced outcome has committed (invariant #4): it resolves
+// after the transaction that produced outcome has committed: it resolves
 // the Executor from the Node Registry, applies the deadline (if any) to ctx, calls
 // Execute, and reports the result through CompleteNode or FailNode -- each of which is
 // its own, separate transaction.
@@ -917,10 +917,9 @@ func isUncertainFailure(ctx context.Context, err error) bool {
 // Dispatch (async)
 // -----------------------------------------------------------------------------------
 
-// nodeDispatchedPayload is the bounded record of a committed dispatch
-// (docs/05-data-model.md §2.3). providerId and externalTaskId are deliberately absent:
-// they are projected from the Callback Binding and are not copied into Events
-// (docs/08-interface-spec.md line 414).
+// nodeDispatchedPayload is the bounded record of a committed dispatch.
+// providerId and externalTaskId are deliberately absent:
+// they are projected from the Callback Binding and are not copied into Events.
 type nodeDispatchedPayload struct {
 	AttemptNo         int    `json:"attemptNo"`
 	CallbackBindingID string `json:"callbackBindingId"`
@@ -930,7 +929,7 @@ type nodeDispatchedPayload struct {
 // the Provider returned is already bound to another Attempt.
 var errDispatchBindingConflict = errors.New("execution: callback binding conflict")
 
-// dispatchNode commits the second phase of an async Node's three-phase dispatch (06 §1.6):
+// dispatchNode commits the second phase of an async Node's three-phase dispatch:
 // the Attempt becomes DISPATCHED, the NodeRun WAITING_CALLBACK, the Callback Binding that
 // routes future callbacks is created and NODE_DISPATCHED is appended -- all in one
 // transaction, so a callback can never find a route to a NodeRun that is not waiting yet.
@@ -940,7 +939,7 @@ func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutc
 		// The Provider may have accepted the task even though nothing identifies it, so
 		// the result of the external call is unknown and the registered SideEffectPolicy
 		// -- not this code path -- decides whether another Attempt is allowed
-		// (06 §3 "Provider 已接受但 external_task_id 未保存").
+		// (the Provider accepted the task but no external_task_id was saved).
 		return s.FailNode(ctx, FailNode{
 			AttemptID: outcome.AttemptID,
 			Error: domain.ExecutionError{
@@ -1075,8 +1074,8 @@ func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutc
 
 	s.postCommit(runID, lastSeq)
 
-	// Only now that the Binding is committed can a callback that arrived first be routed
-	// (06 §1.6 step 3). The stored credential hash decides whether that early delivery
+	// Only now that the Binding is committed can a callback that arrived first be routed.
+	// The stored credential hash decides whether that early delivery
 	// really belongs to this Attempt.
 	s.consumeEarlyCallback(ctx, task.ExternalTaskID, outcome.AttemptID, committedAt)
 	return nil
@@ -1084,7 +1083,7 @@ func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutc
 
 // consumeEarlyCallback resumes this Attempt from a Pending Callback recorded before its
 // Binding committed. Failures are logged rather than returned: the dispatch itself is
-// committed, and the Reconciler rediscovers the same persisted pending row (invariant #6).
+// committed, and the Reconciler rediscovers the same persisted pending row.
 func (s *ExecutionService) consumeEarlyCallback(ctx context.Context, externalTaskID, attemptID string, now time.Time) {
 	var pending domain.PendingCallback
 	var found bool
@@ -1171,10 +1170,10 @@ type runTransitionPayload struct {
 	Error *domain.ExecutionError `json:"error,omitempty"`
 }
 
-// nodeCallbackReceivedPayload is the bounded record of an accepted callback
-// (docs/05-data-model.md §2.3). It never carries the body, the token or the token hash:
+// nodeCallbackReceivedPayload is the bounded record of an accepted callback.
+// It never carries the body, the token or the token hash:
 // payloadHash identifies the delivery, and providerId/externalTaskId stay projected from
-// the Callback Binding (docs/08-interface-spec.md line 414).
+// the Callback Binding.
 type nodeCallbackReceivedPayload struct {
 	AttemptNo         int       `json:"attemptNo"`
 	CallbackBindingID string    `json:"callbackBindingId"`
@@ -1298,8 +1297,8 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 		// the Attempt success too) rather than a second silent no-op.
 		//
 		// A resume is different: WAITING_CALLBACK->SUCCEEDED is exactly the conditional
-		// UPDATE that elects the single winner among callback, Provider Poll and timeout
-		// (06 §1.6, invariant #7), so losing it means another path already completed this
+		// UPDATE that elects the single winner among callback, Provider Poll and timeout,
+		// so losing it means another path already completed this
 		// NodeRun. The whole transaction rolls back: no Event, no seq consumed.
 		if err := tx.NodeRuns().MarkSucceeded(ctx, nodeRun.ID, p.fromNodeRun, now, store.NodeRunOutcome{
 			Output:     outputBytes,
@@ -1312,7 +1311,7 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 			return err
 		}
 
-		// 06 §1.6: only the callback that wins the completion right writes
+		// Only the callback that wins the completion right writes
 		// NODE_CALLBACK_RECEIVED. A Provider Poll completion must not write it.
 		if p.completionSource == domain.CompletionCallback && p.callbackBindingID != "" {
 			if err := s.appendEvent(ctx, tx, lock, run.ID, &nodeRun.ID, domain.EventNodeCallbackReceived, now, nodeCallbackReceivedPayload{
@@ -1439,11 +1438,11 @@ func (s *ExecutionService) advanceAfterNodeSuccess(
 
 // PendingCallbackCredentialMismatchError reports that a stored early callback's
 // authenticated credential belongs to a different Attempt than the one this resume is
-// about to advance. docs/06-execution-model.md §3 gives an unmatched Pending Callback no
-// right to advance Execution and docs/05-data-model.md §1.7 scopes the token to one
-// Attempt, so a row recorded under Attempt X's credential must never complete Attempt Y
-// merely because a later dispatch reused the same external task id. The message carries
-// neither hash: only the external task id and the Attempt it was refused for.
+// about to advance. An unmatched Pending Callback has no right to advance Execution and
+// the callback token is scoped to one Attempt, so a row recorded under Attempt X's
+// credential must never complete Attempt Y merely because a later dispatch reused the
+// same external task id. The message carries neither hash: only the external task id and
+// the Attempt it was refused for.
 type PendingCallbackCredentialMismatchError struct {
 	ExternalTaskID string
 	AttemptID      string
@@ -1464,11 +1463,11 @@ func matchesAttemptCredential(attemptTokenHash *string, pendingTokenHash string)
 }
 
 // consumePendingCallback consumes a stored early callback in the same transaction that
-// acts on it, so a Pending Callback can advance a NodeRun at most once (05 §1.7). An
+// acts on it, so a Pending Callback can advance a NodeRun at most once. An
 // already-consumed, expired or different-payload row means this delivery is superseded and
 // the whole transaction rolls back. A row whose stored credential does not match attempt's
 // own callback token hash is also refused -- the consumption performed by ConsumeOnce above
-// is rolled back along with everything else, since attempt is not this row's owner (06 §3).
+// is rolled back along with everything else, since attempt is not this row's owner.
 func (s *ExecutionService) consumePendingCallback(ctx context.Context, tx store.Tx, attemptID string, attemptTokenHash *string, externalTaskID, expectedPayloadHash string, now time.Time) error {
 	if externalTaskID == "" {
 		return nil
@@ -1507,7 +1506,7 @@ type nodeRetryingPayload struct {
 	NextAttemptAt time.Time             `json:"nextAttemptAt"`
 }
 
-// nodeFailedPayload is NODE_FAILED (docs/05-data-model.md §2.3), with the same two
+// nodeFailedPayload is NODE_FAILED, with the same two
 // variants as nodeStartedPayload: attemptNo for an ordinary node, agentRunId for an Agent
 // node (absent as well when the Agent NodeRun failed before its Agent Run was created).
 type nodeFailedPayload struct {
@@ -1551,8 +1550,8 @@ type failNodeParams struct {
 	consumePending string
 	payloadHash    string
 	// terminal skips the retry decision entirely. It is set for a Provider-reported
-	// failure of a task that is already waiting: 06 §2.2 marks Attempt and NodeRun FAILED
-	// and states that MVP never re-dispatches an external task that reached
+	// failure of a task that is already waiting: such a failure marks Attempt and NodeRun
+	// FAILED, and MVP never re-dispatches an external task that reached
 	// WAITING_CALLBACK, even when the ExecutionPolicy still has attempts left and the
 	// SideEffectPolicy would allow a keyed retry.
 	terminal bool
@@ -1612,7 +1611,7 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 			if errors.Is(err, domain.ErrStaleClaim) {
 				// Late/duplicate failure of an Attempt already resolved elsewhere
 				// (e.g. it already succeeded, or a competing callback won). Ignored, not
-				// an error: 09 §3.2 requires the loser to write nothing.
+				// an error: the loser must write nothing.
 				result.duplicate = true
 				return nil
 			}
@@ -1638,21 +1637,23 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 			// which is stable across every Attempt of the same NodeRun, so a retried
 			// dispatch presents the exact same key to the Provider. Reporting it here is
 			// what lets runtime.DecideRetry allow a retry of a keyed external call at all
-			// (06 §1.1 / SideEffectPolicy); EXTERNAL+UNKNOWN still refuses.
+			// (SideEffectPolicy); EXTERNAL+UNKNOWN still refuses.
 			HasIdempotencyKey: hasIdempotencyKey(sideEffect),
 			ResultUncertain:   p.uncertain,
 		})
 		if !regOK {
-			// The Node Type is no longer registered at all (docs/09-testing-and-acceptance.md
-			// §3.4 "Registry 只存在相似但不兼容的实现" / "恢复已有 Run 时...实现缺失"): there is
+			// The Node Type is no longer registered at all (the Registry holds only a
+			// similar but incompatible implementation, or the implementation is missing
+			// while recovering an existing Run): there is
 			// no SideEffectPolicy left to consult, and CLAUDE.md "Extensions and external
 			// calls" forbids substituting a heuristic in its place. Fail outright regardless
 			// of what DecideRetry computed off the zero-value SideEffectPolicy above.
 			decision.Retry = false
 		}
 		if p.terminal || p.fromNodeRun == domain.NodeRunWaitingCallback {
-			// 06 §2.2 "MVP 不自动重新派发已经进入 WAITING_CALLBACK 的外部任务", and the NodeRun
-			// machine in 06 §1.1 leaves a waiting NodeRun only for SUCCEEDED or FAILED. The
+			// MVP never automatically re-dispatches an external task that entered
+			// WAITING_CALLBACK, and the NodeRun state machine leaves a waiting NodeRun only
+			// for SUCCEEDED or FAILED. The
 			// rule is operative rather than conservative: the external task was already
 			// accepted under this NodeRun's Provider idempotency key and external task id, so
 			// a re-dispatch could not be routed anyway -- an EXTERNAL+KEYED retry would
@@ -1780,10 +1781,12 @@ func hasIdempotencyKey(side domain.SideEffectPolicy) bool {
 // node has nothing to be uncertain about).
 //
 // A NodeRun whose Node Type the Registry no longer carries is a second, unconditional
-// reason to fail rather than the ordinary TIMEOUT path: 06 §4 "恢复还要求当前 Runtime
-// 注册表能够解析绑定 Definition 中的 Node、Provider 和 Tool 类型；缺失或不兼容时必须确定性失败
-// 并保留 Trace", echoed by 09 §3.4's recovery row and CLAUDE.md "Extensions and external
-// calls" ("A missing or incompatible registration fails explicitly and retains Trace").
+// reason to fail rather than the ordinary TIMEOUT path: recovery also requires the
+// current Runtime Registry to resolve the Node, Provider and Tool types the bound
+// Definition uses, and a missing or incompatible one must fail deterministically and
+// retain Trace. The acceptance criteria repeat this for recovery, as does CLAUDE.md
+// "Extensions and external calls" ("A missing or incompatible registration fails
+// explicitly and retains Trace").
 // This mirrors Execute's own unregistered-Node-Type handling (this file, ~833-841): same
 // NODE_TYPE_NOT_REGISTERED code, same Uncertain=false (no SideEffectPolicy survives a
 // dropped registration to judge uncertainty by), same terminal failNode transaction --
@@ -1808,7 +1811,7 @@ func (s *ExecutionService) TimeoutAttempt(ctx context.Context, attemptID string)
 		case domain.NodeAttemptStarted:
 			fromAttempt, fromNodeRun = domain.NodeAttemptStarted, domain.NodeRunRunning
 		case domain.NodeAttemptDispatched:
-			// 06 §1.1 "等待超时": a dispatched Attempt whose deadline passed competes with
+			// Wait timeout: a dispatched Attempt whose deadline passed competes with
 			// the callback and with Provider Poll for the same completion right. The
 			// conditional transitions in failNode elect the single winner.
 			fromAttempt, fromNodeRun = domain.NodeAttemptDispatched, domain.NodeRunWaitingCallback
@@ -1869,7 +1872,7 @@ func (s *ExecutionService) TimeoutAttempt(ctx context.Context, attemptID string)
 		fromAttempt: fromAttempt,
 		fromNodeRun: fromNodeRun,
 		// A timeout of an Attempt that already reached the Provider resolves the NodeRun:
-		// 06 §2.2 forbids re-dispatching an external task that entered WAITING_CALLBACK.
+		// re-dispatching an external task that entered WAITING_CALLBACK is forbidden.
 		// failNode forces Retry=false unconditionally for the registry-drift case too, so
 		// this terminal flag only changes which NodeRun/Run guard failNode uses; it does
 		// not need its own registry-drift branch.

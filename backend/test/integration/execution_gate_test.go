@@ -1,7 +1,7 @@
 //go:build integration
 
-// Gate-closing tests for the M1 exit-gate audit's execution-layer gaps (2 and 3, per
-// docs/09-testing-and-acceptance.md §3.2/§3.4). Kept in their own file but the same
+// Execution-layer gate tests: no Provider call before the claim commits, and explicit
+// failure when a registration is missing on recovery. Kept in their own file but the same
 // package as execution_test.go, reusing execHarness/newExecHarness and its helpers
 // unchanged rather than duplicating the harness.
 package integration
@@ -23,16 +23,16 @@ import (
 )
 
 // ---------------------------------------------------------------------------------------
-// Gap 2 -- docs/09-testing-and-acceptance.md §3.2, row "Provider 调用发生在抢占事务 COMMIT
-// 前": expected outcome "测试失败；事务内不得调用外部系统" (the test must fail if a Provider
-// call ever happens from inside the transaction that claims the NodeRun; a Provider call
-// is only permitted after that transaction has committed).
+// A Provider call made before the claim transaction commits: the test must fail
+// if a Provider call ever happens from inside the transaction that claims the NodeRun; no
+// external system may be called inside a transaction, and a Provider call is only
+// permitted after that transaction has committed.
 // ---------------------------------------------------------------------------------------
 
-// TestExecution_ExecutorInvokedOnlyAfterClaimCommitted proves invariant #4 ("Node
-// execution... happen[s] only after the prerequisite transaction commits") for the one M1
-// node type that makes an external call: text_generation. It installs a
-// mockmodel.Provider.BeforeReturn hook that runs synchronously inside
+// TestExecution_ExecutorInvokedOnlyAfterClaimCommitted proves the commit-before-execution
+// rule ("Node execution... happen[s] only after the prerequisite transaction commits")
+// for the one built-in text node type that makes an external call: text_generation. It
+// installs a mockmodel.Provider.BeforeReturn hook that runs synchronously inside
 // binding.Executor.Execute -> Provider.Generate, strictly after Advance's claiming
 // transaction returned and strictly before Execute reports a result through
 // CompleteNode/FailNode's own separate transaction. From inside that hook it opens a
@@ -40,8 +40,8 @@ import (
 // used, store.UnitOfWork.WithinReadTx) and reads back the NodeRun and its Attempt: if
 // Advance's transaction had not actually committed before the Provider was called, this
 // second connection could not see the RUNNING NodeRun or STARTED Attempt at all (Postgres
-// would not expose another connection's uncommitted write), so a passing assertion here is
-// only possible because the commit already happened.
+// would not expose another connection's uncommitted write), so a passing assertion here
+// is only possible because the commit already happened.
 func TestExecution_ExecutorInvokedOnlyAfterClaimCommitted(t *testing.T) {
 	h := newExecHarness(t)
 	h.saveDefinition(execDocDefinition("wf_exec_gate_provider_after_commit"))
@@ -121,13 +121,12 @@ func TestExecution_ExecutorInvokedOnlyAfterClaimCommitted(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Gap 3 -- docs/09-testing-and-acceptance.md §3.4, row "恢复已有 Run 时 Node、Model、Tool
-// 或 Provider 实现缺失": expected outcome "受影响的 NodeRun、Turn 或 Action 明确失败，并保留
-// 对应 Event 与 Trace" (the affected NodeRun/Turn/Action fails explicitly, and its Event
-// and Trace are retained).
+// A Node, Model, Tool or Provider implementation is missing when an existing Run
+// is recovered: the affected NodeRun/Turn/Action fails explicitly, and its Event and Trace
+// are retained.
 // ---------------------------------------------------------------------------------------
 
-// reducedNodeRegistry builds a NodeRegistry with every M1 node type EXCEPT
+// reducedNodeRegistry builds a NodeRegistry with every built-in text node type EXCEPT
 // text_generation registered, simulating a restarted process built from a Registry that
 // dropped a Node Type a previously-created, frozen Definition still depends on.
 func reducedNodeRegistry(t *testing.T) *registry.NodeRegistry {
@@ -184,7 +183,7 @@ func TestExecution_RecoveryWithMissingNodeType_FailsRunExplicitlyAndRetainsTrace
 	// reduced registry: internal/service.Deps.Compiler and Deps.Nodes are the same
 	// underlying registry in production (see internal/service/service.go), and this is
 	// exactly the drift condition (a previously-valid, frozen Definition no longer
-	// resolves) docs/09-testing-and-acceptance.md §3.4 names.
+	// resolves) that recovery must fail explicitly.
 	reducedNodes := reducedNodeRegistry(t)
 	reducedCompiler := runtime.NewCompiler(reducedNodes, h.clock)
 	svc2 := service.NewExecutionService(service.Deps{
@@ -224,7 +223,7 @@ func TestExecution_RecoveryWithMissingNodeType_FailsRunExplicitlyAndRetainsTrace
 		t.Errorf("generate node run status = %q, want %q", generateNR.Status, domain.NodeRunFailed)
 	}
 	if generateNR.Error == nil {
-		t.Fatalf("generate node run has no recorded Error; docs/09-testing-and-acceptance.md §3.4 requires a stable error naming the missing implementation")
+		t.Fatalf("generate node run has no recorded Error; recovery requires a stable error naming the missing implementation")
 	}
 	if generateNR.Error.Code == "" {
 		t.Errorf("generate node run Error.Code is empty; expected a stable code naming the missing node type")
@@ -261,12 +260,12 @@ func TestExecution_RecoveryWithMissingNodeType_FailsRunExplicitlyAndRetainsTrace
 	}
 }
 
-// reducedModelNodeRegistry builds a NodeRegistry with all four M1 node types registered
+// reducedModelNodeRegistry builds a NodeRegistry with all four built-in text node types registered
 // (text_generation included), but binds text_generation to modelRegistry -- typically one
 // missing a Model ID a previously-created, frozen Definition still depends on, simulating
-// a restart where the Node Type survived but the Model Registry regressed (docs/09 §3.4:
-// "Node、Model、Tool 或 Provider 实现缺失" names Model drift as its own, independent case
-// from Node Type drift).
+// a restart where the Node Type survived but the Model Registry regressed (a missing
+// Node, Model, Tool or Provider implementation names Model drift as its own, independent
+// case from Node Type drift).
 func reducedModelNodeRegistry(t *testing.T, modelRegistry *registry.ModelRegistry) *registry.NodeRegistry {
 	t.Helper()
 	reg := registry.NewNodeRegistry()
@@ -355,13 +354,13 @@ func TestExecution_RecoveryWithMissingModel_FailsRunExplicitlyAndRetainsTrace(t 
 		t.Fatalf("generate node run status = %q, want %q", generateNR.Status, domain.NodeRunFailed)
 	}
 	if generateNR.Error == nil {
-		t.Fatalf("generate node run has no recorded Error; docs/09-testing-and-acceptance.md §3.4 requires a stable error naming the missing implementation")
+		t.Fatalf("generate node run has no recorded Error; recovery requires a stable error naming the missing implementation")
 	}
 	// The Executor's own model resolution (textgeneration.Executor.Execute:
 	// "model %q is not registered") surfaces through Execute's generic
 	// "binding.Executor.Execute returned an error" branch, which reports it under the
 	// stable code EXECUTOR_ERROR (internal/service/execution.go Execute()) -- there is no
-	// more specific stable code for a model-resolution failure in M1 today. This is
+	// more specific stable code for a model-resolution failure today. This is
 	// reported here rather than asserted as an assumption: EXECUTOR_ERROR is the code this
 	// path actually produces.
 	if generateNR.Error.Code != "EXECUTOR_ERROR" {

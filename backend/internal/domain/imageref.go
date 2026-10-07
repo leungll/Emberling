@@ -9,7 +9,7 @@ import (
 )
 
 // ImageSource names which of ImageRef's three mutually exclusive branches carries the
-// image (08 §2.2).
+// image.
 type ImageSource string
 
 const (
@@ -23,7 +23,7 @@ const (
 	ImageSourceExternal ImageSource = "EXTERNAL"
 )
 
-// ImageRef is the single value every `image` port carries (08 §2.2). A Provider's own
+// ImageRef is the single value every `image` port carries. A Provider's own
 // response object never reaches a port: the Node that owns the Provider interaction
 // normalises it into an ImageRef first, so a downstream node reads one shape regardless of
 // where the image came from.
@@ -46,7 +46,7 @@ type ImageRef struct {
 	Height    int          `json:"height,omitempty"`
 }
 
-// Validate reports whether r satisfies every rule of 08 §2.2. It is the only definition of
+// Validate reports whether r satisfies every ImageRef rule. It is the only definition of
 // "a valid ImageRef": a Node validates what it produces and what it consumes through this
 // method, never through a shape check of its own.
 func (r ImageRef) Validate() error {

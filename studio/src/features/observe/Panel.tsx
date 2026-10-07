@@ -16,7 +16,7 @@ export function SectionLabel({ children, className }: { children: ReactNode; cla
   );
 }
 
-/** Rounded dark card with a label row, as laid out in the 04 §1.3 / §3.3 mocks. */
+/** Rounded dark card with a label row, as laid out in the Observe mocks. */
 export function Panel({
   title,
   meta,

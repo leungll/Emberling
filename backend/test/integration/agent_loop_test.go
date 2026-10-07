@@ -47,7 +47,7 @@ const agentTimeoutMs = 120_000
 const agentMaxTurns = 4
 
 // agentInstructions is the frozen system prompt of the fixture Definition. It must never
-// appear in a Context Version's messages (05 §2: Instructions are not copied into Context
+// appear in a Context Version's messages (Instructions are not copied into Context
 // Messages).
 const agentInstructions = "Answer with the lookup tool when a record is needed."
 
@@ -57,7 +57,7 @@ const agentQuestion = "who is ada"
 type agentHarnessOptions struct {
 	// Pool reuses an existing database instead of provisioning a fresh one. Together with
 	// a new harness value it is a process restart: a second Backend image over the same
-	// committed PostgreSQL facts, the only recovery source invariant #6 allows.
+	// committed PostgreSQL facts, the only recovery source the Runtime allows.
 	Pool *pgxpool.Pool
 	// SkipLookupTool leaves "lookup" unregistered in this Backend's Tool Registry,
 	// reproducing registry drift between the Backend that saved a Definition and the one
@@ -81,12 +81,11 @@ type agentHarnessOptions struct {
 }
 
 // agentInlineTurns is the harness's default WorkEnqueuer. A synchronous Tool round no
-// longer chains the next Turn on the same goroutine (06 §1.3): it commits the READY Turn
-// and offers it to the work queue. This enqueuer records those offers so that execute can
-// drain them on the test's own goroutine through the same Turn advance use case a
-// work.Pool worker calls, which keeps single-goroutine tests deterministic. Run-level
-// Advance offers are dropped, as the no-op enqueuer always did: tests drive NodeRuns
-// explicitly.
+// longer chains the next Turn on the same goroutine: it commits the READY Turn and offers
+// it to the work queue. This enqueuer records those offers so that execute can drain them
+// on the test's own goroutine through the same Turn advance use case a work.Pool worker
+// calls, which keeps single-goroutine tests deterministic. Run-level Advance offers are
+// dropped, as the no-op enqueuer always did: tests drive NodeRuns explicitly.
 type agentInlineTurns struct {
 	mu      sync.Mutex
 	pending []string
@@ -365,8 +364,8 @@ func agentNodeRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runID
 
 // assertNoDownstreamNodeRun asserts that the node downstream of the Agent (node_output in
 // agentLoopDefinition) has no NodeRun at all. Downstream READY NodeRuns are created only
-// when the Agent NodeRun succeeds (docs/06 §1.7: a failed Agent fails its NodeRun and the
-// Run; nothing after it is scheduled), so after any Agent failure this must hold.
+// when the Agent NodeRun succeeds (a failed Agent fails its NodeRun and the Run; nothing
+// after it is scheduled), so after any Agent failure this must hold.
 func assertNoDownstreamNodeRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runID string) {
 	t.Helper()
 	var nodeRuns []domain.NodeRun
@@ -496,10 +495,9 @@ func agentCountEventType(types []domain.EventType, want domain.EventType) int {
 // ---------------------------------------------------------------------------
 
 // TestManagedAgentNodeRun_FirstClaim_CreatesAgentRunAndReadyTurnNoNodeAttempt proves the
-// one transaction docs/06-execution-model.md §1.7 requires when an Agent NodeRun first
-// becomes RUNNING: a unique Agent Run frozen from the Definition, Context/State Version 0,
-// Turn 1 READY, AGENT_STARTED and AGENT_TURN_READY -- and, per 05 §1.8, no Node Attempt
-// at all.
+// one transaction required when an Agent NodeRun first becomes RUNNING: a unique Agent
+// Run frozen from the Definition, Context/State Version 0, Turn 1 READY, AGENT_STARTED
+// and AGENT_TURN_READY -- and no Node Attempt at all.
 func TestManagedAgentNodeRun_FirstClaim_CreatesAgentRunAndReadyTurnNoNodeAttempt(t *testing.T) {
 	h := newAgentHarness(t, agentHarnessOptions{})
 	def := h.saveDefinition(agentLoopDefinition("wf-agent-first-claim"))
@@ -615,10 +613,10 @@ func TestManagedAgentNodeRun_FirstClaim_CreatesAgentRunAndReadyTurnNoNodeAttempt
 }
 
 // TestManagedAgentNodeRun_FirstClaim_UnresolvableTool_FailsNodeRunWithoutAgentRun proves
-// docs/06-execution-model.md §1.7: the Agent Run may only be created once every stable
-// Tool Name in the frozen allowlist resolves. A Backend restarted without the `lookup`
-// Tool must fail the Agent NodeRun explicitly instead of silently dropping the missing
-// entry and starting the Agent with a shortened allowlist.
+// that the Agent Run may only be created once every stable Tool Name in the frozen
+// allowlist resolves. A Backend restarted without the `lookup` Tool must fail the Agent
+// NodeRun explicitly instead of silently dropping the missing entry and starting the
+// Agent with a shortened allowlist.
 func TestManagedAgentNodeRun_FirstClaim_UnresolvableTool_FailsNodeRunWithoutAgentRun(t *testing.T) {
 	first := newAgentHarness(t, agentHarnessOptions{})
 	def := first.saveDefinition(agentLoopDefinition("wf-agent-tool-drift"))

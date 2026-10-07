@@ -7,9 +7,8 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// buildPlan is the Compiler's fifth stage: it produces the stable topological Order
-// (docs/06-execution-model.md §1.3: Scheduler "按稳定拓扑顺序") plus Upstream/Downstream
-// dependency indexes (docs/06-execution-model.md §1.2: "上下游依赖索引构建").
+// buildPlan is the Compiler's fifth stage: it produces the stable topological Order the
+// Scheduler follows plus the Upstream/Downstream dependency indexes.
 //
 // Upstream/Downstream hold distinct predecessor/successor node ids, deduped by node pair
 // rather than by edge count: two distinct edges between the same pair of nodes (e.g.

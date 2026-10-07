@@ -49,7 +49,7 @@ func TestStatePatch_ArrayValue_ReplacesWhole(t *testing.T) {
 func TestStatePatch_ResultUnchanged_ReportsNoChange(t *testing.T) {
 	current := json.RawMessage(`{"a":1,"b":{"x":1,"y":2}}`)
 	// The patch restates every value the State already holds and writes the nested
-	// object's keys in the opposite order: object key order is not a change (05 §1.4).
+	// object's keys in the opposite order: object key order is not a change.
 	result, changed, err := ApplyStatePatch(current, json.RawMessage(`{"b":{"y":2,"x":1},"a":1}`))
 	if err != nil {
 		t.Fatalf("ApplyStatePatch() error = %v, want nil", err)
@@ -105,7 +105,7 @@ func TestStatePatch_EmptyPatch_NoChange(t *testing.T) {
 
 func TestStatePatch_NullForAbsentKey_NoChange(t *testing.T) {
 	// RFC 7386: removing a member that is not there is a no-op, so the Action commits no
-	// new State Version (05 §1.4).
+	// new State Version.
 	result, changed, err := ApplyStatePatch(json.RawMessage(`{"a":1}`), json.RawMessage(`{"b":null}`))
 	if err != nil {
 		t.Fatalf("ApplyStatePatch() error = %v, want nil", err)
@@ -161,7 +161,7 @@ func TestValidateAgentState_SchemaViolation_Fails(t *testing.T) {
 	}
 
 	// The whole patched State is validated, not the patch: a patch that only sets `extra`
-	// still fails because the merged result violates the frozen Schema (05 §1.4).
+	// still fails because the merged result violates the frozen Schema.
 	patched, _, err := ApplyStatePatch(json.RawMessage(`{"turns":2}`), json.RawMessage(`{"extra":true}`))
 	if err != nil {
 		t.Fatalf("ApplyStatePatch() error = %v, want nil", err)

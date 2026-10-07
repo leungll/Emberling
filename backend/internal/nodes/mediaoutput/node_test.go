@@ -47,7 +47,7 @@ func TestMediaOutput_Execute_CombinesImageRefAndCaption(t *testing.T) {
 
 // TestMediaOutput_Execute_PreservesAssetBranch: an ASSET reference is preserved as it
 // arrived, member for member -- this node stores the normalised reference, it does not
-// re-derive or rewrite it (08 §2.2).
+// re-derive or rewrite it.
 func TestMediaOutput_Execute_PreservesAssetBranch(t *testing.T) {
 	asset := `{"source":"ASSET","asset":{"assetId":"asset_123","mediaType":"image/png","sizeBytes":102400,"sha256":"abc"}}`
 	in := registry.NodeInput{Ports: map[string]json.RawMessage{
@@ -63,7 +63,7 @@ func TestMediaOutput_Execute_PreservesAssetBranch(t *testing.T) {
 	}
 }
 
-// TestMediaOutput_Execute_ImageIsNotAnImageRef_Fails: 08 §2.2 forbids this node from
+// TestMediaOutput_Execute_ImageIsNotAnImageRef_Fails: this node is forbidden from
 // accepting an arbitrary JSON object. A Run.output must not be able to carry a
 // Provider-private or legacy reference shape just because something upstream produced one.
 func TestMediaOutput_Execute_ImageIsNotAnImageRef_Fails(t *testing.T) {

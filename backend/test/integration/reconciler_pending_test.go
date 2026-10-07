@@ -1,11 +1,11 @@
 //go:build integration
 
-// Reconciler proofs for the async-Node recovery surfaces owned by this track:
-// 06 §2.1 ("Reconciler 必须能够扫描过期的 STARTED 或 DISPATCHED Attempt"), the pending
-// callback consumption scan (06 §2.1/§3, design decision C3), and Pending Callback
-// retention (05 §1.7). These reuse asyncHarness from service_async_test.go rather than
-// duplicating its definition, executor and dispatch helpers (CLAUDE.md "locate the
-// existing implementation ... before introducing a new abstraction").
+// Reconciler proofs for the async-Node recovery surfaces owned by this track: the scan of
+// expired STARTED or DISPATCHED Attempts, the pending callback consumption scan (design
+// decision C3), and Pending Callback retention. These reuse asyncHarness from
+// service_async_test.go rather than duplicating its definition, executor and dispatch
+// helpers (CLAUDE.md "locate the existing implementation ... before introducing a new
+// abstraction").
 package integration
 
 import (
@@ -24,8 +24,8 @@ import (
 // the Reconciler drives a DISPATCHED Attempt past its deadline through the same
 // TimeoutAttempt use case TestTimeoutAttempt_DispatchedAttemptPastDeadline_
 // FailsAttemptAndNodeRun exercises directly, then proves a callback arriving after that
-// commit is a duplicate that writes nothing (06 §2.3, 09 §3.2 "timeout 与 callback ...
-// 竞争同一完成权，只有一方提交").
+// commit is a duplicate that writes nothing (timeout and callback compete for the same
+// completion right, and only one of them commits).
 func TestReconciler_DispatchedAttemptPastDeadline_TimesOutAndLateCallbackIsDuplicate(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -126,10 +126,10 @@ func commitDispatchWithoutConsumingEarlyCallback(h *asyncHarness, attemptID, nod
 }
 
 // TestReconciler_EarlyCallbackRecordedBeforeBinding_ConsumedOnceAfterRestart proves the
-// pending callback consumption scan (design decision C3): a Pending Callback recorded
+// pending callback consumption scan: a Pending Callback recorded
 // before its Binding existed, whose in-process post-commit consumption never ran, is
 // rediscovered and consumed by a brand-new Reconciler + service instance built over the
-// same database (09 §3.2 "WAITING_CALLBACK 期间重启"), exactly once.
+// same database (a restart during WAITING_CALLBACK), exactly once.
 func TestReconciler_EarlyCallbackRecordedBeforeBinding_ConsumedOnceAfterRestart(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -162,7 +162,7 @@ func TestReconciler_EarlyCallbackRecordedBeforeBinding_ConsumedOnceAfterRestart(
 
 	// Simulated restart: a brand-new ExecutionService (fresh registry, fresh plan cache,
 	// fresh Executor instance) driven by a brand-new Reconciler, both built over the same
-	// database (invariant #1).
+	// database.
 	restarted := h.newService(domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown}, &asyncFakeExecutor{externalTaskID: externalTaskID})
 	rec := reconciler.New(reconciler.Config{UoW: h.uow, Executor: restarted, Clock: h.clock, BatchLimit: 100})
 
@@ -213,7 +213,7 @@ func TestReconciler_EarlyCallbackRecordedBeforeBinding_ConsumedOnceAfterRestart(
 	maxSeqAfterDrain := maxEventSeq(eventsAfterDrain)
 
 	// Once fully drained, a further pass is a true no-op: the pending callback stays
-	// consumed once (invariant #5's idempotency), and there is no more ready or expired
+	// consumed once (the resume use case is idempotent), and there is no more ready or expired
 	// work for anything else in this Run.
 	final, err := rec.RunOnce(h.ctx)
 	if err != nil {
@@ -232,9 +232,10 @@ func TestReconciler_EarlyCallbackRecordedBeforeBinding_ConsumedOnceAfterRestart(
 	}
 }
 
-// TestReconciler_ExpiredPendingCallback_DeletedNotConsumed proves the retention scan (05
-// §1.7): an early callback whose dispatch never arrived to bind it is never eligible for
-// resume (06 §4 "无法匹配的 Pending Callback ... 只进入运维审计并按保留策略清理"), and once
+// TestReconciler_ExpiredPendingCallback_DeletedNotConsumed proves the retention scan: an
+// early callback whose dispatch never arrived to bind it is never eligible for resume (an
+// unmatched Pending Callback only enters the operational audit and is cleaned up under the
+// retention policy), and once
 // its own TTL has passed the Reconciler deletes the row outright rather than resuming
 // anything with it.
 func TestReconciler_ExpiredPendingCallback_DeletedNotConsumed(t *testing.T) {

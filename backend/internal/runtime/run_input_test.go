@@ -22,8 +22,8 @@ const testFrozenSchema = `{"type":"object","additionalProperties":false,"propert
 
 // TestValidateRunInput_AdditionalProperty_Rejected asserts the frozen schema's
 // additionalProperties: false is enforced: a Run.input carrying an extra top-level key
-// beyond what the Definition's Input Nodes declared must be rejected
-// (docs/08-interface-spec.md §1.3: "顶层 Schema 固定为...additionalProperties: false").
+// beyond what the Definition's Input Nodes declared must be rejected, because the
+// generated top-level Schema is fixed to additionalProperties: false.
 func TestValidateRunInput_AdditionalProperty_Rejected(t *testing.T) {
 	input := json.RawMessage(`{"document":"hello","extra":"nope"}`)
 

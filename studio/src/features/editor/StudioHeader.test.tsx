@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StudioHeader } from './StudioHeader';
 
-// 04-ux.md §6 MVP 验收 item 3: an unsaved or invalid Definition must not be able to
+// MVP acceptance: an unsaved or invalid Definition must not be able to
 // create a Run — the UI must never silently run a stale version. StudioHeader enforces
 // this by disabling Run whenever there are unsaved changes or the Definition has never
 // been saved (version === null).
@@ -25,7 +25,7 @@ function renderHeader(overrides: Partial<Parameters<typeof StudioHeader>[0]> = {
   );
 }
 
-describe('StudioHeader — Run gating (04-ux.md §6 item 3)', () => {
+describe('StudioHeader — Run gating', () => {
   it('disables Run when there are unsaved changes, even though the Definition was previously saved', () => {
     renderHeader({ version: 4, hasUnsavedChanges: true });
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
@@ -42,7 +42,7 @@ describe('StudioHeader — Run gating (04-ux.md §6 item 3)', () => {
   });
 });
 
-describe('StudioHeader — mode subtitle (04 §1.4)', () => {
+describe('StudioHeader — mode subtitle', () => {
   it('states the saved Definition version and the Editing mode, with the workflow id on hover', () => {
     renderHeader({ version: 4 });
     const subtitle = screen.getByTestId('studio-subtitle');

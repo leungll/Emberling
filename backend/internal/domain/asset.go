@@ -6,12 +6,11 @@ import (
 	"time"
 )
 
-// Asset is the Emberling-owned Metadata of one uploaded image (05 §1.2 "Asset Metadata
-// 与 AssetRef"). It is the half of an Asset PostgreSQL owns; the binary lives in Asset
-// storage.
+// Asset is the Emberling-owned Metadata of one uploaded image. It is the half of an
+// Asset PostgreSQL owns; the binary lives in Asset storage.
 //
 // The internal storage key is deliberately absent: it is a system Secret that must never
-// reach an Event, Trace, API response or log (10-ops §4), so it stays between the Store
+// reach an Event, Trace, API response or log, so it stays between the Store
 // row and the storage layer and is never carried by a domain value.
 type Asset struct {
 	AssetID   string
@@ -24,7 +23,7 @@ type Asset struct {
 // Asset errors. Not-found reuses ErrNotFound, so every layer keeps one not-found test.
 var (
 	// ErrUnsupportedAssetMediaType rejects a media type outside the MVP image set.
-	// General file upload is Phase 2 (08 §3.2).
+	// General file upload is Phase 2.
 	ErrUnsupportedAssetMediaType = errors.New("emberling: unsupported asset media type")
 
 	// ErrAssetTooLarge rejects content above the configured upload limit. It is reported

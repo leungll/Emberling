@@ -1,9 +1,9 @@
-// Package imagegeneration implements the built-in Image Generation Node (08 §2). It is the
+// Package imagegeneration implements the built-in Image Generation Node. It is the
 // first ASYNC Node: Execute only dispatches one external task and returns its identity,
 // and OnCallback normalises the Provider's callback payload into the node's `image` output
-// once the Runtime restores the original Attempt (07 §1.3).
+// once the Runtime restores the original Attempt.
 //
-// The `image` port carries a domain.ImageRef and nothing else (08 §2.2): the Provider's own
+// The `image` port carries a domain.ImageRef and nothing else: the Provider's own
 // response object is validated and re-encoded here, so a Provider-private field or a
 // temporarily signed URL cannot travel downstream inside a NodeRun output, Run.output, an
 // Event or Trace.
@@ -25,7 +25,7 @@ import (
 
 const nodeType = "image_generation"
 
-// promptPort, referencePort and imagePort are the node's three handles, fixed by 08 §2.1.
+// promptPort, referencePort and imagePort are the node's three fixed handles.
 // referencePort is optional: an AIGC Run may or may not start from a Reference Image.
 const (
 	promptPort    = "prompt"
@@ -44,8 +44,8 @@ const (
 // persisted ExecutionError always carries one.
 const defaultFailureCode = "PROVIDER_TASK_FAILED"
 
-// configSchema is the config contract of 08 §2, reproduced exactly: a Model ID and the
-// requested image width.
+// configSchema is the Image Generation config contract, reproduced exactly: a Model ID
+// and the requested image width.
 const configSchema = `{
   "type": "object",
   "properties": {
@@ -57,8 +57,9 @@ const configSchema = `{
 
 // ModelResolver resolves a Model ID to its registration and serving ModelProvider.
 // *registry.ModelRegistry satisfies it; this node depends only on the narrow shape it
-// calls. Image Generation resolves a Model ID rather than a Provider because 08 §2 renders
-// `modelId` with a MODEL_SELECTOR filtered by the image_generation capability.
+// calls. Image Generation resolves a Model ID rather than a Provider because its config
+// contract renders `modelId` with a MODEL_SELECTOR filtered by the image_generation
+// capability.
 type ModelResolver interface {
 	Get(modelID string) (registry.ModelRegistration, registry.ModelProvider, bool)
 }
@@ -102,8 +103,8 @@ func Registration(resolver ModelResolver, dispatcher TaskDispatcher) registry.No
 				{Path: "width", Order: 20, Group: domain.UIGroupModelParameters, Widget: domain.UIWidgetDefault},
 			}},
 			// The dispatch carries the Runtime's stable idempotency key, so the Provider
-			// - not Emberling - decides that a replayed dispatch is the same task (07
-			// §1.2: EXTERNAL + KEYED).
+			// - not Emberling - decides that a replayed dispatch is the same task
+			// (EXTERNAL + KEYED).
 			SideEffect: domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed},
 		},
 		Binding: registry.ExecutorBinding{Executor: Executor{resolver: resolver, dispatcher: dispatcher}},
@@ -117,7 +118,7 @@ type Executor struct {
 }
 
 // ValidateSemantics checks what ConfigSchema cannot express: the referenced model exists
-// and declares the image_generation capability (07 §1.4).
+// and declares the image_generation capability.
 func (e Executor) ValidateSemantics(_ context.Context, config map[string]any) error {
 	modelID, _ := config["modelId"].(string)
 	if modelID == "" {
@@ -136,7 +137,7 @@ func (e Executor) ValidateSemantics(_ context.Context, config map[string]any) er
 // Execute dispatches one external task and returns DISPATCHED. It never returns a
 // COMPLETED result: this node cannot know the outcome within one call, and the Runtime
 // persists the Callback Binding from the ExternalTask returned here before anything else
-// can advance (07 §1.3).
+// can advance.
 func (e Executor) Execute(ctx context.Context, input registry.NodeInput, config map[string]any) (registry.NodeResult, error) {
 	if input.Callback == nil {
 		// Without the Attempt-scoped callback URL and token there is nothing to hand the
@@ -215,7 +216,7 @@ type callbackPayload struct {
 //
 // A reported task failure becomes a *registry.ProviderFailure, which fails the Attempt. A
 // payload this node cannot interpret stays a plain error, which leaves the NodeRun
-// WAITING_CALLBACK until its Attempt deadline decides the outcome (06 §1.6): a malformed
+// WAITING_CALLBACK until its Attempt deadline decides the outcome: a malformed
 // delivery is not evidence that the external task failed.
 func (e Executor) OnCallback(_ context.Context, state registry.NodeAsyncState, payload []byte) (registry.NodeOutput, error) {
 	var body callbackPayload
@@ -226,7 +227,7 @@ func (e Executor) OnCallback(_ context.Context, state registry.NodeAsyncState, p
 	switch body.Status {
 	case statusSucceeded:
 		// The Provider's object is normalised, never republished: only a valid ImageRef
-		// may reach an `image` port (08 §2.2). A Provider-private member, a signed URL or
+		// may reach an `image` port. A Provider-private member, a signed URL or
 		// a reference shape this node does not recognise fails the payload instead.
 		reference, err := domain.ParseImageRef(body.Image)
 		if err != nil {

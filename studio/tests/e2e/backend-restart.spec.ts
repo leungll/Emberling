@@ -12,8 +12,7 @@ import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-
 import { BACKEND_URL } from './stack';
 
 /**
- * Backend restart while observing a suspended Run (docs/09 §1 items 3 and 11; 04-ux.md
- * §6 items 10 and 11).
+ * Backend restart while observing a suspended Run.
  *
  * The Run input `mock:delay:20000` makes the Mock Provider deliver its callback 20s after
  * dispatch (`backend/internal/adapters/mocktask/adapter.go`), which is the window this
@@ -101,7 +100,7 @@ test('Observe reconnects after a Backend restart and shows the resumed Run compl
   // the read-only Canvas.
   await expect(page.locator('.react-flow__node[data-id="node_image"]')).toContainText('Succeeded');
 
-  // Item 10 / docs/09 §1 item 11: no Event is missing, out of order or applied twice.
+  // No Event is missing, out of order or applied twice.
   // The Timeline is contiguous from seq 1 and matches the Backend's committed history.
   await expect(page.getByRole('button', { name: /Run completed/ })).toHaveCount(1);
   const seqsAfterRestart = await renderedSeqs(page);

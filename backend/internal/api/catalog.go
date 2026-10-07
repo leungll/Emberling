@@ -7,7 +7,7 @@ import (
 )
 
 // nodeTypes serves GET /node-types. Empty metadata collections are JSON arrays under
-// the docs/08-interface-spec.md §2 contract, even when a registration stores nil slices.
+// the catalog interface contract, even when a registration stores nil slices.
 func (d Deps) nodeTypes(w http.ResponseWriter, r *http.Request) {
 	items := d.Catalog.NodeTypes()
 	for i := range items {
@@ -29,8 +29,8 @@ func nodeMetadataForResponse(metadata domain.NodeMetadata) domain.NodeMetadata {
 	return metadata
 }
 
-// models serves GET /models. capabilities is a JSON array under the docs/08-interface-spec.md
-// §2 contract, even when a registration stores a nil slice.
+// models serves GET /models. capabilities is a JSON array under the catalog interface
+// contract, even when a registration stores a nil slice.
 func (d Deps) models(w http.ResponseWriter, r *http.Request) {
 	items := d.Catalog.Models()
 	for i := range items {

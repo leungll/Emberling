@@ -13,20 +13,20 @@ import (
 )
 
 // ValidatorVersion identifies the whole compilation contract, including the
-// runInputSchema generation algorithm (docs/11-decisions.md §5: "Validate 与 Save 使用同一
-// 条服务端编译链，成功保存时冻结 runInputSchema 和 validatorVersion"). Changing any stage's
+// runInputSchema generation algorithm (Validate and Save share one server-side
+// compilation chain, and a successful Save freezes runInputSchema and validatorVersion).
+// Changing any stage's
 // behaviour or the schema generation algorithm requires a new value.
 const ValidatorVersion = "mvp-v1"
 
 // CompiledDefinition is the successful result of Compile: the Definition together with
 // the Execution Plan artifacts Run creation and the Scheduler need, plus the frozen
-// runInputSchema and Validation stamp a Save would persist
-// (docs/06-execution-model.md §1.2; docs/08-interface-spec.md §1.3).
+// runInputSchema and Validation stamp a Save would persist.
 type CompiledDefinition struct {
 	Definition domain.Definition
 
-	// Order is a stable topological order of node ids (docs/06-execution-model.md §1.3:
-	// "按稳定拓扑顺序"), used both to report a deterministic execution order and as the
+	// Order is a stable topological order of node ids, used both to report a
+	// deterministic execution order and as the
 	// Scheduler's tie-break.
 	Order []string
 	// Upstream/Downstream map a node id to the distinct node ids of its direct
@@ -37,8 +37,8 @@ type CompiledDefinition struct {
 	// OutputNodeID is the Definition's single, validated Output Node.
 	OutputNodeID string
 
-	// RunInputSchema is the canonical JSON Schema generated from Input Node config
-	// (docs/08-interface-spec.md §1.3). It is frozen at Save time and never regenerated
+	// RunInputSchema is the canonical JSON Schema generated from Input Node config.
+	// It is frozen at Save time and never regenerated
 	// for an existing Run.
 	RunInputSchema json.RawMessage
 
@@ -47,8 +47,8 @@ type CompiledDefinition struct {
 	Validation domain.Validation
 }
 
-// Compiler runs the Definition Validate/Save compilation chain
-// (docs/06-execution-model.md §1.2, docs/08-interface-spec.md §1.2): Structure ->
+// Compiler runs the Definition Validate/Save compilation chain:
+// Structure ->
 // ConfigSchema -> Semantics -> Graph -> Plan -> runInputSchema. Compile stops at the
 // first stage producing any ValidationError, so a caller only ever sees one stage's
 // worth of errors.

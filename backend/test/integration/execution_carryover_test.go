@@ -1,15 +1,18 @@
 //go:build integration
 
-// Carry-over execution coverage for three docs/09-testing-and-acceptance.md rows that the
-// existing execution integration tests leave unproven:
+// Carry-over execution coverage for three acceptance scenarios that the existing
+// execution integration tests leave unproven:
 //
-//   - §3.1 "普通 EXECUTOR NodeRun 抢占成功 -> ... NODE_STARTED 包含 attemptNo": the Event
-//     payload itself, decoded as JSON, must carry the Attempt's number -- including after a
-//     retry, where the second NODE_STARTED of the same node must carry attemptNo 2.
-//   - §3.5 "两个不同 Run 同时有 READY 工作 -> worker pool 可以并发推进；Run 锁不造成跨 Run
-//     串行化": each Run's claim touches only its own NodeRuns.
-//   - §3.5 "长 DAG 连续产生可运行节点 -> ... 调用栈深度不随节点数量增长": a 200-node linear
-//     DAG driven by the same Advance/Execute loop the work pool and Reconciler use.
+//   - A successful claim of an ordinary EXECUTOR NodeRun writes a NODE_STARTED that
+//     carries attemptNo: the Event payload itself, decoded as JSON, must carry the
+//     Attempt's number -- including after a retry, where the second NODE_STARTED of the
+//     same node must carry attemptNo 2.
+//   - Two different Runs with READY work at once may be advanced concurrently by the worker
+//     pool, and the Run lock does not serialize across Runs: each Run's claim touches only
+//     its own NodeRuns.
+//   - A long DAG that keeps producing runnable nodes must not grow call-stack depth with
+//     the node count: a 200-node linear DAG driven by the same Advance/Execute loop the
+//     work pool and Reconciler use.
 //
 // Everything here reuses execHarness and its helpers from execution_test.go unchanged.
 package integration
@@ -95,7 +98,7 @@ func execRunOutputText(t *testing.T, run domain.Run) string {
 
 // ---------------------------------------------------------------------------
 // 1. NODE_STARTED carries the Attempt's own attemptNo, on the first Attempt and on a
-//    retried one (docs/09 §3.1).
+//    retried one.
 // ---------------------------------------------------------------------------
 
 func TestExecution_NodeStartedEvent_CarriesAttemptNo(t *testing.T) {
@@ -194,7 +197,7 @@ func TestExecution_NodeStartedEvent_CarriesAttemptNo(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // 2. Two different Runs with READY work advance concurrently: the Run aggregate lock is
-//    per-Run, so neither claim touches the other Run's NodeRuns (docs/09 §3.5).
+//    per-Run, so neither claim touches the other Run's NodeRuns.
 // ---------------------------------------------------------------------------
 
 func TestExecution_TwoRuns_ConcurrentAdvance_EachProgressesIndependently(t *testing.T) {
@@ -280,7 +283,7 @@ func TestExecution_TwoRuns_ConcurrentAdvance_EachProgressesIndependently(t *test
 
 // ---------------------------------------------------------------------------
 // 3. A long linear DAG advances one transaction at a time, with call-stack depth
-//    independent of node count (docs/09 §3.5).
+//    independent of node count.
 // ---------------------------------------------------------------------------
 
 // execLinearDefinition builds a chain of n nodes: text_input -> (n-2) x prompt_template ->

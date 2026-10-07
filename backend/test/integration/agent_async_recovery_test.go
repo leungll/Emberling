@@ -1,12 +1,12 @@
 //go:build integration
 
-// Recovery tests for asynchronous Agent Tool Attempts (06 §2.1, 06 §4, 05 §1.7, 09 §3.3).
-// A Tool Action that is WAITING_CALLBACK holds no in-process state worth keeping: the
-// DISPATCHED Tool Attempt, its Callback Binding, the Agent deadline and any stored early
-// callback are all committed rows, so a fresh ExecutionService and Reconciler over the
-// same database must be able to finish, time out or replay it without re-executing the
-// Action (invariant #6). They share the agentHarness of agent_loop_test.go and the
-// scripted async Tool of agent_async_tool_test.go.
+// Recovery tests for asynchronous Agent Tool Attempts. A Tool Action that is
+// WAITING_CALLBACK holds no in-process state worth keeping: the DISPATCHED Tool Attempt,
+// its Callback Binding, the Agent deadline and any stored early callback are all
+// committed rows, so a fresh ExecutionService and Reconciler over the same database must
+// be able to finish, time out or replay it without re-executing the Action (the
+// persisted-work recovery rule). They share the agentHarness of agent_loop_test.go and
+// the scripted async Tool of agent_async_tool_test.go.
 package integration
 
 import (
@@ -77,8 +77,9 @@ func agentPendingRow(t *testing.T, h *agentHarness, externalTaskID string) (doma
 
 // agentAsyncForeignPending drives a Run until its Tool Action is WAITING_CALLBACK with an
 // unconsumed Pending Callback row for its external task whose credential hash is not the
-// Attempt's. The row is stored from inside the Tool call, before the Binding commits, which
-// is exactly when 06 §1.6 stores an early delivery; the post-commit replay then refuses it.
+// Attempt's. The row is stored from inside the Tool call, before the Binding commits,
+// which is exactly when an early delivery is stored; the post-commit replay then refuses
+// it.
 func agentAsyncForeignPending(t *testing.T, workflowID string, tool *agentAsyncTool) (*agentHarness, domain.Run, service.AdvanceOutcome) {
 	t.Helper()
 	tool.result = agentAsyncDispatched(agentAsyncExternalTaskID)
@@ -114,12 +115,12 @@ func agentAsyncForeignPending(t *testing.T, workflowID string, tool *agentAsyncT
 }
 
 // TestAgentAsyncToolRecovery_LostEarlyCallbackReplay_ReconcilerConsumesOnceAfterRestart
-// covers 06 §2.1 and invariant #6 for a Tool target: the Provider's early callback was
-// stored as Pending before the Binding committed, and the process died between that
-// commit and the in-process replay. After a restart the Reconciler must rediscover the
-// row through its Binding to the DISPATCHED Tool Attempt, replay it through ResumeNode
-// exactly once, stamp consumed_at, and let the Agent Loop finish -- without calling the
-// Tool again and without a second CALLBACK completion.
+// covers the persisted-work recovery rule for a Tool target: the Provider's early
+// callback was stored as Pending before the Binding committed, and the process died
+// between that commit and the in-process replay. After a restart the Reconciler must
+// rediscover the row through its Binding to the DISPATCHED Tool Attempt, replay it
+// through ResumeNode exactly once, stamp consumed_at, and let the Agent Loop finish --
+// without calling the Tool again and without a second CALLBACK completion.
 func TestAgentAsyncToolRecovery_LostEarlyCallbackReplay_ReconcilerConsumesOnceAfterRestart(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -208,12 +209,12 @@ func TestAgentAsyncToolRecovery_LostEarlyCallbackReplay_ReconcilerConsumesOnceAf
 	assertAgentTokenAbsent(t, restarted, run.ID, token)
 }
 
-// TestAgentAsyncToolRecovery_PendingCredentialMismatch_ReconcilerLeavesActionWaiting covers
-// the Tool-target half of the Pending credential check (06 §1.6, 05 §1.7): a stored early
-// callback whose credential hash is not the bound Tool Attempt's is found by the
-// Reconciler but refused inside the resume transaction, which rolls back -- the row stays
-// unconsumed, the Action stays WAITING_CALLBACK and no Event is written. The Provider's
-// own authenticated callback still resumes the Attempt afterwards.
+// TestAgentAsyncToolRecovery_PendingCredentialMismatch_ReconcilerLeavesActionWaiting
+// covers the Tool-target half of the Pending credential check: a stored early callback
+// whose credential hash is not the bound Tool Attempt's is found by the Reconciler but
+// refused inside the resume transaction, which rolls back -- the row stays unconsumed,
+// the Action stays WAITING_CALLBACK and no Event is written. The Provider's own
+// authenticated callback still resumes the Attempt afterwards.
 func TestAgentAsyncToolRecovery_PendingCredentialMismatch_ReconcilerLeavesActionWaiting(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome := agentAsyncForeignPending(t, "wf-agent-recover-mismatch", tool)
@@ -250,9 +251,10 @@ func TestAgentAsyncToolRecovery_PendingCredentialMismatch_ReconcilerLeavesAction
 	}
 }
 
-// TestAgentAsyncToolRecovery_PendingRetention_DeletedOnlyAfterExpiry covers 05 §1.7
-// retention for Tool targets: the Reconciler's TTL sweep keeps a Tool-target Pending row --
-// consumed or not -- while it is inside its TTL, and removes it once expires_at has passed.
+// TestAgentAsyncToolRecovery_PendingRetention_DeletedOnlyAfterExpiry covers Pending
+// Callback retention for Tool targets: the Reconciler's TTL sweep keeps a Tool-target
+// Pending row -- consumed or not -- while it is inside its TTL, and removes it once
+// expires_at has passed.
 func TestAgentAsyncToolRecovery_PendingRetention_DeletedOnlyAfterExpiry(t *testing.T) {
 	sweepAround := func(t *testing.T, h *agentHarness) {
 		t.Helper()
@@ -307,12 +309,12 @@ func TestAgentAsyncToolRecovery_PendingRetention_DeletedOnlyAfterExpiry(t *testi
 	})
 }
 
-// TestAgentAsyncToolRecovery_RestartWhileWaiting_NoReexecutionThenCallbackCompletes covers
-// 06 §4 ("Agent 异步 Tool 等待时重启: callback 恢复原 Tool Attempt"). A restarted Reconciler
-// pass over a WAITING_CALLBACK Tool Action finds no work: it neither re-executes the Action
-// nor creates an Attempt nor calls the model. The Provider's callback, carrying the token
-// the crashed process minted, then resumes that very Attempt and Action on the restarted
-// process, and reconciliation finishes the loop.
+// TestAgentAsyncToolRecovery_RestartWhileWaiting_NoReexecutionThenCallbackCompletes
+// covers a restart while an async Agent Tool waits: the callback resumes the original
+// Tool Attempt. A restarted Reconciler pass over a WAITING_CALLBACK Tool Action finds no
+// work: it neither re-executes the Action nor creates an Attempt nor calls the model. The
+// Provider's callback, carrying the token the crashed process minted, then resumes that
+// very Attempt and Action on the restarted process, and reconciliation finishes the loop.
 func TestAgentAsyncToolRecovery_RestartWhileWaiting_NoReexecutionThenCallbackCompletes(t *testing.T) {
 	tool := &agentAsyncTool{}
 	crashed, run, outcome, token := agentDispatchedAsync(t, "wf-agent-recover-restart", tool, nil)
@@ -369,8 +371,8 @@ func TestAgentAsyncToolRecovery_RestartWhileWaiting_NoReexecutionThenCallbackCom
 	assertAgentTokenAbsent(t, restarted, run.ID, token)
 }
 
-// TestAgentAsyncToolRecovery_RestartPastDeadline_ReconcilerTimesOutAgent covers 06 §1.7
-// and 06 §2.1 after a restart: the Agent deadline is a committed fact, so a restarted
+// TestAgentAsyncToolRecovery_RestartPastDeadline_ReconcilerTimesOutAgent covers the Agent
+// deadline after a restart: the Agent deadline is a committed fact, so a restarted
 // Reconciler that finds it passed ends the Agent as TIMEOUT through TimeoutAgentRun,
 // closing the DISPATCHED Attempt and the WAITING_CALLBACK Action; the late callback that
 // follows changes nothing.
@@ -424,11 +426,12 @@ func TestAgentAsyncToolRecovery_RestartPastDeadline_ReconcilerTimesOutAgent(t *t
 }
 
 // TestAgentAsyncToolRecovery_ReconcilerTimeoutDuringOnCallback_CallbackSuperseded covers
-// the 09 §3.3 row "异步 Tool callback 与 timeout 竞争" with the Reconciler as the timeout's
-// caller. The barrier is OnCallback: the callback's unlocked routing read has already seen
-// DISPATCHED, then a full Reconciler pass past the deadline commits the TIMEOUT before the
-// resume transaction takes the Run lock. The conditional updates make the timeout the
-// single winner: the callback is answered as a duplicate and writes nothing.
+// the race between an async Tool callback and the timeout, with the Reconciler as the
+// timeout's caller. The barrier is OnCallback: the callback's unlocked routing read has
+// already seen DISPATCHED, then a full Reconciler pass past the deadline commits the
+// TIMEOUT before the resume transaction takes the Run lock. The conditional updates make
+// the timeout the single winner: the callback is answered as a duplicate and writes
+// nothing.
 func TestAgentAsyncToolRecovery_ReconcilerTimeoutDuringOnCallback_CallbackSuperseded(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-recover-race-timeout-first", tool, nil)
@@ -472,15 +475,15 @@ func TestAgentAsyncToolRecovery_ReconcilerTimeoutDuringOnCallback_CallbackSupers
 }
 
 // TestAgentAsyncToolRecovery_CallbackCommitsBeforeReconcilerTimeout_ReconcilerWritesNothing
-// is the reverse order of the same race: the deadline has passed, but the callback's resume
-// transaction commits first and ends the Agent as TIMEOUT through its own deadline check,
-// keeping the Tool result. The Reconciler pass that follows finds no unterminated expired
-// Agent Run and writes nothing. This test orders the two sequentially; the interleaving in
-// which the timeout caller already listed the Agent Run as expired (a stale list) and only
-// calls TimeoutAgentRun after the callback committed is covered by
+// is the reverse order of the same race: the deadline has passed, but the callback's
+// resume transaction commits first and ends the Agent as TIMEOUT through its own deadline
+// check, keeping the Tool result. The Reconciler pass that follows finds no unterminated
+// expired Agent Run and writes nothing. This test orders the two sequentially; the
+// interleaving in which the timeout caller already listed the Agent Run as expired (a
+// stale list) and only calls TimeoutAgentRun after the callback committed is covered by
 // TestAgentAsyncToolCallback_CallbackAfterDeadlineBeforeTimeout_EndsAsTimeout, whose late
-// TimeoutAgentRun must find nothing to fail. Together they cover the 09 §3.3 row
-// "异步 Tool callback 与 timeout 竞争" in the callback-first direction.
+// TimeoutAgentRun must find nothing to fail. Together they cover the race between an
+// async Tool callback and the timeout in the callback-first direction.
 func TestAgentAsyncToolRecovery_CallbackCommitsBeforeReconcilerTimeout_ReconcilerWritesNothing(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-recover-race-callback-first", tool, nil)
@@ -517,9 +520,9 @@ func TestAgentAsyncToolRecovery_CallbackCommitsBeforeReconcilerTimeout_Reconcile
 }
 
 // TestAgentAsyncToolRecovery_CallbackAtMaxTurns_EndsAsMaxTurns covers the round bound at
-// resume time (06 §1.7): when the callback resolves the Tool Action of the Agent's last
-// allowed Turn, the resume transaction keeps the Tool result and ends the Agent as
-// MAX_TURNS instead of creating a Turn nobody may run.
+// resume time: when the callback resolves the Tool Action of the Agent's last allowed
+// Turn, the resume transaction keeps the Tool result and ends the Agent as MAX_TURNS
+// instead of creating a Turn nobody may run.
 func TestAgentAsyncToolRecovery_CallbackAtMaxTurns_EndsAsMaxTurns(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
 	h, run, outcome := newAgentAsyncHarnessMaxTurns(t, "wf-agent-recover-max-turns", tool, agentHarnessOptions{}, 1)

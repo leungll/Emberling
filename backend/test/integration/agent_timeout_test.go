@@ -1,15 +1,15 @@
 //go:build integration
 
-// Agent timeout tests: the single transaction of docs/06-execution-model.md §1.7 that an
-// expired Agent deadline commits, entered directly rather than through the Reconciler scan
-// that agent_reconcile_test.go covers.
+// Agent timeout tests: the single transaction that an expired Agent deadline commits,
+// entered directly rather than through the Reconciler scan that agent_reconcile_test.go
+// covers.
 //
 // What they prove is what a mock repository cannot (CLAUDE.md testing standard): a Tool
-// result that arrives after the timeout already committed changes nothing, a Tool call that
-// runs out of the deadline terminates TIMEOUT and never TOOL_ERROR, and when the timeout
-// transaction and the result transaction genuinely race, the conditional updates let
-// exactly one of them commit a complete outcome (docs/09-testing-and-acceptance.md §3.3:
-// "异步 Tool callback 与 timeout 竞争 | 条件更新只有一方成功，另一方不能改变终态").
+// result that arrives after the timeout already committed changes nothing, a Tool call
+// that runs out of the deadline terminates TIMEOUT and never TOOL_ERROR, and when the
+// timeout transaction and the result transaction genuinely race, the conditional updates
+// let exactly one of them commit a complete outcome, and the other cannot change the
+// terminal state.
 //
 // They share the agentHarness and the fixture Definition of agent_loop_test.go.
 package integration
@@ -91,11 +91,11 @@ func (p *agentPausedTool) Execute(ctx context.Context, action registry.ToolActio
 // A result that arrives after the timeout committed
 // ---------------------------------------------------------------------------
 
-// TestAgentTimeout_LateToolResultAfterTimeout_WritesNothing is the last sentence of
-// docs/06-execution-model.md:453: "之后到达的模型结果或 callback 不能改变终态." The
+// TestAgentTimeout_LateToolResultAfterTimeout_WritesNothing covers the rule that a model
+// result or callback arriving after the timeout cannot change the terminal state. The
 // timeout transaction commits while the Tool is still running; when the Tool then answers
-// successfully, its result transaction must find every conditional update already lost and
-// leave the committed terminal facts exactly as they are.
+// successfully, its result transaction must find every conditional update already lost
+// and leave the committed terminal facts exactly as they are.
 func TestAgentTimeout_LateToolResultAfterTimeout_WritesNothing(t *testing.T) {
 	paused := newAgentPausedTool()
 	h := newAgentHarness(t, agentHarnessOptions{LookupExecutor: paused})
@@ -134,7 +134,7 @@ func TestAgentTimeout_LateToolResultAfterTimeout_WritesNothing(t *testing.T) {
 
 	// The same expired Agent Run reached a second time -- the Reconciler scan racing the
 	// in-process deadline check -- must find the outcome already committed and write
-	// nothing more: the transaction that committed first owns it (invariant #7).
+	// nothing more: the transaction that committed first owns it.
 	if err := h.svc.TimeoutAgentRun(h.ctx, outcome.AgentRunID); err != nil {
 		t.Fatalf("second timeout of the same agent run: %v", err)
 	}
@@ -188,11 +188,11 @@ func TestAgentTimeout_LateToolResultAfterTimeout_WritesNothing(t *testing.T) {
 // A Tool call that runs past the deadline
 // ---------------------------------------------------------------------------
 
-// TestAgentTimeout_ToolExceedsDeadline_TerminatesTimeoutNotToolError covers
-// docs/09-testing-and-acceptance.md §3.3 "Agent deadline 在 Tool 执行或等待期间到期 |
-// timeout 用例取得完成权，termination 为 TIMEOUT；不得误记为 TOOL_ERROR". The Tool reports
-// an error, but it is the deadline's error, so recording it as the Tool's failure would
-// tell Trace the wrong story about why the Agent Run stopped.
+// TestAgentTimeout_ToolExceedsDeadline_TerminatesTimeoutNotToolError covers an Agent
+// deadline that expires while a Tool runs or waits: the timeout use case wins completion,
+// the termination is TIMEOUT and is never misrecorded as TOOL_ERROR. The Tool reports an
+// error, but it is the deadline's error, so recording it as the Tool's failure would tell
+// Trace the wrong story about why the Agent Run stopped.
 func TestAgentTimeout_ToolExceedsDeadline_TerminatesTimeoutNotToolError(t *testing.T) {
 	tool := &agentAbandoningTool{}
 	h := newAgentHarness(t, agentHarnessOptions{
@@ -265,7 +265,8 @@ func TestAgentTimeout_ToolExceedsDeadline_TerminatesTimeoutNotToolError(t *testi
 // Timeout racing the Tool result
 // ---------------------------------------------------------------------------
 
-// TestAgentTimeout_ConcurrentTimeoutAndResult_OnlyOneWins is invariant #7 for the Agent
+// TestAgentTimeout_ConcurrentTimeoutAndResult_OnlyOneWins is the
+// single-winner conditional-update rule for the Agent
 // deadline: the timeout transaction and the successful Tool result transaction are
 // released together by an explicit barrier and both try to close the same Action out. Only
 // one may commit, and whichever one does must leave a complete, internally consistent

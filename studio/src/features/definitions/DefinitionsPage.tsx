@@ -15,7 +15,7 @@ type LoadState =
   | { kind: 'error'; code: string; message: string };
 
 /**
- * Dark left sidebar chrome for the light Definitions surface (04 §1.1, §4). The mock's "WORKSPACE / Documentation" entry is omitted: no
+ * Dark left sidebar chrome for the light Definitions surface. The mock's "WORKSPACE / Documentation" entry is omitted: no
  * Documentation page exists in the MVP, and this slice does not add one.
  */
 function Sidebar() {
@@ -147,10 +147,10 @@ export function DefinitionsPage() {
         onClose={() => setNewDialogOpen(false)}
         onCreate={(name, description) => {
           setNewDialogOpen(false);
-          // 08 §1: MVP defines no DRAFT/PUBLISHED state; the client may hold unsaved edit
+          // MVP defines no DRAFT/PUBLISHED state; the client may hold unsaved edit
           // content that is not a server-side Definition version. The name and description
           // travel as client-only router state until the first Save creates version 1
-          // (04 §2.6). Unlike a mock-only dialog that would POST immediately, this keeps
+          // Unlike a mock-only dialog that would POST immediately, this keeps
           // master's existing deferred-creation contract: no Definition exists yet, so
           // nothing here calls the Backend.
           navigate('/studio/new', { state: { name, description } });
@@ -167,7 +167,7 @@ interface NewDefinitionDialogProps {
 }
 
 /**
- * Collects the identity of a new Definition before Studio opens it (04 §1.1). Nothing is
+ * Collects the identity of a new Definition before Studio opens it. Nothing is
  * persisted here: the first Save is what calls `POST /definitions` and creates version 1,
  * so an empty graph is never sent to a Backend that would reject it for having no Output
  * Node.

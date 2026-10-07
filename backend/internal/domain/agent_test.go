@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The Decision envelope rules come from 05 §1.8 "Decision 与 Action：模型决定和待执行工作":
+// The Decision envelope rules (the model's decision versus the work it leaves to execute):
 // a TOOL_CALL carries a Tool Name and arguments and no output, a FINAL carries an output
 // and no Tool call. The database CHECK constraint on agent_decisions enforces the same
 // shape; Validate lets the Runtime reject a malformed Decision as INVALID_ACTION before
@@ -96,8 +96,8 @@ func TestAgentDecision_Validate_FinalWithToolCall_Rejected(t *testing.T) {
 	}
 }
 
-// Only FINAL_RESPONSE ends an Agent Run successfully (05 §1.8: "只有 `FINAL_RESPONSE`
-// 表示成功"); every other termination fails the Agent NodeRun.
+// Only FINAL_RESPONSE ends an Agent Run successfully; every other termination fails the
+// Agent NodeRun.
 func TestAgentTermination_IsSuccess_OnlyFinalResponse(t *testing.T) {
 	if !TerminationFinalResponse.IsSuccess() {
 		t.Error("FINAL_RESPONSE.IsSuccess() = false, want true")

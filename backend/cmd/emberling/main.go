@@ -1,5 +1,5 @@
 // Command emberling runs the Backend process: API, Runtime and Reconciler live in one
-// process for the MVP (10-ops §1). This entry point owns configuration loading, the
+// process for the MVP. This entry point owns configuration loading, the
 // startup gate and shutdown; it is the only place allowed to depend on every layer.
 package main
 
@@ -53,7 +53,7 @@ const defaultWorkerCount = 4
 const defaultShutdownTimeout = 10 * time.Second
 
 // defaultTaskDispatchTimeout bounds the mocktask Adapter's HTTP client: the single external
-// call an async Node's Execute makes before returning NodeResultDispatched (07 §1.3), never
+// call an async Node's Execute makes before returning NodeResultDispatched, never
 // the callback delivery itself.
 const defaultTaskDispatchTimeout = 10 * time.Second
 
@@ -259,7 +259,7 @@ func run(logger *slog.Logger) error {
 		}
 	}
 
-	// Shutdown order (fixed, matches the M1 API track's brief): stop accepting new
+	// Shutdown order (fixed): stop accepting new
 	// requests first, then cancel the Reconciler, then stop the work Pool, and only then
 	// let the deferred pool.Close() tear down the database pool. Post-COMMIT work that
 	// never ran is recovered by the Reconciler on the next process's own startup gate.

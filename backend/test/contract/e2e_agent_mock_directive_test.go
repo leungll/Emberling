@@ -1,12 +1,13 @@
 //go:build integration
 
-// This file is the M5 slice 5.3b acceptance: the deterministic Mock Model Provider must be
-// able to emit an Agent TOOL_CALL Decision with non-empty arguments when driven only
-// through cmd/emberling's public HTTP surface (a Run's input), not through the in-process
-// mockmodel.Provider.Script hook every other Agent-async contract test in this package
-// uses. That hook is a Go closure held by the test binary; Studio and Playwright can never
-// reach it, so the "Agent with asynchronous Tool" scenario (docs/09-testing-and-acceptance.md
-// §1 DoD row 8) was unreachable from Studio before this directive extension existed.
+// This file is the Mock Model tool-call directive acceptance: the deterministic Mock
+// Model Provider must be able to emit an Agent TOOL_CALL Decision with non-empty
+// arguments when driven only through cmd/emberling's public HTTP surface (a Run's input),
+// not through the in-process mockmodel.Provider.Script hook every other Agent-async
+// contract test in this package uses. That hook is a Go closure held by the test binary;
+// Studio and Playwright can never reach it, so the "Agent with asynchronous Tool"
+// acceptance scenario was unreachable from Studio before this directive extension
+// existed.
 //
 // remote_lookup (internal/tools/remotelookup) requires a non-empty "key" argument
 // (InputSchema minLength 1), so a TOOL_CALL with empty arguments fails

@@ -11,7 +11,7 @@ import type {
 type BadgeVariant = NonNullable<BadgeProps['variant']>;
 
 /**
- * The five status colours of 04 §4 (neutral, blue running, amber waiting, green succeeded,
+ * The five shared status colours (neutral, blue running, amber waiting, green succeeded,
  * red failed). A tone is a display class for a status the Backend reported; it is also a
  * valid Badge variant, so pills, dots and glyphs share one lookup.
  */

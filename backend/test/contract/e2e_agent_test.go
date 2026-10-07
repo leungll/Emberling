@@ -1,16 +1,16 @@
 //go:build integration
 
-// Agent Loop acceptance at the HTTP level (docs/09-testing-and-acceptance.md §1, items 6
-// and 7): one Run of the agent_lookup fixture drives a TOOL_CALL round and a FINAL round
-// through the real work Pool, and two restart scenarios prove that what a stopped process
-// left committed is carried on by a second Backend's Reconciler alone.
+// Agent Loop acceptance at the HTTP level (the two-round loop and restart recovery): one
+// Run of the agent_lookup fixture drives a TOOL_CALL round and a FINAL round through the
+// real work Pool, and two restart scenarios prove that what a stopped process left
+// committed is carried on by a second Backend's Reconciler alone.
 //
 // Everything is observed through the public HTTP surface -- the Snapshot, the Agent Trace
 // projection and an SSE replay from seq 0 -- never by calling a service method or reading
 // a row. The recovery boundary itself is produced by an injected hook rather than a sleep:
 // a service.EventNotifier cancels the work Pool's context at the first commit whose
 // persisted facts satisfy the scenario's predicate, which is exactly the crash-after-COMMIT
-// shape invariant #6 makes recoverable.
+// shape the persisted-work recovery rule makes recoverable.
 package contract
 
 import (
@@ -174,7 +174,7 @@ func agentTurnsOfRun(ctx context.Context, tx store.Tx, runID string) (domain.Age
 	return agentRun, turns, true, nil
 }
 
-// stopAtReadyTurn is the docs/09 §3.3 boundary "Tool result and the next READY Turn are
+// stopAtReadyTurn is the crash boundary "Tool result and the next READY Turn are
 // committed, then the process dies": the named Turn exists, is READY, and the in-process
 // chain that would have claimed it never runs.
 func stopAtReadyTurn(turnNo int) func(context.Context, store.Tx, string) (bool, error) {
@@ -282,7 +282,7 @@ func streamedTypes(events []streamedEvent) []string {
 }
 
 // assertAscendingSeq fails when the replay was not delivered in strictly ascending seq
-// order starting at 1 -- the ordering contract of docs/08-interface-spec.md §5.
+// order starting at 1 -- the SSE ordering contract.
 func assertAscendingSeq(t *testing.T, events []streamedEvent) {
 	t.Helper()
 	for i, ev := range events {
@@ -376,13 +376,13 @@ func turnStatuses(t *testing.T, body []byte) map[float64]string {
 }
 
 // ---------------------------------------------------------------------------------------
-// 1. The two-round Agent Loop, end to end (09 §1 item 6)
+// 1. The two-round Agent Loop, end to end
 // ---------------------------------------------------------------------------------------
 
 // TestE2E_AgentTwoRoundLoop_RunCompletesWithAgentEvents is the HTTP-level acceptance of the
 // Agent Loop: one Run whose Agent decides a TOOL_CALL, executes the lookup Tool, decides
 // FINAL on the next Turn and completes the Run, with the Agent Event vocabulary of
-// docs/05-data-model.md §2.3 delivered over SSE in seq order, and the Agent's answer
+// the data model delivered over SSE in seq order, and the Agent's answer
 // carried to the downstream text_output NodeRun.
 func TestE2E_AgentTwoRoundLoop_RunCompletesWithAgentEvents(t *testing.T) {
 	env := newTestEnv(t)
@@ -463,7 +463,7 @@ func TestE2E_AgentTwoRoundLoop_RunCompletesWithAgentEvents(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------------------
-// 2. Restart after the Tool round: the Reconciler finishes the second Turn (09 §1 item 7)
+// 2. Restart after the Tool round: the Reconciler finishes the second Turn
 // ---------------------------------------------------------------------------------------
 
 // TestE2E_AgentRestartAfterToolRound_ReconcilerFinishesSecondTurn stops the first Backend
@@ -557,7 +557,7 @@ func TestE2E_AgentRestartAfterToolRound_ReconcilerFinishesSecondTurn(t *testing.
 }
 
 // ---------------------------------------------------------------------------------------
-// 3. Restart after a committed Decision: the original Action is executed (09 §1 item 7)
+// 3. Restart after a committed Decision: the original Action is executed
 // ---------------------------------------------------------------------------------------
 
 // TestE2E_AgentRestartAfterDecision_OriginalActionExecutedNoSecondDecision stops the first

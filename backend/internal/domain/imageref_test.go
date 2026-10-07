@@ -60,7 +60,7 @@ func TestImageRef_Validate_RejectsInvalidSource(t *testing.T) {
 	}
 }
 
-// TestImageRef_Validate_RejectsMixedBranches pins 08 §2.2's "三个分支互斥": a member that
+// TestImageRef_Validate_RejectsMixedBranches pins that the three branches are mutually exclusive: a member that
 // belongs to another branch may not travel with the declared one.
 func TestImageRef_Validate_RejectsMixedBranches(t *testing.T) {
 	assetWithURI := assetImageRef()
@@ -163,7 +163,7 @@ func TestImageRef_Validate_RejectsInvalidExternalFields(t *testing.T) {
 
 // TestParseImageRef_RejectsLegacyProviderShape is the regression this type exists for: the
 // pre-ImageRef `{"url":...}` object a Provider used to publish verbatim is not an ImageRef
-// and must not reach an `image` port (08 §2.2).
+// and must not reach an `image` port.
 func TestParseImageRef_RejectsLegacyProviderShape(t *testing.T) {
 	legacy := `{"url":"https://provider.example/images/result.png","mediaType":"image/png","width":1024}`
 	if _, err := ParseImageRef(json.RawMessage(legacy)); err == nil {

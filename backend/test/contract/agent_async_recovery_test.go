@@ -44,14 +44,15 @@ func stopAtWaitingActionOfTurn(turnNo int) func(context.Context, store.Tx, strin
 	}
 }
 
-// TestAPI_AgentAsyncToolCallback_EarlyThenRestart_Returns202AndReconcilerCompletesLoop covers
-// 08 §4 and 06 §2.1 for a Tool Attempt target through the real Mock Provider. The Provider's
-// callback arrives while the dispatch response is still held, so no Callback Binding exists
-// yet: it is answered 202 {accepted:true, pending:true, duplicate:false} and stored. The
-// process then dies right after the dispatch commit, before the in-process replay. A
-// restarted Backend's Reconciler rediscovers the stored delivery through the Tool Attempt's
-// Binding, replays it exactly once, and the Agent Loop completes. Neither the Agent Trace
-// nor any Event carries the callback token or its hash (08 §3.4).
+// TestAPI_AgentAsyncToolCallback_EarlyThenRestart_Returns202AndReconcilerCompletesLoop
+// covers early-callback handling and post-COMMIT resume for a Tool Attempt target through
+// the real Mock Provider. The Provider's callback arrives while the dispatch response is
+// still held, so no Callback Binding exists yet: it is answered 202 {accepted:true,
+// pending:true, duplicate:false} and stored. The process then dies right after the
+// dispatch commit, before the in-process replay. A restarted Backend's Reconciler
+// rediscovers the stored delivery through the Tool Attempt's Binding, replays it exactly
+// once, and the Agent Loop completes. Neither the Agent Trace nor any Event carries the
+// callback token or its hash.
 func TestAPI_AgentAsyncToolCallback_EarlyThenRestart_Returns202AndReconcilerCompletesLoop(t *testing.T) {
 	fixture := newProviderFixture(t)
 	stopper := newAgentLoopStopper()

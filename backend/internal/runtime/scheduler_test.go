@@ -47,7 +47,7 @@ func TestScheduler_NextReady_OnlyWhenAllUpstreamSucceeded(t *testing.T) {
 
 // TestScheduler_NextReady_NeverDuplicatesExistingNodeRun asserts NextReady never proposes
 // a node id already present in existing, matching the (run_id, node_id) uniqueness
-// invariant (docs/06-execution-model.md §1.3).
+// invariant.
 func TestScheduler_NextReady_NeverDuplicatesExistingNodeRun(t *testing.T) {
 	plan := compilePlan(t, "document_processing.json")
 
@@ -67,7 +67,7 @@ func TestScheduler_NextReady_NeverDuplicatesExistingNodeRun(t *testing.T) {
 // TestScheduler_NextReady_NothingAfterFailure asserts the Run-wide stop rule: once ANY
 // NodeRun in the Run is FAILED, NextReady returns nothing at all, even for a node in a
 // completely different branch whose own upstream dependencies are all satisfied. FAILED
-// is terminal (docs/06-execution-model.md §1.5) and MVP has no cancellation, so a Run
+// is terminal and MVP has no cancellation, so a Run
 // that already contains a FAILED NodeRun can never reach COMPLETED; scheduling more work
 // on an unrelated branch (node_caption, downstream only of node_rewrite/node_brief) would
 // be dead work with no recovery path. This uses aigc_media.json: node_image has FAILED
@@ -95,8 +95,8 @@ func TestScheduler_NextReady_NothingAfterFailure(t *testing.T) {
 // of node_rewrite (node_image and node_caption). With node_image WAITING_CALLBACK (an
 // async dispatch in flight) and every other upstream of node_caption SUCCEEDED,
 // node_caption must be ready even though node_image is not -- an unrelated branch does
-// not block scheduling (docs/06-execution-model.md §1.3 permits multiple concurrent
-// READY/WAITING_CALLBACK NodeRuns).
+// not block scheduling (multiple concurrent READY/WAITING_CALLBACK NodeRuns are
+// permitted).
 func TestScheduler_AIGCBranch_CaptionReadyWhileImageWaiting(t *testing.T) {
 	plan := compilePlan(t, "aigc_media.json")
 
@@ -117,7 +117,7 @@ func TestScheduler_AIGCBranch_CaptionReadyWhileImageWaiting(t *testing.T) {
 
 // TestScheduler_SelectNext_RefusesSecondRunningSlot asserts SelectNextToExecute refuses
 // to pick anything while existing already holds a RUNNING NodeRun, since MVP calls only
-// one Node Executor per Run at a time (docs/11-decisions.md §9).
+// one Node Executor per Run at a time.
 func TestScheduler_SelectNext_RefusesSecondRunningSlot(t *testing.T) {
 	plan := compilePlan(t, "aigc_media.json")
 
@@ -135,8 +135,7 @@ func TestScheduler_SelectNext_RefusesSecondRunningSlot(t *testing.T) {
 // TestScheduler_SelectNext_RefusesAfterFailure asserts the Run-wide stop rule: once ANY
 // NodeRun in the Run is FAILED, SelectNextToExecute refuses to claim anything at all --
 // including a node that already reached READY before the failure landed, in an unrelated
-// branch. FAILED is terminal and MVP has no cancellation (docs/06-execution-model.md
-// §1.5), so dispatching already-READY work after a failure would still be dead work with
+// branch. FAILED is terminal and MVP has no cancellation, so dispatching already-READY work after a failure would still be dead work with
 // no recovery path.
 func TestScheduler_SelectNext_RefusesAfterFailure(t *testing.T) {
 	plan := compilePlan(t, "aigc_media.json")

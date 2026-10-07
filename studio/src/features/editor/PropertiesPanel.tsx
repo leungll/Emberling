@@ -49,7 +49,7 @@ export function PropertiesPanel({
           </p>
         ) : (
           <div className="space-y-4">
-            {/* Title row (04 §2.6): the node's name with its registered Node Type as a pill,
+            {/* Title row: the node's name with its registered Node Type as a pill,
                 tinted like the selected card (Agent purple, everything else amber). The name
                 wraps rather than truncating so it is always fully readable beside the pill. */}
             <div className="flex items-start justify-between gap-3">

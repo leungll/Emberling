@@ -1,5 +1,5 @@
 // Package mockmodel is a deterministic, in-process registry.ModelProvider used as a
-// recovery and failure test fixture (09 §4.4). It registers `text-model-v1` and
+// recovery and failure test fixture. It registers `text-model-v1` and
 // `image-model-v1`, and never calls a live third-party endpoint; every scenario is
 // driven by explicit, injected data rather than randomness or wall-clock delay.
 package mockmodel
@@ -43,7 +43,7 @@ const mockDirectivePrefix = "mock:"
 // registry contracts, not on runtime).
 const roleTool = "tool"
 
-// configSchema is the sole contract for this model's parameters (07 §1.4): one optional
+// configSchema is the sole contract for this model's parameters: one optional
 // temperature bounded to [0, 2] with a documented default.
 const configSchema = `{
   "type": "object",
@@ -60,14 +60,13 @@ const (
 	// ScenarioFinal returns a FINAL Decision. It is the default when no directive or
 	// Script overrides it.
 	ScenarioFinal ScenarioKind = "final"
-	// ScenarioFail simulates a Provider response that cannot be normalised at all (07
-	// §1.4: MODEL_ERROR path). Generate returns a non-nil error and no ModelResponse.
+	// ScenarioFail simulates a Provider response that cannot be normalised at all (the
+	// MODEL_ERROR path). Generate returns a non-nil error and no ModelResponse.
 	ScenarioFail ScenarioKind = "fail"
-	// ScenarioToolCall returns a TOOL_CALL Decision, reserved for the M3 Agent Loop
-	// track.
+	// ScenarioToolCall returns a TOOL_CALL Decision for the Agent Loop.
 	ScenarioToolCall ScenarioKind = "tool-call"
 	// ScenarioInvalidDecision returns a Decision whose envelope is normalised but
-	// structurally invalid (07 §1.4: INVALID_ACTION path) - here, a TOOL_CALL missing
+	// structurally invalid (the INVALID_ACTION path) - here, a TOOL_CALL missing
 	// its required tool name and arguments.
 	ScenarioInvalidDecision ScenarioKind = "invalid-decision"
 )
@@ -86,8 +85,8 @@ type Scenario struct {
 	// derived: the Agent Loop's State transition is a Runtime decision, and this Provider
 	// only has to be able to return a Decision that carries one.
 	StatePatch json.RawMessage
-	// OmitTokenUsage reproduces a Provider that reports no Token usage at all. 09 §3.3
-	// requires the normalised result to be nil in that case rather than a zeroed
+	// OmitTokenUsage reproduces a Provider that reports no Token usage at all. The
+	// normalised result must be nil in that case rather than a zeroed
 	// domain.TokenUsage, since "the Provider reported 0 tokens" and "the Provider
 	// reported nothing" are different persisted facts.
 	OmitTokenUsage bool
@@ -156,9 +155,10 @@ func (p *Provider) Generate(ctx context.Context, request registry.ModelRequest) 
 	if err != nil {
 		// A malformed "mock:" directive is a test-authoring error, not a Provider
 		// response to normalise: it must surface as an explicit failure rather than
-		// silently falling back to ScenarioFinal or an empty TOOL_CALL (07 §1.4's
-		// MODEL_ERROR path covers "the Provider response could not be normalised";
-		// an unparsable directive is the same kind of fact for this fixture).
+		// silently falling back to ScenarioFinal or an empty TOOL_CALL (the Adapter
+		// contract's MODEL_ERROR path covers "the Provider response could not be
+		// normalised"; an unparsable directive is the same kind of fact for this
+		// fixture).
 		return registry.ModelResponse{}, fmt.Errorf("mockmodel: %w", err)
 	}
 
@@ -182,8 +182,8 @@ func (p *Provider) Generate(ctx context.Context, request registry.ModelRequest) 
 		return p.finish(scenario, decision, promptText, ""), nil
 
 	case ScenarioInvalidDecision:
-		// Kind is a recognised value, but TOOL_CALL requires ToolName and Arguments (07
-		// §1.4); leaving both empty makes the envelope fail the Runtime's basic shape
+		// Kind is a recognised value, but TOOL_CALL requires ToolName and Arguments;
+		// leaving both empty makes the envelope fail the Runtime's basic shape
 		// check without this Adapter failing outright.
 		decision := registry.ModelDecision{Kind: registry.DecisionToolCall}
 		return p.finish(scenario, decision, promptText, ""), nil
@@ -265,7 +265,7 @@ func (p *Provider) resolveScenario(request registry.ModelRequest) (Scenario, err
 // resolveToolCallDirective parses "<name>" or "<name>:<json-arguments>" (mockDirectivePrefix's
 // doc comment) into a ScenarioToolCall, or reports the directive as malformed.
 //
-// The Agent Loop's persisted safe points (06 §1.7) mean the same Context Version 0 "user"
+// The Agent Loop's persisted safe points mean the same Context Version 0 "user"
 // message -- this directive's own text -- is still the last "user" role message on Turn 2:
 // the Tool result is appended as a "tool" role message, not a rewritten "user" one. Without
 // a check here, this Provider would read the identical directive again on Turn 2 and issue
@@ -288,7 +288,7 @@ func (p *Provider) resolveToolCallDirective(request registry.ModelRequest, arg s
 		// runtime.ParseModelDecision's own boundary: this Adapter does not know the
 		// named Tool's InputSchema, so a value that is valid JSON but the wrong shape
 		// (e.g. an array) is left for ValidateToolCall to reject when the Action
-		// executes (docs/07-extensibility.md §1.4).
+		// executes.
 		if !json.Valid([]byte(trimmed)) {
 			return Scenario{}, fmt.Errorf("mock:tool-call:%s directive arguments are not valid JSON: %q", name, argumentsJSON)
 		}
@@ -337,7 +337,7 @@ func lastUserMessageText(request registry.ModelRequest) string {
 }
 
 // record appends request to the bounded recording, dropping the oldest entry once the
-// cap is reached. It never logs request content (10 §2); recording exists only for
+// cap is reached. It never logs request content; recording exists only for
 // in-process test assertions that hold this Provider directly.
 func (p *Provider) record(request registry.ModelRequest) {
 	p.mu.Lock()

@@ -4,8 +4,8 @@
 // PostgreSQL database and the real production Node Type / Model registrations
 // (cmd/emberling's own assembly), through httptest.Server. Unlike the internal/service
 // integration tests, these tests never call a service method directly: every assertion
-// goes through the HTTP contract docs/08-interface-spec.md defines, so a regression in
-// request/response mapping (not just in the service layer underneath it) fails here.
+// goes through the HTTP contract, so a regression in request/response mapping (not just
+// in the service layer underneath it) fails here.
 package contract
 
 import (
@@ -72,7 +72,7 @@ type testEnv struct {
 	provider *mockmodel.Provider
 
 	// dispatcher is the same *fakeAsyncDispatcher instance bound to testAsyncNodeType, for
-	// tests exercising POST /api/callbacks (deliverable D). It exists in every testEnv
+	// tests exercising POST /api/callbacks. It exists in every testEnv
 	// (registration is unconditional, same as provider), but only a test that creates a
 	// Run against asyncEchoDefinitionRequest ever calls into it.
 	dispatcher *fakeAsyncDispatcher
@@ -138,7 +138,7 @@ type testEnvOptions struct {
 
 	// Pool, when set, is used instead of provisioning a fresh database. It is what makes
 	// a restart test possible: the second Backend is a new process image over the same
-	// PostgreSQL facts, which is the only recovery source invariant #6 allows.
+	// PostgreSQL facts, which is the only recovery source the Runtime allows.
 	Pool *pgxpool.Pool
 
 	// MockTaskBaseURL overrides the Mock Provider origin the image_generation Node's
@@ -406,7 +406,7 @@ type noopObserver struct{}
 func (noopObserver) StepPassed(readiness.Step, bool)  {}
 func (noopObserver) StepFailed(readiness.Step, error) {}
 
-// ---- a test-only ASYNC Node Type, for the M2 callback contract (deliverable D) ----
+// ---- a test-only ASYNC Node Type, for the async Node callback contract ----
 //
 // The real image_generation Node (internal/nodes/imagegeneration) is registered above (and
 // media_output alongside it, so a Text->Image->Media Output graph validates through
@@ -479,8 +479,8 @@ func (d *fakeAsyncDispatcher) last() testAsyncDispatch {
 }
 
 // testAsyncCallbackPayload is the callback body testAsyncExecutor.OnCallback interprets,
-// mirroring internal/nodes/imagegeneration's own status/error discriminated shape (06
-// §1.6): "SUCCEEDED" republishes Output on the node's `out` port, "FAILED" fails the
+// mirroring internal/nodes/imagegeneration's own status/error discriminated shape:
+// "SUCCEEDED" republishes Output on the node's `out` port, "FAILED" fails the
 // Attempt through a *registry.ProviderFailure, and anything else is a payload this
 // Executor cannot interpret.
 type testAsyncCallbackPayload struct {
@@ -500,7 +500,7 @@ type testAsyncExecutor struct {
 func (testAsyncExecutor) ValidateSemantics(context.Context, map[string]any) error { return nil }
 
 // Execute dispatches through dispatcher and returns DISPATCHED; it never returns a
-// COMPLETED result, matching the real async Node contract (07 §1.3).
+// COMPLETED result, matching the real async Node contract.
 func (e testAsyncExecutor) Execute(ctx context.Context, input registry.NodeInput, _ map[string]any) (registry.NodeResult, error) {
 	if input.Callback == nil {
 		return registry.NodeResult{}, fmt.Errorf("test_async_echo: asynchronous dispatch requires a callback context")
@@ -582,7 +582,7 @@ func asyncEchoDefinitionRequest() map[string]any {
 // aigcMediaGraphRequest builds the compilable Definition graph
 // text_input -> prompt_template -> image_generation (prompt) -> media_output.image, plus
 // prompt_template -> text_generation -> media_output.caption: the AIGC scenario's shape
-// (01-scenarios.md, test/fixtures/definitions/aigc_media.json) minus its Reference Image
+// (test/fixtures/definitions/aigc_media.json) minus its Reference Image
 // edge, so that image_generation's optional `reference` input port
 // (internal/nodes/imagegeneration/node.go) is proven to validate while unwired. The Run
 // that does supply one is TestE2E_AIGC_ReferenceImage_... in e2e_async_test.go.
@@ -882,8 +882,8 @@ func (e *testEnv) openSSE(t *testing.T, runID string, afterSeq int64, lastEventI
 
 // openSSERaw is openSSE with the query string passed through verbatim, for tests that
 // need to assert on a specific combination of query parameters (e.g. an afterSeq present
-// alongside Last-Event-ID, to prove the header wins per docs/08-interface-spec.md line
-// 521) rather than the single afterSeq openSSE itself supports.
+// alongside Last-Event-ID, to prove the header takes precedence) rather than the single
+// afterSeq openSSE itself supports.
 func (e *testEnv) openSSERaw(t *testing.T, runID string, rawQuery string, lastEventID string) (*http.Response, *bufio.Reader) {
 	t.Helper()
 	path := fmt.Sprintf("/api/runs/%s/events", runID)

@@ -655,7 +655,7 @@ func (h *cbHarness) eventOfType(typ domain.EventType) (domain.Event, bool) {
 // ---------------------------------------------------------------------------
 
 // TestNodeResume_ProviderPollCompletion_OmitsNodeCallbackReceivedAndSetsProviderPollSource
-// proves 06 §1.6 step 4 / 09 §3.2: only a callback that wins the completion right writes
+// proves that only a callback that wins the completion right writes
 // NODE_CALLBACK_RECEIVED, and a Provider Poll completion records completionSource
 // PROVIDER_POLL on the completion Event instead.
 func TestNodeResume_ProviderPollCompletion_OmitsNodeCallbackReceivedAndSetsProviderPollSource(t *testing.T) {
@@ -696,8 +696,8 @@ func TestNodeResume_ProviderPollCompletion_OmitsNodeCallbackReceivedAndSetsProvi
 	}
 }
 
-// TestNodeResume_InvalidPayload_LeavesNodeRunWaiting proves 06 §1.6 step 1: "解析失败不能
-// 改变等待状态". A plain OnCallback error is not a Provider failure, so nothing is written
+// TestNodeResume_InvalidPayload_LeavesNodeRunWaiting proves that a payload that fails
+// to parse cannot change the waiting state. A plain OnCallback error is not a Provider failure, so nothing is written
 // and the caller gets a typed error it can still answer 200 to.
 func TestNodeResume_InvalidPayload_LeavesNodeRunWaiting(t *testing.T) {
 	h := newCbHarness(t, domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown})
@@ -731,7 +731,7 @@ func TestNodeResume_InvalidPayload_LeavesNodeRunWaiting(t *testing.T) {
 }
 
 // TestNodeResume_ProviderFailureCallback_FailsAttemptWithCallbackSource proves the other
-// half of 06 §1.6: a ProviderFailure is a definite failure of the external task, so the
+// half of callback resume: a ProviderFailure is a definite failure of the external task, so the
 // DISPATCHED Attempt and the WAITING_CALLBACK NodeRun both fail, with failureSource
 // CALLBACK rather than SYNC_EXECUTION or TIMEOUT.
 func TestNodeResume_ProviderFailureCallback_FailsAttemptWithCallbackSource(t *testing.T) {
@@ -772,8 +772,8 @@ func TestNodeResume_ProviderFailureCallback_FailsAttemptWithCallbackSource(t *te
 }
 
 // TestNodeResume_PendingCallbackWithForeignTokenHash_RollsBackAndConsumesNothing proves
-// docs/06-execution-model.md §3 ("无法匹配的 Pending Callback 不具有推进权") and
-// docs/05-data-model.md §1.7's Attempt-scoped token: a stored early callback whose
+// that an unmatched Pending Callback has no right to advance Execution and that the
+// callback token is Attempt-scoped: a stored early callback whose
 // credential hash belongs to a different Attempt than the one dispatched must not
 // complete this Attempt merely because both happen to share an external task id.
 // ConsumeOnce still conditionally claims the row inside the transaction, but the whole
@@ -879,7 +879,7 @@ func TestCallbackToken_TamperedSignatureOrExpired_IsRejectedWithoutPersisting(t 
 	// An Attempt with no deadline has no expiry to derive one from, and inventing one would
 	// silently kill a long-running Provider task. The Attempt's own DISPATCHED status is the
 	// lifetime: the Binding target check and the from-DISPATCHED conditional update reject
-	// anything late (06 §1.6).
+	// anything late.
 	endless, err := issueCallbackToken(secret, cbAttemptID, time.Time{})
 	if err != nil {
 		t.Fatalf("issue a token for an Attempt with no deadline: %v", err)

@@ -13,8 +13,8 @@ import (
 )
 
 // AssetContentStore is the Asset binary storage port. internal/asset implements it over a
-// local persistent volume; this package only needs the three operations the upload order
-// in 10-ops §3 requires.
+// local persistent volume; this package only needs the three operations the fixed upload
+// order requires.
 type AssetContentStore interface {
 	// Write streams content into storage and reports the size and digest of the bytes
 	// that landed, together with the internal storage key they landed under.
@@ -27,8 +27,8 @@ type AssetContentStore interface {
 	Remove(storageKey string) error
 }
 
-// AssetService owns the Asset use cases: upload, Metadata read and controlled download
-// (08 §3.2). An Asset is not Execution State — it belongs to no Run and produces no Event
+// AssetService owns the Asset use cases: upload, Metadata read and controlled download.
+// An Asset is not Execution State — it belongs to no Run and produces no Event
 // — so this service takes no Run aggregate lock and appends nothing to an Event log.
 type AssetService struct {
 	deps Deps
@@ -39,7 +39,7 @@ func NewAssetService(deps Deps) *AssetService {
 	return &AssetService{deps: deps.withDefaults()}
 }
 
-// Upload performs the fixed order 10-ops §3 defines: stream the content into immutable
+// Upload performs the fixed upload order: stream the content into immutable
 // storage while measuring it, verify what landed, commit the Metadata, and only then
 // return an AssetRef. A caller therefore never receives a reference to an Asset that
 // PostgreSQL does not know about, or whose binary is incomplete.
@@ -50,7 +50,7 @@ func NewAssetService(deps Deps) *AssetService {
 //
 // When the Metadata transaction fails, the unreferenced binary is removed on a best-effort
 // basis. A failure to remove it is logged and not returned: the caller's upload failed
-// either way, and 10-ops §3 leaves an unreferenced binary to cleanup, never to a
+// either way, and the upload order leaves an unreferenced binary to cleanup, never to a
 // half-committed Asset.
 func (s *AssetService) Upload(ctx context.Context, mediaType string, r io.Reader, declaredSize int64) (domain.AssetRef, error) {
 	if !domain.IsSupportedAssetMediaType(mediaType) {
@@ -144,7 +144,7 @@ func (s *AssetService) verifyStored(a domain.Asset, declaredSize int64) error {
 }
 
 // removeOrphan deletes a binary whose Asset never became a fact. The storage key is never
-// logged: it is a system Secret (10-ops §4), and the asset id is enough to investigate.
+// logged: it is a system Secret, and the asset id is enough to investigate.
 func (s *AssetService) removeOrphan(assetID, storageKey string) {
 	if err := s.deps.Assets.Remove(storageKey); err != nil && !errors.Is(err, domain.ErrNotFound) {
 		s.deps.Logger.Warn("service assets: unreferenced asset content left on storage",

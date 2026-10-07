@@ -113,7 +113,7 @@ describe('topologicalNodeOrder', () => {
 });
 
 describe('WorkflowStepper', () => {
-  it('maps each server NodeRun status to its 04 §4 glyph and helper line', () => {
+  it('maps each server NodeRun status to its glyph and helper line', () => {
     renderStepper();
 
     const glyph = (nodeId: string) => within(step(nodeId)).getByTestId('stepper-glyph');

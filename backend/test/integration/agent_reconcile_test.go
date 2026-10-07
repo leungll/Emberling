@@ -1,17 +1,16 @@
 //go:build integration
 
-// Agent reconciliation tests: the three Agent rows of the Reconciler scan table of
-// docs/06-execution-model.md §2.1, proved against real committed PostgreSQL facts rather
-// than a mock repository (CLAUDE.md testing standard).
+// Agent reconciliation tests: the three Agent rows of the Reconciler scan table, proved
+// against real committed PostgreSQL facts rather than a mock repository (CLAUDE.md
+// testing standard).
 //
 // Every test here stops the in-process Agent Loop at one committed boundary, restarts the
 // Backend over the same Pool -- a second ExecutionService image, the only recovery source
-// invariant #6 allows -- and lets one Reconciler pass carry the work on. What they cover
-// is the acceptance list of docs/09-testing-and-acceptance.md §1.4/§1.6 and §3.3: a READY
-// Turn, a READY TOOL_CALL Action and a READY FINAL Action are all rediscovered and
-// advanced with claimSource = RECONCILER; a RUNNING Turn without a Decision is never
-// re-called; an expired Agent deadline terminates through the timeout use case; and a
-// RUNNING Agent NodeRun never becomes the source of a fresh Turn.
+// the Runtime allows -- and lets one Reconciler pass carry the work on. What they cover
+// is this acceptance list: a READY Turn, a READY TOOL_CALL Action and a READY FINAL
+// Action are all rediscovered and advanced with claimSource = RECONCILER; a RUNNING Turn
+// without a Decision is never re-called; an expired Agent deadline terminates through the
+// timeout use case; and a RUNNING Agent NodeRun never becomes the source of a fresh Turn.
 //
 // They share the agentHarness and the fixture Definition of agent_loop_test.go.
 package integration
@@ -121,12 +120,13 @@ func agentTurnNoExists(ctx context.Context, t *testing.T, uow store.UnitOfWork, 
 	return found
 }
 
-// agentStopAfterToolRound drives the fixture Run through exactly one successful Tool round
-// and leaves the next Turn where the result transaction committed it. The service hands
-// that Turn to the work enqueuer after COMMIT rather than advancing it on this goroutine,
-// and the harness enqueuer only records it, so what is left is the crash-after-COMMIT
-// state of docs/09 §3.3 "Tool result 与下一条 READY Turn 提交后崩溃": Turn 1 COMPLETED, its
-// Action SUCCEEDED, Turn 2 committed READY and nobody advancing it.
+// agentStopAfterToolRound drives the fixture Run through exactly one successful Tool
+// round and leaves the next Turn where the result transaction committed it. The service
+// hands that Turn to the work enqueuer after COMMIT rather than advancing it on this
+// goroutine, and the harness enqueuer only records it, so what is left is the
+// crash-after-COMMIT state in which the Tool result and the next READY Turn have
+// committed: Turn 1 COMPLETED, its Action SUCCEEDED, Turn 2 committed READY and nobody
+// advancing it.
 func agentStopAfterToolRound(h *agentHarness, runID string) service.AdvanceOutcome {
 	h.t.Helper()
 	outcome := h.claimAgentNode(runID)
@@ -168,8 +168,8 @@ func agentStopAfterDecision(h *agentHarness, stop *agentStopNotifier, runID stri
 }
 
 // agentCrashDuringModelCall claims the Agent NodeRun and then dies inside the model call,
-// leaving the Turn RUNNING with no Decision -- the one state docs/06 §2.1 forbids the
-// Reconciler from re-issuing a model request for.
+// leaving the Turn RUNNING with no Decision -- the one state the Reconciler is forbidden
+// from re-issuing a model request for.
 func agentCrashDuringModelCall(h *agentHarness, runID string) service.AdvanceOutcome {
 	h.t.Helper()
 	outcome := h.claimAgentNode(runID)
@@ -197,11 +197,11 @@ func agentToolCallScenario() mockmodel.Scenario {
 // READY Agent Turn
 // ---------------------------------------------------------------------------
 
-// TestReconciler_ReadyTurnAfterRestart_ClaimsWithReconcilerSourceAndContinues is
-// acceptance item 6 of docs/09-testing-and-acceptance.md §1: the Tool result and the next
-// READY Turn are committed, the process dies before immediate advancement, and the
-// Reconciler of a restarted Backend must carry the second round through to the Run's
-// terminal status -- claiming the existing Turn rather than creating another one.
+// TestReconciler_ReadyTurnAfterRestart_ClaimsWithReconcilerSourceAndContinues covers
+// recovery of a committed READY Turn: the Tool result and the next READY Turn are
+// committed, the process dies before immediate advancement, and the Reconciler of a
+// restarted Backend must carry the second round through to the Run's terminal status --
+// claiming the existing Turn rather than creating another one.
 func TestReconciler_ReadyTurnAfterRestart_ClaimsWithReconcilerSourceAndContinues(t *testing.T) {
 	crashed := newAgentHarness(t, agentHarnessOptions{})
 	agentScriptToolCallThenFinal(crashed, agentToolCallScenario())
@@ -261,10 +261,10 @@ func TestReconciler_ReadyTurnAfterRestart_ClaimsWithReconcilerSourceAndContinues
 // ---------------------------------------------------------------------------
 
 // TestReconciler_ReadyToolCallActionAfterRestart_ExecutesWithoutModelCall covers the
-// READY Agent Action row of the scan table and its "不能重新请求模型或创建新 Decision"
-// column: the Decision is committed, the process died before its Action ran, and recovery
-// must execute that exact Action. The Tool call itself observes how many model calls the
-// restarted process had made by then -- none.
+// READY Agent Action row of the scan table and its "must not re-request the model or
+// create a new Decision" column: the Decision is committed, the process died before its
+// Action ran, and recovery must execute that exact Action. The Tool call itself observes
+// how many model calls the restarted process had made by then -- none.
 func TestReconciler_ReadyToolCallActionAfterRestart_ExecutesWithoutModelCall(t *testing.T) {
 	stop := &agentStopNotifier{}
 	crashed := newAgentHarness(t, agentHarnessOptions{Notifier: stop})
@@ -328,9 +328,9 @@ func TestReconciler_ReadyToolCallActionAfterRestart_ExecutesWithoutModelCall(t *
 }
 
 // TestReconciler_ReadyFinalActionAfterRestart_CompletesWithoutModelCallOrToolAttempt is
-// the FINAL half of the same row (docs/09 §3.3 "Final Decision 与唯一 READY Final Action
-// 提交后、完成事务前崩溃"): the Reconciler advances that Action, never re-asks the model
-// and never creates a Tool Attempt for it.
+// the FINAL half of the same row (a crash after the Final Decision and its single READY
+// Final Action commit, before the completion transaction): the Reconciler advances that
+// Action, never re-asks the model and never creates a Tool Attempt for it.
 func TestReconciler_ReadyFinalActionAfterRestart_CompletesWithoutModelCallOrToolAttempt(t *testing.T) {
 	stop := &agentStopNotifier{}
 	crashed := newAgentHarness(t, agentHarnessOptions{Notifier: stop})
@@ -387,9 +387,10 @@ func TestReconciler_ReadyFinalActionAfterRestart_CompletesWithoutModelCallOrTool
 // RUNNING Turn: not recoverable work
 // ---------------------------------------------------------------------------
 
-// TestReconciler_RunningTurnWithoutDecision_NotRecalledBeforeDeadline is the "不能重调
-// RUNNING Turn 的模型请求" column of the scan table. The model request may already be in
-// flight, so until the Agent deadline expires the only correct action is none at all.
+// TestReconciler_RunningTurnWithoutDecision_NotRecalledBeforeDeadline is the "must not
+// re-issue a RUNNING Turn's model request" column of the scan table. The model request
+// may already be in flight, so until the Agent deadline expires the only correct action
+// is none at all.
 func TestReconciler_RunningTurnWithoutDecision_NotRecalledBeforeDeadline(t *testing.T) {
 	crashed := newAgentHarness(t, agentHarnessOptions{})
 	agentScriptFinal(crashed, mockmodel.Scenario{Output: "never returned"})
@@ -430,10 +431,9 @@ func TestReconciler_RunningTurnWithoutDecision_NotRecalledBeforeDeadline(t *test
 // ---------------------------------------------------------------------------
 
 // TestReconciler_ExpiredAgentDeadline_TerminatesTimeoutAtomically is the Agent deadline
-// row of the scan table and docs/06-execution-model.md §1.7's timeout transaction: the
-// RUNNING Turn that never produced a Decision, the Agent Run, the Agent NodeRun and the
-// Run all end together, and nothing invents an Action failure or a next round to get
-// there.
+// row of the scan table and the Agent timeout transaction: the RUNNING Turn that never
+// produced a Decision, the Agent Run, the Agent NodeRun and the Run all end together, and
+// nothing invents an Action failure or a next round to get there.
 func TestReconciler_ExpiredAgentDeadline_TerminatesTimeoutAtomically(t *testing.T) {
 	crashed := newAgentHarness(t, agentHarnessOptions{})
 	agentScriptFinal(crashed, mockmodel.Scenario{Output: "never returned"})
@@ -494,7 +494,7 @@ func TestReconciler_ExpiredAgentDeadline_TerminatesTimeoutAtomically(t *testing.
 		t.Errorf("the timeout transaction committed a Decision")
 	}
 	if agentTurnNoExists(restarted.ctx, t, restarted.uow, agentRun.ID, 2) {
-		t.Errorf("the timeout transaction created a next Turn, which 06 §2.1 forbids")
+		t.Errorf("the timeout transaction created a next Turn, which is forbidden")
 	}
 }
 
@@ -541,11 +541,10 @@ func TestReconciler_ExpiredDeadlineWithReadyTurn_TimesOutWithoutClaimingTheTurn(
 	}
 }
 
-// TestReconciler_ExpiredDeadlineWithRunningToolAction_FailsActionWithTimeoutSource is
-// docs/06-execution-model.md:453 in full: when a current Action exists, the timeout
-// transaction writes AGENT_ACTION_FAILED with failureSource = TIMEOUT and names the Tool
-// Attempt it closed, and the Agent Run's termination stays TIMEOUT rather than TOOL_ERROR
-// (docs/09 §3.3 "不得误记为 TOOL_ERROR").
+// TestReconciler_ExpiredDeadlineWithRunningToolAction_FailsActionWithTimeoutSource is the
+// full timeout rule: when a current Action exists, the timeout transaction writes
+// AGENT_ACTION_FAILED with failureSource = TIMEOUT and names the Tool Attempt it closed,
+// and the Agent Run's termination stays TIMEOUT rather than TOOL_ERROR.
 func TestReconciler_ExpiredDeadlineWithRunningToolAction_FailsActionWithTimeoutSource(t *testing.T) {
 	tool := &agentRecordingTool{delegate: lookup.Executor{}}
 	crashed := newAgentHarness(t, agentHarnessOptions{LookupExecutor: tool})
@@ -631,8 +630,8 @@ func TestReconciler_ExpiredDeadlineWithRunningToolAction_FailsActionWithTimeoutS
 // RUNNING Agent NodeRun is never a source of work
 // ---------------------------------------------------------------------------
 
-// TestReconciler_AgentScans_NeverCreateTurnFromRunningNodeRun covers the last paragraph of
-// docs/06-execution-model.md §2.1: "Reconciler 不扫描 RUNNING Agent NodeRun 来创建 Turn."
+// TestReconciler_AgentScans_NeverCreateTurnFromRunningNodeRun covers the rule that the
+// Reconciler does not scan RUNNING Agent NodeRuns to create Turns.
 //
 // The state it needs -- a RUNNING Agent NodeRun whose only Turn is COMPLETED, whose only
 // Action SUCCEEDED, and which has no next Turn -- is one the Runtime never commits, because

@@ -1,9 +1,10 @@
 // Package architecture proves, mechanically, that the package layout CLAUDE.md's
-// "Package boundaries" section describes is what the code actually does -- invariant 3
-// ("PostgreSQL is the authority...") and the surrounding transactional guarantees only
-// hold if `runtime` truly never reaches PostgreSQL, `store` truly never decides the next
-// Runtime step, and so on. Before this file, that section was enforced only by review; a
-// stray import can silently widen a package's reach without any test noticing.
+// "Package boundaries" section describes is what the code actually does. The package
+// dependency direction, and with it the rule that PostgreSQL is the authority for
+// execution facts and the surrounding transactional guarantees, only hold if `runtime`
+// truly never reaches PostgreSQL, `store` truly never decides the next Runtime step, and
+// so on. Before this file, that section was enforced only by review; a stray import can
+// silently widen a package's reach without any test noticing.
 //
 // This test shells out to `go list -json` (stdlib os/exec; no third-party dependency) to
 // get every package's real, compiler-verified direct imports, then checks each one against
@@ -172,7 +173,7 @@ var allowedInternalImports = map[string]map[string]bool{
 
 	// nodes/tools/adapters: "perform one registered operation... do not own retry,
 	// timeout, callback routing, state transitions, or Event writes" -- registry (their
-	// own registration contract) and domain only. None of the four registered M1 Node
+	// own registration contract) and domain only. None of the registered built-in Node
 	// Types imports a sibling nodes/* package today, so that is not added preemptively.
 	"nodes":    set("internal/registry", "internal/domain"),
 	"tools":    set("internal/registry", "internal/domain"),

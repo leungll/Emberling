@@ -7,8 +7,8 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// TestDecideRetry_ExternalUnknownUncertain_NoRetry asserts the EXTERNAL+UNKNOWN row
-// (docs/07-extensibility.md §1.2): when a Provider's side effect kind is EXTERNAL, its
+// TestDecideRetry_ExternalUnknownUncertain_NoRetry asserts the EXTERNAL+UNKNOWN
+// SideEffectPolicy row: when a Provider's side effect kind is EXTERNAL, its
 // Idempotency is UNKNOWN and the failed Attempt's outcome is uncertain, DecideRetry must
 // refuse to retry -- retrying could duplicate an external effect whose result is unknown.
 func TestDecideRetry_ExternalUnknownUncertain_NoRetry(t *testing.T) {

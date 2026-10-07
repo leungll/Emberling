@@ -47,7 +47,7 @@ func TestPlanCache_PutThenGet_ReturnsSamePlan(t *testing.T) {
 
 	// A different version of the same Workflow is a distinct cache slot: CreateRun and
 	// Advance both key by (workflowID, version) because a Run stays bound to one
-	// immutable Definition version for its whole lifetime (invariant #8).
+	// immutable Definition version for its whole lifetime.
 	if _, ok := c.get("wf_a", 2); ok {
 		t.Fatal("get with mismatched version: want ok=false, got true")
 	}

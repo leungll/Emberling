@@ -27,8 +27,8 @@ func agentDeadlineExceeded(callErr error, callCtx context.Context) bool {
 	return errors.Is(callErr, context.DeadlineExceeded) || errors.Is(callCtx.Err(), context.DeadlineExceeded)
 }
 
-// TimeoutAgentRun ends one Agent Run whose frozen deadline has passed
-// (docs/06-execution-model.md §1.7). It is the single Agent timeout path: the Reconciler's
+// TimeoutAgentRun ends one Agent Run whose frozen deadline has passed.
+// It is the single Agent timeout path: the Reconciler's
 // scan of expired Agent Runs, a Tool call that ran past the deadline and a model call that
 // ran past the deadline all enter here.
 //
@@ -42,7 +42,7 @@ func agentDeadlineExceeded(callErr error, callCtx context.Context) bool {
 // Nothing at all is written when the Agent Run has already terminated or its deadline has
 // not passed on the injected clock: the transaction that committed first owns the outcome,
 // and a model result or callback arriving afterwards cannot change the terminal state
-// (docs/06-execution-model.md §1.7, invariant #7). No next Turn is ever created here.
+// (the single-winner conditional-update rule). No next Turn is ever created here.
 func (s *ExecutionService) TimeoutAgentRun(ctx context.Context, agentRunID string) error {
 	var commit agentCommit
 
@@ -75,7 +75,7 @@ func (s *ExecutionService) TimeoutAgentRun(ctx context.Context, agentRunID strin
 		}
 		if nodeRun.Status != domain.NodeRunRunning && nodeRun.Status != domain.NodeRunWaitingCallback {
 			// An Agent NodeRun that is neither RUNNING nor WAITING_CALLBACK (on an ASYNC
-			// Tool's callback, 05 §1.8: the deadline covers that wait too) has no Agent
+			// Tool's callback, the deadline covers that wait too) has no Agent
 			// Loop left to stop, and failing it would contradict the status its own
 			// transaction committed.
 			return nil

@@ -14,24 +14,24 @@ import (
 )
 
 // This file owns the Agent Loop's use cases: the transaction that expands a claimed
-// MANAGED_AGENT NodeRun into a durable Agent Run (docs/06-execution-model.md §1.7), and
+// MANAGED_AGENT NodeRun into a durable Agent Run, and
 // the transaction pair that turns one READY Turn into one committed Decision. Everything
 // here obeys the same two rules as the Node path: a state transition and its Event commit
-// together (invariant #3), and the Provider is called only after the prerequisite
-// transaction has committed (invariant #4).
+// together, and the Provider is called only after the prerequisite
+// transaction has committed.
 
 // agentTurnRequest is the bounded, immutable description of the model call a READY Turn
-// grants the right to make (docs/05-data-model.md §2, AgentTurn.Request). It names the
+// grants the right to make (AgentTurn.Request). It names the
 // frozen inputs by reference -- the Model ID and the Context/State Versions the Turn reads
 // -- instead of copying the messages into the Turn row.
 //
-// Design decision (docs/05 and docs/06 fix the field's existence and immutability but not
-// its content): a copy of the messages would be a second, divergent transcript of an
-// immutable chain that already has one authority, and would put user document text into a
-// row that Trace projects. Naming the versions keeps the Turn recoverable (the Context and
-// State a retry would read are exactly the ones named here) and bounded. Provider
-// credentials, headers, the model's ConfigSchema and any Provider-internal structure are
-// out of scope for this field by construction.
+// Design decision (the data and execution models fix the field's existence and
+// immutability but not its content): a copy of the messages would be a second, divergent
+// transcript of an immutable chain that already has one authority, and would put user
+// document text into a row that Trace projects. Naming the versions keeps the Turn
+// recoverable (the Context and State a retry would read are exactly the ones named here)
+// and bounded. Provider credentials, headers, the model's ConfigSchema and any
+// Provider-internal structure are out of scope for this field by construction.
 type agentTurnRequest struct {
 	ModelID        string   `json:"modelId"`
 	ContextVersion int      `json:"contextVersion"`
@@ -40,7 +40,7 @@ type agentTurnRequest struct {
 	MessageCount   int      `json:"messageCount"`
 }
 
-// agentStartedPayload is AGENT_STARTED (docs/05-data-model.md §2.3: agentRunId, modelId,
+// agentStartedPayload is AGENT_STARTED (Event fields: agentRunId, modelId,
 // maxTurns, deadline).
 type agentStartedPayload struct {
 	AgentRunID string    `json:"agentRunId"`
@@ -49,8 +49,8 @@ type agentStartedPayload struct {
 	Deadline   time.Time `json:"deadline"`
 }
 
-// agentTurnPayload is AGENT_TURN_READY and AGENT_TURN_STARTED (docs/05-data-model.md
-// §2.3). ClaimSource is present only on AGENT_TURN_STARTED: a READY Turn has no claimant
+// agentTurnPayload is AGENT_TURN_READY and AGENT_TURN_STARTED. ClaimSource is present
+// only on AGENT_TURN_STARTED: a READY Turn has no claimant
 // yet.
 type agentTurnPayload struct {
 	AgentRunID     string              `json:"agentRunId"`
@@ -94,15 +94,15 @@ func frozenValue(raw json.RawMessage) json.RawMessage {
 // NodeRun's READY->RUNNING claim, holds the Run aggregate lock and has recorded the
 // NodeRun's resolved input. In this same transaction it creates the Agent Run frozen from
 // the Definition, Context and State Version 0, Turn 1 READY, and the Events
-// AGENT_STARTED and AGENT_TURN_READY (docs/06-execution-model.md §1.7).
+// AGENT_STARTED and AGENT_TURN_READY.
 //
 // No Node Attempt is created. An Agent NodeRun's model calls are recorded as Agent Turns;
 // an Attempt would be a second, empty record of the same execution and would give the
 // retry and timeout machinery a handle on a NodeRun whose rounds it does not own.
 //
 // Before anything is created, every stable Tool Name in the frozen allowlist and the
-// frozen Model ID must resolve in the current Registry: docs/06-execution-model.md §1.7
-// forbids silently dropping a missing entry and starting a shortened Agent. A failure to
+// frozen Model ID must resolve in the current Registry: silently dropping a missing
+// entry and starting a shortened Agent is forbidden. A failure to
 // resolve fails the Agent NodeRun in this same transaction and creates no Agent Run.
 func (s *ExecutionService) startAgentRun(
 	ctx context.Context,
@@ -220,7 +220,7 @@ func (s *ExecutionService) startAgentRun(
 		return err
 	}
 
-	// NODE_STARTED's Agent variant (docs/05-data-model.md §2.3) names the Agent Run
+	// NODE_STARTED's Agent variant names the Agent Run
 	// instead of an Attempt number, because this NodeRun has no Attempt.
 	if err := s.appendEvent(ctx, tx, lock, run.ID, &nr.ID, domain.EventNodeStarted, now, nodeStartedPayload{
 		AgentRunID: &agentRunID,
@@ -289,7 +289,7 @@ func (s *ExecutionService) agentInputPort(nodeType string) (string, error) {
 // (it loads the Attempt to find the NodeRun and to fill nodeFailedPayload.AttemptNo) and
 // applies runtime.DecideRetry, and an Agent NodeRun has neither. An Agent NodeRun failure
 // is terminal: the retry unit inside an Agent Run is the Turn or the Tool Attempt, and
-// docs/06-execution-model.md's termination table maps every non-FINAL_RESPONSE termination
+// the Agent termination table maps every non-FINAL_RESPONSE termination
 // straight to a FAILED Agent NodeRun.
 //
 // agentRunID is nil when no Agent Run exists yet, which is exactly what makes the
@@ -305,7 +305,7 @@ func (s *ExecutionService) failAgentNodeRun(
 	now time.Time,
 ) error {
 	// An Agent NodeRun waiting on an ASYNC Tool's callback is still inside its Agent Loop,
-	// so the Agent timeout fails it from WAITING_CALLBACK (06 §1.7); every other Agent
+	// so the Agent timeout fails it from WAITING_CALLBACK; every other Agent
 	// failure fails it from RUNNING. The conditional update still decides the winner.
 	from := domain.NodeRunRunning
 	if nr.Status == domain.NodeRunWaitingCallback {

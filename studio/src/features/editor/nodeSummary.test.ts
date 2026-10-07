@@ -65,7 +65,7 @@ const models: ModelMetadata[] = [
   { id: 'text-model-v1', displayName: 'Text Model v1', capabilities: [], configSchema: {} },
 ];
 
-describe('nodeSummaryLine (04 §2.5)', () => {
+describe('nodeSummaryLine', () => {
   it('names the bound Run input field, whether it is required, and its accepted type for an Input node', () => {
     expect(nodeSummaryLine(textInput, { inputKey: 'brief', required: true })).toBe(
       'brief · required · text',

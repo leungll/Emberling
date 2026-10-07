@@ -108,8 +108,8 @@ func (p *Pool) run(ctx context.Context) {
 // moment Advance makes no claim -- either because there is nothing left to do, or
 // because the sole remaining candidate (a RUNNING NodeRun whose retry backoff has not
 // yet elapsed) is not due. This Pool never waits for that backoff in-process: the
-// Reconciler rediscovers the NodeRun once its next_attempt_at has passed
-// (docs/06-execution-model.md §1.3), so processItem simply returns rather than sleeping
+// Reconciler rediscovers the NodeRun once its next_attempt_at has passed,
+// so processItem simply returns rather than sleeping
 // or busy-polling.
 //
 // Advance's transaction has already committed by the time Execute runs (Execute always
@@ -145,7 +145,7 @@ func (p *Pool) processItem(ctx context.Context, runID string) {
 }
 
 // processAgentTurn hands one committed READY Agent Turn to the same use case immediate
-// advancement and the Reconciler enter (06 §2.1). It runs under the Pool's context, never
+// advancement and the Reconciler enter. It runs under the Pool's context, never
 // a transport request's: the model call and the Tool calls the Turn chains outlive the
 // request that committed the Turn, and stop only when the Pool stops. A lost claim or an
 // error leaves the Turn to its own conditional updates and to the Reconciler.

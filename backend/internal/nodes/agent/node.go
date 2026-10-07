@@ -1,4 +1,4 @@
-// Package agent registers the built-in `agent` Node Type (docs/08-interface-spec.md §2.1).
+// Package agent registers the built-in `agent` Node Type.
 // It carries only the Node's registered Metadata and its ManagedAgentBinding: it owns no
 // Executor, no retry, timeout or Event of its own. Actual Agent execution (Turn, Decision,
 // Action) is the built-in Agent Runtime's responsibility, reached through
@@ -14,7 +14,7 @@ import (
 
 const nodeType = "agent"
 
-// configSchema is the fixed `agent` Node config shape (docs/08-interface-spec.md §2.1):
+// configSchema is the fixed `agent` Node config shape:
 // modelId, maxTurns and timeoutMs are mandatory; instructions, modelConfig, allowedTools
 // and the three frozen Schemas are optional. It matches runtime.AgentNodeConfig field for
 // field so the ConfigSchema stage and the Semantics stage (runtime.ParseAgentNodeConfig)

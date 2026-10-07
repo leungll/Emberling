@@ -8,10 +8,10 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// AgentNodeConfig is the fixed Definition-side shape of an `agent` Node's config
-// (docs/08-interface-spec.md §2.1). It is a pure parse/validate result: it carries no
-// execution state and is not itself the immutable AgentRun record (docs/05-data-model.md
-// §2, AgentRun) -- that record is only created when a Run is created, from these same
+// AgentNodeConfig is the fixed Definition-side shape of an `agent` Node's config.
+// It is a pure parse/validate result: it carries no
+// execution state and is not itself the immutable AgentRun record -- that record is only
+// created when a Run is created, from these same
 // fields plus the identifiers Service resolves through the Registry.
 type AgentNodeConfig struct {
 	Instructions  string          `json:"instructions,omitempty"`
@@ -42,19 +42,18 @@ func (e *AgentConfigError) Error() string {
 }
 
 // ParseAgentNodeConfig parses and validates one `agent` Node's raw config against the
-// fixed shape docs/08-interface-spec.md §2.1 defines. Beyond the struct shape itself
+// fixed `agent` config shape. Beyond the struct shape itself
 // (unknown fields rejected), it checks the three invariants ConfigSchema alone cannot
 // express:
 //
-//   - maxTurns and timeoutMs are both present and >= 1 (docs/05-data-model.md §2 AgentRun
-//     invariants).
+//   - maxTurns and timeoutMs are both present and >= 1 (AgentRun invariants).
 //   - contextSchema, stateSchema and outputSchema, when present, are each a compilable
 //     JSON Schema document.
 //   - stateSchema, when present, accepts `{}` -- an Agent Run's State Version 0
-//     (docs/05-data-model.md §2 "State Version 0 = {}").
+//     ("State Version 0 = {}").
 //   - outputSchema, when present, accepts a JSON string instance -- the Agent's single
-//     `text` output port has no other MVP shape (docs/08-interface-spec.md §2.1 "Agent
-//     的 OutputSchema 在 MVP 中必须接受 string").
+//     `text` output port has no other MVP shape (an Agent's OutputSchema must accept
+//     string in the MVP).
 //
 // It does not resolve modelId against the Model Registry or allowedTools against the Tool
 // Registry: runtime is pure and holds no Registry access (CLAUDE.md "Package boundaries");

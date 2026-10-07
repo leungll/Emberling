@@ -21,7 +21,7 @@ const definitionColumns = `workflow_id, version, name, description, nodes, edges
 
 // Save creates the Workflow row if needed and inserts the version. There is no update
 // path: a stored version is immutable, so re-saving the same version is a conflict
-// rather than a rewrite (invariant #8).
+// rather than a rewrite.
 func (r *definitionRepository) Save(ctx context.Context, def domain.Definition) error {
 	nodes, err := json.Marshal(def.Nodes)
 	if err != nil {
@@ -46,7 +46,7 @@ func (r *definitionRepository) Save(ctx context.Context, def domain.Definition) 
 	// callers racing to create the *same new* Workflow both take the "not found" branch
 	// below and race on the workflows INSERT instead. That INSERT's UNIQUE (workflow_id)
 	// violation is the actual arbiter for that case and is mapped to ErrVersionConflict
-	// the same way the workflow_definitions INSERT already is (09 §3.4: only one caller
+	// the same way the workflow_definitions INSERT already is (only one caller
 	// creates the Workflow, the other gets VERSION_CONFLICT).
 	var currentVersion int
 	err = r.conn.QueryRow(ctx,
@@ -150,8 +150,8 @@ func (r *definitionRepository) GetWorkflow(ctx context.Context, workflowID strin
 }
 
 // ListWorkflows returns every Workflow, most recently updated first, together with its
-// latest version's Description (docs/08-interface-spec.md §3.1: the Definitions-list
-// endpoint returns name, description, latestVersion, updatedAt, lastRun). Description
+// latest version's Description (the Definitions-list endpoint returns name,
+// description, latestVersion, updatedAt, lastRun). Description
 // lives on workflow_definitions per version, so this joins the latest row rather than
 // reading a workflows column.
 func (r *definitionRepository) ListWorkflows(ctx context.Context) ([]store.WorkflowSummary, error) {

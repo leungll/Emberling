@@ -18,7 +18,7 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-/** The Run's own bound Definition version (04 §1.3, Runtime safety rule #8). */
+/** The Run's own bound Definition version, never the latest. */
 const BOUND_DEFINITION: Definition = {
   workflowId: 'wf_1',
   version: 3,
@@ -299,7 +299,7 @@ describe('ObserveCanvas', () => {
     const imageNode = await screen.findByTestId('rf__node-node_image');
     const card = imageNode.querySelector<HTMLElement>('[title="Generate"]');
     expect(card).not.toBeNull();
-    // Status colours are never overridden (04 §4): a selected SUCCEEDED node still reads as
+    // Status colours are never overridden: a selected SUCCEEDED node still reads as
     // succeeded, and the Edit-mode amber selected border/fill is not applied over it.
     expect(card).toHaveClass('border-[var(--status-succeeded-dot)]');
     expect(card?.style.borderColor).toBe('');
@@ -447,7 +447,7 @@ describe('ObserveCanvas', () => {
     const status = within(imageNode).getByTestId('compact-node-status');
     expect(status).toHaveTextContent('Waiting');
     expect(status).not.toHaveAttribute('title');
-    // Screen readers get the full 04 §4 wording, not the one-word visual status.
+    // Screen readers get the full status wording, not the one-word visual status.
     expect(within(status).getByText('Waiting for callback')).toHaveClass('sr-only');
     expect(within(status).getByText('Waiting')).toHaveAttribute('aria-hidden', 'true');
     expect(within(captionNode).getByTestId('compact-node-status')).toHaveTextContent('idle');

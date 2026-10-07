@@ -1,9 +1,10 @@
-// Package mediaoutput implements the built-in Media Output Node (02 §3.2). It is the
+// Package mediaoutput implements the built-in Media Output Node. It is the
 // DAG's sole terminal node in the AIGC media scenario: its complete logical result becomes
 // both its NodeRun output and Run.output, under the same persistence rule Text Output uses
-// (05 §1.3: "Text Output 与 Media Output 使用同一持久化规则，只接受不同的输出 Schema").
+// (Text Output and Media Output share one persistence rule and differ only in their output
+// Schema).
 //
-// 08-interface-spec.md has no Media Output row (it only worked example is
+// The interface contract has no Media Output row (its only worked example is
 // image_generation); the `image` (image, required) and `caption` (text, required) input
 // ports and the SYNC/NONE-SAFE declaration below follow internal/runtime/catalog_test.go's
 // fake catalog fixture, the only place these ports were already specified.
@@ -64,12 +65,12 @@ func (Executor) ValidateSemantics(_ context.Context, _ map[string]any) error {
 
 // Execute combines the `image` and `caption` input ports into the node's complete logical
 // result. The service layer copies this object into Run.output when this node is the
-// Output Node (05 §1.3).
+// Output Node.
 //
-// `image` must be a valid domain.ImageRef and `caption` a JSON string: 08 §2.2 gives this
-// node exactly those two inputs and forbids it from accepting an arbitrary JSON object.
-// The reference is preserved as the normalised value it already is - re-encoded from the
-// parsed ref, so the result cannot differ from what the upstream node published.
+// `image` must be a valid domain.ImageRef and `caption` a JSON string: the ImageRef rules
+// give this node exactly those two inputs and forbids it from accepting an arbitrary JSON
+// object. The reference is preserved as the normalised value it already is - re-encoded
+// from the parsed ref, so the result cannot differ from what the upstream node published.
 func (Executor) Execute(_ context.Context, input registry.NodeInput, _ map[string]any) (registry.NodeResult, error) {
 	imageRaw, present := input.Port(imagePort)
 	if !present {

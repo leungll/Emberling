@@ -210,12 +210,12 @@ func agentAsyncCallbackCompletions(events []map[string]any) int {
 	return n
 }
 
-// TestAPI_AgentAsyncToolCallback_ValidToken_Returns200AndLoopCompletes covers 08 §4 for a
-// Tool Attempt target: the Provider's authenticated callback is answered 200 accepted as
-// soon as the resume commits, with the next Turn still READY -- the request itself runs no
-// model call (06 §2.1). A work.Pool worker then carries the Agent Loop through that Turn to
-// COMPLETED, and the Agent Trace shows the SUCCEEDED Tool Attempt without the callback
-// token or its hash (08 §3.4).
+// TestAPI_AgentAsyncToolCallback_ValidToken_Returns200AndLoopCompletes covers the callback
+// contract for a Tool Attempt target: the Provider's authenticated callback is answered 200
+// accepted as soon as the resume commits, with the next Turn still READY -- the request
+// itself runs no model call. A work.Pool worker then carries the Agent Loop through that
+// Turn to COMPLETED, and the Agent Trace shows the SUCCEEDED Tool Attempt without the
+// callback token or its hash.
 func TestAPI_AgentAsyncToolCallback_ValidToken_Returns200AndLoopCompletes(t *testing.T) {
 	r := startAgentAsyncCallbackRun(t)
 
@@ -263,9 +263,10 @@ func TestAPI_AgentAsyncToolCallback_ValidToken_Returns200AndLoopCompletes(t *tes
 	}
 }
 
-// TestAPI_AgentAsyncToolCallback_InvalidToken_Returns401AndActionKeepsWaiting covers 08 §4:
-// a forged or missing credential for a Tool Attempt's external task is answered 401 and
-// changes nothing -- the Agent NodeRun stays WAITING_CALLBACK and no Event is written.
+// TestAPI_AgentAsyncToolCallback_InvalidToken_Returns401AndActionKeepsWaiting covers the
+// callback-token 401 rule: a forged or missing credential for a Tool Attempt's external
+// task is answered 401 and changes nothing -- the Agent NodeRun stays WAITING_CALLBACK
+// and no Event is written.
 func TestAPI_AgentAsyncToolCallback_InvalidToken_Returns401AndActionKeepsWaiting(t *testing.T) {
 	r := startAgentAsyncCallbackRun(t)
 	eventsBefore := r.env.listEvents(t, r.runID)
@@ -291,8 +292,8 @@ func TestAPI_AgentAsyncToolCallback_InvalidToken_Returns401AndActionKeepsWaiting
 }
 
 // TestAPI_AgentAsyncToolCallback_Duplicate_Returns200DuplicateWithoutNewEvents covers
-// 09 §3.2 for a Tool Attempt: re-delivering the Provider's callback after the Agent Loop
-// resumed is answered 200 duplicate and commits no Event.
+// duplicate delivery for a Tool Attempt: re-delivering the Provider's callback after the
+// Agent Loop resumed is answered 200 duplicate and commits no Event.
 func TestAPI_AgentAsyncToolCallback_Duplicate_Returns200DuplicateWithoutNewEvents(t *testing.T) {
 	r := startAgentAsyncCallbackRun(t)
 	r.fixture.callbacks.release()

@@ -1,6 +1,6 @@
-// Package textinput implements the built-in Text Input Node (02 §3.2, 08 §1.1). It reads
+// Package textinput implements the built-in Text Input Node. It reads
 // one Run input field by its frozen inputKey and republishes it as the node's `text`
-// output port; it owns no NodeRun state, retry or Event of its own (07 §1.1).
+// output port; it owns no NodeRun state, retry or Event of its own.
 package textinput
 
 import (
@@ -14,9 +14,9 @@ import (
 
 const nodeType = "text_input"
 
-// configSchema is the sole contract for Text Input config (08 §1.1): inputKey and
+// configSchema is the sole contract for Text Input config: inputKey and
 // required are mandatory; minLength/maxLength are optional length constraints that flow
-// unchanged into the generated runInputSchema (08 §1.3).
+// unchanged into the generated runInputSchema.
 const configSchema = `{
   "type": "object",
   "properties": {
@@ -58,7 +58,7 @@ func Registration() registry.NodeRegistration {
 type Executor struct{}
 
 // ValidateSemantics checks the one cross-field constraint ConfigSchema cannot express: a
-// declared minLength must not exceed maxLength (07 §1.1).
+// declared minLength must not exceed maxLength.
 func (Executor) ValidateSemantics(_ context.Context, config map[string]any) error {
 	minValue, hasMin := numericField(config, "minLength")
 	maxValue, hasMax := numericField(config, "maxLength")
@@ -71,8 +71,8 @@ func (Executor) ValidateSemantics(_ context.Context, config map[string]any) erro
 	return nil
 }
 
-// Execute reads Run.input[inputKey] and republishes it on the `text` port. Per 08 §1.3,
-// MVP Input Nodes inject no default: an absent optional key produces an explicit JSON
+// Execute reads Run.input[inputKey] and republishes it on the `text` port. MVP Input
+// Nodes inject no default: an absent optional key produces an explicit JSON
 // null port value rather than any substituted content.
 func (Executor) Execute(_ context.Context, input registry.NodeInput, config map[string]any) (registry.NodeResult, error) {
 	inputKey, _ := config["inputKey"].(string)

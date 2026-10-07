@@ -4,7 +4,7 @@
 // boundaries): every state transition still happens inside service.ExecutionService's
 // own transactions. Persisted READY NodeRuns and Agent Turns remain the durable source of
 // recoverable work; this package only shortens the time between COMMIT and the next
-// advancement for the common, still-running process (invariant #6).
+// advancement for the common, still-running process.
 package work
 
 // ItemKind is the work type of a queued Item.
@@ -17,7 +17,7 @@ const (
 	ItemAgentTurn
 )
 
-// Item is one unit of queued work. 06 §2.1: an item carries only its work type, the
+// Item is one unit of queued work. An item carries only its work type, the
 // persisted object's ID and the Run ID -- never authoritative state or execution input,
 // which the use case re-reads from PostgreSQL.
 type Item struct {
@@ -33,8 +33,7 @@ const defaultQueueCapacity = 1024
 
 // Queue is a bounded, non-blocking queue of Items. It backs service.WorkEnqueuer: a
 // refused (full) enqueue must never roll back or lose a committed fact, because the
-// Reconciler rediscovers the same persisted READY work independently of this queue
-// (invariant #6, 06 §2.1).
+// Reconciler rediscovers the same persisted READY work independently of this queue.
 type Queue struct {
 	items chan Item
 }

@@ -15,7 +15,7 @@ interface RunRailProps {
 }
 
 /**
- * The Active NodeRuns of the Run Rail (04 §3), grouped as Running and Waiting. The grouping
+ * The Active NodeRuns of the Run Rail, grouped as Running and Waiting. The grouping
  * is a display filter over server statuses, not an aggregation: it never produces a Run
  * status of its own.
  */

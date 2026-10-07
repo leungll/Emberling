@@ -25,12 +25,13 @@ func (catalogFakeModelProvider) Generate(context.Context, registry.ModelRequest)
 	return registry.ModelResponse{}, errDefsFakeNotImplemented
 }
 
-// TestCatalogService_Models_ReturnsRegisteredModelMetadata closes the second half of gap 4
-// (docs/09-testing-and-acceptance.md §3.4, row "`/models` 查询 Model Registry": expected
-// outcome "返回模型 ConfigSchema；Studio 与 Backend 不维护第二套参数类型、默认值或校验规则").
-// CatalogService.Models must hand back exactly the ConfigSchema (and other Metadata) the
-// Model Provider itself registered -- not a re-derived or re-validated copy -- since a
-// second, backend-maintained parameter schema is exactly what the doc row forbids.
+// TestCatalogService_Models_ReturnsRegisteredModelMetadata covers the `/models` Model
+// Registry query (it returns the model ConfigSchema, and Studio and Backend keep no
+// second set of parameter types, defaults or validation rules). CatalogService.Models
+// must hand back exactly the ConfigSchema (and other Metadata) the Model Provider itself
+// registered -- not a re-derived or re-validated copy -- since a second,
+// backend-maintained parameter schema is exactly what the Model Registry contract
+// forbids.
 func TestCatalogService_Models_ReturnsRegisteredModelMetadata(t *testing.T) {
 	models := registry.NewModelRegistry()
 	schemaA := json.RawMessage(`{"type":"object","properties":{"temperature":{"type":"number","default":0.2}}}`)

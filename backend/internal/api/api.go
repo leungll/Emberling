@@ -1,6 +1,6 @@
 // Package api is the HTTP transport for Emberling: it parses requests, calls exactly one
-// service method, and maps the result to the wire contract docs/08-interface-spec.md
-// defines. It never queries a repository or advances an execution directly (CLAUDE.md
+// service method, and maps the result to the interface wire contract. It never queries
+// a repository or advances an execution directly (CLAUDE.md
 // package boundaries); every handler below is a thin translation over *service.
 package api
 

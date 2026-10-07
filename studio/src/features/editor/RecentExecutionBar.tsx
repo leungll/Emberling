@@ -12,7 +12,7 @@ interface RecentExecutionBarProps {
 }
 
 /**
- * Summarises the Definition's most recent Run (04 §2.6), sourced from the Definition list's
+ * Summarises the Definition's most recent Run, sourced from the Definition list's
  * `lastRun` plus one `GET /runs/:id` for duration and Event count. A Definition that has
  * never run shows an explicit empty state instead of a blank bar.
  */

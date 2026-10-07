@@ -11,14 +11,14 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// fakeCatalog is the M1 test-only NodeCatalog. It registers the 8 MVP Node Types
-// (docs/02-scope.md §3.2) with shapes that match the two fixture Definitions plus a few
+// fakeCatalog is the test-only NodeCatalog. It registers the 8 MVP Node Types
+// with shapes that match the two fixture Definitions plus a few
 // deliberate test hooks:
 //
 //   - text_generation is the one type whose ConfigSchema requires "modelId" (used by
 //     TestCompiler_ConfigSchemaViolation_StopsBeforeSemantics); image_generation's
 //     ConfigSchema is deliberately permissive (does not require modelId/width), unlike
-//     the illustrative example in docs/08-interface-spec.md §2 -- a fixture-only choice,
+//     the illustrative interface example -- a fixture-only choice,
 //     not a claim about the real Registry's future image_generation registration.
 //   - text_output additionally declares an optional "note" input port and (test-only) a
 //     "text" output port, neither of which exists on a production Output Node; the extra
@@ -193,7 +193,7 @@ type fixedClock struct {
 func (c fixedClock) Now() time.Time { return c.at }
 
 // TestCatalog_AgentFixture_MatchesInterfaceSpecPorts pins the fixture's agent ports to
-// the MVP node port contract (docs/08-interface-spec.md §2.1 MVP 节点端口: `agent` takes
+// the MVP node port contract (`agent` takes
 // `input: text` and produces `text: text`). Every compiler test validates Definitions
 // against this fixture, so drift here would let a Definition compile that the real
 // Registry rejects.

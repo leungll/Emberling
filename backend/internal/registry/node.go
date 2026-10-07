@@ -1,6 +1,6 @@
 // Package registry resolves the stable identifiers a Definition or an Agent Action
 // stores - Node Type, Model ID and Tool Name - to the registered metadata and the
-// implementation the Runtime calls after COMMIT (07 §0).
+// implementation the Runtime calls after COMMIT.
 //
 // A registration describes a capability; it never owns NodeRun state, Attempts, retry,
 // timeout or Events. This package therefore depends on domain and a JSON Schema compiler
@@ -15,7 +15,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// NodeRegistration is one registered Node Type (07 §1.1). Metadata lets Studio and the
+// NodeRegistration is one registered Node Type. Metadata lets Studio and the
 // Compiler understand the node; Binding lets the Runtime execute it.
 type NodeRegistration struct {
 	Metadata domain.NodeMetadata
@@ -60,7 +60,7 @@ type NodeExecutor interface {
 	// ValidateSemantics runs after ConfigSchema validation has already passed. It only
 	// checks cross-field constraints and capability compatibility that JSON Schema
 	// cannot express; it must not maintain a second set of type, required-ness or
-	// default rules (07 §1.1).
+	// default rules.
 	ValidateSemantics(ctx context.Context, config map[string]any) error
 	// Execute returns a final result, or dispatch information for an ASYNC node.
 	Execute(ctx context.Context, input NodeInput, config map[string]any) (NodeResult, error)
@@ -68,13 +68,12 @@ type NodeExecutor interface {
 
 // AsyncNodeExecutor converts a Provider callback payload into the Node output. The
 // Runtime restores the original Attempt before calling it; the Executor keeps no NodeRun
-// state of its own (07 §1.3).
+// state of its own.
 type AsyncNodeExecutor interface {
 	NodeExecutor
 	// OnCallback returns a ProviderFailure when the Provider reports that the external
 	// task itself failed, and a plain error when the payload could not be interpreted:
-	// the first fails the Attempt, the second leaves the NodeRun WAITING_CALLBACK
-	// (06 §1.6).
+	// the first fails the Attempt, the second leaves the NodeRun WAITING_CALLBACK.
 	OnCallback(ctx context.Context, state NodeAsyncState, payload []byte) (NodeOutput, error)
 }
 
@@ -86,7 +85,7 @@ type PollableAsyncNodeExecutor interface {
 }
 
 // CallbackContext is the Attempt-scoped callback credential the Runtime generates before
-// dispatch (08 §4). Token is the one-time plaintext handed to the Provider: only its hash
+// dispatch. Token is the one-time plaintext handed to the Provider: only its hash
 // is persisted, and it must never reach an Event, Trace, log or error message.
 type CallbackContext struct {
 	URL   string
@@ -95,7 +94,7 @@ type CallbackContext struct {
 
 // NodeInput is the execution input of one Node Attempt. Ports carries upstream values
 // keyed by input port name; RunInput carries the Run input object an Input Node reads by
-// its frozen inputKey (08 §1.1). Both hold complete logical values, not Trace
+// its frozen inputKey. Both hold complete logical values, not Trace
 // projections.
 type NodeInput struct {
 	RunID     string
@@ -112,7 +111,7 @@ type NodeInput struct {
 	// SideEffectPolicy is EXTERNAL + KEYED, and is empty for every other node. The
 	// service derives it from the NodeRun ID, so it is stable across every Attempt of
 	// that NodeRun: an Adapter must send exactly this value as the Provider's
-	// idempotency key and must never generate one of its own (07 §1.2).
+	// idempotency key and must never generate one of its own.
 	IdempotencyKey string
 }
 
@@ -146,7 +145,7 @@ type NodeResult struct {
 
 // NodeOutput is the complete logical result of a node, keyed by output port name. An
 // Output Node has no output ports and still returns its logical result here; the service
-// copies that object into Run.output (05 §1.3).
+// copies that object into Run.output.
 type NodeOutput struct {
 	Ports map[string]json.RawMessage
 }
@@ -156,7 +155,7 @@ func CompletedResult(ports map[string]json.RawMessage) NodeResult {
 	return NodeResult{Kind: NodeResultCompleted, Output: &NodeOutput{Ports: ports}}
 }
 
-// ExternalTask is the identity of one accepted external task (07 §1.3). ProviderID is a
+// ExternalTask is the identity of one accepted external task. ProviderID is a
 // stable Provider identifier, never a credential, endpoint or internal configuration.
 type ExternalTask struct {
 	ProviderID     string
@@ -201,8 +200,8 @@ type PollResult struct {
 // ProviderFailure is returned by OnCallback - and carried by PollResult.Error in the Poll
 // path - when the Provider reports that the external task itself failed. It is distinct
 // from a payload parse error: a parse error leaves the NodeRun WAITING_CALLBACK, while a
-// ProviderFailure fails the Attempt with FailureSource CALLBACK or PROVIDER_POLL
-// (06 §1.6, §2.2). Callers identify it with errors.As, so an Executor may wrap it.
+// ProviderFailure fails the Attempt with FailureSource CALLBACK or PROVIDER_POLL.
+// Callers identify it with errors.As, so an Executor may wrap it.
 type ProviderFailure struct {
 	Err domain.ExecutionError
 }

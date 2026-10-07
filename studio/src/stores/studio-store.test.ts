@@ -141,8 +141,8 @@ describe('studio store — Edit history', () => {
   });
 
   it('stays dirty when the canvas moved on while the saved request was in flight', () => {
-    // Save sent ONE; before it returned the user edited the canvas to TWO (04 §2.6: Run
-    // stays disabled while unsaved changes exist).
+    // Save sent ONE; before it returned the user edited the canvas to TWO (Run stays
+    // disabled while unsaved changes exist).
     store().syncUnsavedChanges(TWO);
     store().markSaved(ONE);
     expect(store().savedGraph).toEqual(ONE);

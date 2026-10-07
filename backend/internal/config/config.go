@@ -15,8 +15,9 @@ import (
 // EnvPrefix is prepended to every configuration key.
 const EnvPrefix = "EMBERLING_"
 
-// Configuration keys, one per 10-ops §2 category. They are constants because deployment
-// manifests, the readiness sequence and error messages must name exactly the same keys.
+// Configuration keys, one per operations configuration category. They are constants
+// because deployment manifests, the readiness sequence and error messages must name
+// exactly the same keys.
 const (
 	KeyDatabaseURL      = EnvPrefix + "DATABASE_URL"
 	KeyDatabaseMaxConns = EnvPrefix + "DATABASE_MAX_CONNS"
@@ -42,8 +43,8 @@ const (
 	KeyHTTPAddr = EnvPrefix + "HTTP_ADDR"
 )
 
-// DefaultHTTPAddr is the only defaulted value: 10-ops §2 does not list the listen address
-// among the required categories, while every other key must be set explicitly so that no
+// DefaultHTTPAddr is the only defaulted value: the listen address is not one of
+// the required categories, while every other key must be set explicitly so that no
 // deployment silently inherits an unbounded or unintended operational limit.
 const DefaultHTTPAddr = ":8080"
 
@@ -103,7 +104,7 @@ type PendingCallback struct {
 }
 
 // Projection bounds Trace and API rendering only. It never truncates authoritative
-// Execution State (10-ops §4).
+// Execution State.
 type Projection struct {
 	MaxFieldBytes    int
 	MaxResponseBytes int

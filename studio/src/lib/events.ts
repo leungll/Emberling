@@ -39,7 +39,7 @@ export function eventLabel(type: EventType): string {
 }
 
 /**
- * Timeline dot colour per committed Event type (04 §4 status colours). It classifies the
+ * Timeline dot colour per committed Event type, using the shared status colours. It classifies the
  * transition the Event itself records; it never looks at other Events or NodeRuns, so it
  * cannot turn into a client-side status derivation.
  */

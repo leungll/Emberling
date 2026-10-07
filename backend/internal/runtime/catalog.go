@@ -16,8 +16,8 @@ type NodeCatalog interface {
 	NodeMetadata(nodeType string) (domain.NodeMetadata, bool)
 
 	// ValidateSemantics runs Node-Type-specific business rules on a node's decoded
-	// config, beyond what ConfigSchema alone can express (docs/08-interface-spec.md §1.2:
-	// "先按 ConfigSchema 校验每个节点配置，再执行 ValidateSemantics()"). It returns nil
+	// config, beyond what ConfigSchema alone can express (every node config is first
+	// validated against ConfigSchema, then ValidateSemantics runs). It returns nil
 	// when the Node Type has nothing beyond ConfigSchema to check.
 	ValidateSemantics(ctx context.Context, nodeType string, config map[string]any) error
 }

@@ -6,7 +6,7 @@ import (
 )
 
 // ApplyStatePatch applies a Decision's optional state patch to the current Agent State
-// with JSON Merge Patch (RFC 7386) semantics, as docs/05-data-model.md §1.4 requires: the
+// with JSON Merge Patch (RFC 7386) semantics, as the Agent State contract requires: the
 // State root must be a JSON object, object fields merge recursively, an array replaces the
 // previous value whole, and a field whose patch value is null is removed from the result.
 //
@@ -24,7 +24,7 @@ import (
 // as INVALID_ACTION and creates no State Version.
 func ApplyStatePatch(current, patch json.RawMessage) (json.RawMessage, bool, error) {
 	// Version 0 of the State chain is the empty object, so an empty current value is that
-	// object rather than a missing State (docs/05-data-model.md §1.4).
+	// object rather than a missing State.
 	currentValue, err := decodeJSONObject(current, "state", `{}`)
 	if err != nil {
 		return nil, false, err
@@ -52,9 +52,9 @@ func ApplyStatePatch(current, patch json.RawMessage) (json.RawMessage, bool, err
 }
 
 // ValidateAgentState is the execution-time check of the *whole* patched State against the
-// Agent Run's frozen State Schema (docs/05-data-model.md §1.4: "Runtime 将 patch 应用于当前
-// State Version 后，使用 State Schema 校验完整结果，而不是单独校验 patch"). It completes the
-// trio of execution-time checks docs/07-extensibility.md §1.4 names alongside
+// Agent Run's frozen State Schema (the Runtime applies the patch to the current State
+// Version, then validates the complete result against the State Schema rather than
+// validating the patch alone). It completes the trio of execution-time checks, alongside
 // ValidateToolCall and ValidateFinalOutput; the caller passes the result ApplyStatePatch
 // returned, never the patch alone.
 //

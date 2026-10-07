@@ -14,7 +14,7 @@ export interface BoundDefinition {
 /**
  * Fetches the Run's own bound Definition version and the registered Node Types needed to
  * render it, exactly as the Editor does for its own Canvas. This is a read-only lookup by
- * immutable version (08 §3): it never falls back to the Definition's latest version.
+ * immutable version: it never falls back to the Definition's latest version.
  */
 export function useBoundDefinition(
   workflowId: string,

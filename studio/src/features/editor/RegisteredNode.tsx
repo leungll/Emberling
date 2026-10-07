@@ -21,7 +21,7 @@ export interface RegisteredNodeData extends Record<string, unknown> {
 export type RegisteredFlowNode = Node<RegisteredNodeData, 'registered'>;
 
 /**
- * Every card's fixed footprint (04 §2.5). Declaring it on each `RegisteredFlowNode`'s
+ * Every card's fixed footprint. Declaring it on each `RegisteredFlowNode`'s
  * `width`/`height` (see `EditPage`/`ObserveCanvas`) tells React Flow the node's size up
  * front, so it skips its measure-then-reveal pass — without that, controlled `nodes` (this
  * app never hands ownership of node state to React Flow) never receive the internal
@@ -33,7 +33,7 @@ export const NODE_CARD_WIDTH = 176;
 export const NODE_CARD_HEIGHT = 128;
 
 /**
- * First port row's centre and the row pitch (04 §2.5). Port rows sit below the two-line
+ * First port row's centre and the row pitch. Port rows sit below the two-line
  * summary, and their labels are drawn inside the card so they never collide with the
  * neighbouring card's labels across the gutter.
  */
@@ -46,7 +46,7 @@ const PORT_ROW_HEIGHT = 16;
  * and the node's own config only — nothing here is computed or guessed locally.
  *
  * Every card shares one fixed width and stable height so the graph reads consistently
- * regardless of node type (04 §2.5): long names and summaries truncate with an ellipsis
+ * regardless of node type: long names and summaries truncate with an ellipsis
  * rather than resizing the card.
  */
 export function RegisteredNode({ data, selected, isConnectable }: NodeProps<RegisteredFlowNode>) {
@@ -55,10 +55,10 @@ export function RegisteredNode({ data, selected, isConnectable }: NodeProps<Regi
   const outputs = metadata?.outputs ?? [];
   const accent = nodeAccentColor(metadata);
   const isAgent = metadata?.category === 'Agent';
-  // Selected state follows 04 §2.5's two literal treatments rather than the node's own
+  // Selected state follows two literal treatments rather than the node's own
   // accent: every non-Agent category gets the amber border on the warm tint, Agent gets
   // the purple border on its own tint. That treatment applies only to a card without a
-  // NodeRun status: status colours are never overridden (04 §4), so a selected card that
+  // NodeRun status: status colours are never overridden, so a selected card that
   // carries a status keeps its status border and is marked by an outer neutral ring.
   const hasStatus = data.nodeRunStatus !== undefined;
   const editSelected = selected && !hasStatus;

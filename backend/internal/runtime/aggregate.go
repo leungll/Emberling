@@ -4,7 +4,7 @@ import "github.com/leungll/Emberling/backend/internal/domain"
 
 // RunAggregateInput is the minimal, already-committed-or-projected fact set
 // AggregateRunStatus needs. A Run has no independent status of its own: it is always
-// recomputed from NodeRun state (docs/06-execution-model.md §1.5).
+// recomputed from NodeRun state.
 type RunAggregateInput struct {
 	// NodeStatuses is the status of every node that currently has a NodeRun, keyed by
 	// node id. It reflects projected state, the same convention the Scheduler uses.
@@ -22,7 +22,7 @@ type RunAggregateInput struct {
 }
 
 // AggregateRunStatus computes a Run's status from NodeRun state, applying the MVP
-// priority fixed by docs/06-execution-model.md §1.5: FAILED beats RUNNING beats PAUSED
+// priority: FAILED beats RUNNING beats PAUSED
 // beats COMPLETED.
 func AggregateRunStatus(in RunAggregateInput) domain.RunStatus {
 	hasReadyOrRunning := false
@@ -55,7 +55,7 @@ func AggregateRunStatus(in RunAggregateInput) domain.RunStatus {
 	// Every known NodeRun has succeeded, but the Definition still has nodes with no
 	// NodeRun yet, or the Output Node has not produced Run.output. Neither FAILED nor
 	// WAITING is present, so RUNNING is the only remaining non-terminal status in the
-	// §1.5 table; reporting COMPLETED here would be premature.
+	// Run status table; reporting COMPLETED here would be premature.
 	return domain.RunRunning
 }
 
@@ -72,16 +72,16 @@ func allSucceeded(in RunAggregateInput) bool {
 }
 
 // RunTransitionEvent is the Event a caller must additionally record when aggregated Run
-// status actually changes (docs/06-execution-model.md §1.5: "只有聚合状态发生变化时才写对应
-// RUN_* Event"). It carries no Run id, seq or timestamp: those are assigned by store when
-// the Event is persisted, not decided here.
+// status actually changes (only an actual aggregate status change writes the
+// corresponding RUN_* Event). It carries no Run id, seq or timestamp: those are assigned
+// by store when the Event is persisted, not decided here.
 type RunTransitionEvent struct {
 	Type domain.EventType
 }
 
 // NextRunTransitionEvent returns the Event to record for a from -> to Run status change,
 // or false if from == to (no observed change, so no Event). PAUSED -> RUNNING reports
-// RUN_RESUMED (docs/04-ux.md §3.2's Agent-with-async-tool sequence resumes this way).
+// RUN_RESUMED (the Agent-with-async-tool sequence resumes this way).
 // Every "to" that is not one the Run status machine actually reaches from a live Run --
 // notably RUNNING reached from anything other than PAUSED, which is Run creation, not a
 // transition of an existing Run -- reports no Event, since that case belongs to Run

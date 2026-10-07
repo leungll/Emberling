@@ -1,6 +1,6 @@
 //go:build integration
 
-// Agent Trace query contract (docs/08-interface-spec.md §3.4):
+// Agent Trace query contract:
 // GET /runs/{runId}/nodes/{nodeRunId}/agent projects the persisted Agent Run, its Turns,
 // each Turn's committed Decision and Action, and every Tool Attempt, in persisted order.
 //
@@ -135,7 +135,7 @@ func runCompletedAgentLoop(t *testing.T, env *testEnv) (string, map[string]any) 
 // TestAgentTrace_CompletedTwoRoundLoop_ProjectsTurnsInOrder is the positive control: after
 // a TOOL_CALL round and a FINAL round, the projection carries both Turns in turnNo order
 // with their committed Decision, Action and Tool Attempts, and the Agent Run's
-// FINAL_RESPONSE termination (docs/08 §3.4).
+// FINAL_RESPONSE termination.
 func TestAgentTrace_CompletedTwoRoundLoop_ProjectsTurnsInOrder(t *testing.T) {
 	env := newTestEnv(t)
 	runID, snapshot := runCompletedAgentLoop(t, env)
@@ -327,9 +327,9 @@ func TestAgentTrace_NodeRunOfOtherRun_404(t *testing.T) {
 }
 
 // TestAgentTrace_ResponseCarriesNoSecretsOrPayloads is the negative half of the contract
-// (docs/08 §3.4 and 10-ops §4): the projection never carries model request/response
-// bodies, Tool input or result, Context or State contents, Decision arguments, a storage
-// key, a callback token hash or a Provider credential.
+// (Trace projection and operational redaction rules): the projection never carries model
+// request/response bodies, Tool input or result, Context or State contents, Decision
+// arguments, a storage key, a callback token hash or a Provider credential.
 func TestAgentTrace_ResponseCarriesNoSecretsOrPayloads(t *testing.T) {
 	env := newTestEnv(t)
 	runID, snapshot := runCompletedAgentLoop(t, env)
@@ -368,9 +368,10 @@ func TestAgentTrace_ResponseCarriesNoSecretsOrPayloads(t *testing.T) {
 	}
 }
 
-// TestNodeRunDetail_AgentNodeRun_AttemptsEmpty pins docs/08 §3.4 line 476: a MANAGED_AGENT
-// NodeRun creates no Node Attempt, so the existing Node Detail query returns an empty
-// attempts array and the Agent internals are reached through /agent instead.
+// TestNodeRunDetail_AgentNodeRun_AttemptsEmpty pins the Node Detail rule that a
+// MANAGED_AGENT NodeRun creates no Node Attempt, so the existing Node Detail query
+// returns an empty attempts array and the Agent internals are reached through /agent
+// instead.
 func TestNodeRunDetail_AgentNodeRun_AttemptsEmpty(t *testing.T) {
 	env := newTestEnv(t)
 	runID, snapshot := runCompletedAgentLoop(t, env)

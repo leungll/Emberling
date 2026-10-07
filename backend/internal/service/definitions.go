@@ -16,9 +16,9 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
-// DefinitionService owns the Definition Validate/Save use cases (docs/08-interface-spec.md
-// §1.2, §3.1). Save and Create never persist a Definition that failed compilation
-// (docs/09-testing-and-acceptance.md §3.4: "Save 校验失败 | 不创建 Definition version，不改变最新版本").
+// DefinitionService owns the Definition Validate/Save use cases. Save and Create never
+// persist a Definition that failed compilation (a failed Save validation creates no
+// Definition version and leaves the latest version unchanged).
 type DefinitionService struct {
 	deps Deps
 }
@@ -48,7 +48,7 @@ type CreateDefinition struct {
 
 // SaveDefinition is the input of DefinitionService.Save. BaseVersion names the version
 // the client edited from; it must equal the Workflow's current latest version or the save
-// is rejected as a conflict (docs/08-interface-spec.md §3.1).
+// is rejected as a conflict.
 type SaveDefinition struct {
 	WorkflowID  string
 	BaseVersion int
@@ -59,8 +59,8 @@ type SaveDefinition struct {
 }
 
 // DefinitionListItem is one row of the Definitions-list read model: a Workflow summary
-// plus its most recent Run, or a nil LastRun when the Workflow has never run
-// (docs/08-interface-spec.md §3.1). Description is the latest version's description; it
+// plus its most recent Run, or a nil LastRun when the Workflow has never run.
+// Description is the latest version's description; it
 // is not a domain.Workflow field because it lives per-version, not per-workflow.
 type DefinitionListItem struct {
 	Workflow    domain.Workflow
@@ -80,8 +80,8 @@ func (e *CompileFailedError) Error() string {
 	return fmt.Sprintf("emberling: definition compile failed: %d error(s)", len(e.Result.Errors))
 }
 
-// Validate runs the same compile chain Save uses, without persisting anything
-// (docs/08-interface-spec.md §1.2). Only an infrastructure failure (not a Definition
+// Validate runs the same compile chain Save uses, without persisting anything.
+// Only an infrastructure failure (not a Definition
 // authoring mistake) is returned as an error.
 func (s *DefinitionService) Validate(ctx context.Context, nodes []domain.Node, edges []domain.Edge) (ValidateResult, error) {
 	result, _, err := s.compile(ctx, domain.Definition{Nodes: nodes, Edges: edges})
@@ -220,7 +220,7 @@ func (s *DefinitionService) ListVersions(ctx context.Context, workflowID string)
 }
 
 // List returns the Definitions-list read model: every Workflow with its most recent Run,
-// nil when the Workflow has never run (docs/08-interface-spec.md §3.1).
+// nil when the Workflow has never run.
 func (s *DefinitionService) List(ctx context.Context) ([]DefinitionListItem, error) {
 	var items []DefinitionListItem
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {

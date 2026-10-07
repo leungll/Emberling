@@ -11,7 +11,7 @@ import (
 )
 
 // NodeRegistry resolves a stable Node Type to its NodeRegistration. Registration happens
-// once at Backend startup (10 §1 step 3); Get, NodeMetadata and ListMetadata are read
+// once at Backend startup; Get, NodeMetadata and ListMetadata are read
 // paths used by the Compiler, the API and Studio after readiness.
 type NodeRegistry struct {
 	mu      sync.Mutex
@@ -24,9 +24,10 @@ func NewNodeRegistry() *NodeRegistry {
 	return &NodeRegistry{entries: make(map[string]NodeRegistration)}
 }
 
-// Register validates one Node registration and adds it if valid. It reports every
-// violation of 07 §1.1 at once so a broken registration does not need one restart per
-// mistake; messages name the Node Type and the rule, never a schema body or credential.
+// Register validates one Node registration and adds it if valid. It reports every Node
+// registration rule violation at once so a broken registration does not need one restart
+// per mistake; messages name the Node Type and the rule, never a schema body or
+// credential.
 func (r *NodeRegistry) Register(reg NodeRegistration) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -56,8 +57,8 @@ func (r *NodeRegistry) Register(reg NodeRegistration) error {
 	return nil
 }
 
-// validateNodeBinding checks Binding presence and its agreement with ExecutionKind (07
-// §1.1/§1.2): SYNC and ASYNC require an ExecutorBinding, MANAGED_AGENT requires a
+// validateNodeBinding checks Binding presence and its agreement with ExecutionKind:
+// SYNC and ASYNC require an ExecutorBinding, MANAGED_AGENT requires a
 // ManagedAgentBinding, and an ASYNC Executor must implement AsyncNodeExecutor.
 func validateNodeBinding(metadata domain.NodeMetadata, binding NodeBinding) []error {
 	var errs []error
@@ -92,8 +93,8 @@ func validateNodeBinding(metadata domain.NodeMetadata, binding NodeBinding) []er
 	return errs
 }
 
-// validateNodeUIFields checks every UIField against the compiled ConfigSchema (07 §1.1, 04
-// §2.1-2.3): each Path must resolve to a declared top-level property, paths must be
+// validateNodeUIFields checks every UIField against the compiled ConfigSchema: each
+// Path must resolve to a declared top-level property, paths must be
 // unique, SELECT needs enum, MODEL_SELECTOR needs a string property and a non-empty
 // capability, TOOL_SELECTOR needs an array of strings, and TEXTAREA/PROMPT_EDITOR need a
 // string property.
@@ -176,7 +177,7 @@ func (r *NodeRegistry) ListMetadata() []domain.NodeMetadata {
 	return out
 }
 
-// ValidateSemantics dispatches to the registered Executor's ValidateSemantics (07 §1.1).
+// ValidateSemantics dispatches to the registered Executor's ValidateSemantics.
 // It runs only after ConfigSchema validation already passed elsewhere; a MANAGED_AGENT
 // binding has no cross-field semantic check of its own in the MVP and returns nil.
 func (r *NodeRegistry) ValidateSemantics(ctx context.Context, nodeType string, config map[string]any) error {
@@ -196,7 +197,7 @@ func (r *NodeRegistry) ValidateSemantics(ctx context.Context, nodeType string, c
 
 // ModelRegistry resolves a stable Model ID to its registration and the ModelProvider that
 // serves it. MVP registers exactly one ModelProvider, but that Provider may declare
-// several compatible models (07 §1.4).
+// several compatible models.
 type ModelRegistry struct {
 	mu      sync.Mutex
 	entries map[string]modelEntry
@@ -214,7 +215,7 @@ func NewModelRegistry() *ModelRegistry {
 
 // Register calls provider.Models(ctx) once and indexes every returned ModelRegistration by
 // ID. It rejects an empty or duplicate ID and a ConfigSchema that does not compile; a
-// Registry that fails this check must not let the Backend become ready (10 §1 step 3).
+// Registry that fails this check must not let the Backend become ready.
 func (r *ModelRegistry) Register(ctx context.Context, provider ModelProvider) error {
 	if provider == nil {
 		return fmt.Errorf("register model provider: provider is nil")
@@ -289,7 +290,7 @@ func validateSchemaJSON(raw []byte) error {
 	return err
 }
 
-// ToolRegistry resolves a stable Tool Name to its ToolRegistration (07 §1.5). A single
+// ToolRegistry resolves a stable Tool Name to its ToolRegistration. A single
 // lookup always returns Metadata and Executor together; Studio and the API must read
 // ListMetadata only and never obtain an Executor.
 type ToolRegistry struct {
@@ -302,7 +303,7 @@ func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{entries: make(map[string]ToolRegistration)}
 }
 
-// Register validates one Tool registration and adds it if valid (07 §1.5): the name must
+// Register validates one Tool registration and adds it if valid: the name must
 // be non-empty and unique, both Schemas must compile, an Executor must be present, and an
 // ASYNC Tool must implement AsyncToolExecutor.
 func (r *ToolRegistry) Register(reg ToolRegistration) error {

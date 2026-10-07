@@ -5,7 +5,7 @@ import { formatClock, formatMillis } from '@/lib/format';
 import { nodeRunStatusTone } from '@/lib/status';
 import { cn } from '@/lib/utils';
 
-/** Registered Node Type of a MANAGED_AGENT NodeRun, shown as the Agent card (04 §3.4). */
+/** Registered Node Type of a MANAGED_AGENT NodeRun, shown as the Agent card. */
 const AGENT_NODE_TYPE = 'agent';
 
 /** Helper-line note for one NodeRun, read from its own server timestamps and error. */
@@ -49,7 +49,7 @@ interface WorkflowStepperProps {
 }
 
 /**
- * Vertical WORKFLOW · READ ONLY stepper of the Agent view (04 §3.4 mock). Each step is one
+ * Vertical WORKFLOW · READ ONLY stepper of the Agent view mock. Each step is one
  * node of the bound Definition with the status of its own NodeRun as the Backend reported
  * it; a node without a NodeRun yet is numbered and neutral. Nothing here aggregates a Run
  * status. Selecting a step selects its NodeRun for the Detail column.

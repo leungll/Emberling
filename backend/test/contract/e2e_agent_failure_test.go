@@ -1,10 +1,10 @@
 //go:build integration
 
-// Agent failure blocks downstream (docs/04 §6 item 14; docs/06 §1.7): when the Agent
-// NodeRun fails, the Run ends FAILED and the node downstream of the Agent never comes
-// into existence - no NodeRun row, no NODE_READY, nothing dispatched. Both Agent failure
-// shapes are covered: the Model call itself erroring (MODEL_ERROR, no Decision) and a
-// committed Decision whose synchronous Tool fails (TOOL_ERROR).
+// Agent failure blocks downstream: when the Agent NodeRun fails, the Run ends FAILED and
+// the node downstream of the Agent never comes into existence - no NodeRun row, no
+// NODE_READY, nothing dispatched. Both Agent failure shapes are covered: the Model call
+// itself erroring (MODEL_ERROR, no Decision) and a committed Decision whose synchronous
+// Tool fails (TOOL_ERROR).
 //
 // Everything is observed through the public HTTP surface: the terminal Snapshot and an SSE
 // replay from seq 0. The MODEL_ERROR case uses only the Run's input ("mock:fail" directive)

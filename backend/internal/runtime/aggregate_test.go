@@ -6,9 +6,8 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// TestAggregate_Priority_FailedBeatsRunning asserts the §1.5 priority table: a Run with
-// one FAILED NodeRun and one RUNNING NodeRun aggregates to FAILED, not RUNNING
-// (docs/06-execution-model.md §1.5).
+// TestAggregate_Priority_FailedBeatsRunning asserts the aggregation priority table: a Run
+// with one FAILED NodeRun and one RUNNING NodeRun aggregates to FAILED, not RUNNING.
 func TestAggregate_Priority_FailedBeatsRunning(t *testing.T) {
 	in := RunAggregateInput{
 		NodeStatuses: map[string]domain.NodeRunStatus{
@@ -46,7 +45,7 @@ func TestAggregate_OnlyWaiting_IsPaused(t *testing.T) {
 // TestAggregate_WaitingPlusReady_IsRunningNotPaused asserts that a READY NodeRun
 // alongside a WAITING_CALLBACK one still aggregates to RUNNING: MVP allows several
 // concurrent READY/WAITING_CALLBACK NodeRuns, and PAUSED only applies when nothing
-// besides WAITING_CALLBACK remains (docs/06-execution-model.md §1.5).
+// besides WAITING_CALLBACK remains.
 func TestAggregate_WaitingPlusReady_IsRunningNotPaused(t *testing.T) {
 	in := RunAggregateInput{
 		NodeStatuses: map[string]domain.NodeRunStatus{
@@ -63,10 +62,10 @@ func TestAggregate_WaitingPlusReady_IsRunningNotPaused(t *testing.T) {
 	}
 }
 
-// TestAggregate_RunningPlusWaiting_IsRunningNotPaused asserts the literal invariant #2
-// combination: a RUNNING NodeRun alongside a WAITING_CALLBACK one aggregates to RUNNING,
-// never PAUSED -- a Run must not become PAUSED because one node is waiting while another
-// is actively executing (docs/06-execution-model.md §1.5).
+// TestAggregate_RunningPlusWaiting_IsRunningNotPaused asserts the Run-status derivation
+// rule for one combination: a RUNNING NodeRun alongside a WAITING_CALLBACK one aggregates
+// to RUNNING, never PAUSED -- a Run must not become PAUSED because one node is waiting
+// while another is actively executing.
 func TestAggregate_RunningPlusWaiting_IsRunningNotPaused(t *testing.T) {
 	in := RunAggregateInput{
 		NodeStatuses: map[string]domain.NodeRunStatus{
@@ -85,7 +84,7 @@ func TestAggregate_RunningPlusWaiting_IsRunningNotPaused(t *testing.T) {
 
 // TestAggregate_AllSucceededWithoutOutput_NotCompleted asserts COMPLETED requires both
 // every node SUCCEEDED and the Output Node's result written to Run.output
-// (docs/06-execution-model.md §1.5); the former alone must not report COMPLETED.
+// -- the former alone must not report COMPLETED.
 func TestAggregate_AllSucceededWithoutOutput_NotCompleted(t *testing.T) {
 	in := RunAggregateInput{
 		NodeStatuses: map[string]domain.NodeRunStatus{
@@ -109,7 +108,7 @@ func TestAggregate_AllSucceededWithoutOutput_NotCompleted(t *testing.T) {
 // that *does* have a NodeRun has SUCCEEDED, with OutputProduced still false, the Run must
 // aggregate to RUNNING, not COMPLETED -- the missing node's NodeRun has not even been
 // created yet, so treating it as done would be wrong, and neither FAILED nor WAITING is
-// present to justify any other status (docs/06-execution-model.md §1.5).
+// present to justify any other status.
 func TestAggregate_MissingNodeRunsNothingActive_IsRunning(t *testing.T) {
 	in := RunAggregateInput{
 		NodeStatuses: map[string]domain.NodeRunStatus{
@@ -146,8 +145,8 @@ func TestAggregate_AllSucceededWithOutput_IsCompleted(t *testing.T) {
 }
 
 // TestRunTransitionEvent_NoEventOnSameStatus asserts no Event is reported when the
-// aggregated status has not actually changed (docs/06-execution-model.md §1.5: "只有聚合
-// 状态发生变化时才写对应 RUN_* Event").
+// aggregated status has not actually changed: a RUN_* Event is written only when the
+// aggregated status changes.
 func TestRunTransitionEvent_NoEventOnSameStatus(t *testing.T) {
 	_, ok := NextRunTransitionEvent(domain.RunRunning, domain.RunRunning)
 	if ok {

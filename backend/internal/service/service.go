@@ -5,7 +5,7 @@
 // Nothing in this package executes a Node, calls a Model or touches HTTP. Post-COMMIT
 // work is handed to a WorkEnqueuer, and SSE cursors are woken through an EventNotifier;
 // neither is a source of recovery, because persisted READY work is rediscovered by the
-// Reconciler (docs/06-execution-model.md §1.3).
+// Reconciler.
 package service
 
 import (
@@ -22,7 +22,8 @@ import (
 // transaction has committed: a Run that may have a NodeRun to advance, or one persisted
 // READY Agent Turn. It reports whether the item was accepted; a refusal is not an error
 // and must never roll back committed facts, because the Reconciler rediscovers the same
-// persisted READY work (invariant 6, 06 §2.1).
+// persisted READY work (the persisted-work recovery rule: the queue is only a latency
+// optimization).
 type WorkEnqueuer interface {
 	EnqueueAdvance(runID string) bool
 	EnqueueAgentTurn(runID, turnID string) bool

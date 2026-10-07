@@ -15,9 +15,9 @@ import (
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
 
-// TestAPI_CreateDefinition_ValidDefinition_Returns201WithFrozenRunInputSchema covers
-// POST /definitions (docs/08-interface-spec.md §3.1): a compilable graph is persisted as
-// version 1 and the response carries the frozen runInputSchema the Compiler produced.
+// TestAPI_CreateDefinition_ValidDefinition_Returns201WithFrozenRunInputSchema covers POST
+// /definitions: a compilable graph is persisted as version 1 and the response carries the
+// frozen runInputSchema the Compiler produced.
 func TestAPI_CreateDefinition_ValidDefinition_Returns201WithFrozenRunInputSchema(t *testing.T) {
 	env := newTestEnv(t)
 	fx := loadDocumentProcessingFixture(t)
@@ -41,9 +41,9 @@ func TestAPI_CreateDefinition_ValidDefinition_Returns201WithFrozenRunInputSchema
 }
 
 // TestAPI_CreateDefinition_CycleGraph_Returns422WithStructuredErrors covers the
-// DAG_HAS_CYCLE branch of writeError's compile-failure mapping: docs/08-interface-spec.md
-// §6 groups an invalid graph shape under HTTP 422, and the response body must carry the
-// same structured, bounded ValidationError list POST /definitions/validate would.
+// DAG_HAS_CYCLE branch of writeError's compile-failure mapping: the error contract groups
+// an invalid graph shape under HTTP 422, and the response body must carry the same
+// structured, bounded ValidationError list POST /definitions/validate would.
 func TestAPI_CreateDefinition_CycleGraph_Returns422WithStructuredErrors(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -76,10 +76,10 @@ func TestAPI_CreateDefinition_CycleGraph_Returns422WithStructuredErrors(t *testi
 	}
 }
 
-// TestAPI_ValidateDefinition_InvalidGraph_Returns200WithValidFalse covers the
-// docs/08-interface-spec.md §3.1 design decision that /definitions/validate always
-// answers 200 with a discriminated result, never the error envelope: an invalid
-// Definition is a successful validation outcome, not a failed request.
+// TestAPI_ValidateDefinition_InvalidGraph_Returns200WithValidFalse covers the design
+// decision that /definitions/validate always answers 200 with a discriminated result,
+// never the error envelope: an invalid Definition is a successful validation outcome, not
+// a failed request.
 func TestAPI_ValidateDefinition_InvalidGraph_Returns200WithValidFalse(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -139,8 +139,8 @@ func TestAPI_GetDefinition_UnknownWorkflow_Returns404DefinitionNotFound(t *testi
 }
 
 // TestAPI_SaveDefinition_StaleBaseVersion_Returns409VersionConflict covers PUT
-// /definitions/{workflowId} racing a stale baseVersion against the domain.ErrVersionConflict
-// branch of writeError (docs/09-testing-and-acceptance.md §3.4).
+// /definitions/{workflowId} racing a stale baseVersion against the
+// domain.ErrVersionConflict branch of writeError.
 func TestAPI_SaveDefinition_StaleBaseVersion_Returns409VersionConflict(t *testing.T) {
 	env := newTestEnv(t)
 	fx := loadDocumentProcessingFixture(t)
@@ -166,9 +166,9 @@ func TestAPI_SaveDefinition_StaleBaseVersion_Returns409VersionConflict(t *testin
 	}
 }
 
-// TestAPI_ListDefinitions_IncludesDescriptionAndNullLastRun covers definitionListItemDTO's
-// full shape (docs/08-interface-spec.md §3.1): description is carried through, lastRun is
-// JSON null (not an omitted key) for a Definition that has never run and populated for one
+// TestAPI_ListDefinitions_IncludesDescriptionAndNullLastRun covers
+// definitionListItemDTO's full shape: description is carried through, lastRun is JSON
+// null (not an omitted key) for a Definition that has never run and populated for one
 // that has, and the list is ordered by updatedAt descending (the more recently
 // touched/created Definition first).
 func TestAPI_ListDefinitions_IncludesDescriptionAndNullLastRun(t *testing.T) {
@@ -281,12 +281,11 @@ func TestAPI_ListDefinitions_IncludesDescriptionAndNullLastRun(t *testing.T) {
 }
 
 // TestAPI_CreateDefinition_AIGCGraph_WithMediaOutput_Validates proves the last missing
-// piece of the AIGC media scenario (docs/01-scenarios.md, docs/02-scope.md §3.2): a
-// Definition ending in the built-in media_output Node Type passes the same server-side
-// validation chain (ConfigSchema, ValidateSemantics, DAG/connectivity/unique-Output-sink)
-// every other Node Type goes through. Without media_output registered, POST /definitions
-// would reject "output" with UNKNOWN_NODE_TYPE and the graph could never reach a unique,
-// reachable Output Node sink.
+// piece of the AIGC media scenario: a Definition ending in the built-in media_output Node
+// Type passes the same server-side validation chain (ConfigSchema, ValidateSemantics,
+// DAG/connectivity/unique-Output-sink) every other Node Type goes through. Without
+// media_output registered, POST /definitions would reject "output" with UNKNOWN_NODE_TYPE
+// and the graph could never reach a unique, reachable Output Node sink.
 func TestAPI_CreateDefinition_AIGCGraph_WithMediaOutput_Validates(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -302,10 +301,9 @@ func TestAPI_CreateDefinition_AIGCGraph_WithMediaOutput_Validates(t *testing.T) 
 		t.Errorf("POST /api/definitions (AIGC graph with media_output) response missing runInputSchema key: %s", body)
 	}
 
-	// The registered Node Metadata Catalog (docs/08-interface-spec.md §3.1 GET
-	// /node-types) must list media_output under the Output category, the same category
-	// text_output uses, so Studio's palette (which owns no node catalog of its own) can
-	// render it.
+	// The registered Node Metadata Catalog (GET /node-types) must list media_output under
+	// the Output category, the same category text_output uses, so Studio's palette (which
+	// owns no node catalog of its own) can render it.
 	catalogResp, catalogBody := env.doJSON(t, http.MethodGet, "/api/node-types", nil)
 	if catalogResp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /api/node-types status = %d, want %d, body=%s", catalogResp.StatusCode, http.StatusOK, catalogBody)
@@ -330,7 +328,7 @@ func TestAPI_CreateDefinition_AIGCGraph_WithMediaOutput_Validates(t *testing.T) 
 		t.Errorf("GET /api/node-types media_output category = %q, want %q", category, "Output")
 	}
 
-	// docs/08-interface-spec.md §2 fixes inputs, outputs and uiSchema.fields as arrays. A
+	// The Node Metadata contract fixes inputs, outputs and uiSchema.fields as arrays. A
 	// Node Type with nothing on a side (text_input has no inputs; the Output types have no
 	// outputs and no uiSchema fields) must therefore serialise that side as exactly `[]`,
 	// never `null`, even though the registration stores a nil slice. The check reads the
@@ -385,10 +383,9 @@ func (nilCapabilityModelProvider) Generate(context.Context, registry.ModelReques
 }
 
 // TestAPI_ListModels_NilCapabilities_SerialisesEmptyArray covers GET /models
-// (docs/08-interface-spec.md §2): ModelMetadata.capabilities is an array, so a
-// registration that stores a nil slice must serialise as exactly `[]`, never `null`. The
-// check reads the raw bytes because decoding into map[string]any would erase the
-// distinction.
+// ModelMetadata.capabilities is an array, so a registration that stores a nil slice must
+// serialise as exactly `[]`, never `null`. The check reads the raw bytes because decoding
+// into map[string]any would erase the distinction.
 func TestAPI_ListModels_NilCapabilities_SerialisesEmptyArray(t *testing.T) {
 	env := newTestEnvWithOptions(t, testEnvOptions{
 		ExtraModelProviders: []registry.ModelProvider{nilCapabilityModelProvider{}},

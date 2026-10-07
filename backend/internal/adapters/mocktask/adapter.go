@@ -1,6 +1,6 @@
 // Package mocktask normalises exactly one Provider interaction: POST /v1/tasks on the
 // deterministic HTTP Mock Provider (cmd/mockprovider), which accepts one asynchronous task
-// and reports its result later as a callback (07 §1.3).
+// and reports its result later as a callback.
 //
 // It converts Emberling's dispatch inputs into that Provider's wire format and the
 // Provider's answer back into a registry.ExternalTask. It never retries, never writes
@@ -54,7 +54,7 @@ const defaultTimeout = 30 * time.Second
 const maxResponseBytes = 64 << 10
 
 // mediaType is the media type the Mock Provider's images are declared with. The Provider
-// stores no bytes; the callback carries a reference, never binary content (05 §1.2).
+// stores no bytes; the callback carries a reference, never binary content.
 const mediaType = "image/png"
 
 // directivePrefix marks a prompt as a scenario trigger for the Mock Provider instead of
@@ -84,14 +84,14 @@ func New(baseURL string, client *http.Client) *Adapter {
 // callback carries the Attempt-scoped callback URL and one-time plaintext token the
 // Runtime issued; both are forwarded unchanged so the Provider can report back.
 // idempotencyKey is forwarded verbatim and omitted entirely when empty: the Adapter never
-// generates a key of its own (07 §1.2). options is the node's frozen config, forwarded as
+// generates a key of its own. options is the node's frozen config, forwarded as
 // the Provider's task options.
 //
 // reference is the optional Reference Image, forwarded as the credential-free
 // domain.ImageRef the `reference` port carried and omitted entirely when absent. The
 // Adapter never resolves it: it fetches no Asset content, mints no signed URL and reads
 // no storage key, because an ImageRef is already the stable reference a Provider is
-// given (05 §1.2).
+// given.
 func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain.ImageRef, options map[string]any, callback registry.CallbackContext, idempotencyKey string) (registry.ExternalTask, error) {
 	if strings.TrimSpace(callback.URL) == "" || strings.TrimSpace(callback.Token) == "" {
 		// Nothing has been sent, so the Provider cannot have accepted a task: definite.
@@ -202,8 +202,8 @@ func (a *Adapter) buildRequest(prompt string, reference *domain.ImageRef, option
 // success. The Mock Provider echoes an explicit payload verbatim, so this is how a
 // deterministic image reference reaches the node's OnCallback.
 //
-// The reference is a domain.ImageRef on the EXTERNAL branch, which is what 05 §1.2 allows
-// the MVP Mock Provider to report: `uri` addresses that Provider's own GET
+// The reference is a domain.ImageRef on the EXTERNAL branch, which is what the data model
+// allows the MVP Mock Provider to report: `uri` addresses that Provider's own GET
 // /v1/images/{name}.png route, so it is stable, carries no credential and stays readable
 // for as long as the Provider serves. No binary content is produced or stored here; the
 // name is derived from the prompt, so a replayed dispatch reports the same image.
@@ -273,7 +273,7 @@ type taskResponse struct {
 // DispatchError is one failed dispatch. Uncertain reports whether the external task may
 // still have been created: the Execution Service needs that fact for FailNode.Uncertain,
 // because an uncertain external result forbids an automatic retry unless the registered
-// SideEffectPolicy allows it (07 §1.2, 06 §3).
+// SideEffectPolicy allows it.
 //
 // It is matched with errors.As - directly, or through the narrow
 // `interface{ Uncertain() bool }` - so no caller has to import this package to read the

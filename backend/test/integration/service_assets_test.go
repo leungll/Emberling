@@ -1,7 +1,7 @@
 //go:build integration
 
-// Package integration: this file covers AssetService's upload order, which 10-ops §3
-// fixes as "write the binary, verify it, commit the Metadata, and only then return an
+// Package integration: this file covers AssetService's upload order, which is fixed as
+// "write the binary, verify it, commit the Metadata, and only then return an
 // AssetRef". The failure this file exists for is the third step losing: a caller must
 // never receive an AssetRef for an Asset PostgreSQL does not know about, and the
 // unreferenced binary must not stay on the volume.
@@ -180,7 +180,7 @@ func TestAssetUpload_MetadataCommitFails_BinaryRemovedAndNoRow(t *testing.T) {
 		t.Errorf("Upload returned an AssetRef for an uncommitted Asset: %+v", ref)
 	}
 	if binaries := assetBinaries(t, root); len(binaries) != 0 {
-		t.Errorf("binaries after a failed metadata commit: got %v, want none (10-ops §3 orphan cleanup)", binaries)
+		t.Errorf("binaries after a failed metadata commit: got %v, want none (orphan cleanup)", binaries)
 	}
 
 	// The id the injected generator minted for this upload: nothing else could have

@@ -1,4 +1,4 @@
-# CI runs the same Makefile gate as a workstation (ENGINEERING §8). It must not grow a
+# CI runs the same Makefile gate as a workstation. It must not grow a
 # second set of commands: anything that has to pass here belongs in a make target.
 name: CI
 
@@ -78,7 +78,7 @@ jobs:
     name: e2e
     runs-on: ubuntu-latest
     # `check` already proves the unit/integration/build gate; this job only has to prove
-    # the three MVP acceptance scenarios still work end-to-end (04-ux.md §6, 09 §4.6), so
+    # the three MVP acceptance scenarios still work end-to-end, so
     # it does not block on `check` and can report its own, separate signal.
 
     services:

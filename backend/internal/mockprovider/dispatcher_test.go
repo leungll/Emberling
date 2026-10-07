@@ -19,13 +19,13 @@ type receivedCallback struct {
 }
 
 // callbackReceiver is an httptest server that stands in for Emberling's own
-// POST /api/callbacks endpoint (08 §4), recording every delivery under a mutex so
+// POST /api/callbacks endpoint, recording every delivery under a mutex so
 // concurrent Dispatcher goroutines can be asserted against safely.
 type callbackReceiver struct {
 	server *httptest.Server
 
 	mu sync.Mutex
-	// expectToken, when non-empty, makes the receiver enforce 08 §4's token rule: any
+	// expectToken, when non-empty, makes the receiver enforce the callback token rule: any
 	// other token is answered 401 and its payload is not recorded.
 	expectToken string
 	logs        []receivedCallback
@@ -44,7 +44,7 @@ func newCallbackReceiver() *callbackReceiver {
 		c.mu.Lock()
 		expect := c.expectToken
 		if expect != "" && token != expect {
-			// 08 §4: an invalid token must not have its payload saved. Only the token and
+			// An invalid token must not have its payload saved. Only the token and
 			// task id are recorded, so a test can still prove the delivery happened.
 			c.logs = append(c.logs, receivedCallback{
 				Token:  token,

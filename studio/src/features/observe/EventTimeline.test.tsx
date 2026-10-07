@@ -100,7 +100,7 @@ describe('EventTimeline — status dots', () => {
       dot.getAttribute('data-tone'),
     );
     expect(tones).toEqual(['succeeded', 'running', 'waiting', 'failed']);
-    // Only the running dot pulses (04 §4).
+    // Only the running dot pulses.
     expect(container.querySelector('[data-tone="running"]')).toHaveClass('animate-pulse');
     expect(container.querySelector('[data-tone="waiting"]')).not.toHaveClass('animate-pulse');
   });

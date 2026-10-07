@@ -10,8 +10,8 @@ import type { Edge, Node } from '@/api/types';
  * Run aggregation, transition rules and retry decisions belong to the Backend; adding
  * them here would create a second, divergent execution model.
  *
- * The Edit history below is unsaved-Definition interaction state (04 §2.5 lists Undo and
- * Redo among the Canvas operations): it only restores a graph the user already had on this
+ * The Edit history below is unsaved-Definition interaction state (Undo and Redo are among
+ * the Canvas operations): it only restores a graph the user already had on this
  * page and never reaches the server.
  */
 
@@ -128,7 +128,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       coalesceKey: null,
       hasUnsavedChanges: false,
     }),
-  // 04 §2.6: Run is disabled while unsaved changes exist, so an edit made during the Save
+  // Run is disabled while unsaved changes exist, so an edit made during the Save
   // request must keep the page dirty even though the request itself succeeded.
   markSaved: (saved) =>
     set({

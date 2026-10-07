@@ -1,12 +1,11 @@
-// Package imageinput implements the built-in Image Input Node (02 §3.2, 08 §2.1). It
+// Package imageinput implements the built-in Image Input Node. It
 // reads one Run input field by its frozen inputKey -- an AssetRef Run creation already
 // validated against the persisted Asset Metadata -- and wraps it as the `source: ASSET`
-// ImageRef its `image` port carries (08 §2.2).
+// ImageRef its `image` port carries.
 //
 // It touches neither Asset storage nor the database: the binary is never loaded, and the
 // Asset's existence, media type, size and digest were established once, at Run creation,
-// by the CreateRun use case. This node owns no NodeRun state, retry or Event of its own
-// (07 §1.1).
+// by the CreateRun use case. This node owns no NodeRun state, retry or Event of its own.
 package imageinput
 
 import (
@@ -21,10 +20,10 @@ import (
 
 const nodeType = "image_input"
 
-// imagePort is the node's single handle, fixed by 08 §2.1.
+// imagePort is the node's single fixed handle.
 const imagePort = "image"
 
-// configSchema is the sole contract for Image Input config (08 §1.3): inputKey and
+// configSchema is the sole contract for Image Input config: inputKey and
 // required are mandatory; acceptedMediaTypes and maxSizeBytes are optional constraints
 // that flow into the generated runInputSchema's AssetRef property.
 const configSchema = `{
@@ -73,7 +72,7 @@ type Executor struct{}
 func (Executor) ValidateSemantics(_ context.Context, _ map[string]any) error { return nil }
 
 // Execute reads Run.input[inputKey] and publishes it on the `image` port as a canonical
-// ImageRef. Per 08 §1.3, MVP Input Nodes inject no default: an absent optional key
+// ImageRef. MVP Input Nodes inject no default: an absent optional key
 // produces an explicit JSON null port value rather than a substituted image.
 func (Executor) Execute(_ context.Context, input registry.NodeInput, config map[string]any) (registry.NodeResult, error) {
 	inputKey, _ := config["inputKey"].(string)

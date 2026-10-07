@@ -12,7 +12,7 @@ Implement behavior established by the current code, database migrations, public 
 
 When a `docs/` directory is present in the working tree, read `docs/AGENTS.md` and `docs/ENGINEERING.md` in full before implementation, then read the numbered design documents that own the area being changed. These files are the authoritative internal contracts; do not expose or link to them from public repository content.
 
-Code comments cite these internal contracts by number and section, for example `06 §1.1` or `08 §4`, where the number maps to a file under `docs/` such as `06-execution-model.md`. The `docs/` directory is intentionally not published, so these citations will not resolve in a public checkout. Treat them as internal contract anchors: do not delete, rewrite, or "fix" them, and do not add repository links in their place. A comment that cites a section must still state the invariant or rule it relies on, so the code remains understandable without access to `docs/`.
+Code, tests, comments, error messages, and fixtures must not cite `docs/` files by number, filename, or section: no `06 §2.6`, no `06-execution-model.md`, and no `docs/...` paths. A comment states the invariant or rule it relies on in its own words, so the code is understandable without access to `docs/`. When provenance helps, name the concept in domain terms, such as "the async resume contract" or "the callback authentication rule", rather than a document location. Do not reference rules or invariants by number, such as `invariant #5` or `rule #8`, and do not use planning milestone labels such as `M5 slice 5.3b`; name the rule, for example "the single idempotent resume path", or describe the tested behavior. Never quote private design text verbatim. `make check` rejects such citations and numbered references in tracked files.
 
 Do not infer a new product or Runtime contract from a UI mock, fixture, example, or incidental implementation detail. If two authoritative inputs conflict, stop and report the conflict before changing behavior.
 
@@ -26,7 +26,7 @@ Before editing:
 4. Locate the existing implementation and tests before introducing a new abstraction.
 5. Write or update a failing test first for behavioral changes and bug fixes.
 
-During implementation, keep the change as small as the contract allows. Do not perform opportunistic refactors, dependency upgrades, formatting sweeps, or directory reorganizations. Do not create empty packages for future work.
+During implementation, keep the change as small as the contract allows. Do not perform opportunistic refactors, dependency upgrades, formatting sweeps, or directory reorganizations. Do not create empty packages for future work. The preparatory file split described under Code quality is the one exception, and only for a file the change is about to modify.
 
 If the design does not answer a question that affects persisted facts, state transitions, transaction boundaries, recovery guarantees, extension compatibility, or a public API, stop and report the gap. Do not silently choose a new architecture.
 
@@ -126,6 +126,7 @@ If the full gate cannot run, report the exact command, failure, and unverified s
 Write straightforward, idiomatic Go and TypeScript. Optimize for correctness and maintainability before abstraction.
 
 - Keep functions focused on one transaction or one pure decision.
+- Keep each source file to one use case or one pure-decision topic, following the existing split in `service/agent_turn.go`, `agent_final.go` and `agent_timeout.go`. Treat roughly 800 non-test lines as a signal to check whether new code belongs there. Do not add a new use case to a file over 1,200 lines: first split it by use case in a separate commit that only moves code within the same package, changes no behavior or transaction boundary, and passes `make check`. Never split into `helpers.go`, `util.go` or `common.go`, and never use a split to introduce new abstractions.
 - Use domain-specific names; avoid generic `Manager`, `Helper`, `Util`, and `Common` packages.
 - Wrap errors with operation and stable identifiers, while excluding secrets and oversized payloads.
 - Propagate `context.Context` through I/O boundaries and honor cancellation of the request or worker, without inventing Run cancellation semantics.

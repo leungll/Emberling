@@ -1,12 +1,13 @@
 //go:build integration
 
-// This file is the AIGC Media Generation acceptance track (docs/09-testing-and-acceptance.md
-// §1 items 2, 3 and 5), driven end to end through the production pipeline only: the real
-// image_generation Node, the real mocktask Adapter, the real deterministic Mock Provider
-// (internal/mockprovider, served in-process here), the real POST /api/callbacks intake, the
-// real work Pool, and media_output as the sink. Nothing here uses the package's
-// test_async_echo fixture Node or its fakeAsyncDispatcher: the point of these tests is that
-// the shipped components -- not a stand-in -- dispatch, suspend, resume and recover.
+// This file is the AIGC Media Generation acceptance track (dispatch and resume, restart
+// while WAITING_CALLBACK, duplicate/wrong-token/early callbacks and the Reference Image),
+// driven end to end through the production pipeline only: the real image_generation Node,
+// the real mocktask Adapter, the real deterministic Mock Provider (internal/mockprovider,
+// served in-process here), the real POST /api/callbacks intake, the real work Pool, and
+// media_output as the sink. Nothing here uses the package's test_async_echo fixture Node
+// or its fakeAsyncDispatcher: the point of these tests is that the shipped components --
+// not a stand-in -- dispatch, suspend, resume and recover.
 //
 // Ordering is controlled entirely by injected http.RoundTrippers (the Provider's callback
 // client and the Adapter's dispatch client), which are explicit hooks in the sense
@@ -52,10 +53,10 @@ const e2eWait = 20 * time.Second
 // The Provider side: the real Mock Provider, served in-process, with two injected hooks
 // ---------------------------------------------------------------------------------------
 
-// callbackDelivery is one completed callback POST as the Provider's own HTTP client saw it:
-// which task it named, which credential it carried, and how Emberling answered. Recording
-// the answer here is what lets a test assert 08 §4's response rules (200 / 202 / 401) on
-// deliveries it never issued itself.
+// callbackDelivery is one completed callback POST as the Provider's own HTTP client saw
+// it: which task it named, which credential it carried, and how Emberling answered.
+// Recording the answer here is what lets a test assert the callback response rules (200 /
+// 202 / 401) on deliveries it never issued itself.
 type callbackDelivery struct {
 	ExternalTaskID string
 	Token          string
@@ -213,8 +214,8 @@ func readAndRestoreRequestBody(req *http.Request) ([]byte, error) {
 // dispatches with. Armed with hold(), it stalls one POST /v1/tasks *response* after the
 // Provider has already handled the request -- the window in which the Attempt is STARTED,
 // the NodeRun RUNNING, and no Callback Binding exists yet, even though the Provider has
-// already sent (or is sending) its callback. That is the only way to reach 06 §1.6's "早到
-// callback" branch through the real Provider rather than a hand-built request.
+// already sent (or is sending) its callback. That is the only way to reach the
+// early-callback branch through the real Provider rather than a hand-built request.
 type taskTransport struct {
 	inner http.RoundTripper
 
@@ -336,7 +337,7 @@ func newProviderFixture(t *testing.T) *providerFixture {
 
 // startBackend wires one Emberling Backend against this Provider. pool == nil provisions a
 // fresh database; passing a previous testEnv's pool starts a second Backend over the same
-// persisted facts, which is what "restart" means here (invariant #6: recovery comes from
+// persisted facts, which is what "restart" means here (recovery comes from
 // PostgreSQL, never from process memory).
 func (f *providerFixture) startBackend(t *testing.T, pool *pgxpool.Pool) *testEnv {
 	t.Helper()
@@ -371,13 +372,13 @@ func (f *providerFixture) waitDelivery(t *testing.T, timeout time.Duration) call
 //	brief ──▶ image ─────────────▶ output.image
 //	  └────▶ prompt ──▶ caption ─▶ output.caption
 //
-// The direct brief → image edge exists because the Mock Model Provider owns its own `mock:`
-// directives and answers any prompt with `echo: <prompt>`, so a directive routed through
-// text_generation would never reach the Adapter verbatim. This graph keeps the scenario's
-// two independent branches (that is what 09 §3.5's "Image Generation 为 WAITING_CALLBACK，
-// Caption 为 READY" row needs) while letting a test select the Provider's scenario through
-// the Run input. aigcMediaGraphRequest, which the Definition-level tests assert against, is
-// deliberately left unchanged.
+// The direct brief → image edge exists because the Mock Model Provider owns its own
+// `mock:` directives and answers any prompt with `echo: <prompt>`, so a directive routed
+// through text_generation would never reach the Adapter verbatim. This graph keeps the
+// scenario's two independent branches (that is what the "Image Generation is
+// WAITING_CALLBACK while Caption is READY" case needs) while letting a test select the
+// Provider's scenario through the Run input. aigcMediaGraphRequest, which the
+// Definition-level tests assert against, is deliberately left unchanged.
 //
 // Node ids also fix the execution order: the Compiler's stable order breaks ties by
 // ascending node id (internal/runtime/plan.go), so once `brief` succeeds the single
@@ -547,10 +548,11 @@ func assertContiguousSeq(t *testing.T, events []map[string]any) {
 
 // pendingCallbackRow reads the whole Pending Callback row for externalTaskID, read-only,
 // through the same store.UnitOfWork the services use. pendingCallbackExists answers "was
-// anything persisted at all"; this answers the follow-up an early-callback test needs: was
-// the stored delivery claimed, and claimed once. A consumed row is kept on purpose --
-// consumption stamps consumed_at (store.PendingCallbackRepository.ConsumeOnce) and the row
-// is removed later by the TTL sweep (DeleteExpired), per 05 §1.7's retention rule.
+// anything persisted at all"; this answers the follow-up an early-callback test needs:
+// was the stored delivery claimed, and claimed once. A consumed row is kept on purpose --
+// consumption stamps consumed_at (store.PendingCallbackRepository.ConsumeOnce) and the
+// row is removed later by the TTL sweep (DeleteExpired), per the Pending Callback
+// retention rule.
 func (e *testEnv) pendingCallbackRow(t *testing.T, externalTaskID string) (domain.PendingCallback, bool) {
 	t.Helper()
 	var (
@@ -581,7 +583,7 @@ func bindingOf(attempt map[string]any) map[string]any {
 }
 
 // assertRunOutputImageRef checks that a Run output's `image` member is a domain.ImageRef and
-// nothing more (08 §2.2). It re-encodes what the API served and parses it with the same
+// nothing more. It re-encodes what the API served and parses it with the same
 // domain parser the nodes use, so an unknown member -- a Provider-private field, a signed
 // URL parameter carried in an extra key -- fails here exactly as it would inside the
 // Runtime. The explicit key-set check is what makes the "no Provider-private field" rule
@@ -596,7 +598,7 @@ func assertRunOutputImageRef(t *testing.T, output map[string]any) string {
 		t.Fatalf("Run output %q = %v, want a JSON object (an ImageRef)", "image", output["image"])
 	}
 	if got, want := sortedKeys(image), []string{"mediaType", "source", "uri", "width"}; strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("Run output image members = %v, want exactly %v (08 §2.2: an `image` port carries an ImageRef and no Provider-private field)", got, want)
+		t.Errorf("Run output image members = %v, want exactly %v (an `image` port carries an ImageRef and no Provider-private field)", got, want)
 	}
 	if source, _ := image["source"].(string); source != "EXTERNAL" {
 		t.Errorf("Run output image.source = %v, want %q", image["source"], "EXTERNAL")
@@ -607,7 +609,7 @@ func assertRunOutputImageRef(t *testing.T, output map[string]any) string {
 	uri, _ := image["uri"].(string)
 	parsed, err := url.Parse(uri)
 	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
-		t.Errorf("Run output image.uri = %q, want an absolute URI (05 §1.2: EXTERNAL carries an addressable uri)", uri)
+		t.Errorf("Run output image.uri = %q, want an absolute URI (EXTERNAL carries an addressable uri)", uri)
 	}
 
 	// The same bytes the API served must satisfy the domain contract itself.
@@ -622,20 +624,21 @@ func assertRunOutputImageRef(t *testing.T, output map[string]any) string {
 }
 
 // ---------------------------------------------------------------------------------------
-// 1. Dispatch, suspend, resume (09 §1 item 2; 09 §3.5)
+// 1. Dispatch, suspend, resume
 // ---------------------------------------------------------------------------------------
 
 // TestE2E_AIGC_ImageGenerationDispatchesThenCallbackCompletesRun is the AIGC acceptance
-// item itself (09 §1 item 2): the Image Generation NodeRun walks RUNNING →
-// WAITING_CALLBACK → SUCCEEDED, its Attempt walks STARTED → DISPATCHED → SUCCEEDED, the
-// Events record NODE_DISPATCHED (attemptNo + callbackBindingId only), NODE_CALLBACK_RECEIVED
-// and NODE_COMPLETED with completionSource CALLBACK, and the Run ends COMPLETED with
-// media_output's image and caption.
+// item itself: the Image Generation NodeRun walks RUNNING → WAITING_CALLBACK → SUCCEEDED,
+// its Attempt walks STARTED → DISPATCHED → SUCCEEDED, the Events record NODE_DISPATCHED
+// (attemptNo + callbackBindingId only), NODE_CALLBACK_RECEIVED and NODE_COMPLETED with
+// completionSource CALLBACK, and the Run ends COMPLETED with media_output's image and
+// caption.
 //
-// It also covers 09 §3.5's "Image Generation 为 WAITING_CALLBACK，Caption 为 READY →
-// Runtime 释放执行槽并推进 Caption，Run 保持 RUNNING": the caption's model call is held at a
-// barrier while the image Attempt waits, and the Run must read RUNNING -- not PAUSED, which
-// is only correct when nothing is READY or RUNNING at all.
+// It also covers the case where Image Generation is WAITING_CALLBACK and Caption is
+// READY: the Runtime releases the execution slot and advances Caption, and the Run stays
+// RUNNING. The caption's model call is held at a barrier while the image Attempt waits,
+// and the Run must read RUNNING -- not PAUSED, which is only correct when nothing is
+// READY or RUNNING at all.
 func TestE2E_AIGC_ImageGenerationDispatchesThenCallbackCompletesRun(t *testing.T) {
 	fx := newProviderFixture(t)
 	env := fx.startBackend(t, nil)
@@ -710,7 +713,7 @@ func TestE2E_AIGC_ImageGenerationDispatchesThenCallbackCompletesRun(t *testing.T
 		t.Errorf("NODE_DISPATCHED callbackBindingId = %q, want the projected Binding id %q", got, bindingID)
 	}
 
-	// --- 09 §3.5: the execution slot was released, Caption is advancing, Run stays RUNNING.
+	// --- the execution slot was released, Caption is advancing, Run stays RUNNING.
 	captionBarrier.waitEntered(t, e2eWait)
 	if status := env.runStatus(t, runID); status != "RUNNING" {
 		t.Fatalf("Run status while the image Attempt waits and Caption is in flight = %q, want %q (PAUSED is only correct when nothing is READY or RUNNING)", status, "RUNNING")
@@ -782,7 +785,7 @@ func TestE2E_AIGC_ImageGenerationDispatchesThenCallbackCompletesRun(t *testing.T
 		t.Errorf("NODE_COMPLETED completionSource = %q, want %q", source, "CALLBACK")
 	}
 
-	// --- the credential never leaves the Provider boundary (08 §4, 10 §2).
+	// --- the credential never leaves the Provider boundary.
 	if delivery.Token == "" {
 		t.Fatal("the Provider received no callback token, so the leak assertions below would be vacuous")
 	}
@@ -806,15 +809,16 @@ func TestE2E_AIGC_ImageGenerationDispatchesThenCallbackCompletesRun(t *testing.T
 }
 
 // ---------------------------------------------------------------------------------------
-// 2. Restart while WAITING_CALLBACK (09 §1 item 3)
+// 2. Restart while WAITING_CALLBACK
 // ---------------------------------------------------------------------------------------
 
-// TestE2E_AIGC_RestartWhileWaitingCallback_CallbackResumesOriginalRun covers 09 §1 item 3:
-// with the callback held, the Backend is torn down (work Pool stopped, HTTP server closed)
-// and a second Backend is started over the same database. The Provider -- unaware anything
-// happened -- then delivers to the new server, and the ORIGINAL Run, NodeRun and Attempt
-// complete. Nothing but PostgreSQL carries the waiting fact across the restart: the new
-// process has a new registry, a new work Pool, a new queue and an empty memory.
+// TestE2E_AIGC_RestartWhileWaitingCallback_CallbackResumesOriginalRun covers restart
+// while WAITING_CALLBACK: with the callback held, the Backend is torn down (work Pool
+// stopped, HTTP server closed) and a second Backend is started over the same database.
+// The Provider -- unaware anything happened -- then delivers to the new server, and the
+// ORIGINAL Run, NodeRun and Attempt complete. Nothing but PostgreSQL carries the waiting
+// fact across the restart: the new process has a new registry, a new work Pool, a new
+// queue and an empty memory.
 func TestE2E_AIGC_RestartWhileWaitingCallback_CallbackResumesOriginalRun(t *testing.T) {
 	fx := newProviderFixture(t)
 	first := fx.startBackend(t, nil)
@@ -892,11 +896,11 @@ func TestE2E_AIGC_RestartWhileWaitingCallback_CallbackResumesOriginalRun(t *test
 }
 
 // ---------------------------------------------------------------------------------------
-// 3. Duplicate and wrong-token deliveries (09 §1 item 5)
+// 3. Duplicate and wrong-token deliveries
 // ---------------------------------------------------------------------------------------
 
 // TestE2E_AIGC_DuplicateAndWrongTokenCallbacks_DoNotAdvanceTwice covers the two
-// non-advancing delivery classes of 09 §1 item 5, both produced by the real Provider rather
+// non-advancing delivery classes, both produced by the real Provider rather
 // than by a hand-built request: `mock:duplicate` makes it deliver the same callback twice,
 // and `mock:wrong-token` makes it deliver with a credential that is not the one Emberling
 // minted.
@@ -918,7 +922,7 @@ func TestE2E_AIGC_DuplicateAndWrongTokenCallbacks_DoNotAdvanceTwice(t *testing.T
 
 		for i, d := range []callbackDelivery{first, second} {
 			if d.StatusCode != http.StatusOK {
-				t.Fatalf("delivery %d status = %d, want %d (08 §4: a duplicate is idempotently accepted), body=%s", i+1, d.StatusCode, http.StatusOK, d.Body)
+				t.Fatalf("delivery %d status = %d, want %d (a duplicate is idempotently accepted), body=%s", i+1, d.StatusCode, http.StatusOK, d.Body)
 			}
 		}
 		outcomes := []callbackResponseDTO{
@@ -986,7 +990,7 @@ func TestE2E_AIGC_DuplicateAndWrongTokenCallbacks_DoNotAdvanceTwice(t *testing.T
 			t.Errorf("NODE_CALLBACK_RECEIVED events after a rejected credential = %d, want 0: %v", got, eventTypes(nodeEvents))
 		}
 		if env.pendingCallbackExists(t, externalTaskID) {
-			t.Errorf("a rejected delivery persisted a Pending Callback row for %q, want none (08 §4: token 无效时不得保存 payload)", externalTaskID)
+			t.Errorf("a rejected delivery persisted a Pending Callback row for %q, want none (an invalid token must not persist the payload)", externalTaskID)
 		}
 	})
 }
@@ -996,9 +1000,9 @@ func TestE2E_AIGC_DuplicateAndWrongTokenCallbacks_DoNotAdvanceTwice(t *testing.T
 // ---------------------------------------------------------------------------------------
 
 // TestE2E_AIGC_ProviderReportsFailure_NodeAndRunFail covers the Provider-reported failure
-// branch of 06 §1.6: an authenticated callback whose payload says the external task failed
+// branch: an authenticated callback whose payload says the external task failed
 // resolves the waiting Attempt and NodeRun as FAILED and fails the Run. NODE_FAILED carries
-// the bounded error + attemptNo record only (05 §2.3): the failure source is a routing fact
+// the bounded error + attemptNo record only: the failure source is a routing fact
 // of the resume call, not something the Event persists.
 func TestE2E_AIGC_ProviderReportsFailure_NodeAndRunFail(t *testing.T) {
 	fx := newProviderFixture(t)
@@ -1027,7 +1031,7 @@ func TestE2E_AIGC_ProviderReportsFailure_NodeAndRunFail(t *testing.T) {
 	}
 	attempts := attemptsOf(t, detail)
 	if len(attempts) != 1 {
-		t.Fatalf("image Attempts = %d, want 1 (06 §2.2: a reported Provider failure is not re-dispatched)", len(attempts))
+		t.Fatalf("image Attempts = %d, want 1 (a reported Provider failure is not re-dispatched)", len(attempts))
 	}
 	if status, _ := attempts[0]["status"].(string); status != "FAILED" {
 		t.Errorf("image Attempt status = %q, want %q", status, "FAILED")
@@ -1044,7 +1048,7 @@ func TestE2E_AIGC_ProviderReportsFailure_NodeAndRunFail(t *testing.T) {
 	}
 	failedPayload := payloadOf(t, failed[0])
 	if got, want := sortedKeys(failedPayload), []string{"attemptNo", "error"}; strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("NODE_FAILED payload keys = %v, want %v (05 §2.3 gives it error + attemptNo only)", got, want)
+		t.Errorf("NODE_FAILED payload keys = %v, want %v (NODE_FAILED carries error + attemptNo only)", got, want)
 	}
 	if got, _ := failedPayload["attemptNo"].(float64); int(got) != 1 {
 		t.Errorf("NODE_FAILED attemptNo = %v, want 1", got)
@@ -1054,12 +1058,12 @@ func TestE2E_AIGC_ProviderReportsFailure_NodeAndRunFail(t *testing.T) {
 	}
 }
 
-// TestE2E_AIGC_ProviderImageNotImageRef_CallbackRejectedNodeStaysWaiting is the other half
-// of 08 §2.2: an `image` port carries a domain.ImageRef, so a Provider reporting SUCCEEDED
-// with a reference shape of its own is a payload the node cannot interpret -- not a
-// Provider-reported failure and not a completion.
+// TestE2E_AIGC_ProviderImageNotImageRef_CallbackRejectedNodeStaysWaiting is the other
+// half of the ImageRef rule: an `image` port carries a domain.ImageRef, so a Provider
+// reporting SUCCEEDED with a reference shape of its own is a payload the node cannot
+// interpret -- not a Provider-reported failure and not a completion.
 //
-// 06 §1.6 fixes what that means end to end: the delivery is authenticated, so the intake
+// That means, end to end: the delivery is authenticated, so the intake
 // answers 200 {accepted:true} rather than a retry signal, but the Executor rejected the
 // payload, so nothing is persisted at all -- no NODE_CALLBACK_RECEIVED, no NODE_COMPLETED,
 // no Event seq consumed -- and the NodeRun stays WAITING_CALLBACK until its Attempt
@@ -1101,7 +1105,7 @@ func TestE2E_AIGC_ProviderImageNotImageRef_CallbackRejectedNodeStaysWaiting(t *t
 	// The delivery's HTTP response is the barrier: HandleCallback has already returned by
 	// the time it is written, so every fact asserted below is settled, with no sleep.
 	if delivery.StatusCode != http.StatusOK {
-		t.Fatalf("rejected-payload callback status = %d, want %d (08 §4: the credential was valid), body=%s",
+		t.Fatalf("rejected-payload callback status = %d, want %d (the credential was valid), body=%s",
 			delivery.StatusCode, http.StatusOK, delivery.Body)
 	}
 	outcome := decodeBody[callbackResponseDTO](t, delivery.Body)
@@ -1112,7 +1116,7 @@ func TestE2E_AIGC_ProviderImageNotImageRef_CallbackRejectedNodeStaysWaiting(t *t
 	detail, rawDetail := env.nodeRunDetail(t, runID, imageNodeRunID)
 	nodeRun, _ := detail["nodeRun"].(map[string]any)
 	if status, _ := nodeRun["status"].(string); status != "WAITING_CALLBACK" {
-		t.Errorf("image NodeRun status after an uninterpretable payload = %q, want %q (06 §1.6: a malformed delivery is not evidence the external task failed)", status, "WAITING_CALLBACK")
+		t.Errorf("image NodeRun status after an uninterpretable payload = %q, want %q (a malformed delivery is not evidence the external task failed)", status, "WAITING_CALLBACK")
 	}
 	attempts := attemptsOf(t, detail)
 	if len(attempts) != 1 {
@@ -1161,14 +1165,14 @@ func TestE2E_AIGC_ProviderImageNotImageRef_CallbackRejectedNodeStaysWaiting(t *t
 }
 
 // ---------------------------------------------------------------------------------------
-// 5. Callback earlier than its own Callback Binding (09 §1 item 5, 06 §3)
+// 5. Callback earlier than its own Callback Binding
 // ---------------------------------------------------------------------------------------
 
-// TestE2E_AIGC_EarlyCallback_RecordedPendingThenConsumed covers "callback 早于
-// WAITING_CALLBACK 提交" (06 §3) with the real Provider: the dispatch response is held in
-// the Adapter's own HTTP client, so the Provider's immediate callback reaches
-// POST /api/callbacks while dispatchNode is still blocked and no Callback Binding exists.
-// The intake stores it and answers 202; once the Binding commits, the stored delivery is
+// TestE2E_AIGC_EarlyCallback_RecordedPendingThenConsumed covers a callback that arrives
+// before WAITING_CALLBACK commits, with the real Provider: the dispatch response is held
+// in the Adapter's own HTTP client, so the Provider's immediate callback reaches POST
+// /api/callbacks while dispatchNode is still blocked and no Callback Binding exists. The
+// intake stores it and answers 202; once the Binding commits, the stored delivery is
 // consumed exactly once and the Run completes.
 func TestE2E_AIGC_EarlyCallback_RecordedPendingThenConsumed(t *testing.T) {
 	fx := newProviderFixture(t)
@@ -1183,7 +1187,7 @@ func TestE2E_AIGC_EarlyCallback_RecordedPendingThenConsumed(t *testing.T) {
 
 	early := fx.waitDelivery(t, e2eWait)
 	if early.StatusCode != http.StatusAccepted {
-		t.Fatalf("early callback status = %d, want %d (08 §4: binding 尚未创建且 token 有效), body=%s", early.StatusCode, http.StatusAccepted, early.Body)
+		t.Fatalf("early callback status = %d, want %d (binding not yet created and the token is valid), body=%s", early.StatusCode, http.StatusAccepted, early.Body)
 	}
 	outcome := decodeBody[callbackResponseDTO](t, early.Body)
 	if !outcome.Accepted || !outcome.Pending || outcome.Duplicate {
@@ -1211,7 +1215,7 @@ func TestE2E_AIGC_EarlyCallback_RecordedPendingThenConsumed(t *testing.T) {
 		t.Errorf("NODE_COMPLETED events = %d, want 1: %v", got, eventTypes(nodeEvents))
 	}
 	// The stored delivery was claimed, and claimed once. The row itself outlives its
-	// consumption by design (05 §1.7: a consumed record is retained until the TTL sweep),
+	// consumption by design (a consumed record is retained until the TTL sweep),
 	// so "consumed exactly once" -- not "deleted" -- is the fact that proves the early
 	// callback advanced the Attempt and cannot advance it again.
 	pending, found := env.pendingCallbackRow(t, early.ExternalTaskID)
@@ -1228,7 +1232,7 @@ func TestE2E_AIGC_EarlyCallback_RecordedPendingThenConsumed(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------------------
-// 6. Reference Image: Asset -> image_input -> image_generation (09 §1 item 5)
+// 6. Reference Image: Asset -> image_input -> image_generation
 // ---------------------------------------------------------------------------------------
 
 // aigcReferenceE2EGraphRequest is aigcE2EGraphRequest plus the Reference Image branch the
@@ -1292,7 +1296,7 @@ func (e *testEnv) createAIGCReferenceRun(t *testing.T, brief string, reference m
 //
 // What must NOT happen is asserted just as explicitly: the Asset's internal storage key
 // never appears in the dispatch body, the Attempt input, the Node detail or the Events
-// (10-ops §4), and the Provider is handed a reference it does not resolve -- the Mock
+// and the Provider is handed a reference it does not resolve -- the Mock
 // Provider issues no request for the Asset's content at all.
 func TestE2E_AIGC_ReferenceImage_ImageInputOutputsAssetImageRefAndRunCompletes(t *testing.T) {
 	fx := newProviderFixture(t)
@@ -1371,7 +1375,7 @@ func TestE2E_AIGC_ReferenceImage_ImageInputOutputsAssetImageRefAndRunCompletes(t
 	output, _ := run["output"].(map[string]any)
 	assertRunOutputImageRef(t, output)
 
-	// --- nothing about how Emberling stores the Asset crossed any boundary (10-ops §4).
+	// --- nothing about how Emberling stores the Asset crossed any boundary.
 	eventsJSON, err := json.Marshal(env.listEvents(t, runID))
 	if err != nil {
 		t.Fatalf("marshal events: %v", err)

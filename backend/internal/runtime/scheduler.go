@@ -5,7 +5,8 @@ import "github.com/leungll/Emberling/backend/internal/domain"
 // NodeRunState is the minimal, already-persisted-or-projected fact the Scheduler needs
 // about one node's NodeRun. The Scheduler reasons only about dependency completion and
 // node identity, never about execution input/output values
-// (docs/06-execution-model.md §1.3: "Scheduler 回答...不写数据库，也不调用 Executor").
+// (the Scheduler only answers what can run next; it writes no database rows and calls
+// no Executor).
 type NodeRunState struct {
 	NodeID string
 	Status domain.NodeRunStatus
@@ -21,21 +22,21 @@ func InitialReady(plan *CompiledDefinition) []string {
 // NextReady returns, in stable Order, every node id that has become runnable given
 // existing -- the NodeRunState already known for every node that currently has one.
 // A node is runnable when it does not yet have a NodeRun and every one of its upstream
-// dependencies has SUCCEEDED (docs/06-execution-model.md §1.3).
+// dependencies has SUCCEEDED.
 //
 // existing may reflect projected state -- the state a transaction is about to make true,
-// not necessarily what is committed on disk yet (docs/06-execution-model.md §1.3:
-// "按本次事务成功后的状态和 output 计算" -- projected state). NextReady never proposes a
-// node id already present in existing, so it can never suggest a duplicate NodeRun
-// (docs/06-execution-model.md §1.3: "(run_id, node_id) 唯一").
+// not necessarily what is committed on disk yet (computed from the state and output
+// this transaction will have once it succeeds). NextReady never proposes a node id
+// already present in existing, so it can never suggest a duplicate NodeRun
+// ((run_id, node_id) is unique).
 //
-// Run-wide stop after failure: 06 §1.5 makes FAILED terminal and MVP has no
-// cancellation; this is a documented gap (06 §1.3 does not state it explicitly). Once
-// any NodeRun in the Run is FAILED, the Run itself can never reach COMPLETED again, so
-// NextReady returns nothing at all -- proposing new work on an unrelated branch would be
-// dead work with no recovery path. This is a Run-wide rule, not a per-node dependency
-// check: it does not matter whether the failed node is upstream of the node being
-// considered.
+// Run-wide stop after failure: a FAILED NodeRun is terminal and MVP has no
+// cancellation; this is a documented gap (the scheduling rules do not state it
+// explicitly). Once any NodeRun in the Run is FAILED, the Run itself can never reach
+// COMPLETED again, so NextReady returns nothing at all -- proposing new work on an
+// unrelated branch would be dead work with no recovery path. This is a Run-wide rule,
+// not a per-node dependency check: it does not matter whether the failed node is
+// upstream of the node being considered.
 func NextReady(plan *CompiledDefinition, existing map[string]NodeRunState) []string {
 	for _, state := range existing {
 		if state.Status == domain.NodeRunFailed {
@@ -66,19 +67,17 @@ func NextReady(plan *CompiledDefinition, existing map[string]NodeRunState) []str
 // SelectNextToExecute picks which single ready node the MVP's one execution slot may
 // claim next. MVP uses a manually authored static DAG that supports multiple concurrent
 // READY/WAITING_CALLBACK NodeRuns, but the same Run calls only one Node Executor at a
-// time (docs/06-execution-model.md §1.3; docs/11-decisions.md §9: "同一 Run 一次只调用一个
-// Node Executor"). SelectNextToExecute therefore refuses to select anything while
-// existing already contains a RUNNING NodeRun, and otherwise returns the first ready node
-// in stable Order.
+// time. SelectNextToExecute therefore refuses to select anything while existing already
+// contains a RUNNING NodeRun, and otherwise returns the first ready node in stable Order.
 //
 // This is a pure pick, not a claim: the caller must still win the READY -> RUNNING
-// conditional update before invoking the Executor (docs/06-execution-model.md §1.3).
+// conditional update before invoking the Executor.
 //
-// Run-wide stop after failure: 06 §1.5 makes FAILED terminal and MVP has no
-// cancellation; this is a documented gap (06 §1.3 does not state it explicitly). Once
-// any NodeRun in the Run is FAILED, SelectNextToExecute refuses to claim anything at
-// all, even a NodeRun that reached READY before the failure landed: the Run can never
-// reach COMPLETED again, so dispatching more work has no recovery path.
+// Run-wide stop after failure: a FAILED NodeRun is terminal and MVP has no
+// cancellation; this is a documented gap (the scheduling rules do not state it
+// explicitly). Once any NodeRun in the Run is FAILED, SelectNextToExecute refuses to
+// claim anything at all, even a NodeRun that reached READY before the failure landed:
+// the Run can never reach COMPLETED again, so dispatching more work has no recovery path.
 func SelectNextToExecute(plan *CompiledDefinition, existing map[string]NodeRunState, ready []string) (string, bool) {
 	for _, state := range existing {
 		if state.Status == domain.NodeRunRunning || state.Status == domain.NodeRunFailed {

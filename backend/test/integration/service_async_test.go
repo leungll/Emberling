@@ -1,11 +1,10 @@
 //go:build integration
 
-// Async Node suspend/resume integration tests (docs/06-execution-model.md §1.6,
-// docs/09-testing-and-acceptance.md §3.2). Every guarantee proven here is transactional or
-// a race: the dispatch transaction commits the Callback Binding and WAITING_CALLBACK
-// together or not at all, and callback, Provider Poll and timeout all compete for one
-// completion right decided by a conditional UPDATE. A mock repository cannot prove either
-// (CLAUDE.md testing standard), so these run against real PostgreSQL.
+// Async Node suspend/resume integration tests. Every guarantee proven here is
+// transactional or a race: the dispatch transaction commits the Callback Binding and
+// WAITING_CALLBACK together or not at all, and callback, Provider Poll and timeout all
+// compete for one completion right decided by a conditional UPDATE. A mock repository
+// cannot prove either (CLAUDE.md testing standard), so these run against real PostgreSQL.
 //
 // Helpers are prefixed `async` to stay clear of the `exec`/`store` helpers that the
 // sibling files in this package already own. The Node used here is a deterministic
@@ -86,7 +85,7 @@ func (e *asyncFakeExecutor) dispatchCount() int {
 }
 
 // idempotencyKeys reports, in order, the NodeInput.IdempotencyKey of every dispatch call
-// the Provider received. 09 §3.7 asserts byte-for-byte reuse across a keyed retry, so the
+// the Provider received. The keyed-retry test asserts byte-for-byte reuse, so the
 // observation point is the Provider boundary itself, not the AdvanceOutcome.
 func (e *asyncFakeExecutor) idempotencyKeys() []string {
 	e.mu.Lock()
@@ -189,7 +188,7 @@ func newAsyncHarness(t *testing.T, side domain.SideEffectPolicy, policy domain.E
 
 // newService builds an ExecutionService over this harness's database. Calling it a second
 // time models a process restart: registry, compiled-plan cache and Executor instance are
-// all fresh, and PostgreSQL is the only carried-over state (invariant #1).
+// all fresh, and PostgreSQL is the only carried-over state.
 func (h *asyncHarness) newService(side domain.SideEffectPolicy, executor *asyncFakeExecutor) *service.ExecutionService {
 	h.t.Helper()
 	nodes := registry.NewNodeRegistry()
@@ -397,9 +396,9 @@ func asyncNodeRun(t *testing.T, ctx context.Context, uow store.UnitOfWork, runID
 // ---------------------------------------------------------------------------
 
 // TestNodeDispatch_ProviderAcceptedTask_CommitsBindingAndWaitingCallbackTogether proves
-// the second phase of 06 §1.6 is atomic in both directions: on success the Binding, the
-// WAITING_CALLBACK NodeRun, the DISPATCHED Attempt and NODE_DISPATCHED all commit
-// together; when the Event insert fails, none of them survive (invariant #3).
+// the second phase of async dispatch is atomic in both directions: on success the
+// Binding, the WAITING_CALLBACK NodeRun, the DISPATCHED Attempt and NODE_DISPATCHED all
+// commit together; when the Event insert fails, none of them survive.
 func TestNodeDispatch_ProviderAcceptedTask_CommitsBindingAndWaitingCallbackTogether(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -445,7 +444,7 @@ func TestNodeDispatch_ProviderAcceptedTask_CommitsBindingAndWaitingCallbackToget
 	if _, present := payload["attemptNo"]; !present {
 		t.Fatalf("NODE_DISPATCHED payload: want an attemptNo, got %v", payload)
 	}
-	// 08 §"Callback Binding": providerId/externalTaskId are projected from the Binding and
+	// providerId/externalTaskId are projected from the Callback Binding and
 	// never copied into an Event.
 	for _, forbidden := range []string{"providerId", "externalTaskId", "token", "callbackToken"} {
 		if _, present := payload[forbidden]; present {
@@ -490,8 +489,9 @@ func TestNodeDispatch_ProviderAcceptedTask_CommitsBindingAndWaitingCallbackToget
 // ---------------------------------------------------------------------------
 
 // TestNodeResume_CallbackWins_WritesNodeCallbackReceivedInSameTransaction proves the
-// resume transaction of 06 §1.6: the winning callback writes NODE_CALLBACK_RECEIVED and
-// NODE_COMPLETED under one lock, with consecutive seq values, and resumes the Run.
+// resume transaction of async dispatch: the winning callback writes
+// NODE_CALLBACK_RECEIVED and NODE_COMPLETED under one lock, with consecutive seq values,
+// and resumes the Run.
 func TestNodeResume_CallbackWins_WritesNodeCallbackReceivedInSameTransaction(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -555,7 +555,7 @@ func TestNodeResume_CallbackWins_WritesNodeCallbackReceivedInSameTransaction(t *
 	}
 }
 
-// TestNodeResume_DuplicateCallback_DoesNotAdvanceTwice covers 09 §3.2's "重复 callback":
+// TestNodeResume_DuplicateCallback_DoesNotAdvanceTwice covers duplicate callbacks:
 // the second delivery of the same result changes nothing and is reported as a duplicate.
 func TestNodeResume_DuplicateCallback_DoesNotAdvanceTwice(t *testing.T) {
 	h := newAsyncHarness(t,
@@ -590,9 +590,9 @@ func TestNodeResume_DuplicateCallback_DoesNotAdvanceTwice(t *testing.T) {
 	}
 }
 
-// TestNodeResume_StaleCallback_DoesNotConsumeEventSeq covers "无效/迟到 callback 不消耗
-// Event seq": a delivery for an Attempt that already failed must leave the Event log and
-// the seq watermark untouched.
+// TestNodeResume_StaleCallback_DoesNotConsumeEventSeq covers that an invalid or late
+// callback does not consume an Event seq: a delivery for an Attempt that already failed
+// must leave the Event log and the seq watermark untouched.
 func TestNodeResume_StaleCallback_DoesNotConsumeEventSeq(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -633,15 +633,15 @@ func TestNodeResume_StaleCallback_DoesNotConsumeEventSeq(t *testing.T) {
 	}
 }
 
-// TestNodeResume_OldAttemptCallback_DoesNotOverwriteNewerAttempt covers "旧 Attempt 的
-// callback": a credential issued to a superseded Attempt must not complete the NodeRun that
-// a newer Attempt is now waiting on.
+// TestNodeResume_OldAttemptCallback_DoesNotOverwriteNewerAttempt covers a callback for an
+// old Attempt: a credential issued to a superseded Attempt must not complete the NodeRun
+// that a newer Attempt is now waiting on.
 //
 // The newer Attempt is produced the only way MVP allows one: the first Attempt failed
 // definitely while still STARTED -- the Provider call came back with an error, so no
 // Callback Binding was ever committed -- and an EXTERNAL+KEYED Node carries a Provider
 // idempotency key, so that failure is retryable. An Attempt that already reached
-// WAITING_CALLBACK never produces a second one (06 §2.2).
+// WAITING_CALLBACK never produces a second one.
 func TestNodeResume_OldAttemptCallback_DoesNotOverwriteNewerAttempt(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed},
@@ -721,7 +721,7 @@ func TestNodeResume_OldAttemptCallback_DoesNotOverwriteNewerAttempt(t *testing.T
 
 // TestNodeResume_ProviderPollCompletion_OmitsCallbackEventInPostgres is the PostgreSQL
 // counterpart of the unit-level PROVIDER_POLL test: the same resume use case, entered with
-// a different Source, must not write NODE_CALLBACK_RECEIVED (06 §1.6).
+// a different Source, must not write NODE_CALLBACK_RECEIVED.
 func TestNodeResume_ProviderPollCompletion_OmitsCallbackEventInPostgres(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -765,7 +765,7 @@ func TestNodeResume_ProviderPollCompletion_OmitsCallbackEventInPostgres(t *testi
 // ---------------------------------------------------------------------------
 
 // TestCallbackIntake_BindingNotYetCommitted_StoresPendingCallback covers the early
-// callback of 06 §1.6 / 05 §1.7: the Provider answered before the dispatch transaction
+// callback of async dispatch: the Provider answered before the dispatch transaction
 // committed, so the delivery is stored instead of being lost or acted on.
 func TestCallbackIntake_BindingNotYetCommitted_StoresPendingCallback(t *testing.T) {
 	h := newAsyncHarness(t,
@@ -813,8 +813,8 @@ func TestCallbackIntake_BindingNotYetCommitted_StoresPendingCallback(t *testing.
 }
 
 // TestCallbackIntake_BindingCommitted_ConsumesPendingCallbackOnce proves the third phase
-// of 06 §1.6: after the Binding commits, the stored early callback advances the NodeRun
-// exactly once, and the row is marked consumed so no later pass can replay it.
+// of async dispatch: after the Binding commits, the stored early callback advances the
+// NodeRun exactly once, and the row is marked consumed so no later pass can replay it.
 func TestCallbackIntake_BindingCommitted_ConsumesPendingCallbackOnce(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -862,8 +862,8 @@ func TestCallbackIntake_BindingCommitted_ConsumesPendingCallbackOnce(t *testing.
 }
 
 // TestNodeResume_ReconcilerPathPendingCallbackWithMismatchedToken_NotConsumed proves that
-// docs/06-execution-model.md §3 ("无法匹配的 Pending Callback 不具有推进权") and the
-// Attempt-scoped token of docs/05-data-model.md §1.7 hold on the Reconciler's own replay
+// the rule that an unmatched Pending Callback has no right to advance execution, and the
+// Attempt-scoped callback token, hold on the Reconciler's own replay
 // path, not only through consumeEarlyCallback's in-process check after a fresh dispatch
 // commit. A Pending Callback recorded under Attempt X's own valid credential, but naming
 // the external task id a later, unrelated Attempt Y binds to, must not complete Y merely
@@ -886,7 +886,7 @@ func TestNodeResume_ReconcilerPathPendingCallbackWithMismatchedToken_NotConsumed
 	outcomeY := h.claimAsyncNode(runY)
 
 	// A verified delivery, authenticated with X's own valid token, names Y's future
-	// external task id before Y's Binding exists. 06 §1.6 stores it as a Pending Callback
+	// external task id before Y's Binding exists. Intake stores it as a Pending Callback
 	// keyed by X's credential hash -- this is the scenario a misrouted or replayed valid
 	// token produces.
 	body := `{"text":"hijacked"}`
@@ -958,8 +958,8 @@ func TestNodeResume_ReconcilerPathPendingCallbackWithMismatchedToken_NotConsumed
 // ---------------------------------------------------------------------------
 
 // TestTimeoutAttempt_DispatchedAttemptPastDeadline_FailsAttemptAndNodeRun covers the
-// DISPATCHED-deadline row of 09 §3.2 and the "等待超时" edge of the 06 §1.1 NodeRun
-// machine: a Node that is still waiting when its Attempt deadline passes fails.
+// DISPATCHED-deadline scenario and the wait-timeout edge of the NodeRun state machine: a
+// Node that is still waiting when its Attempt deadline passes fails.
 func TestTimeoutAttempt_DispatchedAttemptPastDeadline_FailsAttemptAndNodeRun(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -1000,10 +1000,11 @@ func TestTimeoutAttempt_DispatchedAttemptPastDeadline_FailsAttemptAndNodeRun(t *
 }
 
 // TestTimeoutAttempt_DispatchedKeyedNodeWithAttemptsLeft_FailsWithoutRedispatch pins the
-// operative rule for a waiting Attempt that runs out of time: 06 §2.2 "MVP 不自动重新派发
-// 已经进入 WAITING_CALLBACK 的外部任务", and the NodeRun machine at 06 §1.1 offers
-// WAITING_CALLBACK only the edge to FAILED. The Node here is EXTERNAL+KEYED with two
-// attempts to spare, i.e. exactly the case the generic retry policy would re-dispatch.
+// operative rule for a waiting Attempt that runs out of time: the MVP never automatically
+// re-dispatches an external task that has already entered WAITING_CALLBACK, and the
+// NodeRun state machine offers WAITING_CALLBACK only the edge to FAILED. The Node here is
+// EXTERNAL+KEYED with two attempts to spare, i.e. exactly the case the generic retry
+// policy would re-dispatch.
 func TestTimeoutAttempt_DispatchedKeyedNodeWithAttemptsLeft_FailsWithoutRedispatch(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed},
@@ -1049,17 +1050,18 @@ func TestTimeoutAttempt_DispatchedKeyedNodeWithAttemptsLeft_FailsWithoutRedispat
 	}
 }
 
-// TestNodeDispatch_KeyedRetry_ReusesIdenticalIdempotencyKey pins the EXTERNAL+KEYED row of
-// 09 §3.7 at the Provider boundary: when a keyed external call enters retry, every Provider
-// call carries byte-for-byte the same idempotency key -- the key changing across Attempts
-// must fail this test. The retry is produced the only way 06 §1.1/§2.2 allow one: the first
-// Attempt's deadline expires while it is still STARTED (its dispatch is in flight, not yet
-// WAITING_CALLBACK), TimeoutAttempt fails it, and EXTERNAL+KEYED is what makes that failure
-// retryable at all. The expired Attempt's Provider call then lands late -- the Provider has
-// received the dispatch and its key, while the stale commit writes nothing (dispatchNode's
-// lostRace path) -- and the second Attempt dispatches for real once the backoff elapses.
-// The unit test TestExecute_KeyedExternalNode_PassesNodeRunIDAsIdempotencyKey only pins how
-// one key is constructed; this proves reuse across two real dispatches of one NodeRun.
+// TestNodeDispatch_KeyedRetry_ReusesIdenticalIdempotencyKey pins the EXTERNAL+KEYED
+// side-effect rule at the Provider boundary: when a keyed external call enters retry,
+// every Provider call carries byte-for-byte the same idempotency key -- the key changing
+// across Attempts must fail this test. The retry is produced the only way the NodeRun
+// state machine allows one: the first Attempt's deadline expires while it is still
+// STARTED (its dispatch is in flight, not yet WAITING_CALLBACK), TimeoutAttempt fails it,
+// and EXTERNAL+KEYED is what makes that failure retryable at all. The expired Attempt's
+// Provider call then lands late -- the Provider has received the dispatch and its key,
+// while the stale commit writes nothing (dispatchNode's lostRace path) -- and the second
+// Attempt dispatches for real once the backoff elapses. The unit test
+// TestExecute_KeyedExternalNode_PassesNodeRunIDAsIdempotencyKey only pins how one key is
+// constructed; this proves reuse across two real dispatches of one NodeRun.
 func TestNodeDispatch_KeyedRetry_ReusesIdenticalIdempotencyKey(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed},
@@ -1108,7 +1110,7 @@ func TestNodeDispatch_KeyedRetry_ReusesIdenticalIdempotencyKey(t *testing.T) {
 			firstAttempt.AttemptNo, firstAttempt.AttemptNo+1, firstAttempt.AttemptNo, secondAttempt.AttemptNo)
 	}
 
-	// The 09 §3.7 assertion itself: exactly two Provider calls, one identical key.
+	// The keyed-retry assertion itself: exactly two Provider calls, one identical key.
 	keys := h.exec.idempotencyKeys()
 	if len(keys) != 2 {
 		t.Fatalf("Provider dispatch calls for this NodeRun: want exactly 2, got %d (%q)", len(keys), keys)
@@ -1121,10 +1123,10 @@ func TestNodeDispatch_KeyedRetry_ReusesIdenticalIdempotencyKey(t *testing.T) {
 	}
 }
 
-// TestNodeResume_ConcurrentCallbackAndTimeout_OnlyOneCommits is the race 09 §3.2 names
-// explicitly: "timeout 与 callback、Provider Poll 竞争同一完成权，只有一方提交". Both
-// goroutines start from the same barrier and hit the same Run lock; the conditional
-// UPDATE, not the arrival order, decides the winner.
+// TestNodeResume_ConcurrentCallbackAndTimeout_OnlyOneCommits is the race in which
+// timeout, callback and Provider Poll compete for the same completion right and only one
+// commits. Both goroutines start from the same barrier and hit the same Run lock; the
+// conditional UPDATE, not the arrival order, decides the winner.
 func TestNodeResume_ConcurrentCallbackAndTimeout_OnlyOneCommits(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -1193,10 +1195,10 @@ func TestNodeResume_ConcurrentCallbackAndTimeout_OnlyOneCommits(t *testing.T) {
 	}
 }
 
-// TestNodeResume_AfterRestart_ResumesOriginalAttemptFromDatabase covers 09 §3.2's
-// "WAITING_CALLBACK 期间重启": the waiting Attempt, its Binding and its credential live in
+// TestNodeResume_AfterRestart_ResumesOriginalAttemptFromDatabase covers a restart during
+// WAITING_CALLBACK: the waiting Attempt, its Binding and its credential live in
 // PostgreSQL, so a brand-new service instance -- fresh registry, fresh plan cache, fresh
-// Executor -- resumes the same Attempt (invariants #1 and #6).
+// Executor -- resumes the same Attempt.
 func TestNodeResume_AfterRestart_ResumesOriginalAttemptFromDatabase(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -1247,9 +1249,10 @@ func TestNodeResume_AfterRestart_ResumesOriginalAttemptFromDatabase(t *testing.T
 	}
 }
 
-// TestNodeResume_ProviderFailureWithRetriesLeft_FailsWithoutRedispatch pins 06 §2.2:
-// "Provider 明确失败：将 Attempt 和 NodeRun 标记为 FAILED。MVP 不自动重新派发已经进入
-// WAITING_CALLBACK 的外部任务." The Node here is EXTERNAL+KEYED with attempts to spare, so
+// TestNodeResume_ProviderFailureWithRetriesLeft_FailsWithoutRedispatch pins the rule that a
+// definite Provider failure marks the Attempt and NodeRun FAILED, and the MVP never
+// automatically re-dispatches an external task that has already entered WAITING_CALLBACK.
+// The Node here is EXTERNAL+KEYED with attempts to spare, so
 // the generic retry policy would happily re-dispatch it; a reported Provider failure of a
 // task that is already waiting must still be terminal.
 func TestNodeResume_ProviderFailureWithRetriesLeft_FailsWithoutRedispatch(t *testing.T) {

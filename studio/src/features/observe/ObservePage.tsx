@@ -23,7 +23,7 @@ function describeError(error: unknown, fallback: string): string {
   return fallback;
 }
 
-/** Registered Node Type of a MANAGED_AGENT NodeRun, which gets the Agent layout (04 §3.4). */
+/** Registered Node Type of a MANAGED_AGENT NodeRun, which gets the Agent layout. */
 const AGENT_NODE_TYPE = 'agent';
 
 /**
@@ -210,7 +210,7 @@ export function ObservePage() {
       />
 
       {agentSelected ? (
-        // 04 §3.4 Agent view: workflow stepper and Run facts | Turn timeline | Detail, over
+        // Agent view: workflow stepper and Run facts | Turn timeline | Detail, over
         // an Event stream strip.
         <>
           <main className="flex min-h-0 flex-1">
@@ -255,7 +255,7 @@ export function ObservePage() {
           />
         </>
       ) : (
-        // 04 §3.3 Run view: topology and Run Summary over Event Timeline and Detail.
+        // Run view: topology and Run Summary over Event Timeline and Detail.
         // The top row grows with the Run Summary so its RUNNING / WAITING lists are never
         // clipped; the page scrolls when the lower row would drop below its minimum.
         <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">

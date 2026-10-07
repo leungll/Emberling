@@ -1,12 +1,12 @@
 //go:build integration
 
-// M4 acceptance rows of docs/09 §3.3 that the synchronous Tool path already covers, proven
-// again on the asynchronous callback path (06 §1.7). A callback resume enters the same
-// completion and failure use cases as a synchronous Tool result, so each test pins that the
-// shared transaction keeps its guarantee when it is reached from a callback: State patch
-// atomicity, rollback of a failure transaction, and no recovery of an Agent whose Tool has
-// already failed. They share the agentHarness of agent_loop_test.go and the scripted async
-// Tool of agent_async_tool_test.go.
+// Agent Tool acceptance cases that the synchronous Tool path already covers, proven again
+// on the asynchronous callback path. A callback resume enters the same completion and
+// failure use cases as a synchronous Tool result, so each test pins that the shared
+// transaction keeps its guarantee when it is reached from a callback: State patch
+// atomicity, rollback of a failure transaction, and no recovery of an Agent whose Tool
+// has already failed. They share the agentHarness of agent_loop_test.go and the scripted
+// async Tool of agent_async_tool_test.go.
 package integration
 
 import (
@@ -64,12 +64,12 @@ func agentAsyncPatchedDispatch(t *testing.T, workflowID, stateSchema, statePatch
 	return h, run, outcome, tool.lastToken(t)
 }
 
-// TestAgentAsyncToolCallback_StatePatch_CommitsStateVersionWithResult covers docs/09 §3.3
-// "State 真正变化" on the callback path. 05 §1.4 makes a TOOL_CALL's patch atomic with the
-// Tool result, so while the Action waits there is no State Version; the resume transaction
-// then commits the new State Version, the moved pointer, the Action result and
-// AGENT_STATE_UPDATED together, and the Event records the previous and new State Versions
-// and the Context Version committed with them.
+// TestAgentAsyncToolCallback_StatePatch_CommitsStateVersionWithResult covers a real State
+// change on the callback path. A TOOL_CALL's patch is atomic with the Tool result, so
+// while the Action waits there is no State Version; the resume transaction then commits
+// the new State Version, the moved pointer, the Action result and AGENT_STATE_UPDATED
+// together, and the Event records the previous and new State Versions and the Context
+// Version committed with them.
 func TestAgentAsyncToolCallback_StatePatch_CommitsStateVersionWithResult(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentAsyncPatchedDispatch(t, "wf-agent-cb-state-patch", "", `{"seen":["k1"]}`, tool)
@@ -122,10 +122,11 @@ func TestAgentAsyncToolCallback_StatePatch_CommitsStateVersionWithResult(t *test
 	assertAgentTokenAbsent(t, h, run.ID, token)
 }
 
-// TestAgentAsyncToolCallback_StatePatchFailsSchema_FailsInvalidActionKeepsResult covers
-// docs/09 §3.3 "State patch 应用失败或结果不通过 State Schema" on the callback path: the Tool
-// really succeeded, so its Attempt keeps the callback's result, but the Action fails as
-// INVALID_ACTION with failureSource CALLBACK and no Context or State Version is committed.
+// TestAgentAsyncToolCallback_StatePatchFailsSchema_FailsInvalidActionKeepsResult covers a
+// State patch that fails to apply or fails the State Schema on the callback path: the
+// Tool really succeeded, so its Attempt keeps the callback's result, but the Action fails
+// as INVALID_ACTION with failureSource CALLBACK and no Context or State Version is
+// committed.
 func TestAgentAsyncToolCallback_StatePatchFailsSchema_FailsInvalidActionKeepsResult(t *testing.T) {
 	const stateSchema = `{"type":"object","properties":{"count":{"type":"number"}},"additionalProperties":false}`
 	tool := &agentAsyncTool{}
@@ -152,8 +153,8 @@ func TestAgentAsyncToolCallback_StatePatchFailsSchema_FailsInvalidActionKeepsRes
 	assertAgentTokenAbsent(t, h, run.ID, token)
 }
 
-// TestAgentAsyncToolCallback_FailureTxEventInsertFails_RollsBackTermination covers
-// docs/09 §3.3 "Tool failure 事务在 COMMIT 前失败" on the callback path: when the shared Tool
+// TestAgentAsyncToolCallback_FailureTxEventInsertFails_RollsBackTermination covers a Tool
+// failure transaction that fails before COMMIT on the callback path: when the shared Tool
 // failure transaction reached from a Provider-reported failure cannot insert its first
 // Event, no termination, no Context or State Version and no next Turn survive, the Action
 // is still WAITING_CALLBACK, and the Provider's re-delivery then fails it exactly once.
@@ -209,11 +210,12 @@ func TestAgentAsyncToolCallback_FailureTxEventInsertFails_RollsBackTermination(t
 	assertContiguousSeq(t, listEvents(h.ctx, t, h.uow, run.ID))
 }
 
-// TestAgentAsyncToolRecovery_AfterCallbackFailure_RestartRecoversNothing covers docs/09
-// §3.3 "Tool 已失败后恢复 Agent NodeRun" on the callback path: once a Provider-reported
-// failure committed, a restarted process's Reconciler and a late success callback apply no
-// state patch, create no next Turn, never call the model again and leave the committed
-// Decision as it was. A failed Agent is terminal, not recoverable work (06 §2.1).
+// TestAgentAsyncToolRecovery_AfterCallbackFailure_RestartRecoversNothing covers
+// recovering an Agent NodeRun after its Tool already failed, on the callback path: once a
+// Provider-reported failure committed, a restarted process's Reconciler and a late
+// success callback apply no state patch, create no next Turn, never call the model again
+// and leave the committed Decision as it was. A failed Agent is terminal, not recoverable
+// work.
 func TestAgentAsyncToolRecovery_AfterCallbackFailure_RestartRecoversNothing(t *testing.T) {
 	tool := &agentAsyncTool{}
 	crashed, run, outcome, token := agentAsyncPatchedDispatch(t, "wf-agent-recover-after-failure", "", `{"seen":["k1"]}`, tool)
@@ -257,13 +259,14 @@ func TestAgentAsyncToolRecovery_AfterCallbackFailure_RestartRecoversNothing(t *t
 }
 
 // TestAgentAsyncToolRecovery_DispatchResponseLost_FailsAtDeadlineNeverRedispatched covers
-// docs/09 §3.2 "Provider 已接受任务，但派发响应丢失" and §3.7 "Provider 已接受请求但本地未保存
-// external_task_id" for an async Agent Tool: the Provider accepted the task and even
-// delivered its callback, but the process died before the dispatch transaction committed
-// the Binding. The Attempt is then a STARTED Attempt with no Binding, an uncertain external
-// side effect (06 §1.7). A restarted Reconciler must neither dispatch again nor consume the
-// stored Pending Callback, which has no Binding to route through; the Agent fails at its
-// deadline with failureSource TIMEOUT and is never reported as recovered.
+// a Provider that accepted the task while the dispatch response was lost, and a Provider
+// that accepted the request while no external_task_id was saved locally, for an async
+// Agent Tool: the Provider accepted the task and even delivered its callback, but the
+// process died before the dispatch transaction committed the Binding. The Attempt is then
+// a STARTED Attempt with no Binding, an uncertain external side effect. A restarted
+// Reconciler must neither dispatch again nor consume the stored Pending Callback, which
+// has no Binding to route through; the Agent fails at its deadline with failureSource
+// TIMEOUT and is never reported as recovered.
 func TestAgentAsyncToolRecovery_DispatchResponseLost_FailsAtDeadlineNeverRedispatched(t *testing.T) {
 	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
 	crashed, run, outcome := newAgentAsyncHarness(t, "wf-agent-recover-lost-dispatch", tool)

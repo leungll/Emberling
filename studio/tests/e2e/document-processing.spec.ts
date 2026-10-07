@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
 
 /**
- * Document Processing (04-ux.md §6 items 1-7): a fully synchronous Run. Every Node in
+ * Document Processing: a fully synchronous Run. Every Node in
  * this Definition is SYNC, so the Run is expected to reach COMPLETED without ever passing
  * through WAITING_CALLBACK - this is the scenario's own acceptance shape, not a shortcut
  * taken by the test.
@@ -42,7 +42,7 @@ test('Document Processing completes synchronously and shows its output', async (
   // version is shown throughout (asserted via the header's "v<version>" text below).
   await expect(page.getByText(`${workflowId} · v`)).toBeVisible();
 
-  // 04-ux.md §6 item 5: Observe must not render the Palette or the node config/edit form.
+  // Observe must not render the Palette or the node config/edit form.
   // NodePalette.tsx and PropertiesPanel.tsx render "NODE REGISTRY" and "PROPERTIES ·
   // DEFINITION" headings respectively and are only ever mounted by EditPage, never by
   // ObservePage - so their absence here proves the edit-only surfaces were never rendered,

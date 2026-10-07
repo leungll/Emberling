@@ -156,8 +156,8 @@ describe('DetailPanel — WAITING_CALLBACK', () => {
   });
 
   it('shows "—" for Provider and External Task ID when the Attempt has no Callback Binding yet', async () => {
-    // M1 never populates callbackBinding — Node Runtime callbacks are M2 scope — so the
-    // Backend always emits `callbackBinding: null` on an otherwise-real, in-flight Attempt.
+    // A synchronous Attempt never has a Callback Binding, so the
+    // Backend emits `callbackBinding: null` on an otherwise-real, in-flight Attempt.
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -258,7 +258,7 @@ describe('DetailPanel — JsonBlock default visibility', () => {
       <DetailPanel snapshot={snapshot} selectedNodeRun={null} selectedEvent={null} events={[]} />,
     );
 
-    // 04 §3 only collapses large fields by default; a small value has no <details> toggle.
+    // Only large fields collapse by default; a small value has no <details> toggle.
     expect(screen.queryByText('Raw JSON')).not.toBeInTheDocument();
     expect(screen.getByText(/"brief": "x"/)).toBeVisible();
   });

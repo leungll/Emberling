@@ -7,7 +7,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// ModelRegistration is one stable Model ID a Definition may store (07 §1.4). It embeds
+// ModelRegistration is one stable Model ID a Definition may store. It embeds
 // domain.ModelMetadata so the Registry, the `/models` response and Studio read exactly
 // one description of a model; ConfigSchema stays the only contract for model parameters.
 type ModelRegistration struct {
@@ -28,7 +28,7 @@ func (r ModelRegistration) HasCapability(capability string) bool {
 // ModelProvider converts Emberling's unified model request into one Provider protocol and
 // the response back into a unified structure. It authenticates, converts, normalises
 // errors and extracts Token usage. It does not select a Tool, apply a state patch,
-// advance an Action or repeat a cost-bearing call invisibly to the Runtime (07 §1.4).
+// advance an Action or repeat a cost-bearing call invisibly to the Runtime.
 type ModelProvider interface {
 	Models(ctx context.Context) ([]ModelRegistration, error)
 	Generate(ctx context.Context, request ModelRequest) (ModelResponse, error)
@@ -112,7 +112,7 @@ type ModelResponse struct {
 	TokenUsage      *domain.TokenUsage
 }
 
-// decisionSchema is the fixed envelope of 07 §1.4. It constrains only the TOOL_CALL and
+// decisionSchema is the fixed Decision envelope. It constrains only the TOOL_CALL and
 // FINAL envelope: Tool arguments, Final output and the patched State are validated by the
 // Runtime against their own frozen Schemas.
 const decisionSchema = `{

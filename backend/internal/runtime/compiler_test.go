@@ -376,8 +376,8 @@ func TestCompiler_UnreachableNode_Fails(t *testing.T) {
 	def = cloneDefinition(t, def)
 	// An isolated node with no edges at all: unreachable to the Output Node, but without
 	// a second, unrelated error. That needs a node type with no required inputs, which
-	// rules out prompt_template ("text" is required) and agent ("input" is required per
-	// docs/08-interface-spec.md §2.1); image_input declares no input ports at all.
+	// rules out prompt_template ("text" is required) and agent ("input" is required by
+	// the MVP port contract); image_input declares no input ports at all.
 	def.Nodes = append(def.Nodes, domain.Node{ID: "node_isolated", Type: NodeTypeImageInput, Config: json.RawMessage(`{}`)})
 
 	_, err := compiler.Compile(context.Background(), def)

@@ -74,7 +74,7 @@ func promptInput(callback *registry.CallbackContext, idempotencyKey string) regi
 }
 
 // TestImageGenerationNode_Metadata_MatchesInterfaceSpec pins the registered metadata to
-// the Node Metadata Contract of 08 §2: an ASYNC, EXTERNAL + KEYED node with one required
+// the Node Metadata Contract: an ASYNC, EXTERNAL + KEYED node with one required
 // `prompt` text input and one required `image` output.
 func TestImageGenerationNode_Metadata_MatchesInterfaceSpec(t *testing.T) {
 	meta := Registration(stubResolver{model: imageModel(), ok: true}, &recordingDispatcher{}).Metadata
@@ -122,7 +122,7 @@ func TestImageGenerationNode_Metadata_MatchesInterfaceSpec(t *testing.T) {
 	got, _ := json.Marshal(schema)
 	wantJSON, _ := json.Marshal(want)
 	if string(got) != string(wantJSON) {
-		t.Fatalf("ConfigSchema = %s, want %s (08 §2)", got, wantJSON)
+		t.Fatalf("ConfigSchema = %s, want %s", got, wantJSON)
 	}
 }
 
@@ -152,7 +152,7 @@ func TestImageGenerationExecutor_ValidateSemantics_MissingCapabilityFails(t *tes
 }
 
 // TestImageGenerationNode_Execute_WithoutCallbackContext_Fails: an ASYNC dispatch has no
-// meaning without the Attempt-scoped callback URL and token the Runtime issues (07 §1.3),
+// meaning without the Attempt-scoped callback URL and token the Runtime issues,
 // so Execute must fail loudly instead of dispatching a task nobody can report back on.
 func TestImageGenerationNode_Execute_WithoutCallbackContext_Fails(t *testing.T) {
 	dispatcher := &recordingDispatcher{task: registry.ExternalTask{ProviderID: "p", ExternalTaskID: "t"}}
@@ -224,7 +224,7 @@ func TestImageGenerationNode_Execute_ForwardsIdempotencyKeyAndReturnsDispatched(
 }
 
 // TestImageGenerationNode_Execute_EmptyIdempotencyKeyIsNotInvented: an empty key means the
-// Provider gets no key at all; the Adapter must never generate one of its own (07 §1.2).
+// Provider gets no key at all; the Adapter must never generate one of its own.
 func TestImageGenerationNode_Execute_EmptyIdempotencyKeyIsNotInvented(t *testing.T) {
 	var body map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -249,7 +249,7 @@ func TestImageGenerationNode_Execute_EmptyIdempotencyKeyIsNotInvented(t *testing
 // TestImageGenerationNode_OnCallback_SucceededPayload_ProducesNormalisedImageRef: the
 // `image` port carries the canonical encoding of the parsed domain.ImageRef, not the
 // Provider's bytes. Re-encoding is what guarantees a downstream node sees one shape and
-// that nothing the Provider added alongside the reference can ride along (08 §2.2).
+// that nothing the Provider added alongside the reference can ride along.
 func TestImageGenerationNode_OnCallback_SucceededPayload_ProducesNormalisedImageRef(t *testing.T) {
 	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: &recordingDispatcher{}}
 	cases := map[string]struct{ image, want string }{
@@ -380,7 +380,7 @@ func asyncState() registry.NodeAsyncState {
 const assetReferencePort = `{"source":"ASSET","asset":{"assetId":"asset_123","mediaType":"image/png","sizeBytes":102400,"sha256":"abc"}}`
 
 // TestImageGenerationNode_Execute_ReferenceImageRefReachesTheDispatcher pins the optional
-// `reference` input of 08 §2.1: when an upstream Node publishes an ImageRef on it, the
+// `reference` input port: when an upstream Node publishes an ImageRef on it, the
 // parsed reference travels to the Adapter with the dispatch, so the Provider request can
 // name the source image.
 func TestImageGenerationNode_Execute_ReferenceImageRefReachesTheDispatcher(t *testing.T) {

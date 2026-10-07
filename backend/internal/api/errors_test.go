@@ -20,7 +20,7 @@ func discardLogger() *slog.Logger {
 
 // TestWriteError_MapsEachClassifiedErrorToItsDocumentedStatusAndCode is a table test over
 // writeError's own doc comment: it is the single function every handler calls to map a
-// service/runtime/domain error to the HTTP contract docs/08-interface-spec.md §6 defines,
+// service/runtime/domain error to the HTTP error contract,
 // so this test is the one place that pins each branch's status/code pair.
 func TestWriteError_MapsEachClassifiedErrorToItsDocumentedStatusAndCode(t *testing.T) {
 	cases := []struct {

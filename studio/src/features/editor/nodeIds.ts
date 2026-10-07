@@ -1,7 +1,7 @@
 /**
  * Generates the id of a node added from the Palette.
  *
- * The id has to be unique within the Definition, and 08 §1 does not prescribe a format, so
+ * The id has to be unique within the Definition, and the API does not prescribe a format, so
  * this only needs to be collision-free: a per-generator counter makes two ids from the
  * same generator distinct even when they are minted in the same instant (a double click,
  * or two adds inside one event loop turn), and a random suffix keeps an id minted in one

@@ -3,7 +3,7 @@ import type { EventType, RunEvent } from './types';
 
 /**
  * Every MVP Event type. The Backend writes each Event as a NAMED frame
- * (`id: <seq>\nevent: <TYPE>\ndata: <Event JSON>`, 08 §5), and the browser dispatches a
+ * (`id: <seq>\nevent: <TYPE>\ndata: <Event JSON>`), and the browser dispatches a
  * named frame only to listeners registered for that name, never to `onmessage`. A Record
  * keeps this list exhaustive at compile time when `EventType` changes.
  */

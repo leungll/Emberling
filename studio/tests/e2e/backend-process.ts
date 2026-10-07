@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFile);
  *
  * `playwright.config.ts`'s `webServer` launches the Backend as `go run ./cmd/emberling`
  * and only ever kills it at the end of the whole run: it exposes no restart. This module
- * fills that gap for the restart scenario (docs/09 §1 item 3, 04-ux.md §6 item 11) by
+ * fills that gap for the restart scenario by
  * finding the Backend that is listening on `BACKEND_PORT`, killing it, and starting a
  * fresh process from `BACKEND_ENV` - the same environment the config launched it with -
  * against the same database. PostgreSQL is the authority for execution facts (invariant
@@ -60,7 +60,7 @@ async function listenerPids(port: string): Promise<number[]> {
  * Kills the Backend listening on `BACKEND_PORT` and resolves once the port is free.
  *
  * SIGKILL, deliberately: a crash is the recovery case the Runtime promises to survive
- * (invariant #6, "never make process memory the recovery source"), and a graceful stop
+ * (process memory is never the recovery source), and a graceful stop
  * would first wait `defaultShutdownTimeout` for the browser's open SSE stream to drain.
  */
 export async function killBackend(): Promise<void> {

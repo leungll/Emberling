@@ -52,7 +52,7 @@ describe('RunRail', () => {
     render(<RunRail snapshot={snap} selectedNodeRunId={null} onSelect={() => {}} />);
 
     // Finished NodeRuns (SUCCEEDED, FAILED) are not part of the Run Rail; they are
-    // reached via Timeline Event click / Canvas instead (docs/04-ux.md §3.1).
+    // reached via Timeline Event click / Canvas instead.
     expect(screen.queryByText('node_input')).not.toBeInTheDocument();
     expect(screen.queryByText('node_summary')).not.toBeInTheDocument();
 

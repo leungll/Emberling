@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
 
 /**
- * Agent with a synchronous Tool (docs/09 §1 item 6; 04-ux.md §6 items 12 and 14): the
+ * Agent with a synchronous Tool: the
  * Tool Loop runs at least two Turns, the first executing the Tool and the second
  * producing FINAL. `mock:tool-call:lookup:<json-arguments>` makes the in-process Mock
  * Model Provider commit a TOOL_CALL Decision for the built-in `lookup` Tool on Turn 1

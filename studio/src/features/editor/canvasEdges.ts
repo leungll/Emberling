@@ -33,7 +33,7 @@ function isIncompatible(source: PortDataType | undefined, target: PortDataType |
 
 /**
  * Edit canvas edges. Presentation follows the Edit mock (orthogonal step routing) with the
- * Observe topology's arrow and stroke. 04 §2.2 (typed ports): a connection whose output type
+ * Observe topology's arrow and stroke. Ports are typed: a connection whose output type
  * the input cannot accept turns red as soon as it is drawn, before Validate, so it is flagged
  * at the place it was made.
  */

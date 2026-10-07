@@ -175,8 +175,9 @@ func (r *nodeRunRepository) ClaimRetry(ctx context.Context, nodeRunID string, no
 }
 
 // ScheduleRetry records the next backoff deadline for a NodeRun that stays RUNNING after
-// a retryable Attempt failure (06 §1.4: "允许重试 | FAILED | 保持RUNNING |
-// next_attempt_at、NODE_RETRYING"). It requires the NodeRun to still be RUNNING.
+// a retryable Attempt failure (retry allowed: the Attempt is FAILED, the NodeRun stays
+// RUNNING with next_attempt_at set, and NODE_RETRYING is written). It requires the
+// NodeRun to still be RUNNING.
 func (r *nodeRunRepository) ScheduleRetry(ctx context.Context, nodeRunID string, nextAttemptAt, now time.Time) error {
 	const update = `
 		UPDATE node_runs

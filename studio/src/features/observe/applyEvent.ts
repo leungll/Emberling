@@ -4,21 +4,21 @@ import type { NodeRunStatus, RunEvent, RunSnapshot, RunStatus } from '@/api/type
  * Merges one committed Event into a local copy of a Run Snapshot, and decides when the
  * Event alone is not enough so the Snapshot must be re-read.
  *
- * Rule (04 §0, 04 §6 item 7, 08 §5): every status shown in Observe is a server fact.
+ * Rule: every status shown in Observe is a server fact.
  * Studio never derives Runtime status; it copies a status only when the Event states it,
  * and otherwise re-reads the Snapshot:
  *
- *   - `run.status` comes from a Run status Event's payload `to` (05 §2.3: Run status
- *     Events carry the previous and next status). A `WAITING_CALLBACK` NodeRun never
+ *   - `run.status` comes from a Run status Event's payload `to` (Run status Events
+ *     carry the previous and next status). A `WAITING_CALLBACK` NodeRun never
  *     turns the Run into `PAUSED` here; that aggregate arrives as `RUN_PAUSED`.
  *   - A NodeRun status changes only for the `NODE_*` Events that the Runtime commits in
  *     the same transaction as exactly that transition of the NodeRun named by the
- *     envelope (06 §1.4 and §1.6: `NODE_READY` with a new READY NodeRun, `NODE_STARTED`
+ *     envelope (`NODE_READY` with a new READY NodeRun, `NODE_STARTED`
  *     with the claim to RUNNING, `NODE_DISPATCHED` with WAITING_CALLBACK, `NODE_COMPLETED`
  *     with SUCCEEDED, `NODE_FAILED` with FAILED).
  *   - `AGENT_*` Events do not state the Agent NodeRun status: after `AGENT_ACTION_WAITING`
  *     it may or may not be WAITING_CALLBACK, and after an async Tool resume it returns to
- *     RUNNING without any `NODE_*` Event (04 §3.2). Those statuses come from a re-read.
+ *     RUNNING without any `NODE_*` Event. Those statuses come from a re-read.
  *   - An Event for a NodeRun the view has not seen triggers a re-read; no row is invented.
  *   - Event payloads are bounded summaries. Authoritative `input`, `output` and `error`
  *     come from the Snapshot and the Detail queries, so they are not written here.

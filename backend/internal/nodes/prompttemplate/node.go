@@ -1,6 +1,6 @@
-// Package prompttemplate implements the built-in Prompt Template Node (02 §3.2). It
+// Package prompttemplate implements the built-in Prompt Template Node. It
 // substitutes `{{name}}` placeholders in a fixed template string with upstream input port
-// values; it owns no NodeRun state, retry or Event of its own (07 §1.1).
+// values; it owns no NodeRun state, retry or Event of its own.
 package prompttemplate
 
 import (
@@ -31,7 +31,7 @@ const configSchema = `{
 // ValidateSemantics as an unknown port name.
 var placeholderPattern = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
 
-// inputPortNames are the node's declared input ports (02 §3.2 node literals: prompt
+// inputPortNames are the node's declared input ports (MVP node literals: prompt
 // template input `text`, required). ValidateSemantics checks every placeholder against
 // this fixed set rather than maintaining a second, dynamic port contract.
 var inputPortNames = map[string]struct{}{"text": {}}

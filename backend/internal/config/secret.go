@@ -11,7 +11,7 @@ const redacted = "[REDACTED]"
 
 // Secret holds a deployment credential: a database URL, a Provider API key or a callback
 // signing secret. The value is unexported and reachable only through Reveal, so printing,
-// logging or serialising a Config cannot leak it (10-ops §2, §4).
+// logging or serialising a Config cannot leak it.
 type Secret struct {
 	value string
 }

@@ -263,7 +263,7 @@ func agentNodeModelConfig(t *testing.T, body []byte) map[string]any {
 // agentRunFrozenTemperature reads the one Agent Run of runID and returns its frozen
 // model_config temperature. It is read straight from PostgreSQL because no API surface
 // exposes an Agent Run's frozen model parameters, and PostgreSQL is the authority for
-// exactly the fact this test is about (invariant #1).
+// exactly the fact this test is about.
 func agentRunFrozenTemperature(t *testing.T, pool *pgxpool.Pool, runID string) float64 {
 	t.Helper()
 	var raw []byte
@@ -311,10 +311,10 @@ func agentCreateRunAndWait(t *testing.T, env *testEnv, workflowID string, versio
 	return runID
 }
 
-// TestCreateRun_AgentFrozenModelConfigIgnoresProviderDefaultChange covers docs/09 §3.3
-// "创建 Run 或恢复 Agent 时 Provider 默认值发生变化": neither CreateRun nor a process
-// restart may re-derive `modelConfig` from the Model Registration, so the Definition's
-// frozen value and the Agent Run's frozen snapshot both survive unchanged.
+// TestCreateRun_AgentFrozenModelConfigIgnoresProviderDefaultChange covers a Provider
+// default that changes while a Run is created or an Agent recovers: neither CreateRun nor
+// a process restart may re-derive `modelConfig` from the Model Registration, so the
+// Definition's frozen value and the Agent Run's frozen snapshot both survive unchanged.
 //
 // The "changed default" is represented by the one difference that is actually detectable:
 // a Definition frozen to temperature 1.5 while the Backend's live ConfigSchema default is

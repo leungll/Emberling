@@ -133,7 +133,7 @@ func (s ToolAttemptStatus) IsValid() bool {
 }
 
 // A synchronous call resolves from STARTED; an asynchronous one resolves from DISPATCHED
-// when its callback arrives (06 §1.7). A terminal Attempt never moves again, so a
+// when its callback arrives. A terminal Attempt never moves again, so a
 // duplicated or late result cannot overwrite the committed one.
 var toolAttemptTransitions = map[ToolAttemptStatus][]ToolAttemptStatus{
 	ToolAttemptStarted:    {ToolAttemptDispatched, ToolAttemptSucceeded, ToolAttemptFailed},
@@ -216,8 +216,8 @@ func (s AgentActionStatus) IsTerminal() bool {
 }
 
 var agentActionTransitions = map[AgentActionStatus][]AgentActionStatus{
-	// READY -> FAILED belongs to the Agent timeout transaction alone
-	// (docs/06-execution-model.md §1.7): an expired Agent deadline ends the current
+	// READY -> FAILED belongs to the Agent timeout transaction alone:
+	// an expired Agent deadline ends the current
 	// Action even when no executor ever claimed it. Every other failure path reaches an
 	// Action it holds the execution right on, so it starts from RUNNING.
 	AgentActionReady:           {AgentActionRunning, AgentActionFailed},

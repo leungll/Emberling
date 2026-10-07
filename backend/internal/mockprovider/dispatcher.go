@@ -118,7 +118,7 @@ func (d *Dispatcher) send(ctx context.Context, task callbackTask) error {
 		return fmt.Errorf("mockprovider: build callback request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// The callback token is forwarded exactly as received and never logged (10 §2/§4):
+	// The callback token is forwarded exactly as received and never logged:
 	// this package is a Provider stand-in, not a holder of Emberling credentials.
 	req.Header.Set("X-Emberling-Callback-Token", task.CallbackToken)
 
@@ -126,9 +126,10 @@ func (d *Dispatcher) send(ctx context.Context, task callbackTask) error {
 	if err != nil {
 		return fmt.Errorf("mockprovider: deliver callback: %w", err)
 	}
-	// The receiver's status is deliberately not inspected: a rejection such as 08 §4's 401
-	// for a mismatched token is a completed delivery attempt with a defined answer, not a
-	// transport failure, and this Provider stand-in never retries on its own either way.
+	// The receiver's status is deliberately not inspected: a rejection such as the
+	// callback contract's 401 for a mismatched token is a completed delivery attempt with
+	// a defined answer, not a transport failure, and this Provider stand-in never retries
+	// on its own either way.
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil

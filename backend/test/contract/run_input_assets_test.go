@@ -1,8 +1,8 @@
 //go:build integration
 
-// Package contract: this file covers the Run input `AssetRef` rule of
-// docs/08-interface-spec.md §3.3 REST API — "未知字段、缺少必填字段、类型错误或无效 `AssetRef`
-// 都不能创建 Run". The frozen runInputSchema decides the *shape* of an AssetRef; only a
+// Package contract: this file covers the Run input `AssetRef` rule of the REST API: an
+// unknown field, a missing required field, a type error or an invalid `AssetRef` must not
+// create a Run. The frozen runInputSchema decides the *shape* of an AssetRef; only a
 // lookup against the committed Asset Metadata can decide that the reference is real and
 // describes the Asset it names, so POST /api/runs performs that lookup before any Run,
 // NodeRun or Event row exists.
@@ -73,7 +73,7 @@ func (e *testEnv) createRunWithReference(t *testing.T, workflowID string, versio
 }
 
 // assertAssetRefRejected pins the whole rejection contract: HTTP 400 with the existing
-// VALIDATION_FAILED code (docs/08-interface-spec.md §6 Error Contract defines no Asset-specific
+// VALIDATION_FAILED code (the error contract defines no Asset-specific
 // 400 code), a detail entry naming the offending Image Input node and the assetId, and no
 // Run identity in the body. It also proves the response leaks nothing about storage: an
 // asset's storage key is "<shard>/<assetId>", so neither that path nor the word "storage"
@@ -104,7 +104,7 @@ func assertAssetRefRejected(t *testing.T, resp *http.Response, raw []byte, asset
 		t.Errorf("a rejected Run creation returned a Run identity: %s", raw)
 	}
 	if strings.Contains(strings.ToLower(string(raw)), "storage") || strings.Contains(string(raw), "/"+assetID) {
-		t.Errorf("rejection response carries an internal storage detail (10-ops §4): %s", raw)
+		t.Errorf("rejection response carries an internal storage detail: %s", raw)
 	}
 }
 
@@ -127,9 +127,9 @@ func TestCreateRun_ImageInputUnknownAsset_400(t *testing.T) {
 }
 
 // TestCreateRun_ImageInputSha256Mismatch_400: `asset_id` points at immutable content
-// (05 §1.2 "Asset Metadata 与 AssetRef"), so a digest that disagrees with the committed
-// Metadata describes content this Asset never held. Accepting it would let a Run claim a
-// provenance PostgreSQL contradicts.
+// (Asset Metadata and AssetRef are immutable), so a digest that disagrees with the
+// committed Metadata describes content this Asset never held. Accepting it would let a
+// Run claim a provenance PostgreSQL contradicts.
 func TestCreateRun_ImageInputSha256Mismatch_400(t *testing.T) {
 	env := newTestEnv(t)
 	workflowID, version := env.createReferenceImageDefinition(t)
@@ -170,7 +170,7 @@ func TestCreateRun_ImageInputMediaTypeMismatch_400(t *testing.T) {
 
 // TestCreateRun_ImageInputValidAsset_RunCreated is the positive half: the AssetRef the
 // upload itself returned is accepted unchanged, the Run is created, and the Image Input
-// publishes the canonical `source: ASSET` ImageRef (08 §2.2) -- never a browser URL, a
+// publishes the canonical `source: ASSET` ImageRef -- never a browser URL, a
 // storage key or binary content.
 func TestCreateRun_ImageInputValidAsset_RunCreated(t *testing.T) {
 	env := newTestEnv(t)
@@ -233,6 +233,6 @@ func assertAssetImageRef(t *testing.T, raw []byte, assetID string, want map[stri
 		}
 	}
 	if strings.Contains(strings.ToLower(string(raw)), "storagekey") || strings.Contains(string(raw), "/"+assetID) {
-		t.Errorf("image_input NodeRun detail carries an internal storage detail (10-ops §4): %s", raw)
+		t.Errorf("image_input NodeRun detail carries an internal storage detail: %s", raw)
 	}
 }

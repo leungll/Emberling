@@ -6,8 +6,8 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
-// MVP retry backoff constants. docs/06-execution-model.md §1.4 and
-// docs/07-extensibility.md §1.2 name FIXED and EXPONENTIAL backoff but do not specify
+// MVP retry backoff constants. The retry and SideEffectPolicy contracts name FIXED and
+// EXPONENTIAL backoff but do not specify
 // numeric base/cap values; these are an MVP default choice, reported as a design decision
 // rather than a documented requirement.
 const (
@@ -42,7 +42,7 @@ type RetryDecision struct {
 }
 
 // DecideRetry applies ExecutionPolicy and SideEffectPolicy to decide whether a failed
-// Attempt may be retried (docs/07-extensibility.md §1.2, docs/06-execution-model.md §1.4).
+// Attempt may be retried.
 // Emberling does not promise a universal at-least-once/exactly-once guarantee for
 // external calls; DecideRetry is the one place that boundary is enforced.
 func DecideRetry(in RetryInput) RetryDecision {

@@ -255,7 +255,7 @@ type ControlProps = {
 };
 
 /**
- * Lists only Model Registry entries (04 §2.3). A saved Model ID the Registry no longer
+ * Lists only Model Registry entries. A saved Model ID the Registry no longer
  * serves stays selected and is labelled as such: dropping it would silently change the
  * Definition, and the Backend decides whether it is still valid.
  */
@@ -399,7 +399,7 @@ function schemaPropertyNames(schema: JsonSchema): string {
 }
 
 /**
- * Allowlist picker over Tool Registry entries (04 §2.4), showing each Tool's purpose,
+ * Allowlist picker over Tool Registry entries, showing each Tool's purpose,
  * execution kind, side effect and input/output fields. Output keeps Registry order,
  * independent of click order. A saved Tool name the Registry no longer serves stays
  * selected and is labelled as such: dropping it would silently change the Definition, and

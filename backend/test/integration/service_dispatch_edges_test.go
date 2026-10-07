@@ -1,7 +1,7 @@
 //go:build integration
 
-// Dispatch-boundary integration tests (docs/06-execution-model.md §3 表 "外部派发边界",
-// docs/09-testing-and-acceptance.md §3.2 and §3.5). Everything proven here is about the
+// Dispatch-boundary integration tests (the external-dispatch boundary). Everything proven
+// here is about the
 // one window Emberling cannot put inside a transaction: the Provider call between the
 // claim COMMIT and the dispatch COMMIT. The three failure shapes of that window are a
 // dispatch whose response carried no external task identity, a response whose external
@@ -10,7 +10,7 @@
 // NodeRun, Run aggregate and Event must agree, so a mock repository cannot stand in for
 // PostgreSQL here (CLAUDE.md testing standard).
 //
-// The fourth test covers the Run aggregate with two NodeRuns waiting at once (09 §3.5).
+// The fourth test covers the Run aggregate with two NodeRuns waiting at once.
 //
 // Helpers reuse the `async` harness of service_async_test.go; names added here stay
 // prefixed `async` for the same reason.
@@ -49,7 +49,8 @@ func (e *asyncFakeExecutor) setOmitTaskID(v bool) {
 	e.mu.Unlock()
 }
 
-// asyncClassifiedError is the Adapter-style error of 06 §3 row 1: it reports whether the
+// asyncClassifiedError is the Adapter-style error of the external-dispatch boundary: it
+// reports whether the
 // external call's result at the Provider is unknown. It mirrors execClassifiedError in
 // internal/service/execution_test.go, which proves the same classification against fakes.
 type asyncClassifiedError struct{ uncertain bool }
@@ -104,13 +105,15 @@ func asyncBindingsOfAttempt(ctx context.Context, t *testing.T, uow store.UnitOfW
 // 1. Dispatch accepted, but nothing identifies the external task
 // ---------------------------------------------------------------------------
 
-// TestNodeDispatch_ProviderAcceptedWithoutExternalTaskID_FailsAttemptAsUncertain covers
-// 09 §3.2 "Provider 已接受任务，但派发响应丢失 → NodeRun 按已知恢复边界失败" and the 06 §3
-// row "Provider 接受任务，但本地未保存 external_task_id". Emberling cannot know whether the
-// Provider accepted the task, so the Attempt fails as uncertain with code
-// DISPATCH_WITHOUT_EXTERNAL_TASK; for this EXTERNAL+UNKNOWN node that classification --
-// not an exhausted attempt budget, the policy here still has two attempts left -- is what
-// forbids a re-dispatch. No Binding exists, so no callback could ever route home either.
+// TestNodeDispatch_ProviderAcceptedWithoutExternalTaskID_FailsAttemptAsUncertain covers a
+// Provider that accepted the task while the dispatch response was lost, so the NodeRun
+// fails at the known recovery boundary, and the external-dispatch case in which the
+// Provider accepted the task but no external_task_id was saved locally. Emberling cannot
+// know whether the Provider accepted the task, so the Attempt fails as uncertain with
+// code DISPATCH_WITHOUT_EXTERNAL_TASK; for this EXTERNAL+UNKNOWN node that classification
+// -- not an exhausted attempt budget, the policy here still has two attempts left -- is
+// what forbids a re-dispatch. No Binding exists, so no callback could ever route home
+// either.
 func TestNodeDispatch_ProviderAcceptedWithoutExternalTaskID_FailsAttemptAsUncertain(t *testing.T) {
 	cases := []struct {
 		name string
@@ -221,7 +224,7 @@ func TestNodeDispatch_ProviderAcceptedWithoutExternalTaskID_FailsAttemptAsUncert
 // (errDispatchBindingConflict) and the Attempt fails *definitely* -- uncertain = false,
 // because a rejected route is not an unknown Provider outcome. The observable difference
 // between definite and uncertain is the retry: this EXTERNAL+UNKNOWN node may take its
-// second Attempt only because the failure is definite (06 §3 row 1). The winning Binding
+// second Attempt only because the failure is definite. The winning Binding
 // is untouched and still routes the external task id to the first Run's Attempt; the
 // UNIQUE constraint on callback_bindings.external_task_id
 // (callback_bindings_external_task_id_key) is what makes the second insert fail at all.
@@ -334,7 +337,8 @@ func TestNodeDispatch_ExternalTaskIDAlreadyBoundToAnotherAttempt_FailsDefinitely
 // TestNodeDispatch_AdapterReportsUncertainError_FailsAttemptAsUncertainInPostgres is the
 // PostgreSQL counterpart of TestExecute_DispatchErrorReportingUncertain/Definite in
 // internal/service/execution_test.go: the same two Adapter classifications, but with the
-// real transaction, the real retry scheduling and the real Event log. 06 §3 row 1 makes
+// real transaction, the real retry scheduling and the real Event log. The dispatch boundary
+// makes
 // the classification -- not the Go error type -- decide whether a retry is permitted at
 // all, so the two halves differ in exactly one bit: Uncertain() true or false.
 func TestNodeDispatch_AdapterReportsUncertainError_FailsAttemptAsUncertainInPostgres(t *testing.T) {
@@ -574,7 +578,7 @@ func newAsyncFanOutHarness(t *testing.T) *asyncFanOutHarness {
 
 // dispatchAll advances the Run until nothing can be claimed, dispatching every async Node
 // it meets with its own external task id. Only one Executor call is in flight at a time,
-// which is the serial execution 09 §3.5 requires.
+// which is the serial execution the test requires.
 func (h *asyncFanOutHarness) dispatchAll(run domain.Run) map[string]asyncDispatch {
 	h.t.Helper()
 	dispatches := make(map[string]asyncDispatch, 2)
@@ -606,13 +610,13 @@ func (h *asyncFanOutHarness) dispatchAll(run domain.Run) map[string]asyncDispatc
 	return nil
 }
 
-// TestRunAggregate_TwoWaitingCallbackNodeRuns_RunIsPausedUntilOneResumes covers 09 §3.5
-// "同一 Run 存在多个 WAITING_CALLBACK NodeRun：全部等待事实保留；没有 READY 或 RUNNING 时
-// Run 为 PAUSED". The aggregation rule is 06 §1.5 / runtime.AggregateRunStatus: FAILED
-// beats RUNNING beats PAUSED, so resuming one of the two waiting NodeRuns leaves the Run
-// PAUSED as long as its completion unlocked no downstream work -- the join node here needs
-// both branches -- and only the second resume, which does make the join READY, returns the
-// Run to RUNNING.
+// TestRunAggregate_TwoWaitingCallbackNodeRuns_RunIsPausedUntilOneResumes covers one Run
+// with several WAITING_CALLBACK NodeRuns: every waiting fact is retained, and with no
+// READY or RUNNING NodeRun the Run is PAUSED. The aggregation rule is
+// runtime.AggregateRunStatus: FAILED beats RUNNING beats PAUSED, so resuming one of the
+// two waiting NodeRuns leaves the Run PAUSED as long as its completion unlocked no
+// downstream work -- the join node here needs both branches -- and only the second
+// resume, which does make the join READY, returns the Run to RUNNING.
 func TestRunAggregate_TwoWaitingCallbackNodeRuns_RunIsPausedUntilOneResumes(t *testing.T) {
 	h := newAsyncFanOutHarness(t)
 	run, err := h.svc.CreateRun(h.ctx, service.CreateRun{

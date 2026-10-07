@@ -32,7 +32,7 @@ func TestRegistration_Register_Succeeds(t *testing.T) {
 }
 
 // TestRegistration_AllowedTools_UsesToolSelector pins the widget Studio needs to offer the
-// allowlist as a choice among registered Tools (04 §2.4) rather than free-text names.
+// allowlist as a choice among registered Tools rather than free-text names.
 func TestRegistration_AllowedTools_UsesToolSelector(t *testing.T) {
 	for _, field := range Registration().Metadata.UISchema.Fields {
 		if field.Path == "allowedTools" {

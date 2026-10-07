@@ -15,8 +15,8 @@ import path from 'node:path';
 export const BACKEND_PORT = process.env.EMBERLING_E2E_BACKEND_PORT ?? '8080';
 export const MOCKPROVIDER_PORT = process.env.EMBERLING_E2E_MOCKPROVIDER_PORT ?? '9101';
 export const STUDIO_PORT = process.env.EMBERLING_E2E_STUDIO_PORT ?? '5173';
-// The default matches the no-Docker local PostgreSQL this repository documents
-// (ENGINEERING.md §1: PostgreSQL 18 on 127.0.0.1:55432); CI overrides it to the
+// The default matches the no-Docker local PostgreSQL setup
+// (PostgreSQL 18 on 127.0.0.1:55432); CI overrides it to the
 // job-scoped `postgres` service instead.
 export const DATABASE_URL =
   process.env.EMBERLING_E2E_DATABASE_URL ??

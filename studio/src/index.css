@@ -34,7 +34,7 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
 }
 
-/* Palette anchors are the literal hex values of the 04 §1.1 / §1.2 mocks (04 §4): Definitions
+/* Palette anchors are the literal hex values of the Definitions and Studio mocks: Definitions
    stays light, Studio (Edit/Observe) is a fixed dark workspace with no runtime theme toggle. */
 :root {
   --radius: 0.5rem;
@@ -65,7 +65,7 @@
   --sidebar-active: #262f40;
   --sidebar-border: #344054;
 
-  /* Status tokens (04 §4): shared by Definitions status pills, Canvas and Trace. */
+  /* Status tokens: shared by Definitions status pills, Canvas and Trace. */
   --status-running-bg: #eff8ff;
   --status-running-fg: #175cd3;
   --status-running-dot: #53a7ff;
@@ -111,7 +111,7 @@
   --sidebar-border: #344054;
 
   /* Status tokens keep the same hues on dark surfaces; only bg/fg pairs shift to the
-     mock's dark-panel equivalents (04 §4 still names the same four states). */
+     mock's dark-panel equivalents (still the same four states). */
   --status-running-bg: rgba(83, 167, 255, 0.12);
   --status-running-fg: #53a7ff;
   --status-running-dot: #53a7ff;
@@ -128,9 +128,9 @@
   --status-neutral-fg: #93a0b5;
   --status-neutral-dot: #93a0b5;
 
-  /* Selected Canvas node card fill (04 §2.5): a generic warm tint for every category, and
+  /* Selected Canvas node card fill: a generic warm tint for every category, and
      a distinct purple tint for the Agent category. Edit-only: a card carrying a NodeRun
-     status keeps its status colours (04 §4). */
+     status keeps its status colours. */
   --node-selected-fill: #282215;
   --node-selected-agent-fill: #25213a;
 }
@@ -152,7 +152,7 @@
       Roboto,
       'Helvetica Neue',
       sans-serif;
-    /* 04 §4 sets 14px as the floor for body text, fields and values. */
+    /* 14px is the floor for body text, fields and values. */
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
   }

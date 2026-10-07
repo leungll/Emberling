@@ -122,7 +122,7 @@ func TestCreateRun_AssetCheck_RunNotPersistedOnMismatch(t *testing.T) {
 		t.Fatalf("validation errors: want exactly one naming node %q, got %+v", "reference", invalidErr.Errors)
 	}
 	if msg := invalidErr.Errors[0].Message; !strings.Contains(msg, ref.AssetID) || strings.Contains(msg, "ab/") {
-		t.Errorf("validation message = %q, want it to name the assetId and no storage key (10-ops §4)", msg)
+		t.Errorf("validation message = %q, want it to name the assetId and no storage key", msg)
 	}
 
 	if latest := execLatestRun(t, h, "wf_asset_mismatch"); latest != nil {

@@ -12,7 +12,7 @@ import (
 const agentResumeOutputSchema = `{"type":"object","required":["key"],"properties":{"key":{"type":"string"}},"additionalProperties":false}`
 
 // TestAgentCallbackOutcome_ClassifiesProviderFailureInvalidResultAndUninterpretable covers
-// the three ways an async Tool callback can end (06 §1.6, 06 §1.7): a Provider-reported
+// the three ways an async Tool callback can end: a Provider-reported
 // failure fails the Action with the Provider's error, a result the registered OutputSchema
 // rejects fails it as TOOL_RESULT_INVALID, and any other Executor error is an
 // uninterpretable payload that must not change state.
@@ -43,7 +43,7 @@ func TestAgentCallbackOutcome_ClassifiesProviderFailureInvalidResultAndUninterpr
 }
 
 // TestAsyncToolOutcome_ResolvesDispatchedAttemptOfWaitingAction covers the "from" statuses
-// the asynchronous resume requires (06 §1.7) and the failureSource each delivery path
+// the asynchronous resume requires and the failureSource each delivery path
 // records, next to the synchronous source it must not be confused with.
 func TestAsyncToolOutcome_ResolvesDispatchedAttemptOfWaitingAction(t *testing.T) {
 	hash := "h"

@@ -14,7 +14,7 @@ import { formatRelativeTime, formatTimestamp } from '@/lib/format';
 import { runStatusLabel, runStatusVariant } from '@/lib/status';
 
 /**
- * Avatar background/foreground pairs, cycled by workflowId (04 §1.1). Purely decorative
+ * Avatar background/foreground pairs, cycled by workflowId. Purely decorative
  * grouping: the API carries no colour or icon field, so no meaning is attached to which
  * pair a given Definition receives.
  */
@@ -102,7 +102,7 @@ export function DefinitionsTable({ items }: { items: DefinitionListItem[] }) {
                 <TableCell className="font-semibold tabular-nums">v{item.latestVersion}</TableCell>
                 <TableCell>
                   {item.lastRun ? (
-                    // Status and time (04 §1.1): the pill states the server Run status and
+                    // Status and time: the pill states the server Run status and
                     // the helper line under it states when that Run was created.
                     <div className="flex flex-col items-start gap-1">
                       <Badge

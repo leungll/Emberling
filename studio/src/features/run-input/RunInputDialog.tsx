@@ -35,7 +35,7 @@ function isAssetRefSchema(schema: JsonSchema): boolean {
 }
 
 /**
- * An AssetRef value carries exactly the immutable reference fields (04 §1.3): a prior
+ * An AssetRef value carries exactly the immutable reference fields: a prior
  * Run's input has already been through Backend validation, so a shape check is sufficient
  * to recognise it without re-deriving Runtime rules client-side.
  */
@@ -82,8 +82,8 @@ export function RunInputDialog({
   });
 
   // Completed Asset uploads, keyed by inputKey. Only a completed upload's AssetRef is
-  // written into run input (04 §1.5): a browser-local file selection is never enough.
-  // Run Again seeds this from `initialInput`'s own AssetRef values (04 §1.3) so the prior
+  // written into run input: a browser-local file selection is never enough.
+  // Run Again seeds this from `initialInput`'s own AssetRef values so the prior
   // Run's Assets are resubmitted unchanged rather than requiring a fresh upload.
   const [assets, setAssets] = useState<Record<string, AssetRef>>(() => {
     const seed: Record<string, AssetRef> = {};
@@ -107,7 +107,7 @@ export function RunInputDialog({
     if (!file) return;
 
     // Client pre-check for responsiveness only; the Backend re-validates and is the
-    // authority on accepted media types and size (08 §3.2).
+    // authority on accepted media types and size.
     const acceptedMediaTypes = field.schema.properties?.mediaType?.enum as string[] | undefined;
     if (acceptedMediaTypes && !acceptedMediaTypes.includes(file.type)) {
       setAssetErrors((prev) => ({

@@ -36,10 +36,10 @@ const DOT_TONE: Record<StatusTone, string> = {
 };
 
 /**
- * Observe header (04 §1.3): Run identity, bound Definition version and the server's
+ * Observe header: Run identity, bound Definition version and the server's
  * aggregated Run status, verbatim. Studio must not compute that status from the NodeRun
  * list, even when a node is WAITING_CALLBACK. Observe is read-only, so the only actions
- * are Back to Edit and Run Again (04 §1.4).
+ * are Back to Edit and Run Again.
  */
 export function ObserveHeader({ run, definitionName, onRunAgain }: ObserveHeaderProps) {
   const tone = runStatusTone(run.status);
@@ -56,7 +56,7 @@ export function ObserveHeader({ run, definitionName, onRunAgain }: ObserveHeader
         </Link>
         <div className="min-w-0">
           <h1 className="truncate text-[15px] font-semibold">{definitionName ?? run.workflowId}</h1>
-          {/* 04 §1.4: the mode is always explicit, and the Run stays bound to its own
+          {/* The mode is always explicit, and the Run stays bound to its own
               immutable version, never the latest. */}
           <p
             data-testid="observe-subtitle"
@@ -68,7 +68,7 @@ export function ObserveHeader({ run, definitionName, onRunAgain }: ObserveHeader
         </div>
       </div>
 
-      {/* The raw Run status is shown next to the documented 04 §4 wording. */}
+      {/* The raw Run status is shown next to its display wording. */}
       <div
         className={cn(
           'flex items-center gap-2 rounded-full border px-4 py-1.5 text-[14px] font-semibold',

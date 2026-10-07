@@ -8,7 +8,7 @@ import type { RegisteredFlowNode } from '@/features/editor/RegisteredNode';
 /**
  * The READ-ONLY TOPOLOGY card always shows the whole graph (fitted by `WorkflowCanvas`
  * itself, whose `fitView` behaviour has its own coverage). This file proves that selecting
- * a NodeRun from outside the Canvas (04 §3.1: "选择联动") only moves the highlight: the
+ * a NodeRun from outside the Canvas (linked selection) only moves the highlight: the
  * Canvas receives no zoom-to-node request, and nothing but the nodes' `selected` flags
  * changes between renders.
  */

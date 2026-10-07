@@ -25,7 +25,7 @@ func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
 
 // WithinTx runs fn inside a single transaction. The transaction is committed only when
 // fn returns nil; any error, including a failed Event insert, rolls back every write
-// made inside it (invariant #4).
+// made inside it.
 func (u *UnitOfWork) WithinTx(ctx context.Context, fn func(ctx context.Context, tx store.Tx) error) error {
 	pgxTx, err := u.pool.Begin(ctx)
 	if err != nil {
@@ -49,8 +49,8 @@ func (u *UnitOfWork) WithinTx(ctx context.Context, fn func(ctx context.Context, 
 // WithinReadTx runs fn inside one read-only transaction that observes a single
 // consistent snapshot for every statement it issues (PostgreSQL REPEATABLE READ, not the
 // default READ COMMITTED's fresh snapshot per statement). This is what the
-// Snapshot-to-SSE handoff contract needs (docs/08-interface-spec.md §5: "lastSeq 与
-// Snapshot 在同一个一致性读取中取得"): Run and NodeRuns are two separate statements, and
+// Snapshot-to-SSE handoff contract needs (lastSeq and the Snapshot are taken in the
+// same consistent read): Run and NodeRuns are two separate statements, and
 // under READ COMMITTED a commit landing between them could advance one but not the
 // other. fn must not write: PostgreSQL rejects any write statement in a read-only
 // transaction (SQLSTATE 25006).

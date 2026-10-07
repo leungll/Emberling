@@ -36,7 +36,7 @@ func TestNewQueue_NonPositiveCapacity_FallsBackToDefault(t *testing.T) {
 	}
 }
 
-// TestQueue_EnqueueAgentTurn_SharesTheBoundAndCarriesTypedIDs covers 06 §2.1: an Agent Turn
+// TestQueue_EnqueueAgentTurn_SharesTheBoundAndCarriesTypedIDs: an Agent Turn
 // item carries only its work type, the persisted Turn ID and the Run ID, and competes for
 // the same bounded capacity as a Run item -- a full queue refuses it without blocking.
 func TestQueue_EnqueueAgentTurn_SharesTheBoundAndCarriesTypedIDs(t *testing.T) {

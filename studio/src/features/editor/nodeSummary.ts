@@ -1,7 +1,7 @@
 import type { ExecutionKind, JsonObject, ModelMetadata, NodeMetadata } from '@/api/types';
 
 /**
- * One-line, factual node card summaries (04 §2.5). Each summary reads only the node's own
+ * One-line, factual node card summaries. Each summary reads only the node's own
  * registered NodeMetadata (ports, category, uiSchema) and its own Definition-node config;
  * nothing here is a marketing description or an invented capability. A generic
  * "ExecutionKind · SideEffect" line was tried and rejected (it told a reader nothing about
@@ -31,7 +31,7 @@ function modelLabel(modelId: unknown, models: ModelMetadata[]): string {
  * Input Nodes (Text Input, Image Input) share the same `inputKey`/`required` config shape
  * (backend/internal/nodes/textinput, imageinput). The card's type is already the eyebrow
  * (RegisteredNode); this line names the Run input field it binds, whether a Run must
- * supply it, and the accepted type (04 §2.5), read off the registered output ports.
+ * supply it, and the accepted type, read off the registered output ports.
  */
 function inputSummary(metadata: NodeMetadata, config: JsonObject): string {
   const inputKey = typeof config.inputKey === 'string' && config.inputKey ? config.inputKey : '—';
@@ -53,7 +53,7 @@ function outputSummary(): string {
  * A Model call node (any node whose uiSchema names a MODEL_SELECTOR field, i.e. Text
  * Generation and Image Generation) summarises the resolved model, one representative
  * MODEL_PARAMETERS value if the config sets one (e.g. Image Generation's `width`), and the
- * Sync/Async mode — the three facts 04 §2.5 calls out, read generically off the Registry's
+ * Sync/Async mode — the three facts the card calls out, read generically off the Registry's
  * own uiSchema groups rather than a per-node-type field name.
  */
 function generationSummary(
@@ -78,7 +78,7 @@ function generationSummary(
 
 /**
  * Agent nodes (backend/internal/nodes/agent) summarise the resolved model, how many Tools
- * the Definition allows it, and its Max Turns limit — the four facts 04 §2.5 calls out for
+ * the Definition allows it, and its Max Turns limit — the four facts called out for
  * an Agent card (name is already the card's bold title).
  */
 function agentSummary(config: JsonObject, models: ModelMetadata[]): string {

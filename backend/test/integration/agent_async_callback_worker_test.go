@@ -1,11 +1,10 @@
 //go:build integration
 
-// Asynchronous Agent Tool resume tests for what happens after the resume commits
-// (06 §2.1) and for the callback-vs-timeout race (09 §3.3, 06 §1.7). The resume only
-// commits facts: the next READY Turn is handed to the bounded in-process work queue, and
-// no model or Tool call ever runs on the callback request. A refused enqueue leaves the
-// READY Turn for the Reconciler. They share the harnesses of agent_async_tool_test.go and
-// agent_async_callback_test.go.
+// Asynchronous Agent Tool resume tests for what happens after the resume commits and for
+// the callback-vs-timeout race. The resume only commits facts: the next READY Turn is
+// handed to the bounded in-process work queue, and no model or Tool call ever runs on the
+// callback request. A refused enqueue leaves the READY Turn for the Reconciler. They
+// share the harnesses of agent_async_tool_test.go and agent_async_callback_test.go.
 package integration
 
 import (
@@ -68,7 +67,7 @@ func agentAwaitRunStatus(t *testing.T, h *agentHarness, runID string, want domai
 }
 
 // agentRefusingEnqueuer is a WorkEnqueuer whose bounded queue is always full: every offer
-// is refused, which 06 §2.1 requires the caller to tolerate without rolling anything back.
+// is refused, which the caller must tolerate without rolling anything back.
 type agentRefusingEnqueuer struct {
 	mu      sync.Mutex
 	refused []string
@@ -90,10 +89,10 @@ func (e *agentRefusingEnqueuer) refusedTurns() []string {
 }
 
 // TestAgentAsyncToolCallback_HandlerReturnsAtResumeCommit_WorkerRunsNextTurn covers
-// 06 §2.1: HandleCallback returns as soon as the resume transaction commits, with the next
-// Turn still READY -- the callback request makes no model call. The Turn reaches the work
-// queue as an AGENT_TURN item, and a work.Pool goroutine, not the handler, finishes the
-// Agent Loop and the Run.
+// post-commit handoff: HandleCallback returns as soon as the resume transaction commits,
+// with the next Turn still READY -- the callback request makes no model call. The Turn
+// reaches the work queue as an AGENT_TURN item, and a work.Pool goroutine, not the
+// handler, finishes the Agent Loop and the Run.
 func TestAgentAsyncToolCallback_HandlerReturnsAtResumeCommit_WorkerRunsNextTurn(t *testing.T) {
 	queue := work.NewQueue(16)
 	tool := &agentAsyncTool{}
@@ -161,10 +160,10 @@ func TestAgentAsyncToolCallback_RequestCancelledAtResumeCommit_WorkerStillComple
 	assertContiguousSeq(t, listEvents(h.ctx, t, h.uow, run.ID))
 }
 
-// TestAgentAsyncToolCallback_QueueRefusesTurn_ReconcilerAdvancesReadyTurn covers 06 §2.1
-// and invariant #6: a full queue refuses the AGENT_TURN item, the resume stays committed,
-// and the READY Turn is rediscovered by the Reconciler's ListReady scan, which drives the
-// Agent Loop through the same use case to completion.
+// TestAgentAsyncToolCallback_QueueRefusesTurn_ReconcilerAdvancesReadyTurn covers the
+// persisted-work recovery rule: a full queue refuses the AGENT_TURN item, the resume
+// stays committed, and the READY Turn is rediscovered by the Reconciler's ListReady scan,
+// which drives the Agent Loop through the same use case to completion.
 func TestAgentAsyncToolCallback_QueueRefusesTurn_ReconcilerAdvancesReadyTurn(t *testing.T) {
 	enqueuer := &agentRefusingEnqueuer{}
 	tool := &agentAsyncTool{}
@@ -199,12 +198,13 @@ func TestAgentAsyncToolCallback_QueueRefusesTurn_ReconcilerAdvancesReadyTurn(t *
 	assertContiguousSeq(t, listEvents(h.ctx, t, h.uow, run.ID))
 }
 
-// TestAgentAsyncToolCallback_TimeoutCommitsDuringOnCallback_CallbackSuperseded covers
-// 09 §3.3 "异步 Tool callback 与 timeout 竞争" and invariant #7. The resume's routing read
-// has seen the Attempt DISPATCHED; inside OnCallback -- outside every lock -- the Agent
-// timeout commits. The resume transaction's conditional update from DISPATCHED then
-// affects no row, rolls back as superseded and reports a Duplicate: nothing is written, no
-// seq is consumed, and the Agent ends as TIMEOUT. Both payload branches are covered.
+// TestAgentAsyncToolCallback_TimeoutCommitsDuringOnCallback_CallbackSuperseded covers the
+// race between an async Tool callback and the timeout, and the single-winner
+// conditional-update rule. The resume's routing read has seen the Attempt DISPATCHED;
+// inside OnCallback -- outside every lock -- the Agent timeout commits. The resume
+// transaction's conditional update from DISPATCHED then affects no row, rolls back as
+// superseded and reports a Duplicate: nothing is written, no seq is consumed, and the
+// Agent ends as TIMEOUT. Both payload branches are covered.
 func TestAgentAsyncToolCallback_TimeoutCommitsDuringOnCallback_CallbackSuperseded(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -272,10 +272,10 @@ func TestAgentAsyncToolCallback_TimeoutCommitsDuringOnCallback_CallbackSupersede
 }
 
 // TestAgentAsyncToolCallback_CallbackAfterDeadlineBeforeTimeout_EndsAsTimeout covers the
-// reverse order of the same race (06 §1.7): the deadline has passed but the timeout has
-// not run yet, so the callback wins the conditional updates. Its result transaction keeps
-// the Tool result and ends the Agent as TIMEOUT through its own deadline check, creating
-// no next Turn; the later timeout then finds nothing to fail and writes nothing.
+// reverse order of the same race: the deadline has passed but the timeout has not run
+// yet, so the callback wins the conditional updates. Its result transaction keeps the
+// Tool result and ends the Agent as TIMEOUT through its own deadline check, creating no
+// next Turn; the later timeout then finds nothing to fail and writes nothing.
 func TestAgentAsyncToolCallback_CallbackAfterDeadlineBeforeTimeout_EndsAsTimeout(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-cb-race-reverse", tool, nil)

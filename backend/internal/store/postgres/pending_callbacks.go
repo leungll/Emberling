@@ -22,7 +22,7 @@ const pendingCallbackColumns = `external_task_id, payload, payload_hash, callbac
 // Record persists a first arrival or registers a duplicate delivery. The ON CONFLICT
 // clause deliberately touches only duplicate_count and received_at: a Provider that
 // re-delivers with a different body must not be able to replace the first payload that
-// was already authenticated and may already have resumed an Execution (05 §1.7).
+// was already authenticated and may already have resumed an Execution.
 //
 // duplicate_count is inserted as 0 and only ever incremented here, so a returned value
 // above zero is exactly "this row already existed".
@@ -104,9 +104,9 @@ func (r *pendingCallbackRepository) ConsumeOnce(ctx context.Context, externalTas
 //     NodeRunID is that Agent NodeRun and AttemptID the Tool Attempt.
 //
 // Both branches return the same row shape, so the Reconciler replays either through the
-// one ResumeNode use case, which routes on the Binding's target type (06 §2.1, invariant
-// #5). A record without a binding stays behind for audit only; it never advances an
-// Execution (06 §4).
+// one ResumeNode use case, which routes on the Binding's target type. A
+// record without a binding stays behind for audit only; it never advances an
+// Execution.
 //
 // Ordering by received_at keeps the oldest rediscovered callback first; external_task_id
 // breaks ties so a bounded batch is stable across scans. The single outer LIMIT bounds the
@@ -194,8 +194,8 @@ func (r *pendingCallbackRepository) ListConsumableForWaiting(ctx context.Context
 }
 
 // DeleteExpired removes records past their expiry, consumed or not: a consumed record has
-// already served its purpose, and an unmatched one has lost the right to advance anything
-// (05 §1.7). The inner SELECT bounds the batch so retention never locks the whole table.
+// already served its purpose, and an unmatched one has lost the right to advance anything.
+// The inner SELECT bounds the batch so retention never locks the whole table.
 func (r *pendingCallbackRepository) DeleteExpired(ctx context.Context, now time.Time, limit int) (int64, error) {
 	if limit <= 0 {
 		return 0, fmt.Errorf("store/postgres pending_callbacks.DeleteExpired: limit must be positive, got %d", limit)

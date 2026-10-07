@@ -1,8 +1,8 @@
 //go:build integration
 
 // Package contract: SSE-specific tests. These use newTestEnvWithOptions's barrier and
-// dropNotifier hooks (harness_test.go) to drive the two handoff windows CLAUDE.md and
-// docs/09 §3.6 call out as non-negotiable: Snapshot-to-SSE (no gap, no duplicate across
+// dropNotifier hooks (harness_test.go) to drive the two handoff windows CLAUDE.md calls
+// out as non-negotiable: Snapshot-to-SSE (no gap, no duplicate across
 // the boundary) and reconnect-via-Last-Event-ID (resume without duplicates), plus the
 // notifier-wakes-cursor / poll-ticker-fallback pair that proves the stream never treats
 // the in-process notification itself as the Event source.
@@ -119,9 +119,8 @@ func TestAPI_Snapshot_ThenStreamFromLastSeq_NoGapNoDuplicate(t *testing.T) {
 
 // TestAPI_Stream_Reconnect_WithLastEventID_ResumesWithoutDuplicates covers the reconnect
 // handoff window: a client that read up through some seq, disconnected, and reconnects
-// with Last-Event-ID must resume from seq+1 with no repeats, and per
-// docs/08-interface-spec.md line 521 ("Last-Event-ID 优先"), Last-Event-ID must win over a
-// simultaneously-present afterSeq query parameter.
+// with Last-Event-ID must resume from seq+1 with no repeats, and Last-Event-ID must win
+// over a simultaneously-present afterSeq query parameter.
 func TestAPI_Stream_Reconnect_WithLastEventID_ResumesWithoutDuplicates(t *testing.T) {
 	b := newBarrierAtCall(1)
 	env := newTestEnv(t)
@@ -173,7 +172,7 @@ func TestAPI_Stream_Reconnect_WithLastEventID_ResumesWithoutDuplicates(t *testin
 		seen[s] = true
 	}
 
-	// Header-wins-over-afterSeq (08 line 521): open a third connection with a stale
+	// Header-wins-over-afterSeq: open a third connection with a stale
 	// afterSeq=0 AND Last-Event-ID=lastRead present together; the first frame delivered
 	// must be > lastRead (i.e. the header won), not the Event at seq 1 that afterSeq=0
 	// would have replayed.

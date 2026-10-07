@@ -9,9 +9,8 @@ import (
 // validateGraph is the Compiler's fourth stage: the DAG-shape rules that ConfigSchema and
 // Semantics cannot express -- edge type compatibility, required-input cardinality, cycle
 // freedom, exactly one Output Node, that Output Node being the unique DAG sink, and full
-// reachability of every node to it (docs/06-execution-model.md §1.2;
-// docs/11-decisions.md §5). It returns the resolved Output Node id (best-effort, "" if
-// none/ambiguous) and every violation found.
+// reachability of every node to it. It returns the resolved Output Node id (best-effort,
+// "" if none/ambiguous) and every violation found.
 //
 // A cycle makes topological order and forward reachability meaningless, so this stage
 // returns immediately once it detects one, before running the output/reachability checks.

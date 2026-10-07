@@ -41,7 +41,7 @@ function stubFetch() {
     if (url === '/api/node-types' || url === '/api/models' || url === '/api/tools') {
       return Promise.resolve(jsonResponse(200, { items: [] }));
     }
-    // The Recent Execution bar's list lookup (04 §2.6): no matching item means no Run yet,
+    // The Recent Execution bar's list lookup: no matching item means no Run yet,
     // which is the common case across these fixtures.
     if (url === '/api/definitions') {
       return Promise.resolve(jsonResponse(200, { items: [] }));
@@ -212,7 +212,7 @@ function stubRoutes(routes: Record<string, Handler>) {
     }
     if (key === 'GET /api/models') return Promise.resolve(jsonResponse(200, { items: MODELS }));
     if (key === 'GET /api/tools') return Promise.resolve(jsonResponse(200, { items: TOOLS }));
-    // The Recent Execution bar's list lookup (04 §2.6): defaults to no Run unless a test
+    // The Recent Execution bar's list lookup: defaults to no Run unless a test
     // overrides this key in `routes` to exercise the bar itself.
     if (key === 'GET /api/definitions' && !routes[key]) {
       return Promise.resolve(jsonResponse(200, { items: [] }));
@@ -404,7 +404,7 @@ describe('EditPage — Backend validation errors', () => {
     const items = within(list).getAllByRole('listitem');
     expect(items).toHaveLength(3);
     expect(items[2]).toHaveTextContent('the graph has a cycle');
-    // 04 §4 palette: the row uses the shared FAILED tokens, the message is body text (≥14px)
+    // Shared status palette: the row uses the shared FAILED tokens, the message is body text (≥14px)
     // and the path is a helper label (≥12px); no off-palette Tailwind red.
     expect(list.className).toContain('bg-[var(--status-failed-bg)]');
     expect(list.className).not.toMatch(/text-red-|text-xs/);
@@ -471,7 +471,7 @@ describe('EditPage — load errors', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('NOT_FOUND: definition wf_123 not found');
-    // 04 §4 palette, the same tokens and sizes as the Validation errors row: the FAILED red
+    // Shared status palette, the same tokens and sizes as the Validation errors row: the FAILED red
     // is shared across the surfaces, the message is body text (≥14px) in the foreground
     // colour, with no off-palette Tailwind red.
     expect(alert.className).toContain('bg-[var(--status-failed-bg)]');
@@ -714,7 +714,7 @@ describe('EditPage — Undo and Redo', () => {
     resolveSave(jsonResponse(200, definitionWithNode(5, 'Generate')));
     await screen.findByText('Saved version 5.');
 
-    // 04 §2.6: Run is disabled while unsaved changes exist; the third node was never saved.
+    // Run is disabled while unsaved changes exist; the third node was never saved.
     expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
   });

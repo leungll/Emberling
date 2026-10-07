@@ -22,7 +22,7 @@ export interface CanvasFocusRequest {
 }
 
 /**
- * Below 100% zoom a 10px port label renders under the 10px port-hint floor (04 §4), so a
+ * Below 100% zoom a 10px port label renders under the 10px port-hint floor, so a
  * read-only canvas fitted smaller than that hides the labels and keeps only the ports.
  */
 const PORT_HINT_MIN_ZOOM = 1;
@@ -34,7 +34,7 @@ const PORT_HINT_MIN_ZOOM = 1;
  */
 const READ_ONLY_MIN_ZOOM = 0.1;
 
-/** Port-hint floor on screen (04 §4): hint text never renders under 10px at any zoom. */
+/** Port-hint floor on screen: hint text never renders under 10px at any zoom. */
 const PORT_HINT_MIN_PX = 10;
 
 /**
@@ -50,7 +50,7 @@ interface WorkflowCanvasProps<N extends FlowNode> {
   nodes: N[];
   edges: FlowEdge[];
   /**
-   * Read-only is a topology snapshot (04 §1.4, Observe): no drag, no connect, no delete.
+   * Read-only is a topology snapshot (Observe): no drag, no connect, no delete.
    * It always shows the whole graph, fitted at up to 100% and re-fitted when the canvas
    * resizes; selecting a node highlights it and never moves the viewport.
    * Selection stays so Observe can pick a NodeRun. `onEdgesChange`/`onConnect` are never

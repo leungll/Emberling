@@ -130,7 +130,7 @@ describe('api client', () => {
     const body = init.body as FormData;
     expect(body.get('file')).toBeInstanceOf(File);
     expect((body.get('file') as File).name).toBe('reference.png');
-    // Only the one accepted part name (08 §3.2); no stray form fields.
+    // Only the one accepted part name; no stray form fields.
     expect(Array.from(body.keys())).toEqual(['file']);
     expect(ref).toEqual({
       assetId: 'asset_123',

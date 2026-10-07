@@ -18,7 +18,7 @@ type RunInputAssetRef struct {
 
 // RunInputAssetRefs collects every AssetRef a Run's input supplies to an Image Input of
 // def. It is a pure read of an already schema-valid input: the frozen runInputSchema has
-// fixed the AssetRef shape by the time this runs (docs/08-interface-spec.md §1.3), so a
+// fixed the AssetRef shape by the time this runs, so a
 // key that is absent, explicitly null, or not an AssetRef object is skipped rather than
 // re-reported here.
 //
@@ -59,8 +59,8 @@ func RunInputAssetRefs(def domain.Definition, input json.RawMessage) []RunInputA
 }
 
 // MatchesAsset reports whether this reference describes the Asset PostgreSQL committed.
-// An `asset_id` points at immutable content (docs/05-data-model.md §1.2 "Asset Metadata 与
-// AssetRef"), so a media type, size or digest that disagrees with the Metadata is a
+// An `asset_id` points at immutable content, so a media type, size or digest that
+// disagrees with the Metadata is a
 // reference to content the Asset never held, not a detail to be corrected silently.
 func (r RunInputAssetRef) MatchesAsset(asset domain.Asset) bool {
 	return r.Ref == asset.Ref()

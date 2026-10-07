@@ -14,7 +14,7 @@ import {
 
 describe('status badges', () => {
   it('status badge labels WAITING_CALLBACK, DISPATCHED and PAUSED', () => {
-    // The three async statuses share the amber "waiting" colour of 04 §4, and none of
+    // The three async statuses share the amber "waiting" colour, and none of
     // them may fall through to the neutral style reserved for a node with no NodeRun.
     expect(nodeRunStatusLabel('WAITING_CALLBACK')).toBe('Waiting for callback');
     expect(nodeRunStatusVariant('WAITING_CALLBACK')).toBe('waiting');
@@ -32,7 +32,7 @@ describe('status badges', () => {
   });
 });
 
-describe('04 §4 status tones', () => {
+describe('status tones', () => {
   it('maps every NodeRun status to its documented colour class', () => {
     expect(nodeRunStatusTone('READY')).toBe('neutral');
     expect(nodeRunStatusTone('RUNNING')).toBe('running');
@@ -56,7 +56,7 @@ describe('04 §4 status tones', () => {
 });
 
 describe('agentTurnStatusTone', () => {
-  it('maps every Turn status to a 04 §4 tone, matching its Badge variant', () => {
+  it('maps every Turn status to a status tone, matching its Badge variant', () => {
     // A Turn succeeds as COMPLETED, unlike NodeRun/Action SUCCEEDED; both read green.
     expect(agentTurnStatusTone('READY')).toBe('neutral');
     expect(agentTurnStatusTone('RUNNING')).toBe('running');

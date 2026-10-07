@@ -12,8 +12,7 @@ const ONE_PIXEL_PNG = Buffer.from(
 );
 
 /**
- * AIGC Media Generation with a Reference Image (docs/09 §1 item 13; 04-ux.md §6 items
- * 1, 2, 7): the Run Input Dialog uploads the image through `POST /api/assets` first and
+ * AIGC Media Generation with a Reference Image: the Run Input Dialog uploads the image through `POST /api/assets` first and
  * only then writes the returned immutable AssetRef into the Run input (RunInputDialog.tsx;
  * the browser-local file is never enough). Observe then shows the Image Input NodeRun's
  * own output: a `source: ASSET` ImageRef, previewed through the Backend's controlled

@@ -69,7 +69,7 @@ export function truncate(value: string, max = 160): string {
 }
 
 /**
- * Coarse relative-time label for the Definitions table's "Updated" column (04 §1.1).
+ * Coarse relative-time label for the Definitions table's "Updated" column.
  * Formatting only: it reads a server timestamp and never derives one.
  */
 export function formatRelativeTime(value: string | null | undefined): string {

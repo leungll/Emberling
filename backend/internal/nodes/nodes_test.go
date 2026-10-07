@@ -29,9 +29,8 @@ func (noopModelResolver) Get(string) (registry.ModelRegistration, registry.Model
 }
 
 // TestNodeRegistry_Registrations_PassStartupValidation covers every built-in Node
-// registered so far. It was named ..._M1Registrations_... while M1's four synchronous
-// nodes were the whole list; image_generation (M2) belongs to the same startup check, so
-// the milestone dropped out of the name rather than a second, parallel list appearing.
+// registered so far: the synchronous text Nodes and the asynchronous image_generation
+// share one startup check rather than a second, parallel list.
 func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 	r := registry.NewNodeRegistry()
 	registrations := []registry.NodeRegistration{

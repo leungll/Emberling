@@ -121,7 +121,7 @@ func (g *execForcedIDs) NewID(prefix string) string {
 }
 
 // execHarness wires one real PostgreSQL-backed ExecutionService, using the actual
-// production Node Registry (the four M1 built-in node types), the deterministic Mock
+// production Node Registry (the four built-in text node types), the deterministic Mock
 // Model Provider, and an injected fake clock. Every test gets its own database
 // (testdb.Open) and its own harness, so tests never observe each other's rows.
 type execHarness struct {
@@ -260,8 +260,8 @@ func (h *execHarness) drain(runID string) {
 
 // execDocDefinition is the shared "document processing" scenario used across this file:
 // text_input --text--> prompt_template --text--> text_generation --prompt/text-->
-// text_output. It matches the four M1 built-in node types end to end, with
-// text_generation the only EXTERNAL-side-effect node (07 §1.2) and text_output the
+// text_output. It matches the four built-in text node types end to end, with
+// text_generation the only EXTERNAL-side-effect node and text_output the
 // Definition's single Output Node.
 func execDocDefinition(workflowID string) domain.Definition {
 	return domain.Definition{
@@ -411,8 +411,8 @@ func TestExecution_DocumentProcessing_CompletesWithOutputAndOrderedEvents(t *tes
 // 2. Crash after CreateRun's own commit, before any Advance call at all: the "input"
 //    NodeRun is still plain READY (no Attempt was ever started), so the Reconciler must
 //    rediscover it through the plain READY branch of ListReadyOrRetryable, not through a
-//    timed-out Attempt (docs/09 §3.1 row 1: "任一 READY 工作提交后、即时推进前崩溃 ->
-//    Reconciler 重新发现同一 NodeRun").
+//    timed-out Attempt (a crash after any READY work commits but before immediate
+//    advancement must let the Reconciler rediscover the same NodeRun).
 // ---------------------------------------------------------------------------
 
 func TestExecution_ProcessCrashAfterCommitBeforeExecute_ReconcilerRediscoversReadyWork(t *testing.T) {
@@ -1008,8 +1008,7 @@ func TestReconciler_RunOnce_TimesOutExpiredAttempts(t *testing.T) {
 // ---------------------------------------------------------------------------
 // 13. A full in-process work queue refuses the post-COMMIT enqueue without rolling back
 //     or blocking the committing transaction, and the Reconciler eventually advances the
-//     work the queue dropped (docs/09 §3.5: "in-process work queue 已满 -> 提交事务不回
-//     滚、不阻塞持锁事务；Reconciler 最终推进遗漏的工作").
+//     work the queue dropped.
 // ---------------------------------------------------------------------------
 
 // execRecordingEnqueuer wraps a real *work.Queue so a test can observe which

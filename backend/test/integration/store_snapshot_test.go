@@ -1,8 +1,8 @@
 //go:build integration
 
 // Package integration: this file covers store.UnitOfWork.WithinReadTx, the read-only
-// REPEATABLE READ transaction the Snapshot-to-SSE handoff contract needs
-// (docs/08-interface-spec.md §5: "lastSeq 与 Snapshot 在同一个一致性读取中取得"). A plain
+// REPEATABLE READ transaction the Snapshot-to-SSE handoff contract needs (lastSeq and the
+// Snapshot are taken in the same consistent read). A plain
 // READ COMMITTED transaction cannot give that guarantee: two separate statements
 // (Runs().Get, then NodeRuns().ListByRun) can each see a different, more recent snapshot
 // if another transaction commits in between.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// Agent Context message roles (docs/05-data-model.md §2 AgentContextVersion). Instructions
+// Agent Context message roles (AgentContextVersion). Instructions
 // are not one of them: the system prompt travels beside the Context in every model request
 // (registry.ModelRequest.Instructions) and is never copied into the message chain, so that
 // re-freezing or re-reading Instructions can never be confused with rewriting history.
@@ -31,8 +31,8 @@ type AgentContextMessage struct {
 }
 
 // InitialAgentContext builds Context Version 0 from the Agent NodeRun's validated input
-// port value (docs/05-data-model.md §2: "Version 0 holds the Agent Node's validated
-// upstream input"). It is exactly one `user` message carrying that value unchanged; the
+// port value (Version 0 holds the Agent Node's validated upstream input). It is
+// exactly one `user` message carrying that value unchanged; the
 // frozen Instructions are not part of it.
 //
 // An absent value is an error rather than an empty message: an Agent Run whose Context

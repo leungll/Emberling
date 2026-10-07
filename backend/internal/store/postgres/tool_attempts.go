@@ -160,7 +160,7 @@ func (r *toolAttemptRepository) MarkFailed(ctx context.Context, attemptID string
 
 // MarkTimedOut conditionally fails an Attempt that is still STARTED or DISPATCHED. The
 // Agent deadline bounds the synchronous call and the wait for an asynchronous Tool's
-// callback alike (05 §1.8), so the Agent timeout transaction closes both; a result that
+// callback alike, so the Agent timeout transaction closes both; a result that
 // committed first leaves the row no longer in either state, and this reports false rather
 // than relabelling it.
 func (r *toolAttemptRepository) MarkTimedOut(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) (bool, error) {

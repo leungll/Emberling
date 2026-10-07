@@ -51,8 +51,8 @@ func TestAPI_CreateRun_UnknownWorkflow_Returns404DefinitionNotFound(t *testing.T
 // TestAPI_CreateRun_InvalidInput_Returns400WithSchemaPaths covers CreateRun's
 // RunInputInvalidError branch. Task brief note: the brief's own literal test name implies
 // HTTP 422, but service.RunInputInvalidError's doc comment pins this to
-// runtime.CodeValidationFailed's family, which docs/08-interface-spec.md §6 maps to 400
-// ("请求内容无效"), not 422 (an invalid graph *shape*). This test asserts the code's own
+// runtime.CodeValidationFailed's family, which the error contract maps to 400 (invalid
+// request content), not 422 (an invalid graph *shape*). This test asserts the code's own
 // documented behavior (400), not the brief's literal number; see the final report's
 // "undocumented decisions" section.
 func TestAPI_CreateRun_InvalidInput_Returns400WithSchemaPaths(t *testing.T) {
@@ -88,13 +88,13 @@ func TestAPI_CreateRun_InvalidInput_Returns400WithSchemaPaths(t *testing.T) {
 }
 
 // TestAPI_CreateRun_ValidInput_RunsToCompletion_SnapshotAndNodeRunDetailReflectResult
-// covers the full pipeline end-to-end through the real production Node Types and the
-// Mock Model Provider: POST /runs starts the Run, the work Pool advances it entirely off
-// the request goroutine, and GET /runs/{id} eventually reports COMPLETED with the
-// Text Output node's result as Run.output. It also covers GET /runs/{id}/nodes/{nodeRunId}
-// (NodeRunDetail), folded into this test rather than a fourteenth test to stay within the
-// track's 13-test budget: both endpoints read the same completed Run, so splitting them
-// would only duplicate the run-to-completion setup.
+// covers the full pipeline end-to-end through the real production Node Types and the Mock
+// Model Provider: POST /runs starts the Run, the work Pool advances it entirely off the
+// request goroutine, and GET /runs/{id} eventually reports COMPLETED with the Text Output
+// node's result as Run.output. It also covers GET /runs/{id}/nodes/{nodeRunId}
+// (NodeRunDetail), folded into this test rather than a separate one: both endpoints read
+// the same completed Run, so splitting them would only duplicate the run-to-completion
+// setup.
 func TestAPI_CreateRun_ValidInput_RunsToCompletion_SnapshotAndNodeRunDetailReflectResult(t *testing.T) {
 	env := newTestEnv(t)
 	workflowID, version := createFixtureDefinition(t, env)
@@ -150,7 +150,7 @@ func TestAPI_CreateRun_ValidInput_RunsToCompletion_SnapshotAndNodeRunDetailRefle
 	}
 	firstAttempt, _ := attempts[0].(map[string]any)
 	if _, ok := firstAttempt["callbackBinding"]; !ok {
-		t.Errorf("NodeAttempt missing required callbackBinding key (Studio requires it non-optional, always null in M1): %s", detailBody)
+		t.Errorf("NodeAttempt missing required callbackBinding key (Studio requires it non-optional, null for a synchronous Node): %s", detailBody)
 	}
 }
 
@@ -207,7 +207,7 @@ func TestAPI_GetRunEvents_JSON_ReturnsOrderedEventsAfterSeq(t *testing.T) {
 // TestAPI_GetRunEvents_SSE_StreamsEventsAndClosesOnTerminal covers the
 // text/event-stream branch of GET /runs/{id}/events: it must deliver every Event as an
 // SSE frame and close the connection once the Run reaches a terminal status and the
-// cursor has caught up, rather than hanging forever (docs/08-interface-spec.md §5).
+// cursor has caught up, rather than hanging forever.
 func TestAPI_GetRunEvents_SSE_StreamsEventsAndClosesOnTerminal(t *testing.T) {
 	env := newTestEnv(t)
 	workflowID, version := createFixtureDefinition(t, env)

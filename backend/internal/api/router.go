@@ -6,10 +6,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// NewRouter builds the Emberling HTTP API: every M1-scope route from
-// docs/08-interface-spec.md §3, plus /health, /ready, the M2 async Node callback contract
-// (§4, POST /api/callbacks), the M5 Asset routes (§3.2) and the M3 Agent Trace query
-// (§3.4).
+// NewRouter builds the Emberling HTTP API: every core REST route, plus /health, /ready,
+// the async Node callback contract (POST /api/callbacks), the Asset routes and the Agent
+// Trace query.
 func NewRouter(deps Deps) http.Handler {
 	deps = deps.withDefaults()
 
@@ -45,7 +44,7 @@ func NewRouter(deps Deps) http.Handler {
 			r.Post("/", deps.uploadAsset)
 			r.Get("/{assetId}", deps.getAsset)
 			// Content is served by the Backend itself rather than through a signed URL,
-			// so no storage location is ever handed to a client (10-ops §4).
+			// so no storage location is ever handed to a client.
 			r.Get("/{assetId}/content", deps.getAssetContent)
 		})
 

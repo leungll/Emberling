@@ -201,9 +201,9 @@ func emptyFakeTx() *fakeTx {
 }
 
 // TestReconciler_RunOnce_ResumesConsumablePendingCallbacksThroughResumeNode proves the
-// Pending Callback consumption scan (design decision C3, docs/06-execution-model.md §2.1):
+// Pending Callback consumption scan:
 // every row ListConsumableForWaiting returns is replayed through the same idempotent
-// ResumeNode use case a live callback or Provider Poll enters (invariant #5), with
+// ResumeNode use case a live callback or Provider Poll enters, with
 // ConsumePending=true, Source=CALLBACK and the stored PayloadHash forwarded verbatim (never
 // recomputed from the JSONB-round-tripped payload -- service.ResumeNode.hash's own doc
 // comment explains why re-hashing would not match what the Provider actually sent).
@@ -264,8 +264,8 @@ func TestReconciler_RunOnce_ResumesConsumablePendingCallbacksThroughResumeNode(t
 
 // TestReconciler_RunOnce_PayloadRejectedPendingCallback_LogsAndContinues proves that a
 // stored early callback the registered Executor cannot interpret does not abort the pass
-// or count as an operational error: 06 §1.6 leaves the NodeRun WAITING_CALLBACK for such a
-// payload, so the Reconciler logs at warn -- without the token, hash or payload -- and
+// or count as an operational error: an uninterpretable payload leaves the NodeRun
+// WAITING_CALLBACK, so the Reconciler logs at warn -- without the token, hash or payload -- and
 // moves on, leaving the row for the next tick or for retention to eventually delete.
 func TestReconciler_RunOnce_PayloadRejectedPendingCallback_LogsAndContinues(t *testing.T) {
 	tx := emptyFakeTx()
@@ -320,7 +320,7 @@ func TestReconciler_RunOnce_PayloadRejectedPendingCallback_LogsAndContinues(t *t
 	// A second RunOnce sees the same still-unconsumed row (this fake never removes it, the
 	// same way a real Postgres row survives an untouched pass) and rejects it again --
 	// proving the Reconciler retries it every tick rather than giving up after one warning,
-	// exactly as CLAUDE.md's completion checklist and 09 §3.2 require for a payload that
+	// exactly as CLAUDE.md's completion checklist requires for a payload that
 	// stays uninterpretable: nothing advances until the row expires and retention deletes
 	// it.
 	if _, err := rec.RunOnce(context.Background()); err != nil {
@@ -334,7 +334,7 @@ func TestReconciler_RunOnce_PayloadRejectedPendingCallback_LogsAndContinues(t *t
 // TestReconciler_RunOnce_PendingCallbackCredentialMismatch_LogsAndContinues proves that a
 // stored early callback whose credential ResumeNode finds does not belong to the Attempt
 // it was about to advance (service.PendingCallbackCredentialMismatchError,
-// docs/06-execution-model.md §3: "无法匹配的 Pending Callback 不具有推进权") is classified
+// an unmatched Pending Callback has no right to advance Execution) is classified
 // exactly like a rejected payload: not an operational error, not counted as resumed, logged
 // at warn with only the external task id and attempt id (never a hash), and the pass
 // continues to the next row instead of aborting.
@@ -406,8 +406,8 @@ func TestReconciler_RunOnce_PendingCallbackCredentialMismatch_LogsAndContinues(t
 	}
 }
 
-// TestReconciler_RunOnce_DeletesExpiredPendingCallbacks proves the retention scan (05
-// §1.7): DeleteExpired runs every tick and its count is only surfaced through the report
+// TestReconciler_RunOnce_DeletesExpiredPendingCallbacks proves the retention scan:
+// DeleteExpired runs every tick and its count is only surfaced through the report
 // and a debug log, never as an operational error, and never logged when there was nothing
 // to delete.
 func TestReconciler_RunOnce_DeletesExpiredPendingCallbacks(t *testing.T) {

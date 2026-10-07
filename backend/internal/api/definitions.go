@@ -29,7 +29,7 @@ type saveDefinitionRequest struct {
 	BaseVersion int `json:"baseVersion"`
 }
 
-// lastRunDTO is DefinitionListItem.lastRun's shape (docs/08-interface-spec.md §3.1): only
+// lastRunDTO is DefinitionListItem.lastRun's shape: only
 // id/status/createdAt, never the full Run. createdAt is sourced from domain.Run.StartedAt:
 // domain.Run has no CreatedAt field of its own, and StartedAt is set the moment CreateRun
 // commits, so it is the only fact this field can mean.
@@ -157,9 +157,9 @@ type validateResponse struct {
 }
 
 // validateDefinition serves POST /definitions/validate. Unlike createDefinition and
-// saveDefinition, an invalid Definition is not an error here (docs/08-interface-spec.md
-// §3.1: "校验接口返回确定性的结构化结果"): the endpoint always answers 200 with a result,
-// never the error envelope, since nothing was ever meant to be persisted.
+// saveDefinition, an invalid Definition is not an error here (the validation endpoint
+// returns a deterministic structured result): the endpoint always answers 200 with a
+// result, never the error envelope, since nothing was ever meant to be persisted.
 func (d Deps) validateDefinition(w http.ResponseWriter, r *http.Request) {
 	var req createDefinitionRequest
 	if !decodeJSON(w, d.Logger, r, &req) {

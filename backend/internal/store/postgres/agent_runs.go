@@ -114,7 +114,7 @@ func (r *agentRunRepository) Terminate(ctx context.Context, agentRunID string, t
 }
 
 // ListExpired returns the Agent Runs whose deadline has passed and that nothing has
-// terminated yet -- the persisted timeout work of 06 §2.1. `termination IS NULL` is the
+// terminated yet -- the persisted Agent timeout work. `termination IS NULL` is the
 // same predicate Terminate conditions on, so an Agent Run another path already closed is
 // never rediscovered as work. The limit bounds the scan batch.
 func (r *agentRunRepository) ListExpired(ctx context.Context, before time.Time, limit int) ([]domain.AgentRun, error) {

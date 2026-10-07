@@ -4,8 +4,7 @@ import "github.com/leungll/Emberling/backend/internal/domain"
 
 // validateStructure is the Compiler's first stage: every node's type must be a
 // registered Node Type, and every edge must reference a real output port on its source
-// node and a real input port on its target node
-// (docs/06-execution-model.md §1.2: "节点类型和配置校验").
+// node and a real input port on its target node (Node Type and config validation).
 //
 // Port resolution is only attempted once every node type is known: an edge touching a
 // node whose type could not be resolved would just produce a confusing, redundant

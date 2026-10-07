@@ -1,6 +1,6 @@
 import type { StatusTone } from '@/lib/status';
 
-/** Solid colour per tone, from the shared 04 §4 status tokens in index.css. */
+/** Solid colour per tone, from the shared status tokens in index.css. */
 export const TONE_DOT: Record<StatusTone, string> = {
   neutral: 'bg-[var(--status-neutral-dot)]',
   running: 'bg-[var(--status-running-dot)]',

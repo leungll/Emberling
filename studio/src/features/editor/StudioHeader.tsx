@@ -13,7 +13,7 @@ interface StudioHeaderProps {
   onRun: () => void;
 }
 
-/** Header actions follow the mock's large, equal-weight buttons (04 §2.6). */
+/** Header actions follow the mock's large, equal-weight buttons. */
 const ACTION = 'h-9 min-w-[88px] px-5 font-semibold';
 
 /** Edit-mode header. Observe mode keeps the same shell but swaps the actions. */
@@ -39,7 +39,7 @@ export function StudioHeader({
         </Link>
         <div>
           <h1 className="text-[15px] font-semibold">{name}</h1>
-          {/* 04 §1.4: the mode is always explicit, so Edit states "Definition vN · Editing".
+          {/* The mode is always explicit, so Edit states "Definition vN · Editing".
               The workflow id stays available on hover as the bound Definition identity. */}
           <p
             data-testid="studio-subtitle"

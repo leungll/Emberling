@@ -328,7 +328,7 @@ func TestNodeRegistry_ValidateSemantics_ManagedAgentReturnsNil(t *testing.T) {
 		t.Fatalf("Register() error = %v", err)
 	}
 	if err := r.ValidateSemantics(context.Background(), reg.Metadata.Type, map[string]any{}); err != nil {
-		t.Fatalf("ValidateSemantics() error = %v, want nil for MANAGED_AGENT in M1", err)
+		t.Fatalf("ValidateSemantics() error = %v, want nil for MANAGED_AGENT", err)
 	}
 }
 

@@ -12,8 +12,8 @@ import (
 )
 
 // DecisionEnvelope is one normalised model Decision as the Runtime receives it. It mirrors
-// the Adapter contract's decision envelope (docs/07-extensibility.md §1.4,
-// registry.ModelDecision) without importing registry: runtime holds pure decisions and
+// the Adapter contract's decision envelope (registry.ModelDecision) without importing
+// registry: runtime holds pure decisions and
 // never depends on the Provider-facing packages (CLAUDE.md "Package boundaries"). The
 // caller maps the Adapter's result onto this struct.
 type DecisionEnvelope struct {
@@ -28,8 +28,8 @@ type DecisionEnvelope struct {
 }
 
 // ParseModelDecision performs the only check the model result transaction may make before
-// it commits an immutable Decision: the basic envelope shape (docs/05-data-model.md §1.4,
-// docs/07-extensibility.md §1.4). The kind must be valid, each kind's required fields must
+// it commits an immutable Decision: the basic envelope shape. The kind must be valid,
+// each kind's required fields must
 // be present, the two kinds' fields are mutually exclusive, and an optional state patch
 // must be a JSON object.
 //
@@ -59,8 +59,8 @@ func ParseModelDecision(envelope DecisionEnvelope) (domain.AgentDecision, error)
 
 	switch decision.Kind {
 	case domain.DecisionToolCall:
-		// The Decision envelope Schema declares `arguments` with no type
-		// (docs/07-extensibility.md §1.4), so only well-formedness is checked here; the
+		// The Decision envelope Schema declares `arguments` with no type,
+		// so only well-formedness is checked here; the
 		// Tool InputSchema rejects a wrongly shaped value when the Action executes.
 		if !json.Valid(decision.Arguments) {
 			return domain.AgentDecision{}, &InvalidActionError{Subject: "decision", Message: "TOOL_CALL arguments are not valid JSON"}
@@ -79,8 +79,8 @@ func ParseModelDecision(envelope DecisionEnvelope) (domain.AgentDecision, error)
 	return decision, nil
 }
 
-// ValidateToolCall is the execution-time check of a committed TOOL_CALL Decision
-// (docs/07-extensibility.md §1.4): the Tool must belong to the Agent Run's frozen
+// ValidateToolCall is the execution-time check of a committed TOOL_CALL Decision:
+// the Tool must belong to the Agent Run's frozen
 // allowlist and the arguments must satisfy that Tool's registered InputSchema. tool is the
 // metadata the caller already resolved through the Tool Registry for decision.ToolName;
 // runtime resolves no Tool itself and never infers Tool behaviour from an Executor's type.
@@ -109,10 +109,9 @@ func ValidateToolCall(decision domain.AgentDecision, allowlist []string, tool do
 }
 
 // ValidateFinalOutput is the execution-time check of a committed FINAL Decision's output
-// against the Agent Run's frozen OutputSchema (docs/07-extensibility.md §1.4). An absent
+// against the Agent Run's frozen OutputSchema. An absent
 // OutputSchema means the MVP default: the Agent's single output port is `text`, so the
-// output must be a JSON string (docs/08-interface-spec.md §2.1 "Agent 的 OutputSchema 在
-// MVP 中必须接受 string").
+// output must be a JSON string (an Agent's OutputSchema must accept string in the MVP).
 //
 // A violation is an *InvalidActionError: the Final Action fails as INVALID_ACTION, without
 // a new State Version and without a second model call.
@@ -137,7 +136,7 @@ func ValidateFinalOutput(output json.RawMessage, outputSchema json.RawMessage) e
 }
 
 // ValidateToolResult checks the result of one real Tool call against that Tool's
-// registered OutputSchema (docs/07-extensibility.md §1.5: the OutputSchema is the Tool's
+// registered OutputSchema (the OutputSchema is the Tool's
 // sole result contract, and the Runtime -- not the Executor -- enforces it).
 //
 // It is deliberately not an *InvalidActionError: the model's Decision was valid and the

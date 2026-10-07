@@ -167,7 +167,7 @@ export function listTools(signal?: AbortSignal): Promise<ToolMetadata[]> {
 // --- Asset --------------------------------------------------------------------
 
 /**
- * Uploads one image as the `file` multipart part (08 §3.2's single accepted part name)
+ * Uploads one image as the `file` multipart part (the single accepted part name)
  * and returns the immutable `AssetRef` the Backend commits. The caller writes this value
  * into `Run.input`; Studio never invents an `assetId` or writes a browser-local URL there.
  */

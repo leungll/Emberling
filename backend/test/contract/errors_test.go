@@ -9,13 +9,13 @@ import (
 
 // TestAPI_ErrorEnvelope_UnknownRoute_MatchesSpec covers the router's own fallback
 // handlers (router.go's r.NotFound/r.MethodNotAllowed), not a service/domain error path:
-// both must answer the same {"error": {"code", "message"}} envelope shape
-// docs/08-interface-spec.md §6 defines for every other error response.
+// both must answer the same {"error": {"code", "message"}} envelope shape the error
+// contract defines for every other error response.
 //
-// Note: 08 §6's own code list ("示例 code") is illustrative, not exhaustive or closed;
-// NOT_FOUND and METHOD_NOT_ALLOWED are this router's own additions for routes the spec's
-// endpoint table never claims to cover (an unknown path, or a known path with the wrong
-// method), and are kept exactly as router.go already defines them.
+// Note: the error contract's own code list (example codes) is illustrative, not
+// exhaustive or closed; NOT_FOUND and METHOD_NOT_ALLOWED are this router's own additions
+// for routes the spec's endpoint table never claims to cover (an unknown path, or a known
+// path with the wrong method), and are kept exactly as router.go already defines them.
 func TestAPI_ErrorEnvelope_UnknownRoute_MatchesSpec(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -39,7 +39,7 @@ func TestAPI_ErrorEnvelope_UnknownRoute_MatchesSpec(t *testing.T) {
 }
 
 // assertErrorEnvelopeShape asserts the full {"error": {"code","message"}} envelope shape
-// docs/08-interface-spec.md §6 defines: code matches wantCode exactly, and message is
+// the error contract defines: code matches wantCode exactly, and message is
 // present and non-empty (its exact wording is not part of the contract).
 func assertErrorEnvelopeShape(t *testing.T, body []byte, wantCode string) {
 	t.Helper()

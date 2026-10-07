@@ -77,7 +77,7 @@ func containsEventType(types []domain.EventType, want domain.EventType) bool {
 }
 
 // TestAgentTurn_ReadyToRunningRace_OnlyOneClaimWins proves the conditional Turn claim is
-// what elects the single model caller (invariant #7). Two advancement paths enter
+// what elects the single model caller. Two advancement paths enter
 // AdvanceAgentTurn for the same READY Turn, released together by an explicit barrier; the
 // loser must stop without an Event and, above all, without a second cost-bearing model
 // call.
@@ -148,11 +148,11 @@ func TestAgentTurn_ReadyToRunningRace_OnlyOneClaimWins(t *testing.T) {
 	}
 }
 
-// TestAgentTurn_ModelCallAfterCommit_NotBeforeCommit proves invariant #4 for the Agent
-// Loop: the Provider is called only after the claim transaction has committed, and never
-// while the Run aggregate lock is held. The Provider hook reads the Turn back on a second
-// database connection: a model call issued inside the claim transaction would still see
-// the uncommitted READY row there.
+// TestAgentTurn_ModelCallAfterCommit_NotBeforeCommit proves the commit-before-execution
+// rule for the Agent Loop: the Provider is called only after the claim transaction has
+// committed, and never while the Run aggregate lock is held. The Provider hook reads the
+// Turn back on a second database connection: a model call issued inside the claim
+// transaction would still see the uncommitted READY row there.
 func TestAgentTurn_ModelCallAfterCommit_NotBeforeCommit(t *testing.T) {
 	h := newAgentHarness(t, agentHarnessOptions{})
 	def := h.saveDefinition(agentLoopDefinition("wf-agent-call-after-commit"))
@@ -342,9 +342,8 @@ func TestAgentDecision_BasicShapeInvalid_TerminatesInvalidActionNoDecisionRow(t 
 }
 
 // assertAgentTerminated is the shared assertion of the two model-result failure paths:
-// both commit the same facts and differ only in the recorded termination reason
-// (docs/06-execution-model.md termination table: every non-FINAL_RESPONSE termination
-// fails the Agent NodeRun).
+// both commit the same facts and differ only in the recorded termination reason (every
+// non-FINAL_RESPONSE termination fails the Agent NodeRun).
 func assertAgentTerminated(t *testing.T, h *agentHarness, runID string, outcome service.AdvanceOutcome, want domain.AgentTermination) {
 	t.Helper()
 
@@ -419,11 +418,10 @@ func assertAgentTerminated(t *testing.T, h *agentHarness, runID string, outcome 
 }
 
 // TestAgentTurn_RestartAfterClaim_RunningTurnIsNotRecalled is the crash-after-COMMIT case
-// invariant #6 accepts by design: the claim transaction committed, then the process died
-// before the model answered. The Turn stays RUNNING, and recovery must leave it alone --
-// docs/06-execution-model.md §2.1 has the Reconciler rediscover READY Turns only, because
-// re-issuing a model request that may already be in flight buys a duplicate cost-bearing
-// call.
+// the persisted-work recovery rule accepts by design: the claim transaction committed,
+// then the process died before the model answered. The Turn stays RUNNING, and recovery
+// must leave it alone -- the Reconciler rediscovers READY Turns only, because re-issuing
+// a model request that may already be in flight buys a duplicate cost-bearing call.
 func TestAgentTurn_RestartAfterClaim_RunningTurnIsNotRecalled(t *testing.T) {
 	crashed := newAgentHarness(t, agentHarnessOptions{})
 	def := crashed.saveDefinition(agentLoopDefinition("wf-agent-restart"))
@@ -472,13 +470,13 @@ func TestAgentTurn_RestartAfterClaim_RunningTurnIsNotRecalled(t *testing.T) {
 }
 
 // TestAgentTurn_RegistryDriftAfterAgentRunCreated_TerminatesModelErrorWithoutModelCall
-// covers the mid-run half of docs/09-testing-and-acceptance.md §3.4 "Tool 从 Registry 消失"
-// for the Turn side: the Agent Run was created while `lookup` still resolved -- the
-// allowlist is frozen and Turn 1 is committed READY -- and then a restarted Backend
-// without that Tool claims the Turn. Building the model request discovers the drift inside
-// the claim transaction, so the Provider is never called, the claimed Turn fails, the
-// Agent Run terminates as MODEL_ERROR, and no Decision exists. The frozen allowlist is not
-// silently shortened to make the request buildable.
+// covers the mid-run half of a Tool disappearing from the Registry, for the Turn side:
+// the Agent Run was created while `lookup` still resolved -- the allowlist is frozen and
+// Turn 1 is committed READY -- and then a restarted Backend without that Tool claims the
+// Turn. Building the model request discovers the drift inside the claim transaction, so
+// the Provider is never called, the claimed Turn fails, the Agent Run terminates as
+// MODEL_ERROR, and no Decision exists. The frozen allowlist is not silently shortened to
+// make the request buildable.
 func TestAgentTurn_RegistryDriftAfterAgentRunCreated_TerminatesModelErrorWithoutModelCall(t *testing.T) {
 	first := newAgentHarness(t, agentHarnessOptions{})
 	def := first.saveDefinition(agentLoopDefinition("wf-agent-turn-registry-drift"))

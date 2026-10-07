@@ -104,7 +104,7 @@ func (r *agentTurnRepository) GetByRunAndTurnNo(ctx context.Context, agentRunID 
 	return turns[0], nil
 }
 
-// ClaimReady conditionally moves READY to RUNNING and stamps started_at (06 §1.7). The
+// ClaimReady conditionally moves READY to RUNNING and stamps started_at. The
 // single caller whose UPDATE affected one row owns the model call, and only after this
 // transaction commits; everybody else must stop without re-issuing the request.
 func (r *agentTurnRepository) ClaimReady(ctx context.Context, turnID string, now time.Time) (bool, error) {
@@ -123,7 +123,7 @@ func (r *agentTurnRepository) ClaimReady(ctx context.Context, turnID string, now
 	return affected == 1, nil
 }
 
-// ListReady returns persisted READY Turns for Reconciler rediscovery (06 §2.1). RUNNING
+// ListReady returns persisted READY Turns for Reconciler rediscovery. RUNNING
 // Turns are excluded on purpose: the MVP never re-issues a model request that may still
 // be in flight; such a Turn ends through the Agent deadline instead.
 func (r *agentTurnRepository) ListReady(ctx context.Context, limit int) ([]domain.AgentTurn, error) {

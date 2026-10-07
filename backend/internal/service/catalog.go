@@ -3,7 +3,7 @@ package service
 import "github.com/leungll/Emberling/backend/internal/domain"
 
 // CatalogService serves the read-only Node/Model/Tool Registry metadata Studio and the
-// API need (docs/08-interface-spec.md §2). It never returns an Executor, Adapter or
+// API need. It never returns an Executor, Adapter or
 // Provider credential: the underlying Registries' ListMetadata methods already strip
 // those.
 type CatalogService struct {

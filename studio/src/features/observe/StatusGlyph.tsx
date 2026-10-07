@@ -13,7 +13,7 @@ const TONE_RING: Record<StatusTone, string> = {
 };
 
 /**
- * Plain status dot (Timeline, Turn cards). Running pulses lightly (04 §4); every other tone
+ * Plain status dot (Timeline, Turn cards). Running pulses lightly; every other tone
  * is a still dot. `data-tone` exposes the class for tests without reading colours.
  */
 export function StatusDot({ tone, className }: { tone: StatusTone; className?: string }) {
@@ -33,7 +33,7 @@ export function StatusDot({ tone, className }: { tone: StatusTone; className?: s
 
 /**
  * Circled status mark (Run Rail): green check, amber hourglass, red exclamation, a pulsing
- * blue dot for running and a neutral dot for ready (04 §4).
+ * blue dot for running and a neutral dot for ready.
  */
 export function StatusGlyph({ tone, className }: { tone: StatusTone; className?: string }) {
   return (

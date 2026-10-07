@@ -20,10 +20,10 @@ import (
 )
 
 // callbackTokenHeaderForTest mirrors internal/api's unexported callbackTokenHeader
-// constant (docs/08-interface-spec.md §4). This test package cannot import that
-// identifier -- it is unexported in a different package -- and duplicating the literal
-// here, rather than adding an exported alias production code would otherwise never need,
-// keeps the production surface unchanged.
+// constant. This test package cannot import that identifier -- it is unexported in a
+// different package -- and duplicating the literal here, rather than adding an exported
+// alias production code would otherwise never need, keeps the production surface
+// unchanged.
 const callbackTokenHeaderForTest = "X-Emberling-Callback-Token"
 
 // ---- shared helpers for this file ----
@@ -135,8 +135,8 @@ func (e *testEnv) listEvents(t *testing.T, runID string) []map[string]any {
 
 // doCallback POSTs {externalTaskId, payload} to /api/callbacks with token as the
 // credential header. token == "" sends the request with no credential header at all
-// (matching a client that never set one, the "missing" case 08 §4 distinguishes from an
-// empty one only in that neither carries a usable credential).
+// (matching a client that never set one, the "missing" case the callback contract
+// distinguishes from an empty one only in that neither carries a usable credential).
 func (e *testEnv) doCallback(t *testing.T, token, externalTaskID string, payload map[string]any) (*http.Response, []byte) {
 	t.Helper()
 	reqBody := map[string]any{"externalTaskId": externalTaskID, "payload": payload}
@@ -219,7 +219,7 @@ func (b *syncBuffer) String() string {
 // -----------------------------------------------------------------------------------
 
 // TestAPI_Callback_MissingToken_Returns401AndPersistsNothing covers the credential-first
-// contract (08 §4): a callback with no X-Emberling-Callback-Token header at all is
+// contract: a callback with no X-Emberling-Callback-Token header at all is
 // rejected before anything is read from the database, let alone written to it.
 func TestAPI_Callback_MissingToken_Returns401AndPersistsNothing(t *testing.T) {
 	env := newTestEnv(t)
@@ -243,7 +243,7 @@ func TestAPI_Callback_MissingToken_Returns401AndPersistsNothing(t *testing.T) {
 
 // TestAPI_Callback_TamperedToken_Returns401AndPersistsNothing covers a non-empty but
 // invalid credential: verifyCallbackToken rejects it by signature alone, without ever
-// reading the Callback Binding or writing a Pending Callback row (06 §1.6, 08 §4). This
+// reading the Callback Binding or writing a Pending Callback row. This
 // uses a genuine dispatched Attempt's own token, tampered by one character, so the test
 // proves tampering specifically -- not just "any garbage string" -- is rejected.
 func TestAPI_Callback_TamperedToken_Returns401AndPersistsNothing(t *testing.T) {
@@ -304,7 +304,7 @@ func tamperToken(token string) string {
 // -----------------------------------------------------------------------------------
 
 // TestAPI_Callback_MalformedBody_Returns400InvalidCallbackPayload covers three ways a
-// credentialed request can still fail to decode into {externalTaskId, payload} (08 §4):
+// credentialed request can still fail to decode into {externalTaskId, payload}:
 // invalid JSON, a missing externalTaskId, and a missing payload. None of these ever reach
 // service.HandleCallback, so a valid-looking but otherwise unused token is enough.
 func TestAPI_Callback_MalformedBody_Returns400InvalidCallbackPayload(t *testing.T) {
@@ -378,12 +378,12 @@ func TestAPI_Callback_BodyOverLimit_Returns413(t *testing.T) {
 // 5. Delivery before the Callback Binding commits
 // -----------------------------------------------------------------------------------
 
-// TestAPI_Callback_BeforeBinding_Returns202Pending covers the Pending Callback path (05
-// §1.7, 06 §1.6, 08 §4): a delivery that names an external task id with no Callback
-// Binding yet is stored, answered 202 with pending=true, and -- once the dispatch
-// transaction commits -- consumed automatically without any further client action
-// (consumeEarlyCallback, invariant #6: a persisted fact is recoverable work, the
-// in-process resume is only a latency optimization).
+// TestAPI_Callback_BeforeBinding_Returns202Pending covers the Pending Callback path: a
+// delivery that names an external task id with no Callback Binding yet is stored,
+// answered 202 with pending=true, and -- once the dispatch transaction commits --
+// consumed automatically without any further client action (consumeEarlyCallback:
+// a persisted fact is recoverable work, the in-process resume is only a
+// latency optimization).
 //
 // The barrier stalls fakeAsyncDispatcher.dispatch, which production code calls from
 // inside Execute -- after the STARTED Attempt (and its callback token) already committed,
@@ -466,7 +466,7 @@ func TestAPI_Callback_FirstDelivery_Returns200AndRunProceeds(t *testing.T) {
 // -----------------------------------------------------------------------------------
 
 // TestAPI_Callback_Duplicate_Returns200DuplicateWithoutNewEvents covers re-delivery of an
-// already-resumed callback (09 §3.2): ResumeNode finds the Attempt no longer DISPATCHED
+// already-resumed callback: ResumeNode finds the Attempt no longer DISPATCHED
 // and writes nothing, so the second delivery answers 200 with duplicate=true and commits
 // no additional Event -- the Event list is byte-for-byte identical before and after.
 func TestAPI_Callback_Duplicate_Returns200DuplicateWithoutNewEvents(t *testing.T) {
@@ -511,11 +511,11 @@ func TestAPI_Callback_Duplicate_Returns200DuplicateWithoutNewEvents(t *testing.T
 // 8. NodeRunDetail projects the Callback Binding without its token/hash
 // -----------------------------------------------------------------------------------
 
-// TestAPI_NodeDetail_DispatchedAttempt_ProjectsCallbackBindingWithoutTokenHash covers
-// deliverable B: GET /runs/{runId}/nodes/{nodeRunId} on a dispatched Attempt now projects
-// a real callbackBinding object {id, providerId, externalTaskId, createdAt} instead of a
-// pinned null, and that projection never carries the token or its hash (08 §4 lines
-// 403-408/414: those four fields are the only ones a Callback Binding may expose).
+// TestAPI_NodeDetail_DispatchedAttempt_ProjectsCallbackBindingWithoutTokenHash covers the
+// Callback Binding projection: GET /runs/{runId}/nodes/{nodeRunId} on a dispatched
+// Attempt now projects a real callbackBinding object {id, providerId, externalTaskId,
+// createdAt} instead of a pinned null, and that projection never carries the token or its
+// hash (those four fields are the only ones a Callback Binding may expose).
 func TestAPI_NodeDetail_DispatchedAttempt_ProjectsCallbackBindingWithoutTokenHash(t *testing.T) {
 	env := newTestEnv(t)
 	runID := env.createAsyncEchoRun(t, map[string]any{"prompt": "hello"})

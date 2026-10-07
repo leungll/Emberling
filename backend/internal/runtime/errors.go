@@ -9,7 +9,7 @@ import (
 
 // ValidationError is one structural, semantic, config or instance violation found while
 // compiling a Definition or validating Run input. Code is a stable, machine-readable
-// identifier (docs/08-interface-spec.md §6); Path locates the violation inside the
+// identifier; Path locates the violation inside the
 // Definition (e.g. "nodes[2].config") or inside the instance being validated.
 type ValidationError struct {
 	Code    string `json:"code"`
@@ -25,8 +25,8 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s (path=%s)", e.Code, e.Message, e.Path)
 }
 
-// Structural/semantic error codes (HTTP 422, docs/08-interface-spec.md §6: "Definition
-// 语义无效"). These describe an invalid graph shape, not an invalid config value.
+// Structural/semantic error codes (HTTP 422, semantically invalid Definition). These
+// describe an invalid graph shape, not an invalid config value.
 const (
 	CodeDAGHasCycle             = "DAG_HAS_CYCLE"
 	CodeIncompatibleEdge        = "INCOMPATIBLE_EDGE"
@@ -41,8 +41,7 @@ const (
 	CodeDuplicateInputKey       = "DUPLICATE_INPUT_KEY"
 )
 
-// Config/schema/instance error codes (HTTP 400, docs/08-interface-spec.md §6: "请求内容
-// 无效").
+// Config/schema/instance error codes (HTTP 400, invalid request content).
 const (
 	CodeValidationFailed         = "VALIDATION_FAILED"
 	CodeSemanticValidationFailed = "SEMANTIC_VALIDATION_FAILED"
@@ -51,14 +50,14 @@ const (
 	// Compiler itself: a `agent` node's modelId and allowedTools name identifiers only the
 	// Model and Tool Registries can resolve, and runtime holds no Registry access
 	// (CLAUDE.md "Package boundaries"). They stay in this same HTTP 400 family because
-	// they are still "请求内容无效" (08 §6), not a graph-shape violation.
+	// they are still invalid request content, not a graph-shape violation.
 	CodeModelNotFound      = "MODEL_NOT_FOUND"
 	CodeToolNotFound       = "TOOL_NOT_FOUND"
 	CodeModelConfigInvalid = "MODEL_CONFIG_INVALID"
 )
 
-// CompileStage names one stage of the Compiler's validation chain
-// (docs/06-execution-model.md §1.2). Compile stops after the first stage that reports
+// CompileStage names one stage of the Compiler's validation chain.
+// Compile stops after the first stage that reports
 // any error, so a caller only ever sees one stage's worth of ValidationErrors.
 type CompileStage string
 
@@ -96,7 +95,7 @@ func AsCompileError(err error) (*CompileError, bool) {
 // InvalidActionError is a deterministic Agent failure: a model Decision whose basic shape
 // is wrong, a Tool outside the Agent Run's frozen allowlist, arguments or a Final output
 // that fail their frozen Schema, or a state patch that cannot be applied
-// (docs/06-execution-model.md §1.7 termination table). It is a typed error so the calling
+// (the Agent termination table). It is a typed error so the calling
 // use case can terminate the Agent Run with domain.TerminationInvalidAction instead of
 // treating a model mistake as an infrastructure failure or retrying it.
 //

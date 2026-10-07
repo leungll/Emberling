@@ -156,8 +156,8 @@ func TestPool_Stop_WaitsForInFlightExecuteToFinish(t *testing.T) {
 	pool.Stop()
 }
 
-// TestPool_AgentTurnItem_DispatchesToAdvanceAgentTurn covers the typed queue item of
-// 06 §2.1: an AGENT_TURN item carries the persisted Turn ID and its Run ID, and the Pool
+// TestPool_AgentTurnItem_DispatchesToAdvanceAgentTurn covers the typed queue item:
+// an AGENT_TURN item carries the persisted Turn ID and its Run ID, and the Pool
 // hands it to the Agent Turn use case as immediate advancement -- never to the Run-level
 // Advance -- under the same Before/AfterExecute hooks a Run item uses.
 func TestPool_AgentTurnItem_DispatchesToAdvanceAgentTurn(t *testing.T) {
