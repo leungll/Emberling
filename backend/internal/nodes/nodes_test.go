@@ -1,7 +1,7 @@
 // Package nodes has no production code of its own; it only proves that every built-in
 // Node registers cleanly together against one NodeRegistry; nodes/textinput, .../
-// prompttemplate, .../textgeneration, .../textoutput, .../mediaoutput, .../imageinput and
-// .../imagegeneration each still own their focused, per-node tests.
+// prompttemplate, .../textgeneration, .../textoutput, .../mediaoutput, .../imageinput,
+// .../mediabrief and .../imagegeneration each still own their focused, per-node tests.
 package nodes
 
 import (
@@ -11,6 +11,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
 	"github.com/leungll/Emberling/backend/internal/nodes/imagegeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/imageinput"
+	"github.com/leungll/Emberling/backend/internal/nodes/mediabrief"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
@@ -36,6 +37,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 	registrations := []registry.NodeRegistration{
 		textinput.Registration(),
 		imageinput.Registration(),
+		mediabrief.Registration(),
 		prompttemplate.Registration(),
 		textgeneration.Registration(noopModelResolver{}),
 		textoutput.Registration(),
@@ -55,6 +57,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 	wantTypes := map[string]bool{
 		"text_input":       false,
 		"image_input":      false,
+		"media_brief":      false,
 		"prompt_template":  false,
 		"text_generation":  false,
 		"text_output":      false,

@@ -25,6 +25,39 @@ type imageInputConfig struct {
 	MaxSizeBytes       *int64   `json:"maxSizeBytes"`
 }
 
+// nodeTypeMediaBrief is the Media Brief node, which reads a required photo set from Run
+// input. It is not an Input Node -- it also consumes a brief through an input port -- but
+// it contributes one runInputSchema property and shares the inputKey namespace with the
+// Input Nodes.
+const nodeTypeMediaBrief = "media_brief"
+
+// Media Brief photo set bounds, mirrored by the node itself.
+const (
+	mediaBriefMinPhotos = 1
+	mediaBriefMaxPhotos = 12
+)
+
+// mediaBriefImageTypes is the photo set's mediaType enum: the supported image media types,
+// sorted so the generated schema is canonical.
+var mediaBriefImageTypes = []string{"image/jpeg", "image/png", "image/webp"}
+
+// mediaBriefConfig is the subset of a media_brief node's config that drives
+// runInputSchema generation.
+type mediaBriefConfig struct {
+	InputKey string `json:"inputKey"`
+}
+
+// mediaBriefSchema is the always-required photo set property: an array of AssetRefs
+// restricted to image media types, with no per-Asset size bound.
+func mediaBriefSchema() canonicalObject {
+	return canonicalObject{
+		{Key: "type", Value: "array"},
+		{Key: "items", Value: assetRefSchema(mediaBriefImageTypes, nil)},
+		{Key: "minItems", Value: mediaBriefMinPhotos},
+		{Key: "maxItems", Value: mediaBriefMaxPhotos},
+	}
+}
+
 // assetRefSchema is the fixed AssetRef object every Image Input generates before any
 // acceptedMediaTypes/maxSizeBytes constraint is layered on. The property key order --
 // assetId, mediaType, sizeBytes, sha256 -- matches that example exactly and is NOT
@@ -67,7 +100,7 @@ func assetRefSchema(mediaTypeEnum []string, maxSizeBytes *int64) canonicalObject
 }
 
 // buildRunInputSchema is the Compiler's sixth stage: one top-level property per Input
-// Node, keyed by inputKey and ordered ascending by inputKey, with the top-level
+// Node (and per Media Brief node), keyed by inputKey and ordered ascending by inputKey, with the top-level
 // `required` array in the same order. The result is canonical JSON: byte-identical for
 // equal Definition content and validatorVersion.
 //
@@ -131,6 +164,23 @@ func buildRunInputSchema(def domain.Definition) (json.RawMessage, []ValidationEr
 				inputKey: cfg.InputKey, required: cfg.Required,
 				property: assetRefSchema(mediaTypes, cfg.MaxSizeBytes),
 			})
+
+		case nodeTypeMediaBrief:
+			var cfg mediaBriefConfig
+			if err := json.Unmarshal(node.Config, &cfg); err != nil {
+				continue
+			}
+			if cfg.InputKey == "" {
+				errs = append(errs, ValidationError{
+					Code:    CodeInputKeyRequired,
+					NodeID:  node.ID,
+					Path:    "nodes[" + node.ID + "].config.inputKey",
+					Message: "inputKey must not be empty",
+				})
+				continue
+			}
+			keyCount[cfg.InputKey]++
+			entries = append(entries, inputEntry{inputKey: cfg.InputKey, required: true, property: mediaBriefSchema()})
 		}
 	}
 
@@ -139,7 +189,7 @@ func buildRunInputSchema(def domain.Definition) (json.RawMessage, []ValidationEr
 			continue
 		}
 		for _, node := range def.Nodes {
-			if !isInputNodeType(node.Type) {
+			if !isInputNodeType(node.Type) && node.Type != nodeTypeMediaBrief {
 				continue
 			}
 			var raw struct {

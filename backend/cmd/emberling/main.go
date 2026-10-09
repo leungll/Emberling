@@ -26,6 +26,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/nodes/agent"
 	"github.com/leungll/Emberling/backend/internal/nodes/imagegeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/imageinput"
+	"github.com/leungll/Emberling/backend/internal/nodes/mediabrief"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
@@ -175,6 +176,7 @@ func run(logger *slog.Logger) error {
 			registrations := []registry.NodeRegistration{
 				textinput.Registration(),
 				imageinput.Registration(),
+				mediabrief.Registration(),
 				prompttemplate.Registration(),
 				textoutput.Registration(),
 				mediaoutput.Registration(),

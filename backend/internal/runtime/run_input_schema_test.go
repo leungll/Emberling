@@ -180,3 +180,100 @@ func TestRunInputSchema_AllOptional_OmitsTopLevelRequired(t *testing.T) {
 		t.Errorf("RunInputSchema =\n%s\nwant\n%s (top-level required must be omitted, not empty)", got.RunInputSchema, want)
 	}
 }
+
+func mediaBriefDefinition(inputKey string, extra ...domain.Node) domain.Definition {
+	nodes := []domain.Node{{
+		ID: "node_brief", Type: nodeTypeMediaBrief,
+		Config: json.RawMessage(`{"inputKey":"` + inputKey + `"}`),
+	}}
+	return domain.Definition{Nodes: append(nodes, extra...)}
+}
+
+// TestRunInputSchema_MediaBrief_RequiredBoundedImageAssetRefArray pins the photo set
+// property byte for byte: an always-required array of the shared AssetRef schema with the
+// sorted image mediaType enum and no size maximum, bounded to one through twelve items.
+func TestRunInputSchema_MediaBrief_RequiredBoundedImageAssetRefArray(t *testing.T) {
+	got, errs := buildRunInputSchema(mediaBriefDefinition("photos", domain.Node{
+		ID: "node_text", Type: NodeTypeTextInput,
+		Config: json.RawMessage(`{"inputKey":"brief","required":false}`),
+	}))
+	if len(errs) > 0 {
+		t.Fatalf("buildRunInputSchema() errors = %+v, want none", errs)
+	}
+
+	want := `{"type":"object","additionalProperties":false,"properties":{` +
+		`"brief":{"type":"string"},` +
+		`"photos":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{` +
+		`"assetId":{"type":"string","minLength":1},` +
+		`"mediaType":{"type":"string","minLength":1,"enum":["image/jpeg","image/png","image/webp"]},` +
+		`"sizeBytes":{"type":"integer","minimum":0},` +
+		`"sha256":{"type":"string","minLength":1}},` +
+		`"required":["assetId","mediaType","sizeBytes","sha256"]},"minItems":1,"maxItems":12}},` +
+		`"required":["photos"]}`
+	if string(got) != want {
+		t.Errorf("RunInputSchema =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestRunInputSchema_MediaBrief_EnforcesPhotoSetBoundsAtRunCreation(t *testing.T) {
+	schema, errs := buildRunInputSchema(mediaBriefDefinition("photos"))
+	if len(errs) > 0 {
+		t.Fatalf("buildRunInputSchema() errors = %+v, want none", errs)
+	}
+	photo := func(id, mediaType string) string {
+		return `{"assetId":"` + id + `","mediaType":"` + mediaType + `","sizeBytes":10,"sha256":"abc"}`
+	}
+	thirteen := ""
+	for i := 0; i < 13; i++ {
+		if i > 0 {
+			thirteen += ","
+		}
+		thirteen += photo("asset_"+string(rune('a'+i)), "image/png")
+	}
+
+	cases := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{name: "one photo", input: `{"photos":[` + photo("asset_a", "image/png") + `]}`},
+		{name: "absent", input: `{}`, wantErr: true},
+		{name: "empty", input: `{"photos":[]}`, wantErr: true},
+		{name: "thirteen photos", input: `{"photos":[` + thirteen + `]}`, wantErr: true},
+		{name: "non-image media type", input: `{"photos":[` + photo("asset_a", "application/pdf") + `]}`, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := ValidateRunInput(schema, json.RawMessage(tc.input))
+			if tc.wantErr && len(errs) == 0 {
+				t.Fatal("ValidateRunInput() errors = none, want a rejection")
+			}
+			if !tc.wantErr && len(errs) > 0 {
+				t.Fatalf("ValidateRunInput() errors = %+v, want none", errs)
+			}
+		})
+	}
+}
+
+func TestRunInputSchema_MediaBrief_EmptyInputKey_Fails(t *testing.T) {
+	_, errs := buildRunInputSchema(mediaBriefDefinition(""))
+	if !containsCode(errs, CodeInputKeyRequired) {
+		t.Errorf("errors = %+v, want to contain %s", errs, CodeInputKeyRequired)
+	}
+}
+
+func TestRunInputSchema_MediaBrief_KeySharedWithInputNode_FailsOnBoth(t *testing.T) {
+	_, errs := buildRunInputSchema(mediaBriefDefinition("photos", domain.Node{
+		ID: "node_image", Type: NodeTypeImageInput,
+		Config: json.RawMessage(`{"inputKey":"photos","required":true}`),
+	}))
+	flagged := map[string]bool{}
+	for _, e := range errs {
+		if e.Code == CodeDuplicateInputKey {
+			flagged[e.NodeID] = true
+		}
+	}
+	if !flagged["node_brief"] || !flagged["node_image"] {
+		t.Errorf("DUPLICATE_INPUT_KEY flagged nodes = %v, want node_brief and node_image (errors=%+v)", flagged, errs)
+	}
+}
