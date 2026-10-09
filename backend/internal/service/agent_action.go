@@ -139,7 +139,8 @@ func (s *ExecutionService) wake(c agentCommit) {
 // It runs two transactions with one Tool call between them:
 //
 //  1. Lock the Run, conditionally claim the Action READY->RUNNING, validate the committed
-//     Decision against the frozen allowlist and the registered Tool InputSchema, create
+//     Decision against the frozen allowlist and the registered Tool InputSchema, check
+//     the fact requirements the Tool declares against the Run's committed facts, create
 //     the STARTED Tool Attempt and write AGENT_ACTION_STARTED. Losing the claim writes
 //     nothing; a Decision that may not be executed fails the Action in this same
 //     transaction and never reaches the Tool.
@@ -454,6 +455,22 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
 				domain.FailureSyncExecution, domain.TerminationInvalidAction,
 				domain.ExecutionError{Code: "INVALID_ACTION", Message: validationErr.Error()}, now); err != nil {
+				return err
+			}
+			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
+			return nil
+		}
+
+		// A valid call of a Tool that requires committed facts is still not executable
+		// until those facts hold. An unmet requirement fails the Action exactly like an
+		// invalid Decision, before any Attempt exists, so no external call can follow.
+		unmet, err := s.unmetFactRequirementLocked(ctx, tx, nodeRun.RunID, reg.Metadata.Requires, decision.Arguments)
+		if err != nil {
+			return err
+		}
+		if unmet != nil {
+			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
+				domain.FailureSyncExecution, domain.TerminationInvalidAction, *unmet, now); err != nil {
 				return err
 			}
 			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}

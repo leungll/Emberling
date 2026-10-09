@@ -12,8 +12,9 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
-// This file owns the execution fact a successful Tool result establishes under its Tool's
-// registered production declaration.
+// This file owns the execution facts of Agent Tool calls: the fact a successful Tool result
+// establishes under its Tool's registered production declaration, and the check of a
+// Tool's declared fact requirements when its Action is claimed.
 
 // recordProducedFactLocked writes the execution fact of one successful Tool result inside
 // the Tool result transaction, under the Run aggregate lock the caller holds, so the fact
@@ -117,6 +118,58 @@ func (s *ExecutionService) recordProducedFactLocked(
 		CreatedAt:     now,
 	}); err != nil {
 		return nil, fmt.Errorf("execution: record fact %q of tool attempt %s: %w", produced.FactType, call.attemptID, err)
+	}
+	return nil, nil
+}
+
+// requirementCandidateLimit bounds the facts one requirement check reads. Only the newest
+// fact about the subject decides a requirement, so a handful is ample; the bound keeps the
+// claim transaction's read independent of how many facts the Run has accumulated.
+const requirementCandidateLimit = 8
+
+// unmetFactRequirementLocked evaluates every fact requirement the Tool's current
+// registration declares against the facts already committed in the Run. It runs inside
+// the claim transaction, under the Run aggregate lock the caller holds, after the call
+// passed the allowlist and Input Schema checks and before any Tool Attempt exists, so a
+// fact committed by a concurrent result transaction is either fully visible or not yet
+// there, and an unmet requirement is decided before anything external can happen.
+//
+// Requirements are evaluated in declaration order and the first unmet one is returned as
+// the PRECONDITION_UNMET ExecutionError the caller fails the Action with. Its details name
+// the fact type, the subject reference, the reason and the binding involved; they never
+// carry other argument values, which may hold signed URLs. Only persisted facts are
+// consulted: whether the Tool that produced them is still registered does not matter.
+// A Tool without requirements reads nothing.
+func (s *ExecutionService) unmetFactRequirementLocked(
+	ctx context.Context,
+	tx store.Tx,
+	runID string,
+	requirements []domain.FactRequirement,
+	arguments json.RawMessage,
+) (*domain.ExecutionError, error) {
+	for _, requirement := range requirements {
+		// The matcher reads the subject and every compared argument before it looks at a
+		// single candidate. Asked with no candidates, it therefore reports either the
+		// argument problem or NO_FACT naming the subject it read; the store query takes
+		// the subject from that answer, so the arguments are interpreted in one place.
+		_, probe := runtime.MatchRequirement(requirement, arguments, nil)
+		if probe == nil {
+			return nil, fmt.Errorf("execution: requirement %q of run %s matched without any committed fact", requirement.FactType, runID)
+		}
+		if probe.Reason != runtime.RequirementNoFact {
+			unmet := probe.ExecutionError()
+			return &unmet, nil
+		}
+		subject := probe.Subject
+
+		candidates, err := tx.ExecutionFacts().ListForRequirement(ctx, runID, requirement.FactType, &subject, requirementCandidateLimit)
+		if err != nil {
+			return nil, fmt.Errorf("execution: list facts %q about %q of run %s: %w", requirement.FactType, subject, runID, err)
+		}
+		if _, failure := runtime.MatchRequirement(requirement, arguments, candidates); failure != nil {
+			unmet := failure.ExecutionError()
+			return &unmet, nil
+		}
 	}
 	return nil, nil
 }
