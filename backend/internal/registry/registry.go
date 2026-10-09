@@ -208,8 +208,9 @@ func (r *NodeRegistry) ValidateSemantics(ctx context.Context, nodeType string, c
 }
 
 // ModelRegistry resolves a stable Model ID to its registration and the ModelProvider that
-// serves it. MVP registers exactly one ModelProvider, but that Provider may declare
-// several compatible models.
+// serves it. The deterministic mock model is always registered, and a real Provider may be
+// registered beside it; each Provider may declare several models, and every model is
+// resolved by its own stable Model ID, never by Provider.
 type ModelRegistry struct {
 	mu      sync.Mutex
 	entries map[string]modelEntry
