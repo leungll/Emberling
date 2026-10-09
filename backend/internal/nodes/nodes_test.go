@@ -1,7 +1,7 @@
 // Package nodes has no production code of its own; it only proves that every built-in
 // Node registers cleanly together against one NodeRegistry; nodes/textinput, .../
 // prompttemplate, .../textgeneration, .../textoutput, .../mediaoutput, .../imageinput,
-// .../mediabrief and .../imagegeneration each still own their focused, per-node tests.
+// .../mediabrief, .../mediaresult and .../imagegeneration each still own their focused, per-node tests.
 package nodes
 
 import (
@@ -13,6 +13,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/nodes/imageinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediabrief"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
+	"github.com/leungll/Emberling/backend/internal/nodes/mediaresult"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
@@ -42,6 +43,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 		textgeneration.Registration(noopModelResolver{}),
 		textoutput.Registration(),
 		mediaoutput.Registration(),
+		mediaresult.Registration(),
 		imagegeneration.Registration(noopModelResolver{}, mocktask.New("http://mock-provider.test", nil)),
 	}
 	for _, reg := range registrations {
@@ -62,6 +64,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 		"text_generation":  false,
 		"text_output":      false,
 		"media_output":     false,
+		"media_result":     false,
 		"image_generation": false,
 	}
 	for _, meta := range list {

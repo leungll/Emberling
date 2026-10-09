@@ -39,6 +39,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/nodes/imageinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediabrief"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
+	"github.com/leungll/Emberling/backend/internal/nodes/mediaresult"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
@@ -276,6 +277,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		prompttemplate.Registration(),
 		textoutput.Registration(),
 		mediaoutput.Registration(),
+		mediaresult.Registration(),
 		textgeneration.Registration(modelRegistry),
 		imagegeneration.Registration(modelRegistry, mocktask.New(mockTaskBaseURL, opts.TaskClient)),
 		agent.Registration(),

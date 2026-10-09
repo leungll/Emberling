@@ -28,6 +28,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/nodes/imageinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediabrief"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
+	"github.com/leungll/Emberling/backend/internal/nodes/mediaresult"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
@@ -183,6 +184,7 @@ func run(logger *slog.Logger) error {
 				prompttemplate.Registration(),
 				textoutput.Registration(),
 				mediaoutput.Registration(),
+				mediaresult.Registration(),
 				textgeneration.Registration(modelRegistry),
 				imagegeneration.Registration(modelRegistry, mocktask.New(cfg.ModelProvider.BaseURL, taskClient)),
 				agent.Registration(),
