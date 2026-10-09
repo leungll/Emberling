@@ -522,6 +522,8 @@ func TestE2E_SoftwareDelivery_HappyPath_TestsThenDeploysOnce(t *testing.T) {
 	if outcome := decodeBody[callbackResponseDTO](t, delivery.Body); !outcome.Accepted || outcome.Duplicate {
 		t.Errorf("callback outcome = %+v, want accepted and not a duplicate", outcome)
 	}
+	// The runner records the line only after the HTTP response returns.
+	waitRecordLine(t, f.runner.http.URL, "callback", "callback", nil)
 	callbacks := recordLines(serviceRecord(t, f.runner.http.URL), "callback", "callback")
 	if len(callbacks) != 1 || callbacks[0]["httpStatus"] != float64(http.StatusOK) || callbacks[0]["attempt"] != float64(1) {
 		t.Errorf("runner callback lines = %v, want one first delivery answered 200", callbacks)
