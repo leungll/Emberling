@@ -27,7 +27,7 @@ STUDIO  := studio
 
 .PHONY: bootstrap dev test test-integration test-e2e lint check \
         check-go-version check-node-version fmt-check lint-go install-golangci-lint check-doc-refs \
-        check-migrations migrations-checksum check-file-size
+        check-migrations migrations-checksum check-file-size test-engineering
 
 ## bootstrap: verify toolchain versions and install dependencies. Starts no service.
 bootstrap: check-go-version check-node-version install-golangci-lint
@@ -209,8 +209,12 @@ check-file-size:
 	@echo "==> source: file size"
 	@sh scripts/check-file-size.sh
 
+## test-engineering: prove the guards reject attempts to rewrite protected history.
+test-engineering:
+	@sh scripts/tests/check-engineering.sh
+
 ## check: the full repository gate.
-check: fmt-check lint check-doc-refs check-migrations check-file-size test test-integration
+check: fmt-check lint check-doc-refs check-migrations check-file-size test-engineering test test-integration
 	@if [ -d $(STUDIO) ]; then \
 		echo "==> studio: build"; \
 		cd $(STUDIO) && pnpm build; \
@@ -219,3 +223,4 @@ check: fmt-check lint check-doc-refs check-migrations check-file-size test test-
 	fi
 	@echo "==> git: whitespace check"
 	@git diff --check
+

@@ -1,12 +1,14 @@
 #!/bin/sh
 # Enforces the source file size limit with a shrink-only baseline.
 #
-# Scope: tracked, non-test, non-generated source files: backend Go files and Studio
+# Scope: tracked and untracked, non-test, non-generated source files: backend Go files and Studio
 # src TypeScript files. A file over LIMIT lines fails unless scripts/file-size-baseline.txt
 # lists it as `<max_lines> <path>`; a listed file fails if it grows past its recorded
 # count, and its entry must be removed once the file is back under the limit. Files over
 # WARN lines are reported without failing.
 set -eu
+
+sh scripts/check-engineering-baseline.sh file-size
 
 LIMIT=1200
 WARN=800
@@ -14,10 +16,10 @@ baseline=scripts/file-size-baseline.txt
 
 files=$(
 	{
-		git ls-files -- 'backend/*.go' | grep -v '_test\.go$' || true
-		git ls-files -- 'studio/src/*.ts' 'studio/src/*.tsx' |
+		git ls-files --cached --others --exclude-standard -- 'backend/*.go' | grep -v '_test\.go$' || true
+		git ls-files --cached --others --exclude-standard -- 'studio/src/*.ts' 'studio/src/*.tsx' |
 			grep -vE '\.(test|spec)\.tsx?$|\.gen\.tsx?$|\.d\.ts$' || true
-	} | sort
+	} | sort -u
 )
 
 baseline_max() {
@@ -59,7 +61,7 @@ if [ -f "$baseline" ]; then
 	stale=$(awk '$1 !~ /^#/ && NF >= 2 { print $2 }' "$baseline")
 	for path in $stale; do
 		if ! printf '%s\n' "$files" | grep -qxF "$path"; then
-			echo "FAIL $path: listed in $baseline but no longer a tracked source file; remove its entry."
+			echo "FAIL $path: listed in $baseline but no longer a checked source file; remove its entry."
 			status=1
 		fi
 	done

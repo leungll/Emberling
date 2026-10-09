@@ -12,6 +12,8 @@
 #   scripts/check-migrations.sh register  append checksums for unlisted migrations only
 set -eu
 
+sh scripts/check-engineering-baseline.sh migrations
+
 dir=backend/migrations
 manifest=$dir/checksums.sha256
 

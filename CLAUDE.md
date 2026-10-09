@@ -26,6 +26,12 @@ Before editing:
 4. Locate the existing implementation and tests before introducing a new abstraction.
 5. Write or update a failing test first for behavioral changes and bug fixes.
 
+Before a new capability starts, write a reviewable task contract in the implementation plan or task description. State its purpose and exclusions, authoritative contracts, affected packages and interfaces, persisted facts and state transitions, transaction boundaries, post-COMMIT work, recovery and concurrency behavior, required failure tests, and completion commands. Mark items that do not apply explicitly. A phase is not a single coding task: split facts, approval, feedback, multiple Actions, polling, and resolution into independently reviewable changes with explicit dependencies. Do not give an agent an entire proposal and let it fill missing contracts while coding.
+
+Do not make a feature pass by weakening dependency allowlists, adding lint exemptions, deleting or skipping failing tests, raising file limits, rewriting old migrations or their checksum lines, or adding or raising file-size allowances. Fix the implementation or report a contract gap. When an accepted contract genuinely requires a check or test to change, identify the rule being changed, its reason, impact, and replacement evidence for separate review. The feature task alone does not authorize weakening a guard. Select the comparison commit before editing; never move it forward merely to hide a failing baseline check.
+
+Package checks prove import direction, not behavior. Review permitted imports for their permitted use, and prove transaction, external-call, recovery, and retry boundaries with failure tests. A passing architecture test or `make check` does not by itself prove architectural correctness.
+
 During implementation, keep the change as small as the contract allows. Do not perform opportunistic refactors, dependency upgrades, formatting sweeps, or directory reorganizations. Do not create empty packages for future work. The preparatory file split described under Code quality is the one exception, and only for a file the change is about to modify.
 
 If the design does not answer a question that affects persisted facts, state transitions, transaction boundaries, recovery guarantees, extension compatibility, or a public API, stop and report the gap. Do not silently choose a new architecture.
@@ -82,7 +88,7 @@ Use `pgx` and explicit SQL. Transaction ownership belongs in `service` through t
 - Store recovery-critical values in Execution State or immutable Artifact references. Event payloads remain bounded summaries.
 - Keep Provider credentials, authorization headers, callback tokens, signing secrets, and internal storage keys out of business fields, Events, Trace, logs, and errors.
 
-Every schema change includes its migration, Store mapping, relevant projection updates, and PostgreSQL integration tests. Do not rewrite a migration that has already been shared; add a forward migration. `make check` verifies every migration against `backend/migrations/checksums.sha256`; register a new migration with `make migrations-checksum`, which only appends.
+Every schema change includes its migration, Store mapping, relevant projection updates, and PostgreSQL integration tests. Do not rewrite a migration that has already been shared; add a forward migration. `make check` verifies every migration against `backend/migrations/checksums.sha256`; register a new migration with `make migrations-checksum`, which only appends. Both checks compare protected history with `EMBERLING_CHECK_BASE` as well as checking current checksums; local runs default to `HEAD`, so use the agreed base commit to check changes already committed on a branch.
 
 ## Extensions and external calls
 
