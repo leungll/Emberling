@@ -22,7 +22,8 @@ BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 \echo 'checks run:'
 \echo '  run_exists                         the Run row is present'
 \echo '  event_seq_contiguous               Event seq is 1..N with no gap, no duplicate, and equals runs.last_seq'
-\echo '  transition_has_event               every recorded state transition has its Event in the same Run'
+\echo '  transition_has_event               every recorded state transition has its Event in the same Run;'
+\echo '                                     a dispatched Attempt completes by exactly one of callback or Provider poll'
 \echo '  no_inflight_work_in_terminal_run   a terminal Run has no RUNNING/WAITING NodeRun, Turn or Action and no STARTED/DISPATCHED Attempt'
 \echo '  run_status_matches_noderuns        the Run status is the one its NodeRuns derive'
 \echo '  one_external_task_per_attempt      no Attempt is bound to two external tasks, no external task id is bound twice'
@@ -140,11 +141,26 @@ v_transition_event AS (
       AND NOT EXISTS (SELECT 1 FROM run_events e WHERE e.node_run_id = a.node_run_id
                       AND e.type = 'NODE_RETRYING' AND (e.payload ->> 'attemptNo')::int = a.attempt_no)
     UNION ALL
+    -- A dispatched Attempt completes either through an accepted callback, which writes
+    -- NODE_CALLBACK_RECEIVED, or through a Provider poll, which deliberately does not and
+    -- instead records completionSource PROVIDER_POLL on NODE_COMPLETED. NODE_COMPLETED
+    -- carries no attempt number; a NodeRun has at most one SUCCEEDED Attempt (checked
+    -- below), so the NodeRun's completion source identifies how that Attempt completed.
     SELECT a.node_id || ' attempt ' || a.attempt_no || ' completed by callback without NODE_CALLBACK_RECEIVED'
     FROM run_attempts a
     WHERE a.status = 'SUCCEEDED' AND a.dispatched_at IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM run_events e WHERE e.node_run_id = a.node_run_id
                       AND e.type = 'NODE_CALLBACK_RECEIVED' AND (e.payload ->> 'attemptNo')::int = a.attempt_no)
+      AND NOT EXISTS (SELECT 1 FROM run_events e WHERE e.node_run_id = a.node_run_id
+                      AND e.type = 'NODE_COMPLETED' AND e.payload ->> 'completionSource' = 'PROVIDER_POLL')
+    UNION ALL
+    SELECT a.node_id || ' attempt ' || a.attempt_no || ' completed by Provider poll but also has NODE_CALLBACK_RECEIVED'
+    FROM run_attempts a
+    WHERE a.status = 'SUCCEEDED' AND a.dispatched_at IS NOT NULL
+      AND EXISTS (SELECT 1 FROM run_events e WHERE e.node_run_id = a.node_run_id
+                  AND e.type = 'NODE_CALLBACK_RECEIVED' AND (e.payload ->> 'attemptNo')::int = a.attempt_no)
+      AND EXISTS (SELECT 1 FROM run_events e WHERE e.node_run_id = a.node_run_id
+                  AND e.type = 'NODE_COMPLETED' AND e.payload ->> 'completionSource' = 'PROVIDER_POLL')
 ),
 
 -- Node execution and external calls happen only after the transaction that claimed the
@@ -265,7 +281,12 @@ ORDER BY ord, sub, line;
 SELECT 'run ' || id || ' status=' || status || ' last_seq=' || last_seq FROM runs WHERE id = :'run_id';
 SELECT '  ' || rpad(nr.node_id, 16) || rpad(nr.status, 17) || 'attempts=' || nr.attempt_count
        || coalesce('  [' || string_agg(a.attempt_no || ':' || a.status
-                         || coalesce(' bound=' || b.external_task_id, ''), ', ' ORDER BY a.attempt_no) || ']', '')
+                         || coalesce(' bound=' || b.external_task_id, '')
+                         || CASE WHEN a.poll_count > 0 THEN ' polls=' || a.poll_count ELSE '' END,
+                         ', ' ORDER BY a.attempt_no) || ']', '')
+       || coalesce('  completionSource=' || (
+            SELECT string_agg(e.payload ->> 'completionSource', ',' ORDER BY e.seq)
+            FROM events e WHERE e.node_run_id = nr.id AND e.type = 'NODE_COMPLETED'), '')
 FROM node_runs nr
 LEFT JOIN node_attempts a ON a.node_run_id = nr.id
 LEFT JOIN callback_bindings b ON b.target_type = 'NODE_ATTEMPT' AND b.target_id = a.id

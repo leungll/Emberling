@@ -2,7 +2,14 @@
 # Entry point for `make demo` and `make demo-down`.
 #
 #   demo.sh run   build and start postgres, the Mock Provider and the Backend when needed,
-#                 run fault-kill.sh, then ledger-vs-record.sh, then print a summary.
+#                 then run each fault variant in turn, each followed by
+#                 ledger-vs-record.sh, then print a summary per variant:
+#                   held-before-accept  fault-kill.sh: SIGKILL while the image dispatch is
+#                                       held before the Provider accepts it;
+#                   after-accept        fault-kill-after-accept.sh: SIGKILL after the
+#                                       Provider accepted the task and the Attempt is
+#                                       DISPATCHED, so only Provider polling can complete it.
+#                 EMBERLING_DEMO_VARIANT=held-before-accept|after-accept runs only one.
 #   demo.sh down  stop the stack and remove the Mock Provider dispatch-record volume, so
 #                 the next demo starts from an empty record. The PostgreSQL and asset
 #                 volumes are kept: they also hold the developer's own `make dev` data.
@@ -19,26 +26,45 @@ run)
   log "starting postgres, mockprovider and backend"
   compose up -d --wait postgres mockprovider backend
 
+  case "${EMBERLING_DEMO_VARIANT:-all}" in
+  all) variants=(held-before-accept after-accept) ;;
+  held-before-accept | after-accept) variants=("$EMBERLING_DEMO_VARIANT") ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept or after-accept" ;;
+  esac
+
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
   trap 'rm -f "$state"' EXIT
 
-  fault_status=0
-  DEMO_STATE=$state "$DEMO_ROOT/scripts/demo/fault-kill.sh" || fault_status=$?
-  [[ -s "$state" ]] || die "fault-kill.sh did not reach a terminal Run (exit $fault_status)"
-  run_id=$(sed -n 's/^RUN_ID=//p' "$state")
-  record_after=$(sed -n 's/^RECORD_AFTER=//p' "$state")
-  run_status=$(sed -n 's/^RUN_STATUS=//p' "$state")
-
-  ledger_status=0
-  "$DEMO_ROOT/scripts/demo/ledger-vs-record.sh" "$run_id" "$record_after" || ledger_status=$?
-
   verdict() { if [[ "$1" -eq 0 ]]; then echo PASS; else echo "FAIL (exit $1)"; fi; }
-  printf '\n==== demo summary ====\n'
-  printf 'run                 %s\n' "$run_id"
-  printf 'run status          %s\n' "$run_status"
-  printf 'invariant report    %s\n' "$(verdict "$fault_status")"
-  printf 'ledger vs record    %s\n' "$(verdict "$ledger_status")"
-  [[ "$fault_status" -eq 0 && "$ledger_status" -eq 0 ]]
+  summary=""
+  overall=0
+  for variant in "${variants[@]}"; do
+    case "$variant" in
+    held-before-accept) script=fault-kill.sh ;;
+    after-accept) script=fault-kill-after-accept.sh ;;
+    esac
+    printf '\n==== variant %s (%s) ====\n' "$variant" "$script"
+    : >"$state"
+    fault_status=0
+    DEMO_STATE=$state "$DEMO_ROOT/scripts/demo/$script" || fault_status=$?
+    [[ -s "$state" ]] || die "$script did not reach a terminal Run (exit $fault_status)"
+    run_id=$(sed -n 's/^RUN_ID=//p' "$state")
+    record_after=$(sed -n 's/^RECORD_AFTER=//p' "$state")
+    run_status=$(sed -n 's/^RUN_STATUS=//p' "$state")
+
+    ledger_status=0
+    "$DEMO_ROOT/scripts/demo/ledger-vs-record.sh" "$run_id" "$record_after" || ledger_status=$?
+
+    summary+=$(printf '\nvariant             %s\nrun                 %s\nrun status          %s\ninvariant report    %s\nledger vs record    %s\n' \
+      "$variant" "$run_id" "$run_status" "$(verdict "$fault_status")" "$(verdict "$ledger_status")")
+    summary+=$'\n'
+    if [[ "$fault_status" -ne 0 || "$ledger_status" -ne 0 ]]; then
+      overall=1
+    fi
+  done
+
+  printf '\n==== demo summary ====\n%s' "$summary"
+  [[ "$overall" -eq 0 ]]
   ;;
 down)
   compose down --remove-orphans

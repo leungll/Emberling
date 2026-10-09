@@ -26,7 +26,10 @@
 #     every created task is bound to exactly one dispatch unit of the Run, so a
 #     non-replayed duplicate dispatch of one NodeRun or Tool Attempt is a failure while a
 #     replayed one passes with a note;
-#   - accepted callback deliveries are at least the callback-received Events.
+#   - accepted callback deliveries are at least the callback-received Events;
+#   - status queries the Provider answered with a finished task (`polled` with taskStatus
+#     SUCCEEDED or FAILED) are at least the completions whose source is PROVIDER_POLL. A
+#     poll that finds the task still RUNNING changes nothing and is only counted.
 set -euo pipefail
 
 # shellcheck source=scripts/demo/lib.sh
@@ -65,12 +68,14 @@ while IFS=$'\t' read -r node_run_id node_type; do
   bindings=$(jq -s 'add' <(printf '%s' "$bindings") <(printf '%s' "$rows"))
 done < <(jq -r '.nodeRuns[] | [.id, .nodeType] | @tsv' <<<"$snapshot")
 
-record=$(record_after "$record_after_seq" | jq -s '[.[] | select(.kind == "task")]')
+window=$(record_after "$record_after_seq" | jq -s '.')
+record=$(jq '[.[] | select(.kind == "task")]' <<<"$window")
+polls=$(jq '[.[] | select(.kind == "poll")]' <<<"$window")
 
 printf 'ledger vs dispatch record for run %s (record lines after seq %s)\n' "$run_id" "$record_after_seq"
-printf 'run status: %s, ledger events: %s, bound external tasks: %s, record task lines: %s\n\n' \
+printf 'run status: %s, ledger events: %s, bound external tasks: %s, record task lines: %s, record poll lines: %s\n\n' \
   "$(jq -r '.run.status' <<<"$snapshot")" "$(jq 'length' <<<"$events")" \
-  "$(jq 'length' <<<"$bindings")" "$(jq 'length' <<<"$record")"
+  "$(jq 'length' <<<"$bindings")" "$(jq 'length' <<<"$record")" "$(jq 'length' <<<"$polls")"
 
 created=$(jq '[.[] | select(.event == "responded" and .status == 202 and (.replayed | not)) | .externalTaskId]' <<<"$record")
 
@@ -123,6 +128,22 @@ fi
 if ((attempted > accepted)); then
   note "$((attempted - accepted)) delivery attempt(s) got no 2xx answer, for example while the Backend was down"
 fi
+
+# 4. Finished-task poll answers cover every completion whose source is a Provider poll.
+polled=$(jq --argjson created "$created" '[.[] | select(.event == "polled" and (.externalTaskId as $id | $created | index($id)))]' <<<"$polls")
+poll_answers=$(jq 'length' <<<"$polled")
+poll_finished=$(jq '[.[] | select(.status == 200 and (.taskStatus == "SUCCEEDED" or .taskStatus == "FAILED"))] | length' <<<"$polled")
+poll_running=$(jq '[.[] | select(.status == 200 and .taskStatus == "RUNNING")] | length' <<<"$polled")
+poll_completions=$(jq '[.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
+    and .payload.completionSource == "PROVIDER_POLL")] | length' <<<"$events")
+if ((poll_finished >= poll_completions)); then
+  pass "poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions"
+else
+  fail "poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions"
+fi
+jq -r '[.[] | select(.type == "NODE_COMPLETED")] | group_by(.payload.completionSource)
+    | .[] | "\(length) NODE_COMPLETED event(s) with completionSource \(.[0].payload.completionSource)"' <<<"$events" |
+  while IFS= read -r line; do note "$line"; done
 
 printf '\n'
 if ((failures > 0)); then

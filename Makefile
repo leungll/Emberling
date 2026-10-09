@@ -227,9 +227,12 @@ check: fmt-check lint check-doc-refs check-migrations check-file-size test-engin
 .PHONY: demo demo-down
 
 ## demo: fault-injection demo on the Compose stack. Builds and starts postgres, the Mock
-## Provider and the Backend when needed, SIGKILLs the Backend while an external dispatch
-## is held, restarts it, then runs the invariant report and the ledger-vs-record
-## comparison. Needs Docker, curl and jq; deliberately not part of `check`.
+## Provider and the Backend when needed, then runs two variants in turn: SIGKILL the
+## Backend while the image dispatch is held before the Provider accepts it, and SIGKILL it
+## after the Provider accepted the task so its callback is lost and Provider polling must
+## complete the Attempt. Each variant restarts the Backend and ends with the invariant
+## report and the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=held-before-accept
+## or after-accept runs one. Needs Docker, curl and jq; deliberately not part of `check`.
 demo:
 	@bash scripts/demo/demo.sh run
 
