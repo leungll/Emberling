@@ -222,12 +222,13 @@ func (s *ExecutionService) CreateRun(ctx context.Context, req CreateRun) (domain
 	return created, nil
 }
 
-// verifyRunInputAssets checks every AssetRef this Run input supplies to an Image Input
-// against the committed Asset Metadata. It returns validation errors for references that
+// verifyRunInputAssets checks every AssetRef this Run input supplies, an Image Input's
+// single reference and each photo of a Media Brief's photo set, against the committed
+// Asset Metadata. It returns validation errors for references that
 // name no Asset or disagree with one, and a plain error only when the lookup itself
 // failed.
 //
-// Errors and validation messages name the Image Input node and the asset id alone: the
+// Errors and validation messages name the consuming node and the asset id alone: the
 // storage key never leaves the Store boundary, and it is not needed to
 // explain the rejection.
 func (s *ExecutionService) verifyRunInputAssets(ctx context.Context, tx store.Tx, def domain.Definition, input json.RawMessage) ([]runtime.ValidationError, error) {
