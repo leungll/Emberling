@@ -103,7 +103,7 @@ func NewServer(dispatcher *Dispatcher, opts ...Option) *Server {
 	r.Post("/v1/assets", s.handleGenerateImage)
 	r.Get("/v1/assets/{name}", s.handleAsset)
 	if s.controls != nil {
-		dispatcher.observe = s.controls.record.appendDelivery
+		dispatcher.observe = s.controls.recordDelivery
 		s.mountControlRoutes(r)
 	}
 	s.router = r
@@ -287,7 +287,7 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Media == mediaVideo {
-		s.recordMedia(recordEntry{Event: recordVideoDispatched, Kind: kindTask, ExternalTaskID: arrival.ExternalTaskID})
+		s.recordMedia(recordEntry{Event: recordVideoDispatched, Kind: kindTask, recordDetail: recordDetail{ExternalTaskID: arrival.ExternalTaskID}})
 	}
 	s.recordResponse(kindTask, arrival.ExternalTaskID, http.StatusAccepted, false)
 	writeJSON(w, http.StatusAccepted, taskResponse{ExternalTaskID: externalTaskID})

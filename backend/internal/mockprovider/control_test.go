@@ -15,6 +15,21 @@ import (
 	"time"
 )
 
+// barrierResponse is a barrier control response as a test decodes it.
+type barrierResponse struct {
+	Paused   bool          `json:"paused"`
+	Kinds    []string      `json:"kinds"`
+	Held     []heldRequest `json:"held"`
+	Released int           `json:"released,omitempty"`
+}
+
+// heldRequest is one held entry of a barrierResponse.
+type heldRequest struct {
+	Kind           string `json:"kind"`
+	ExternalTaskID string `json:"externalTaskId,omitempty"`
+	ArrivalSeq     int64  `json:"arrivalSeq"`
+}
+
 // controlledProvider is a Server with test controls enabled, served in-process, together
 // with the barrier hook and callback hook that let a test wait on observable state.
 type controlledProvider struct {

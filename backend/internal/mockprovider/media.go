@@ -102,7 +102,7 @@ func (s *Server) handleGenerateImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	assetID := generatedAssetID(req.PhotoAssetID, req.SettingsDigest)
-	s.recordMedia(recordEntry{Event: recordGenerated, Kind: kindImage, AssetID: assetID})
+	s.recordMedia(recordEntry{Event: recordGenerated, Kind: kindImage, recordDetail: recordDetail{AssetID: assetID}})
 	s.recordResponse(kindImage, "", http.StatusOK, false)
 	writeJSON(w, http.StatusOK, imageResponse{
 		AssetID:  assetID,
@@ -226,5 +226,5 @@ func (s *Server) recordMedia(entry recordEntry) {
 	if s.controls == nil {
 		return
 	}
-	_, _ = s.controls.record.append(entry)
+	_, _ = s.controls.record.Append(entry.line(entry.Event))
 }

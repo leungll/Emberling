@@ -107,6 +107,8 @@ func role(pkg string) string {
 		return "trace"
 	case pkg == "internal/mockprovider":
 		return "mockprovider"
+	case pkg == "internal/mockcontrol":
+		return "mockcontrol"
 	case pkg == "migrations":
 		return "migrations"
 	case pkg == "cmd" || strings.HasPrefix(pkg, "cmd/"):
@@ -227,9 +229,15 @@ var allowedInternalImports = map[string]map[string]bool{
 	// cmd/mockprovider and in-process by the contract tests. It stands in for an external
 	// Provider, so it must not share a single Go type with the Runtime it is dispatched
 	// from (its own package doc: "a real external Provider would not share Go types with
-	// Emberling either"). The empty set is that rule, mechanically enforced: not even
-	// internal/domain or internal/registry may be imported here.
-	"mockprovider": set(),
+	// Emberling either"). The only internal import is internal/mockcontrol, the shared
+	// test-fixture barrier and request record, which itself imports nothing internal: not
+	// even internal/domain or internal/registry may be reached from here.
+	"mockprovider": set("internal/mockcontrol"),
+
+	// mockcontrol: the barrier and request record shared by the HTTP fixtures that stand
+	// in for external services. It is fixture code like mockprovider and holds to the same
+	// rule: no Go type shared with the Runtime, so no internal import at all.
+	"mockcontrol": set(),
 }
 
 // violation is one forbidden edge (or one unclassifiable package) found by

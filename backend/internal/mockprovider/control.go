@@ -1,22 +1,15 @@
 package mockprovider
 
 import (
-	"cmp"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
-	"slices"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/go-chi/chi/v5"
-)
 
-// maxControlBodyBytes bounds a control request body; the largest valid one is a short
-// JSON object naming a request kind.
-const maxControlBodyBytes = 4 << 10
+	"github.com/leungll/Emberling/backend/internal/mockcontrol"
+)
 
 // maxRedeliverableTasks bounds how many accepted tasks the redeliver control can still
 // find. The oldest task is forgotten first; redelivering a forgotten task answers 404.
@@ -32,9 +25,10 @@ type Option func(*Server)
 func WithTestControls(record *Record) Option {
 	return func(s *Server) {
 		s.controls = &testControls{
-			record:    record,
-			barrier:   newBarrier(),
-			tasksByID: make(map[string]callbackTask),
+			record:     record,
+			barrier:    mockcontrol.NewBarrier(kindTask, kindGenerate),
+			tasksByID:  make(map[string]callbackTask),
+			deliveries: make(map[string]int),
 		}
 	}
 }
@@ -43,7 +37,7 @@ func WithTestControls(record *Record) Option {
 // that option, which is what keeps the default request path unchanged.
 type testControls struct {
 	record  *Record
-	barrier *barrier
+	barrier *mockcontrol.Barrier
 	// heldHook, when non-nil, receives the externalTaskId (or kind, for requests without
 	// one) of each request right after it is recorded and registered as held. It is a test
 	// barrier; production code leaves it nil.
@@ -56,128 +50,14 @@ type testControls struct {
 	mu          sync.Mutex
 	tasksByID   map[string]callbackTask
 	taskIDOrder []string
+
+	// deliveryMu guards deliveries and deliveryOrder, the per-task callback attempt
+	// counters. It is held across the record append so delivery numbers for one task rise
+	// in the same order as their seq.
+	deliveryMu    sync.Mutex
+	deliveries    map[string]int
+	deliveryOrder []string
 }
-
-// heldRequest is one request the barrier is currently holding.
-type heldRequest struct {
-	Kind           string `json:"kind"`
-	ExternalTaskID string `json:"externalTaskId,omitempty"`
-	ArrivalSeq     int64  `json:"arrivalSeq"`
-}
-
-// barrier holds matching requests between pause and release. pause arms a fresh gate;
-// release closes it, letting every request waiting on that gate proceed at once, and
-// disarms. Pausing again after a release arms a new gate. stop rejects every held request
-// and makes later pauses no-ops, so shutdown never waits on a request nobody will release.
-type barrier struct {
-	mu      sync.Mutex
-	paused  bool
-	kinds   map[string]bool // empty means every kind
-	gate    chan struct{}
-	stopped chan struct{}
-	isStop  bool
-	nextID  int64
-	held    map[int64]heldRequest
-}
-
-func newBarrier() *barrier {
-	return &barrier{stopped: make(chan struct{}), held: make(map[int64]heldRequest)}
-}
-
-// pause arms the barrier for kinds (every kind when empty). Pausing an already paused
-// barrier keeps its gate and the requests already held, and only replaces the kind filter.
-func (b *barrier) pause(kinds []string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.isStop {
-		return
-	}
-	filter := make(map[string]bool, len(kinds))
-	for _, kind := range kinds {
-		filter[kind] = true
-	}
-	b.kinds = filter
-	if !b.paused {
-		b.paused = true
-		b.gate = make(chan struct{})
-	}
-}
-
-// release lets every held request proceed and disarms the barrier. It returns how many
-// requests it released; releasing an unpaused barrier is a no-op that returns 0.
-func (b *barrier) release() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if !b.paused {
-		return 0
-	}
-	released := len(b.held)
-	close(b.gate)
-	b.paused = false
-	b.gate = nil
-	b.held = make(map[int64]heldRequest)
-	return released
-}
-
-// stop rejects every held request and disables the barrier for good.
-func (b *barrier) stop() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.isStop {
-		return
-	}
-	b.isStop = true
-	close(b.stopped)
-	b.paused = false
-	b.gate = nil
-	b.held = make(map[int64]heldRequest)
-}
-
-// enter registers req as held when the barrier is paused for its kind. It returns the gate
-// to wait on and a ticket for leave, or a nil gate when the request must not be held.
-func (b *barrier) enter(req heldRequest) (<-chan struct{}, int64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if !b.paused || (len(b.kinds) > 0 && !b.kinds[req.Kind]) {
-		return nil, 0
-	}
-	b.nextID++
-	b.held[b.nextID] = req
-	return b.gate, b.nextID
-}
-
-// leave removes a request that stops waiting for a reason other than release.
-func (b *barrier) leave(ticket int64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	delete(b.held, ticket)
-}
-
-// state returns whether the barrier is paused and which requests it is holding, ordered by
-// arrival.
-func (b *barrier) state() (bool, []string, []heldRequest) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	held := make([]heldRequest, 0, len(b.held))
-	for _, req := range b.held {
-		held = append(held, req)
-	}
-	slices.SortFunc(held, func(a, b heldRequest) int { return cmp.Compare(a.ArrivalSeq, b.ArrivalSeq) })
-	kinds := make([]string, 0, len(b.kinds))
-	for _, kind := range []string{kindTask, kindGenerate} {
-		if b.kinds[kind] {
-			kinds = append(kinds, kind)
-		}
-	}
-	return b.paused, kinds, held
-}
-
-// errProviderStopping reports that a held request was rejected because the Provider is
-// shutting down.
-var errProviderStopping = errors.New("mock provider is shutting down")
-
-// errCallerGone reports that the caller disconnected while its request was held.
-var errCallerGone = errors.New("caller disconnected while held")
 
 // admit records the arrival of one external request and, while the barrier is paused for
 // its kind, holds it until release. It returns nil when the request may proceed. Without
@@ -188,16 +68,15 @@ func (s *Server) admit(r *http.Request, arrival recordEntry) error {
 	if c == nil {
 		return nil
 	}
-	arrival.Event = recordArrived
-	seq, err := c.record.append(arrival)
-	if err != nil {
-		return err
+	req := mockcontrol.Request{
+		Kind:   arrival.Kind,
+		Detail: arrival.recordDetail,
+		Ref:    recordDetail{ExternalTaskID: arrival.ExternalTaskID},
 	}
-	gate, ticket := c.barrier.enter(heldRequest{Kind: arrival.Kind, ExternalTaskID: arrival.ExternalTaskID, ArrivalSeq: seq})
-	if gate == nil {
-		return nil
-	}
-	if c.heldHook != nil {
+	return c.barrier.Admit(r.Context(), c.record, req, func() {
+		if c.heldHook == nil {
+			return
+		}
 		label := arrival.ExternalTaskID
 		if label == "" {
 			label = arrival.Kind
@@ -206,24 +85,7 @@ func (s *Server) admit(r *http.Request, arrival recordEntry) error {
 		case c.heldHook <- label:
 		case <-r.Context().Done():
 		}
-	}
-
-	outcome := recordEntry{Kind: arrival.Kind, ExternalTaskID: arrival.ExternalTaskID}
-	select {
-	case <-gate:
-		outcome.Event = recordReleased
-		_, _ = c.record.append(outcome)
-		return nil
-	case <-c.barrier.stopped:
-		outcome.Event = recordRejected
-		_, _ = c.record.append(outcome)
-		return errProviderStopping
-	case <-r.Context().Done():
-		c.barrier.leave(ticket)
-		outcome.Event = recordAbandoned
-		_, _ = c.record.append(outcome)
-		return errCallerGone
-	}
+	})
 }
 
 // recordResponse writes the responded line immediately before the response status is
@@ -232,12 +94,14 @@ func (s *Server) recordResponse(kind, externalTaskID string, status int, replaye
 	if s.controls == nil {
 		return
 	}
-	_, _ = s.controls.record.append(recordEntry{
-		Event:          recordResponded,
-		Kind:           kind,
-		ExternalTaskID: externalTaskID,
-		Status:         status,
-		Replayed:       replayed,
+	_, _ = s.controls.record.Append(mockcontrol.Line{
+		Event: recordResponded,
+		Kind:  kind,
+		Detail: recordDetail{
+			ExternalTaskID: externalTaskID,
+			Status:         status,
+			Replayed:       replayed,
+		},
 	})
 }
 
@@ -265,94 +129,18 @@ func (s *Server) rememberTask(task callbackTask) {
 // will never come. It is a no-op without test controls.
 func (s *Server) StopHolding() {
 	if s.controls != nil {
-		s.controls.barrier.stop()
+		s.controls.barrier.Stop()
 	}
 }
 
 func (s *Server) mountControlRoutes(r chi.Router) {
 	r.Route("/control", func(r chi.Router) {
-		r.Post("/pause", s.handlePause)
-		r.Post("/release", s.handleRelease)
-		r.Get("/barrier", s.handleBarrier)
-		r.Get("/record", s.handleRecord)
+		r.Method(http.MethodPost, "/pause", mockcontrol.PauseHandler(s.controls.barrier))
+		r.Method(http.MethodPost, "/release", mockcontrol.ReleaseHandler(s.controls.barrier))
+		r.Method(http.MethodGet, "/barrier", mockcontrol.BarrierHandler(s.controls.barrier))
+		r.Method(http.MethodGet, "/record", mockcontrol.RecordHandler(s.controls.record))
 		r.Post("/tasks/{externalTaskId}/callback", s.handleRedeliver)
 	})
-}
-
-// pauseRequest is the optional body of POST /control/pause.
-type pauseRequest struct {
-	// Kinds limits the barrier to "task" and/or "generate" requests; empty holds both.
-	Kinds []string `json:"kinds,omitempty"`
-}
-
-// barrierResponse is the body of every barrier control response.
-type barrierResponse struct {
-	Paused   bool          `json:"paused"`
-	Kinds    []string      `json:"kinds"`
-	Held     []heldRequest `json:"held"`
-	Released int           `json:"released,omitempty"`
-}
-
-func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
-	var req pauseRequest
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxControlBodyBytes))
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "request body could not be read"})
-		return
-	}
-	if len(strings.TrimSpace(string(body))) > 0 {
-		if err := json.Unmarshal(body, &req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "request body is not valid JSON"})
-			return
-		}
-	}
-	for _, kind := range req.Kinds {
-		if kind != kindTask && kind != kindGenerate {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: `kinds may contain only "task" and "generate"`})
-			return
-		}
-	}
-	s.controls.barrier.pause(req.Kinds)
-	s.writeBarrier(w, 0)
-}
-
-func (s *Server) handleRelease(w http.ResponseWriter, _ *http.Request) {
-	s.writeBarrier(w, s.controls.barrier.release())
-}
-
-func (s *Server) handleBarrier(w http.ResponseWriter, _ *http.Request) {
-	s.writeBarrier(w, 0)
-}
-
-func (s *Server) writeBarrier(w http.ResponseWriter, released int) {
-	paused, kinds, held := s.controls.barrier.state()
-	writeJSON(w, http.StatusOK, barrierResponse{Paused: paused, Kinds: kinds, Held: held, Released: released})
-}
-
-// handleRecord serves the dispatch record as JSON lines. ?after=<seq> returns only later
-// lines, so a script can wait for a new event without re-reading the whole file.
-func (s *Server) handleRecord(w http.ResponseWriter, r *http.Request) {
-	var after int64
-	if raw := r.URL.Query().Get("after"); raw != "" {
-		parsed, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || parsed < 0 {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "after must be a non-negative integer"})
-			return
-		}
-		after = parsed
-	}
-	var body strings.Builder
-	truncated, err := s.controls.record.readAfter(&body, after)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "record could not be read"})
-		return
-	}
-	w.Header().Set("Content-Type", "application/x-ndjson")
-	if truncated {
-		w.Header().Set("X-Mockprovider-Record-Truncated", "true")
-	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, body.String())
 }
 
 // redeliverResponse is the body of a successful POST /control/tasks/{id}/callback.
@@ -423,8 +211,7 @@ func taskScenarioSummary(req taskRequest) string {
 // the Provider received.
 func (s *Server) reject(w http.ResponseWriter, arrival recordEntry, status int, message string) {
 	if s.controls != nil {
-		arrival.Event = recordArrived
-		_, _ = s.controls.record.append(arrival)
+		_, _ = s.controls.record.Append(arrival.line(recordArrived))
 		s.recordResponse(arrival.Kind, arrival.ExternalTaskID, status, false)
 	}
 	writeJSON(w, status, errorResponse{Error: message})
@@ -433,9 +220,9 @@ func (s *Server) reject(w http.ResponseWriter, arrival recordEntry, status int, 
 // respondHeldError answers a request admit did not let through.
 func (s *Server) respondHeldError(w http.ResponseWriter, kind, externalTaskID string, err error) {
 	switch {
-	case errors.Is(err, errCallerGone):
+	case errors.Is(err, mockcontrol.ErrCallerGone):
 		// Nobody is left to read a response.
-	case errors.Is(err, errProviderStopping):
+	case errors.Is(err, mockcontrol.ErrStopping):
 		s.recordResponse(kind, externalTaskID, http.StatusServiceUnavailable, false)
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "mock provider is shutting down"})
 	default:

@@ -6,6 +6,8 @@ import (
 	"sync"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/leungll/Emberling/backend/internal/mockcontrol"
 )
 
 // maxTaskStatuses bounds the per-instance task status map the same way maxIdempotencyKeys
@@ -121,11 +123,13 @@ func (s *Server) recordPoll(externalTaskID string, status int, taskStatus string
 	if s.controls == nil {
 		return
 	}
-	_, _ = s.controls.record.append(recordEntry{
-		Event:          recordPolled,
-		Kind:           kindPoll,
-		ExternalTaskID: truncateSummary(externalTaskID),
-		Status:         status,
-		TaskStatus:     taskStatus,
+	_, _ = s.controls.record.Append(mockcontrol.Line{
+		Event: recordPolled,
+		Kind:  kindPoll,
+		Detail: recordDetail{
+			ExternalTaskID: truncateSummary(externalTaskID),
+			Status:         status,
+			TaskStatus:     taskStatus,
+		},
 	})
 }
