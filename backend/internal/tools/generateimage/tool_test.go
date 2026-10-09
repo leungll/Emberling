@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -55,6 +56,14 @@ func TestRegistration_SyncExternalProducerCountingTowardLimit_RegistersCleanly(t
 	}
 	if reg.Metadata.Produces == nil || reg.Metadata.Produces.FactType != FactType {
 		t.Fatalf("produces = %+v, want fact type %q", reg.Metadata.Produces, FactType)
+	}
+	wantBindings := map[string]domain.FactPointer{
+		"imageUrl":       {Source: domain.FactPointerResult, Pointer: "/imageUrl"},
+		"photoAssetId":   {Source: domain.FactPointerArguments, Pointer: "/photoAssetId"},
+		"settingsDigest": {Source: domain.FactPointerResult, Pointer: "/settingsDigest"},
+	}
+	if got := reg.Metadata.Produces.BindArguments; !reflect.DeepEqual(got, wantBindings) {
+		t.Errorf("bindArguments = %+v, want %+v", got, wantBindings)
 	}
 	if err := registry.NewToolRegistry().Register(reg); err != nil {
 		t.Fatalf("register: %v", err)

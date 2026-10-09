@@ -85,7 +85,10 @@ const outputSchema = `{
 //
 // A successful result establishes an `image_generated` fact about the returned assetRef,
 // bound to the source photo and to the digest of the settings that produced it, so a later
-// review or video call can prove which photo and settings the asset came from.
+// review or video call can prove which photo and settings the asset came from. The fact
+// also binds the Provider's imageUrl, a credential-free address of the generated asset, so
+// a delivery node can present the generated image from the fact rather than from a URL the
+// model reports.
 func Registration(baseURL string, client *http.Client) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
@@ -99,6 +102,7 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 				FactType:       FactType,
 				SubjectPointer: domain.FactPointer{Source: domain.FactPointerResult, Pointer: "/assetRef"},
 				BindArguments: map[string]domain.FactPointer{
+					"imageUrl":       {Source: domain.FactPointerResult, Pointer: "/imageUrl"},
 					"photoAssetId":   {Source: domain.FactPointerArguments, Pointer: "/photoAssetId"},
 					"settingsDigest": {Source: domain.FactPointerResult, Pointer: "/settingsDigest"},
 				},

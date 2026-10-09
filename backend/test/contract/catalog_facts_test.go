@@ -122,7 +122,7 @@ func TestAPI_ToolsCatalog_FactDeclarations_SerialisedInDTOShape(t *testing.T) {
 		},
 		{
 			name:         "generate_image",
-			produces:     `{"factType":"image_generated","subjectPointer":{"source":"RESULT","pointer":"/assetRef"},"bindArguments":{"photoAssetId":{"source":"ARGUMENTS","pointer":"/photoAssetId"},"settingsDigest":{"source":"RESULT","pointer":"/settingsDigest"}}}`,
+			produces:     `{"factType":"image_generated","subjectPointer":{"source":"RESULT","pointer":"/assetRef"},"bindArguments":{"imageUrl":{"source":"RESULT","pointer":"/imageUrl"},"photoAssetId":{"source":"ARGUMENTS","pointer":"/photoAssetId"},"settingsDigest":{"source":"RESULT","pointer":"/settingsDigest"}}}`,
 			requires:     `[]`,
 			countsToward: `true`,
 		},
