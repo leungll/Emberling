@@ -164,6 +164,9 @@ type NodeMetadata struct {
 	// and bounds how often and how many times the Runtime may ask. Nil means the Node
 	// Type is never polled; only an ASYNC Node may declare it.
 	Poll *PollPolicy `json:"poll,omitempty"`
+	// FactInputs lists the execution fact types of the current Run this Node Type reads.
+	// Empty means the Node reads no execution facts.
+	FactInputs []string `json:"factInputs"`
 }
 
 // Validate checks the structural rules a registration must satisfy before the Backend can
@@ -187,6 +190,7 @@ func (m NodeMetadata) Validate() error {
 	errs = append(errs, validateUISchema(m.UISchema)...)
 	errs = append(errs, validateSideEffect(m.SideEffect)...)
 	errs = append(errs, validatePollPolicy(m.Poll, m.ExecutionKind == NodeExecutionAsync)...)
+	errs = append(errs, validateFactInputs(m.FactInputs)...)
 
 	if len(errs) == 0 {
 		return nil
@@ -271,6 +275,15 @@ type ToolMetadata struct {
 	ExecutionKind ToolExecutionKind `json:"executionKind"`
 	// Poll has the same meaning as NodeMetadata.Poll; only an ASYNC Tool may declare it.
 	Poll *PollPolicy `json:"poll,omitempty"`
+	// Produces declares the fact a successful result of this Tool establishes. Nil means
+	// the Tool produces no fact.
+	Produces *FactProduction `json:"produces,omitempty"`
+	// Requires lists the committed facts an Action of this Tool needs before it is
+	// claimed. Empty means the Tool is not guarded by any fact.
+	Requires []FactRequirement `json:"requires"`
+	// CountsTowardGenerationLimit marks a Tool whose calls count against an Agent's
+	// generation call limit.
+	CountsTowardGenerationLimit bool `json:"countsTowardGenerationLimit"`
 }
 
 // Validate mirrors NodeMetadata.Validate for Tool registrations. Executor presence and
@@ -292,6 +305,7 @@ func (m ToolMetadata) Validate() error {
 	}
 	errs = append(errs, validateSideEffect(m.SideEffect)...)
 	errs = append(errs, validatePollPolicy(m.Poll, m.ExecutionKind == ToolExecutionAsync)...)
+	errs = append(errs, validateToolFactDeclarations(m.Produces, m.Requires)...)
 
 	if len(errs) == 0 {
 		return nil

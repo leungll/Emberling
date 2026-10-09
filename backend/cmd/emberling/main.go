@@ -193,7 +193,9 @@ func run(logger *slog.Logger) error {
 			if err := toolRegistry.Register(remotelookup.Registration(cfg.ModelProvider.BaseURL, taskClient)); err != nil {
 				return fmt.Errorf("register tool: %w", err)
 			}
-			return nil
+			// Fact declarations may name a producer Tool registered after its consumer, so
+			// they are checked only once every registration is in.
+			return registry.ValidateFactDeclarations(toolRegistry.ListMetadata(), nodeRegistry.ListMetadata())
 		},
 		// Step 4: the Asset storage volume must exist and accept the write, read and
 		// delete an upload performs. A Backend that cannot do this must not become

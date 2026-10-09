@@ -7,6 +7,7 @@ import type { ModelMetadata, NodeMetadata } from '@/api/types';
 const base = {
   configSchema: { type: 'object', properties: {} },
   sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+  factInputs: [] as string[],
 } as const;
 
 // Shapes mirror GET /api/node-types, including the `null` port lists and uiSchema fields

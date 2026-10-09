@@ -85,6 +85,7 @@ const NODE_TYPES: NodeMetadata[] = [
     configSchema: { type: 'object', properties: {} },
     uiSchema: { fields: [] },
     sideEffect: { kind: 'EXTERNAL', idempotency: 'UNKNOWN' },
+    factInputs: [],
   },
   {
     type: 'captioning',
@@ -96,6 +97,7 @@ const NODE_TYPES: NodeMetadata[] = [
     configSchema: { type: 'object', properties: {} },
     uiSchema: { fields: [] },
     sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+    factInputs: [],
   },
 ];
 

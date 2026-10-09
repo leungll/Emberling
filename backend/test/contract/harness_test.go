@@ -293,6 +293,9 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 			t.Fatalf("register tool %s: %v", reg.Metadata.Name, err)
 		}
 	}
+	if err := registry.ValidateFactDeclarations(toolRegistry.ListMetadata(), nodeRegistry.ListMetadata()); err != nil {
+		t.Fatalf("validate fact declarations: %v", err)
+	}
 
 	compiler := runtime.NewCompiler(nodeRegistry, clock)
 	queue := work.NewQueue(0)

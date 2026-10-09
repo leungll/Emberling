@@ -267,7 +267,8 @@ const wireNodeMetadata = `{
       }
     ]
   },
-  "sideEffect": {"kind": "EXTERNAL", "idempotency": "KEYED"}
+  "sideEffect": {"kind": "EXTERNAL", "idempotency": "KEYED"},
+  "factInputs": []
 }`
 
 // encodeWire serialises without HTML escaping so the result can be compared to the
@@ -287,6 +288,7 @@ func encodeWire(t *testing.T, value any) []byte {
 func TestNodeMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 	fixture := validNodeMetadata()
 	fixture.ConfigSchema = json.RawMessage(`{"type":"object","properties":{"modelId":{"type":"string"},"width":{"type":"integer","minimum":256}},"required":["modelId","width"]}`)
+	fixture.FactInputs = []string{}
 
 	var want bytes.Buffer
 	if err := json.Compact(&want, []byte(wireNodeMetadata)); err != nil {
@@ -329,7 +331,7 @@ func TestModelMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 }
 
 func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
-	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC"}`
+	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false}`
 
 	fixture := ToolMetadata{
 		Name:          "lookup",
@@ -338,6 +340,7 @@ func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 		OutputSchema:  json.RawMessage(`{}`),
 		SideEffect:    SideEffectPolicy{Kind: SideEffectNone, Idempotency: IdempotencySafe},
 		ExecutionKind: ToolExecutionSync,
+		Requires:      []FactRequirement{},
 	}
 	encoded, err := json.Marshal(fixture)
 	if err != nil {
@@ -445,8 +448,9 @@ func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
 		SideEffect:    SideEffectPolicy{Kind: SideEffectExternal, Idempotency: IdempotencyKeyed},
 		ExecutionKind: ToolExecutionAsync,
 		Poll:          &PollPolicy{IntervalMs: 2000, MaxPolls: 10},
+		Requires:      []FactRequirement{},
 	}
-	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10}}`
+	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false}`
 	encoded, err := json.Marshal(tool)
 	if err != nil {
 		t.Fatalf("Marshal() error: %v", err)

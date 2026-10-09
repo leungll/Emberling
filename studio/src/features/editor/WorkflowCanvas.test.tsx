@@ -15,6 +15,7 @@ const metadata: NodeMetadata = {
   configSchema: { type: 'object', properties: {} },
   uiSchema: { fields: [] },
   sideEffect: { kind: 'EXTERNAL', idempotency: 'UNKNOWN' },
+  factInputs: [],
 };
 
 const nodes: RegisteredFlowNode[] = [

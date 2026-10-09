@@ -316,8 +316,10 @@ func NewToolRegistry() *ToolRegistry {
 }
 
 // Register validates one Tool registration and adds it if valid: the name must
-// be non-empty and unique, both Schemas must compile, an Executor must be present, and an
-// ASYNC Tool must implement AsyncToolExecutor.
+// be non-empty and unique, both Schemas must compile, every declared fact pointer must
+// land inside the schema it reads, an Executor must be present, and an ASYNC Tool must
+// implement AsyncToolExecutor. Fact declarations that refer to other registrations are
+// checked by ValidateFactDeclarations once every registration is in.
 func (r *ToolRegistry) Register(reg ToolRegistration) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -340,6 +342,9 @@ func (r *ToolRegistry) Register(reg ToolRegistration) error {
 		if _, err := CompileSchema(reg.Metadata.OutputSchema); err != nil {
 			errs = append(errs, fmt.Errorf("tool %q: outputSchema: %w", reg.Metadata.Name, err))
 		}
+	}
+	if len(reg.Metadata.InputSchema) > 0 && len(reg.Metadata.OutputSchema) > 0 {
+		errs = append(errs, validateToolFactPointers(reg.Metadata)...)
 	}
 	if reg.Executor == nil {
 		errs = append(errs, fmt.Errorf("tool %q: executor is missing", reg.Metadata.Name))

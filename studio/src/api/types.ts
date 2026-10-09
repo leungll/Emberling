@@ -196,6 +196,33 @@ export interface PollPolicy {
   maxPolls: number;
 }
 
+/** Which document of a Tool call a fact pointer reads. */
+export type FactPointerSource = 'ARGUMENTS' | 'RESULT';
+
+/** An RFC 6901 JSON Pointer into a Tool call's arguments or result. */
+export interface FactPointer {
+  source: FactPointerSource;
+  pointer: string;
+}
+
+/** The execution fact a Tool's successful result establishes. Studio only displays it. */
+export interface FactProduction {
+  factType: string;
+  subjectPointer: FactPointer;
+  bindArguments: Record<string, FactPointer>;
+  verdictPointer?: FactPointer | null;
+  basisFactType?: string;
+}
+
+/** A committed execution fact an Action of the Tool needs before it is claimed. */
+export interface FactRequirement {
+  factType: string;
+  /** JSON Pointer into the call's arguments. */
+  subjectArgument: string;
+  matchBindings: string[];
+  requireVerdict?: boolean | null;
+}
+
 export interface NodeMetadata {
   type: string;
   displayName: string;
@@ -207,6 +234,8 @@ export interface NodeMetadata {
   uiSchema: UiSchema;
   sideEffect: SideEffectPolicy;
   poll?: PollPolicy | null;
+  /** Execution fact types of the current Run this Node Type reads. */
+  factInputs: string[];
 }
 
 export interface ModelMetadata {
@@ -224,6 +253,10 @@ export interface ToolMetadata {
   sideEffect: SideEffectPolicy;
   executionKind: ExecutionKind;
   poll?: PollPolicy | null;
+  /** Absent when the Tool produces no execution fact. */
+  produces?: FactProduction | null;
+  requires: FactRequirement[];
+  countsTowardGenerationLimit: boolean;
 }
 
 export interface NodeTypeListResponse {

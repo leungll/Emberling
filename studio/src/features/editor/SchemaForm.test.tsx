@@ -184,6 +184,8 @@ const tools: ToolMetadata[] = [
     inputSchema: { type: 'object', properties: { key: { type: 'string', minLength: 1 } } },
     outputSchema: recordSchema,
     sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+    requires: [],
+    countsTowardGenerationLimit: false,
     executionKind: 'SYNC',
   },
   {
@@ -192,6 +194,8 @@ const tools: ToolMetadata[] = [
     inputSchema: { type: 'object', properties: { key: { type: 'string', minLength: 1 } } },
     outputSchema: recordSchema,
     sideEffect: { kind: 'EXTERNAL', idempotency: 'UNKNOWN' },
+    requires: [],
+    countsTowardGenerationLimit: false,
     executionKind: 'ASYNC',
   },
 ];

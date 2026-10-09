@@ -19,6 +19,7 @@ function metadata(
     configSchema: { type: 'object', properties: {} },
     uiSchema: { fields: [] },
     sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+    factInputs: [],
   };
 }
 

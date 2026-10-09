@@ -144,6 +144,7 @@ const TEXT_GENERATION = {
     ],
   },
   sideEffect: { kind: 'EXTERNAL', idempotency: 'UNKNOWN' },
+  factInputs: [],
 };
 
 const MODELS = [
@@ -173,6 +174,7 @@ const AGENT = {
     fields: [{ path: 'allowedTools', order: 30, group: 'BASIC', widget: 'TOOL_SELECTOR' }],
   },
   sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+  factInputs: [],
 };
 
 const TOOLS = [
@@ -183,6 +185,8 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { key: { type: 'string' } } },
     outputSchema: { type: 'object', properties: { key: { type: 'string' } } },
     sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
+    requires: [],
+    countsTowardGenerationLimit: false,
   },
 ];
 
