@@ -111,6 +111,10 @@ func role(pkg string) string {
 		return "mockproduction"
 	case pkg == "internal/mockcontrol":
 		return "mockcontrol"
+	// The sandbox test runner is a separate process standing in for an external test
+	// service, like the Mock Provider.
+	case pkg == "internal/sandboxrunner":
+		return "sandboxrunner"
 	case pkg == "migrations":
 		return "migrations"
 	case pkg == "cmd" || strings.HasPrefix(pkg, "cmd/"):
@@ -246,6 +250,11 @@ var allowedInternalImports = map[string]map[string]bool{
 	// in for external services. It is fixture code like mockprovider and holds to the same
 	// rule: no Go type shared with the Runtime, so no internal import at all.
 	"mockcontrol": set(),
+
+	// sandboxrunner: the sandbox test runner served by cmd/sandboxrunner. The sandbox_test
+	// Tool reaches it only over HTTP, so like mockprovider it shares no Go type with the
+	// Runtime; its only internal import is the shared barrier and request record.
+	"sandboxrunner": set("internal/mockcontrol"),
 }
 
 // violation is one forbidden edge (or one unclassifiable package) found by
