@@ -686,18 +686,44 @@ function collectImageRefs(value: unknown): ImageRef[] {
 }
 
 /**
+ * The URI an EXTERNAL reference may be previewed from: only an absolute http or https URL,
+ * the only form the Backend accepts for that branch. Anything else (a relative path, a
+ * `data:` or `javascript:` URI, an unparseable string) gets no `<img>` and is shown as text
+ * only, so the panel never loads or inlines content the reference was not allowed to name.
+ */
+function externalPreviewUri(uri: string | undefined): string | null {
+  if (typeof uri !== 'string' || uri === '') return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch {
+    return null;
+  }
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || parsed.host === '') {
+    return null;
+  }
+  return uri;
+}
+
+/** The Backend route that serves an uploaded Asset's immutable content, or null. */
+function assetPreviewUri(image: ImageRef): string | null {
+  const assetId = image.asset?.assetId;
+  if (typeof assetId !== 'string' || assetId === '') return null;
+  return `${API_BASE}/assets/${encodeURIComponent(assetId)}/content`;
+}
+
+/**
  * `<img>` preview plus the raw reference text: an image shows both a preview and its raw
- * reference. EXTERNAL
- * renders the given URI directly; ASSET reuses the existing `/assets/{id}/content` route.
- * ARTIFACT has no documented content endpoint, so it shows only the raw reference —
- * never a guessed or invented proxy URL.
+ * reference. EXTERNAL renders the given http(s) URI directly, never through a proxy; ASSET
+ * reuses the existing `/assets/{id}/content` route. ARTIFACT has no documented content
+ * endpoint, so it shows only the raw reference — never a guessed or invented proxy URL.
  */
 function ImagePreview({ image }: { image: ImageRef }) {
   const src =
-    image.source === 'EXTERNAL' && image.uri
-      ? image.uri
-      : image.source === 'ASSET' && image.asset
-        ? `${API_BASE}/assets/${encodeURIComponent(image.asset.assetId)}/content`
+    image.source === 'EXTERNAL'
+      ? externalPreviewUri(image.uri)
+      : image.source === 'ASSET'
+        ? assetPreviewUri(image)
         : null;
   const reference =
     image.source === 'EXTERNAL'
@@ -721,6 +747,7 @@ function ImagePreview({ image }: { image: ImageRef }) {
           <img
             src={src}
             alt={`${image.source} image preview`}
+            referrerPolicy="no-referrer"
             className="h-full w-full object-contain"
           />
         </div>

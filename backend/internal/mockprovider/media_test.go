@@ -203,3 +203,31 @@ func TestServer_Tasks_UnknownMediaReturnsBadRequest(t *testing.T) {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 }
+
+func TestServer_GenerateImage_PublicBaseURLPrefixesImageURLAndStillServesAsset(t *testing.T) {
+	base, err := ParsePublicBaseURL("http://browser.example:9101/")
+	if err != nil {
+		t.Fatalf("ParsePublicBaseURL() error = %v", err)
+	}
+	srv := httptest.NewServer(NewServer(NewDispatcher(nil), WithPublicBaseURL(base)))
+	t.Cleanup(srv.Close)
+
+	resp, generated := postImage(t, srv.URL, `{"photoAssetId":"asset_photo_1","settingsDigest":"sha256:aa"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /v1/assets status = %d, want 200", resp.StatusCode)
+	}
+	if want := "http://browser.example:9101/v1/assets/" + generated.AssetID + ".png"; generated.ImageURL != want {
+		t.Fatalf("imageUrl = %q, want %q", generated.ImageURL, want)
+	}
+	// The public base only changes the origin; the path still names a route this Provider
+	// serves, so the same path is readable through the caller's own address.
+	path := strings.TrimPrefix(generated.ImageURL, base)
+	image, err := http.Get(srv.URL + path)
+	if err != nil {
+		t.Fatalf("GET asset path error = %v", err)
+	}
+	_ = image.Body.Close()
+	if image.StatusCode != http.StatusOK {
+		t.Fatalf("GET asset path status = %d, want 200", image.StatusCode)
+	}
+}

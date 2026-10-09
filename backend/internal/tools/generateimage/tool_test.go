@@ -112,6 +112,31 @@ func TestExecute_ProviderGenerates_ReturnsReachableAssetAndSettingsDigest(t *tes
 	}
 }
 
+func TestExecute_ProviderWithPublicBaseURL_BindsBrowserReachableImageURL(t *testing.T) {
+	const public = "http://localhost:9101"
+	provider := httptest.NewServer(mockprovider.NewServer(mockprovider.NewDispatcher(nil), mockprovider.WithPublicBaseURL(public)))
+	t.Cleanup(provider.Close)
+
+	got, err := New(provider.URL, provider.Client()).Execute(context.Background(),
+		action(`{"photoAssetId":"asset_photo_1","settings":{"style":"film"}}`))
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got.Kind != registry.ToolResultCompleted || got.Result == nil {
+		t.Fatalf("result = %+v, want COMPLETED", got)
+	}
+	validateOutput(t, got.Result.Output)
+	var out result
+	if err := json.Unmarshal(got.Result.Output, &out); err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	// The Tool reaches the Provider at its internal address, but the imageUrl it returns,
+	// and which its generation fact binds, names the public origin a browser can open.
+	if want := public + "/v1/assets/" + out.AssetRef + ".png"; out.ImageURL != want {
+		t.Errorf("imageUrl = %q, want %q", out.ImageURL, want)
+	}
+}
+
 func TestExecute_FailControl_FailsWithoutQuotingArguments(t *testing.T) {
 	provider := newProvider(t)
 

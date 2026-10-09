@@ -35,7 +35,8 @@
 //
 // POST /v1/assets generates one image synchronously from {photoAssetId, settingsDigest}:
 // it answers {assetId, imageUrl}, where assetId is derived from those two values alone and
-// imageUrl addresses GET /v1/assets/{assetId}.png on the host the caller used. With
+// imageUrl addresses GET /v1/assets/{assetId}.png on the host the caller used, or under
+// the public base URL when WithPublicBaseURL configures one. With
 // `outcome: "failed"` it answers 422 and generates nothing. Each generation writes a
 // "generated" record line naming the assetId.
 //

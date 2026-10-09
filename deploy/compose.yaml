@@ -2,7 +2,7 @@
 # persistent volume. Redis, external queues and distributed workers are not part of the
 # MVP and must not appear here.
 #
-# Known gap (AIGC image preview): the image URI a completed image_generation/media_output NodeRun
+# Known gap (AIGC image preview): the image URI a completed image_generation NodeRun
 # returns is built from EMBERLING_MODEL_PROVIDER_BASE_URL (backend/internal/adapters/
 # mocktask/adapter.go successPayload), the same value the backend container uses to reach
 # the mockprovider container. That value must be the container-DNS name
@@ -14,6 +14,9 @@
 # restricted to compose/Makefile/CI/studio, so the fix (for example a
 # backend-configured public base URL used only for the returned ImageRef.uri) is out of
 # scope here and reported rather than worked around with an invented backend env var.
+# The generate_image Tool's images are not affected: the Mock Provider builds their URL
+# from EMBERLING_MOCKPROVIDER_PUBLIC_URL (see the mockprovider service), so the cover
+# example a media_result NodeRun delivers opens in the browser.
 name: emberling
 
 services:
@@ -43,9 +46,10 @@ services:
   # postgres, backend and studio for a full acceptance stack.
   #
   # The host-published port below makes http://localhost:9101 reachable from a browser on
-  # the host, but the image URI a Run actually returns is built from
-  # EMBERLING_MODEL_PROVIDER_BASE_URL ("http://mockprovider:9101" below) -- see the gap
-  # noted at the top of this file.
+  # the host. EMBERLING_MOCKPROVIDER_PUBLIC_URL makes generated image URLs (POST /v1/assets)
+  # name that host address even though the backend calls the Provider as
+  # "http://mockprovider:9101"; the image_generation node's URI is still built from
+  # EMBERLING_MODEL_PROVIDER_BASE_URL -- see the gap noted at the top of this file.
   mockprovider:
     profiles: ["mock"]
     build:
@@ -65,6 +69,8 @@ services:
     environment:
       MOCKPROVIDER_TEST_CONTROLS: "true"
       MOCKPROVIDER_RECORD_PATH: /var/lib/emberling/mockprovider/dispatch-record.jsonl
+      # Must match the host side of the published port above for the browser to load it.
+      EMBERLING_MOCKPROVIDER_PUBLIC_URL: ${EMBERLING_MOCKPROVIDER_PUBLIC_URL:-http://localhost:9101}
     volumes:
       - emberling-mockprovider-record:/var/lib/emberling/mockprovider
 

@@ -26,6 +26,10 @@ import (
 // configuration is treated as authoritative over a differing default suggested elsewhere.
 const defaultAddr = ":9101"
 
+// publicURLEnv names the browser-reachable origin generated image URLs start with, for a
+// deployment where callers reach the Provider under an internal name.
+const publicURLEnv = "EMBERLING_MOCKPROVIDER_PUBLIC_URL"
+
 // shutdownTimeout bounds how long main waits for in-flight requests and scheduled
 // callbacks to finish once a shutdown signal arrives.
 const shutdownTimeout = 10 * time.Second
@@ -43,12 +47,16 @@ type config struct {
 	// recordPath is the append-only dispatch record file; required exactly when
 	// testControls is on.
 	recordPath string
+	// publicBaseURL is the normalised browser-reachable origin generated image URLs
+	// start with; empty keeps the origin the caller used.
+	publicBaseURL string
 }
 
-// loadConfig reads MOCKPROVIDER_ADDR, MOCKPROVIDER_TEST_CONTROLS and
-// MOCKPROVIDER_RECORD_PATH through getenv. A record path without test controls is
-// rejected rather than ignored, so a configuration never looks like it records when it
-// does not.
+// loadConfig reads MOCKPROVIDER_ADDR, MOCKPROVIDER_TEST_CONTROLS,
+// MOCKPROVIDER_RECORD_PATH and EMBERLING_MOCKPROVIDER_PUBLIC_URL through getenv. A record
+// path without test controls is rejected rather than ignored, so a configuration never
+// looks like it records when it does not; an unusable public URL is rejected at startup
+// rather than producing image URLs nobody can open.
 func loadConfig(getenv func(string) string) (config, error) {
 	cfg := config{addr: getenv("MOCKPROVIDER_ADDR"), recordPath: getenv("MOCKPROVIDER_RECORD_PATH")}
 	if cfg.addr == "" {
@@ -60,6 +68,13 @@ func loadConfig(getenv func(string) string) (config, error) {
 			return config{}, fmt.Errorf("MOCKPROVIDER_TEST_CONTROLS must be a boolean: %w", err)
 		}
 		cfg.testControls = enabled
+	}
+	if raw := getenv(publicURLEnv); raw != "" {
+		base, err := mockprovider.ParsePublicBaseURL(raw)
+		if err != nil {
+			return config{}, fmt.Errorf("%s: %w", publicURLEnv, err)
+		}
+		cfg.publicBaseURL = base
 	}
 	switch {
 	case cfg.testControls && cfg.recordPath == "":
@@ -92,6 +107,10 @@ func main() {
 		}
 		opts = append(opts, mockprovider.WithTestControls(record))
 		logger.Info("mockprovider: test controls enabled", slog.String("record_path", cfg.recordPath))
+	}
+	if cfg.publicBaseURL != "" {
+		opts = append(opts, mockprovider.WithPublicBaseURL(cfg.publicBaseURL))
+		logger.Info("mockprovider: public base URL configured", slog.String("public_base_url", cfg.publicBaseURL))
 	}
 
 	dispatcher := mockprovider.NewDispatcher(nil)

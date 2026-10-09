@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { DetailPanel } from './DetailPanel';
-import type { NodeRun, Run, RunEvent, RunSnapshot } from '@/api/types';
+import type { JsonValue, NodeRun, Run, RunEvent, RunSnapshot } from '@/api/types';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -392,6 +392,86 @@ describe('DetailPanel — ImageRef preview', () => {
     await screen.findByText('Output');
     // The raw JSON body is reachable but not visible until the <summary> is toggled open.
     expect(screen.getByText('Raw JSON').closest('details')).not.toHaveAttribute('open');
+  });
+});
+
+/** A media_result NodeRun whose `image` port carries the given reference. */
+function mediaResultNodeRun(image: JsonValue): NodeRun {
+  return {
+    ...IMAGE_NODE_RUN,
+    id: 'nr_media_result',
+    nodeId: 'node_media_result',
+    nodeType: 'media_result',
+    output: { image, caption: '{"accepted":true}' },
+  };
+}
+
+function renderNodeRun(nodeRun: NodeRun) {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { nodeRun, attempts: [] })));
+  const snapshot: RunSnapshot = { run: run(), nodeRuns: [nodeRun], lastSeq: 5 };
+  render(
+    <DetailPanel snapshot={snapshot} selectedNodeRun={nodeRun} selectedEvent={null} events={[]} />,
+  );
+}
+
+describe('DetailPanel — generated image preview', () => {
+  it('previews the cover example a Mock Provider public URL points at', async () => {
+    const uri = 'http://localhost:9101/v1/assets/img_0123456789abcdef.png';
+    renderNodeRun(mediaResultNodeRun({ source: 'EXTERNAL', uri, mediaType: 'image/png' }));
+
+    await screen.findByText('Output');
+    const img = await screen.findByRole<HTMLImageElement>('img', {
+      name: 'EXTERNAL image preview',
+    });
+    expect(img.getAttribute('src')).toBe(uri);
+    expect(img).toHaveAttribute('referrerpolicy', 'no-referrer');
+    expect(screen.getByTestId('image-preview-box')).toHaveClass('h-40', 'w-40');
+    expect(screen.getByText(`EXTERNAL · ${uri}`)).toBeInTheDocument();
+  });
+
+  it('previews an ASSET fallback through the Backend asset content route', async () => {
+    renderNodeRun(
+      mediaResultNodeRun({
+        source: 'ASSET',
+        asset: { assetId: 'asset_photo 1', mediaType: 'image/png', sizeBytes: 10, sha256: 'ab' },
+      }),
+    );
+
+    await screen.findByText('Output');
+    const img = await screen.findByRole<HTMLImageElement>('img', { name: 'ASSET image preview' });
+    expect(img.getAttribute('src')).toBe('/api/assets/asset_photo%201/content');
+    expect(screen.getByText('ASSET · asset_photo 1')).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      'a javascript: URI',
+      { source: 'EXTERNAL', uri: 'javascript:alert(1)', mediaType: 'image/png' },
+    ],
+    [
+      'a data: URI',
+      { source: 'EXTERNAL', uri: 'data:image/png;base64,AAAA', mediaType: 'image/png' },
+    ],
+    [
+      'a relative path',
+      { source: 'EXTERNAL', uri: '/v1/assets/img_1.png', mediaType: 'image/png' },
+    ],
+    ['a missing uri', { source: 'EXTERNAL', mediaType: 'image/png' }],
+    ['an ASSET without an id', { source: 'ASSET', asset: {} }],
+    [
+      'an ARTIFACT with no content route',
+      {
+        source: 'ARTIFACT',
+        artifact: { artifactId: 'artifact_1', mediaType: 'image/png', sizeBytes: 1, sha256: 'a' },
+      },
+    ],
+  ])('shows %s as reference text without an image element', async (_name, image) => {
+    renderNodeRun(mediaResultNodeRun(image));
+
+    await screen.findByText('Output');
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('image-preview-box')).not.toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`^${image.source} · `))).toBeInTheDocument();
   });
 });
 

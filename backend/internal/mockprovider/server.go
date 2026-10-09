@@ -73,6 +73,10 @@ type Server struct {
 	// statuses answers GET /v1/tasks/{externalTaskId}. It exists with or without test
 	// controls and is independent of the redeliver control's task map.
 	statuses *taskStatuses
+
+	// publicBaseURL, when set, prefixes every generated imageUrl in place of the
+	// request's own scheme and host. It is empty unless WithPublicBaseURL was passed.
+	publicBaseURL string
 }
 
 // NewServer wires dispatcher into a ready-to-serve Server. dispatcher is owned by the

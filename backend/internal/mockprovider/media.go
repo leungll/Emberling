@@ -10,6 +10,7 @@ import (
 	"image/color"
 	"image/png"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -105,7 +106,7 @@ func (s *Server) handleGenerateImage(w http.ResponseWriter, r *http.Request) {
 	s.recordResponse(kindImage, "", http.StatusOK, false)
 	writeJSON(w, http.StatusOK, imageResponse{
 		AssetID:  assetID,
-		ImageURL: requestBaseURL(r) + "/v1/assets/" + assetID + ".png",
+		ImageURL: s.imageBaseURL(r) + "/v1/assets/" + assetID + ".png",
 	})
 }
 
@@ -175,6 +176,49 @@ func requestBaseURL(r *http.Request) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
+}
+
+// WithPublicBaseURL makes every generated imageUrl start with base instead of the scheme
+// and host the caller used. It exists for a topology where the caller reaches the Provider
+// under an internal name a browser cannot resolve: the URL is handed on to whoever displays
+// the image, so it must name an origin that viewer can reach. base must already be
+// normalised by ParsePublicBaseURL; an empty base keeps the request-derived behaviour.
+func WithPublicBaseURL(base string) Option {
+	return func(s *Server) {
+		s.publicBaseURL = base
+	}
+}
+
+// ParsePublicBaseURL validates and normalises a public base URL for WithPublicBaseURL. It
+// must be an absolute http or https URL with a host and nothing a generated URL could not
+// be appended to or should not carry: no user information (the URL is credential-free by
+// contract), query or fragment. A trailing slash is removed so the result joins cleanly
+// with an absolute route path.
+func ParsePublicBaseURL(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", errors.New("public base URL is not a valid URL")
+	}
+	switch {
+	case parsed.Scheme != "http" && parsed.Scheme != "https":
+		return "", errors.New("public base URL must use http or https")
+	case parsed.Host == "":
+		return "", errors.New("public base URL must name a host")
+	case parsed.User != nil:
+		return "", errors.New("public base URL must not carry user information")
+	case parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "":
+		return "", errors.New("public base URL must not carry a query or fragment")
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+// imageBaseURL is the origin a generated imageUrl starts with: the configured public base
+// when there is one, otherwise the scheme and host this request used.
+func (s *Server) imageBaseURL(r *http.Request) string {
+	if s.publicBaseURL != "" {
+		return s.publicBaseURL
+	}
+	return requestBaseURL(r)
 }
 
 // recordMedia appends one media line. It is a no-op without test controls.
