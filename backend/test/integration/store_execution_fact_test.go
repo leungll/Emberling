@@ -232,6 +232,65 @@ func TestExecutionFactStore_FindLatest_ReturnsNewestForSubject(t *testing.T) {
 	}
 }
 
+// A node that declares fact inputs receives one Run's facts of one type, oldest first and
+// bounded; facts of another type or another Run never leak into that read.
+func TestExecutionFactStore_ListByRunAndType_OldestFirstScopedAndBounded(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedToolAttempts(ctx, t, uow, f, "ar_1", []string{"generate_image", "generate_image", "generate_image", "review_asset"})
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		if err := tx.Runs().Create(ctx, domain.Run{
+			ID: "run_other", WorkflowID: f.workflowID, DefinitionVersion: 1, Status: domain.RunRunning,
+			Input: json.RawMessage(`{}`), StartedAt: fixtureTime, UpdatedAt: fixtureTime,
+		}); err != nil {
+			return err
+		}
+		return tx.NodeRuns().Create(ctx, newNodeRun("nr_other", "run_other", "node_input"))
+	}); err != nil {
+		t.Fatalf("seed another Run: %v", err)
+	}
+	seedToolAttemptsOn(ctx, t, uow, "nr_other", "ar_other", []string{"generate_image"})
+
+	newest := newExecutionFact("fact_g_newest", f.runID, "ar_1", "tool_attempt_ar_1_1", "image_generated", "asset_c")
+	newest.CreatedAt = fixtureTime.Add(2 * time.Minute)
+	sameTimeHigherID := newExecutionFact("fact_g_b", f.runID, "ar_1", "tool_attempt_ar_1_2", "image_generated", "asset_b")
+	sameTimeHigherID.CreatedAt = fixtureTime.Add(time.Minute)
+	sameTimeLowerID := newExecutionFact("fact_g_a", f.runID, "ar_1", "tool_attempt_ar_1_3", "image_generated", "asset_a")
+	sameTimeLowerID.CreatedAt = fixtureTime.Add(time.Minute)
+	otherType := newExecutionFact("fact_r_1", f.runID, "ar_1", "tool_attempt_ar_1_4", "asset_reviewed", "asset_a")
+	otherRun := newExecutionFact("fact_g_other_run", "run_other", "ar_other", "tool_attempt_ar_other_1", "image_generated", "asset_x")
+	// Insert the newest first so insertion order cannot explain the result.
+	for _, fact := range []domain.ExecutionFact{newest, sameTimeHigherID, otherType, otherRun, sameTimeLowerID} {
+		insertExecutionFact(ctx, t, uow, fact)
+	}
+
+	if ids := factIDs(listFactsByRunAndType(ctx, t, uow, f.runID, "image_generated", 10)); len(ids) != 3 ||
+		ids[0] != "fact_g_a" || ids[1] != "fact_g_b" || ids[2] != "fact_g_newest" {
+		t.Fatalf("ListByRunAndType: want [fact_g_a fact_g_b fact_g_newest], got %v", ids)
+	}
+	if ids := factIDs(listFactsByRunAndType(ctx, t, uow, f.runID, "image_generated", 2)); len(ids) != 2 ||
+		ids[0] != "fact_g_a" || ids[1] != "fact_g_b" {
+		t.Fatalf("ListByRunAndType with limit 2: want the two oldest [fact_g_a fact_g_b], got %v", ids)
+	}
+	if ids := factIDs(listFactsByRunAndType(ctx, t, uow, "run_other", "image_generated", 10)); len(ids) != 1 ||
+		ids[0] != "fact_g_other_run" {
+		t.Fatalf("ListByRunAndType for another Run: want [fact_g_other_run], got %v", ids)
+	}
+	if facts := listFactsByRunAndType(ctx, t, uow, f.runID, "video_generated", 10); facts == nil || len(facts) != 0 {
+		t.Fatalf("ListByRunAndType for a type without facts: want an empty list, got %#v", facts)
+	}
+	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		_, err := tx.ExecutionFacts().ListByRunAndType(ctx, f.runID, "image_generated", 0)
+		return err
+	})
+	if err == nil {
+		t.Fatal("ListByRunAndType with a zero limit: want an error, got an unbounded read")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Generation limit: frozen value and the calls already made
 // ---------------------------------------------------------------------------
@@ -507,4 +566,17 @@ func factIDs(facts []domain.ExecutionFact) []string {
 		ids = append(ids, fact.ID)
 	}
 	return ids
+}
+
+func listFactsByRunAndType(ctx context.Context, t *testing.T, uow store.UnitOfWork, runID, factType string, limit int) []domain.ExecutionFact {
+	t.Helper()
+	var facts []domain.ExecutionFact
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		facts, err = tx.ExecutionFacts().ListByRunAndType(ctx, runID, factType, limit)
+		return err
+	}); err != nil {
+		t.Fatalf("ListByRunAndType %s/%s: %v", runID, factType, err)
+	}
+	return facts
 }

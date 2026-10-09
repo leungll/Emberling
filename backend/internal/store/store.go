@@ -539,6 +539,11 @@ type ExecutionFactRepository interface {
 	// id), for Trace projection. It is bounded by the Agent Run itself: each Tool Attempt
 	// produces at most one fact per type, and Tool Attempts are bounded by maxTurns.
 	ListByAgentRun(ctx context.Context, agentRunID string) ([]domain.ExecutionFact, error)
+
+	// ListByRunAndType returns up to limit facts of factType in the Run, oldest first
+	// (created_at then id, ascending), for the facts a Node Type declares it reads. A
+	// non-positive limit is an error rather than an unbounded read.
+	ListByRunAndType(ctx context.Context, runID, factType string, limit int) ([]domain.ExecutionFact, error)
 }
 
 // AgentContextVersionRepository persists the immutable message chain a restarted process

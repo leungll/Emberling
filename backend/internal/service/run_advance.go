@@ -358,6 +358,10 @@ func (s *ExecutionService) startAttempt(ctx context.Context, tx store.Tx, lock *
 	if hasIdempotencyKey(sideEffect) {
 		idempotencyKey = nr.ID
 	}
+	facts, err := s.nodeInputFacts(ctx, tx, run.ID, nr.NodeType)
+	if err != nil {
+		return err
+	}
 
 	if err := tx.NodeAttempts().Create(ctx, domain.NodeAttempt{
 		ID:                attemptID,
@@ -402,6 +406,7 @@ func (s *ExecutionService) startAttempt(ctx context.Context, tx store.Tx, lock *
 			RunInput:       run.Input,
 			Callback:       callbackCtx,
 			IdempotencyKey: idempotencyKey,
+			Facts:          facts,
 		},
 		Config:   config,
 		Deadline: deadlinePtr,

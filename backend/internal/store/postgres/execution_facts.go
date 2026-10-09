@@ -127,6 +127,28 @@ func (r *executionFactRepository) ListByAgentRun(ctx context.Context, agentRunID
 	return facts, nil
 }
 
+func (r *executionFactRepository) ListByRunAndType(ctx context.Context, runID, factType string, limit int) ([]domain.ExecutionFact, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres execution_facts.ListByRunAndType: limit must be positive, got %d", limit)
+	}
+
+	const query = `SELECT ` + executionFactColumns + `
+		  FROM execution_facts
+		 WHERE run_id = $1 AND fact_type = $2
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT $3`
+
+	rows, err := r.conn.Query(ctx, query, runID, factType, limit)
+	if err != nil {
+		return nil, mapError("execution_facts.ListByRunAndType", err, runID, factType)
+	}
+	facts, err := scanExecutionFacts(rows)
+	if err != nil {
+		return nil, mapError("execution_facts.ListByRunAndType", err, runID, factType)
+	}
+	return facts, nil
+}
+
 func scanExecutionFacts(rows pgx.Rows) ([]domain.ExecutionFact, error) {
 	defer rows.Close()
 

@@ -113,6 +113,22 @@ type NodeInput struct {
 	// that NodeRun: an Adapter must send exactly this value as the Provider's
 	// idempotency key and must never generate one of its own.
 	IdempotencyKey string
+
+	// Facts is set only for a Node Type whose registered Metadata declares FactInputs: it
+	// holds this Run's committed execution facts of each declared type, keyed by fact
+	// type, read in the transaction that started the Attempt. Every declared type has an
+	// entry, empty when the Run has no such fact. A node checks these facts; it never
+	// queries execution facts itself.
+	Facts map[string]FactSet
+}
+
+// FactSet is the committed execution facts of one type in one Run, oldest first
+// (creation time, then id). The read is bounded: Truncated reports that the Run holds
+// more facts of the type than were delivered, so a node checking the whole set must not
+// treat Facts as complete.
+type FactSet struct {
+	Facts     []domain.ExecutionFact
+	Truncated bool
 }
 
 // Port returns one input port value and whether the port was supplied at all. An absent
