@@ -196,6 +196,11 @@ type testEnvOptions struct {
 	// ship (e.g. one declaring a poll policy) and observe how the catalogue serialises it.
 	ExtraNodeRegistrations []registry.NodeRegistration
 	ExtraToolRegistrations []registry.ToolRegistration
+
+	// Clock, when set, replaces the system clock every service of this Backend reads, so
+	// a restart test can start a second Backend whose time is already past a deadline the
+	// first one froze, instead of waiting for real time to pass.
+	Clock domain.Clock
 }
 
 // defaultTestCallbackMaxPayloadBytes bounds POST /api/callbacks bodies in every testEnv
@@ -245,7 +250,10 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		pool = testdb.Open(t)
 	}
 	uow := postgres.NewUnitOfWork(pool)
-	clock := domain.SystemClock{}
+	var clock domain.Clock = domain.SystemClock{}
+	if opts.Clock != nil {
+		clock = opts.Clock
+	}
 
 	mockTaskBaseURL := opts.MockTaskBaseURL
 	if mockTaskBaseURL == "" {

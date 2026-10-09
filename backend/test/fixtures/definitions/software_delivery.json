@@ -1,0 +1,39 @@
+{
+  "workflowId": "wf_software_delivery",
+  "name": "Software Delivery",
+  "description": "An Agent tests a submitted patch in the sandbox and deploys it only when the tests passed",
+  "nodes": [
+    {
+      "id": "node_task",
+      "type": "text_input",
+      "name": "Delivery Task",
+      "position": {"x": 0, "y": 0},
+      "config": {"inputKey": "task", "label": "Delivery Task", "required": true}
+    },
+    {
+      "id": "node_agent",
+      "type": "agent",
+      "name": "Delivery Agent",
+      "position": {"x": 200, "y": 0},
+      "config": {
+        "instructions": "The task is a JSON document {\"baseCommit\",\"patch\",\"target\":{\"service\",\"environment\"}}. Test the patch on the base commit with sandbox_test. Deploy it to the target with deploy only when the tests passed, using the base commit and patch digest the test reported. Finish with {\"operationId\",\"version\",\"patchDigest\"} for the deployment, or, when the tests did not pass, finish with a failure report instead of deploying.",
+        "modelId": "text-model-v1",
+        "modelConfig": {"script": "software-delivery"},
+        "allowedTools": ["sandbox_test", "deploy"],
+        "maxTurns": 8,
+        "timeoutMs": 120000
+      }
+    },
+    {
+      "id": "node_result",
+      "type": "text_output",
+      "name": "Deployment Result",
+      "position": {"x": 400, "y": 0},
+      "config": {}
+    }
+  ],
+  "edges": [
+    {"id": "edge_task_agent", "source": "node_task", "sourceHandle": "text", "target": "node_agent", "targetHandle": "input"},
+    {"id": "edge_agent_result", "source": "node_agent", "sourceHandle": "text", "target": "node_result", "targetHandle": "text"}
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "turns": [
+    {"toolCall": {"toolName": "sandbox_test", "arguments": {"baseCommit": "{{task:/baseCommit}}", "patch": "{{task:/patch}}", "mock": "duplicate"}}},
+    {"toolCall": {"toolName": "deploy", "arguments": {"target": "{{task:/target}}", "baseCommit": "{{tool:0:/baseCommit}}", "patchDigest": "{{tool:0:/patchDigest}}", "parameters": {}}}},
+    {"final": {"outputText": {"operationId": "{{tool:1:/operationId}}", "version": "{{tool:1:/version}}", "patchDigest": "{{tool:0:/patchDigest}}"}}}
+  ]
+}

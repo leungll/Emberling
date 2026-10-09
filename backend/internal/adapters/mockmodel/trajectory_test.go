@@ -227,9 +227,77 @@ func TestProvider_Generate_ScriptDirective_SelectsTrajectory(t *testing.T) {
 	}
 }
 
+const deliveryTask = `{"baseCommit":"fixture-v1","patch":"--- a/x\n+++ b/x\n",` +
+	`"target":{"environment":"staging","service":"checkout"},"mock":"fail"}`
+
+// playDeliveryTrajectory plays the named software-delivery trajectory against deliveryTask,
+// feeding back a passing test result and a deployment, and returns the FINAL text.
+func playDeliveryTrajectory(t *testing.T, script, wantTestArguments string) string {
+	t.Helper()
+	p := NewProvider()
+	turns := []scriptedTurn{
+		{"sandbox_test", wantTestArguments,
+			`{"passed":true,"baseCommit":"fixture-v1","patchDigest":"sha256:p","resultDigest":"sha256:r","summary":{"total":12,"failed":0}}`},
+		{"deploy",
+			`{"baseCommit":"fixture-v1","parameters":{},"patchDigest":"sha256:p","target":{"environment":"staging","service":"checkout"}}`,
+			`{"operationId":"op_act_b_1","version":"v1"}`},
+	}
+	results := make([]string, 0, len(turns))
+	for index := 0; index <= len(turns); index++ {
+		messages := []registry.ModelMessage{userMessage(t, deliveryTask)}
+		for resultIndex, result := range results {
+			name := turns[resultIndex].tool
+			actionID := "act_" + string(rune('a'+resultIndex))
+			messages = append(messages,
+				registry.ModelMessage{Role: "assistant", Content: json.RawMessage(`{"kind":"TOOL_CALL"}`), ToolName: &name, ToolActionID: &actionID},
+				registry.ModelMessage{Role: roleTool, Content: json.RawMessage(result), ToolName: &name, ToolActionID: &actionID},
+			)
+		}
+		response, err := p.Generate(context.Background(), registry.ModelRequest{
+			ModelID: ModelID, Messages: messages, ModelConfig: json.RawMessage(`{"script":"` + script + `"}`),
+		})
+		if err != nil {
+			t.Fatalf("turn %d Generate() error = %v", index, err)
+		}
+		if index == len(turns) {
+			if response.Decision.Kind != registry.DecisionFinal {
+				t.Fatalf("turn %d Decision.Kind = %q, want FINAL", index, response.Decision.Kind)
+			}
+			var text string
+			if err := json.Unmarshal(response.Decision.Output, &text); err != nil {
+				t.Fatalf("FINAL Output %s is not a JSON string: %v", response.Decision.Output, err)
+			}
+			return text
+		}
+		assertToolCall(t, response, turns[index].tool, turns[index].arguments)
+		results = append(results, turns[index].result)
+	}
+	return ""
+}
+
+// The task's own mock member never reaches a Tool call: the test mode is the trajectory's
+// choice, and the deployment carries only the target, the tested commit and patch digest.
+func TestProvider_Generate_SoftwareDeliveryTrajectories_TestThenDeployThenFinal(t *testing.T) {
+	const wantFinal = `{"operationId":"op_act_b_1","patchDigest":"sha256:p","version":"v1"}`
+	cases := map[string]string{
+		"software-delivery":                    `{"baseCommit":"fixture-v1","patch":"--- a/x\n+++ b/x\n"}`,
+		"software-delivery-duplicate-callback": `{"baseCommit":"fixture-v1","mock":"duplicate","patch":"--- a/x\n+++ b/x\n"}`,
+	}
+	for script, wantTestArguments := range cases {
+		t.Run(script, func(t *testing.T) {
+			if got := playDeliveryTrajectory(t, script, wantTestArguments); got != wantFinal {
+				t.Fatalf("FINAL text =\n%s\nwant\n%s", got, wantFinal)
+			}
+		})
+	}
+}
+
 func TestTrajectories_EmbeddedFixtures_LoadAndAppearInTextModelConfigSchema(t *testing.T) {
 	names := TrajectoryNames()
-	for _, want := range []string{"photo-set", "photo-set-limit", "photo-set-skip-review"} {
+	for _, want := range []string{
+		"photo-set", "photo-set-limit", "photo-set-skip-review",
+		"software-delivery", "software-delivery-duplicate-callback",
+	} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("TrajectoryNames() = %v, want to contain %q", names, want)
 		}
