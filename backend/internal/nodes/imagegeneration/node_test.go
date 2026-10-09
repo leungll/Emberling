@@ -58,6 +58,12 @@ func (d *recordingDispatcher) Dispatch(_ context.Context, prompt string, referen
 	return d.task, d.err
 }
 
+// Poll lets recordingDispatcher stand in for the whole TaskProvider in Registration; the
+// tests that use it never poll.
+func (d *recordingDispatcher) Poll(context.Context, string) (registry.PollStatus, json.RawMessage, error) {
+	return registry.PollStatusUnknown, nil, nil
+}
+
 func validConfig() map[string]any {
 	return map[string]any{"modelId": "image-model-v1", "width": float64(1024)}
 }

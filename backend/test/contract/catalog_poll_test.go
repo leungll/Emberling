@@ -101,7 +101,14 @@ func TestAPI_NodeTypesCatalog_PollPolicyDeclared_ExposesPollOnlyForThatType(t *t
 	if got, want := string(pollable["poll"]), `{"intervalMs":1500,"maxPolls":4}`; got != want {
 		t.Errorf("GET /api/node-types %s.poll = %s, want %s", pollableTestNodeType, got, want)
 	}
-	for _, typ := range []string{"image_generation", testAsyncNodeType, "text_input"} {
+	imageGeneration, ok := items["image_generation"]
+	if !ok {
+		t.Fatalf("GET /api/node-types does not list image_generation: %s", body)
+	}
+	if got, want := string(imageGeneration["poll"]), `{"intervalMs":2000,"maxPolls":30}`; got != want {
+		t.Errorf("GET /api/node-types image_generation.poll = %s, want %s", got, want)
+	}
+	for _, typ := range []string{testAsyncNodeType, "text_input"} {
 		item, ok := items[typ]
 		if !ok {
 			t.Fatalf("GET /api/node-types does not list %s: %s", typ, body)

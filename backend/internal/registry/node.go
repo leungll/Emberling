@@ -181,6 +181,11 @@ const (
 	PollRunning   PollStatus = "RUNNING"
 	PollSucceeded PollStatus = "SUCCEEDED"
 	PollFailed    PollStatus = "FAILED"
+	// PollStatusUnknown reports a query that produced no interpretable task state: the
+	// Provider does not know the task, answered a non-2xx status, or sent a body that
+	// cannot be read. It changes no Attempt state and is not a failure; a later
+	// callback, poll or the Attempt deadline still decides the outcome.
+	PollStatusUnknown PollStatus = "UNKNOWN"
 )
 
 // PollResult is shared by the optional pollable Node and Tool Executors: Output is set

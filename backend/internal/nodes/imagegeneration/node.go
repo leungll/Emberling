@@ -1,7 +1,9 @@
 // Package imagegeneration implements the built-in Image Generation Node. It is the
 // first ASYNC Node: Execute only dispatches one external task and returns its identity,
 // and OnCallback normalises the Provider's callback payload into the node's `image` output
-// once the Runtime restores the original Attempt.
+// once the Runtime restores the original Attempt. Poll queries the same external task once
+// and interprets a terminal answer with the exact rules OnCallback applies, so a callback
+// and a poll for one task produce identical outputs and failures.
 //
 // The `image` port carries a domain.ImageRef and nothing else: the Provider's own
 // response object is validated and re-encoded here, so a Provider-private field or a
@@ -17,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
@@ -82,10 +85,35 @@ type TaskDispatcher interface {
 	Dispatch(ctx context.Context, prompt string, reference *domain.ImageRef, options map[string]any, callback registry.CallbackContext, idempotencyKey string) (registry.ExternalTask, error)
 }
 
+// TaskPoller is the status query this node needs: one request for one external task,
+// normalised by the Adapter. A SUCCEEDED or FAILED status carries the Provider's terminal
+// payload, which is the same body the task's callback delivers; RUNNING and
+// PollStatusUnknown carry none. An error means no answer arrived at all.
+type TaskPoller interface {
+	Poll(ctx context.Context, externalTaskID string) (registry.PollStatus, json.RawMessage, error)
+}
+
+// TaskProvider is the Adapter this node is registered with: it dispatches the task and
+// answers status queries for it.
+type TaskProvider interface {
+	TaskDispatcher
+	TaskPoller
+}
+
+// pollIntervalMs and maxPolls bound the Runtime's status queries for one Attempt. The
+// deterministic Mock Provider finishes a task as soon as its callback becomes due, so a 2 s
+// interval answers promptly without flooding it, and 30 queries cover one minute; the
+// Attempt deadline, not this bound, still ends a task that neither a poll nor a callback
+// resolved.
+const (
+	pollIntervalMs = 2000
+	maxPolls       = 30
+)
+
 // Registration returns the Image Generation NodeRegistration bound to resolver and
-// dispatcher. Both are consulted per call, never cached across calls, so a Registry update
+// provider. Both are consulted per call, never cached across calls, so a Registry update
 // between Definition save and Run creation is observed correctly.
-func Registration(resolver ModelResolver, dispatcher TaskDispatcher) registry.NodeRegistration {
+func Registration(resolver ModelResolver, provider TaskProvider) registry.NodeRegistration {
 	return registry.NodeRegistration{
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
@@ -106,15 +134,17 @@ func Registration(resolver ModelResolver, dispatcher TaskDispatcher) registry.No
 			// - not Emberling - decides that a replayed dispatch is the same task
 			// (EXTERNAL + KEYED).
 			SideEffect: domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed},
+			Poll:       &domain.PollPolicy{IntervalMs: pollIntervalMs, MaxPolls: maxPolls},
 		},
-		Binding: registry.ExecutorBinding{Executor: Executor{resolver: resolver, dispatcher: dispatcher}},
+		Binding: registry.ExecutorBinding{Executor: Executor{resolver: resolver, dispatcher: provider, poller: provider}},
 	}
 }
 
-// Executor implements registry.AsyncNodeExecutor for the Image Generation Node.
+// Executor implements registry.PollableAsyncNodeExecutor for the Image Generation Node.
 type Executor struct {
 	resolver   ModelResolver
 	dispatcher TaskDispatcher
+	poller     TaskPoller
 }
 
 // ValidateSemantics checks what ConfigSchema cannot express: the referenced model exists
@@ -219,6 +249,52 @@ type callbackPayload struct {
 // WAITING_CALLBACK until its Attempt deadline decides the outcome: a malformed
 // delivery is not evidence that the external task failed.
 func (e Executor) OnCallback(_ context.Context, state registry.NodeAsyncState, payload []byte) (registry.NodeOutput, error) {
+	return interpretTerminalPayload(state, payload)
+}
+
+// Poll queries the external task once through the Adapter and normalises the answer. It
+// never retries and changes no state: the Runtime submits a terminal result through the
+// same idempotent resume path a callback uses.
+//
+// A terminal payload is interpreted exactly as OnCallback interprets it. A Provider-reported
+// failure becomes PollFailed with the same ExecutionError the callback path's
+// ProviderFailure carries. A payload this node cannot interpret, or one whose own status
+// contradicts the polled status, is PollStatusUnknown, just as an uninterpretable callback
+// leaves the NodeRun waiting. A query that got no answer returns the Adapter's error.
+func (e Executor) Poll(ctx context.Context, state registry.NodeAsyncState) (registry.PollResult, error) {
+	if e.poller == nil {
+		return registry.PollResult{}, fmt.Errorf("image_generation: poll external task %s: no task poller is configured", state.ExternalTask.ExternalTaskID)
+	}
+	status, payload, err := e.poller.Poll(ctx, state.ExternalTask.ExternalTaskID)
+	if err != nil {
+		return registry.PollResult{}, fmt.Errorf("image_generation: poll external task %s: %w", state.ExternalTask.ExternalTaskID, err)
+	}
+
+	switch status {
+	case registry.PollRunning:
+		return registry.PollResult{Status: registry.PollRunning}, nil
+	case registry.PollSucceeded, registry.PollFailed:
+		output, err := interpretTerminalPayload(state, payload)
+		var failure *registry.ProviderFailure
+		switch {
+		case err == nil && status == registry.PollSucceeded:
+			return registry.PollResult{Status: registry.PollSucceeded, Output: &output}, nil
+		case errors.As(err, &failure) && status == registry.PollFailed:
+			reported := failure.Err
+			return registry.PollResult{Status: registry.PollFailed, Error: &reported}, nil
+		default:
+			return registry.PollResult{Status: registry.PollStatusUnknown}, nil
+		}
+	default:
+		return registry.PollResult{Status: registry.PollStatusUnknown}, nil
+	}
+}
+
+// interpretTerminalPayload is the one interpretation of a terminal Provider payload, shared
+// by OnCallback and Poll. SUCCEEDED yields the normalised `image` output; FAILED yields a
+// *registry.ProviderFailure; anything else is a plain error naming why the payload could
+// not be interpreted, never quoting it.
+func interpretTerminalPayload(state registry.NodeAsyncState, payload []byte) (registry.NodeOutput, error) {
 	var body callbackPayload
 	if err := json.Unmarshal(payload, &body); err != nil {
 		return registry.NodeOutput{}, fmt.Errorf("image_generation: callback payload for external task %s is not a JSON object: %w", state.ExternalTask.ExternalTaskID, err)

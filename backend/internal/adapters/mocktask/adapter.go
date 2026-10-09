@@ -1,14 +1,16 @@
-// Package mocktask normalises exactly one Provider interaction: POST /v1/tasks on the
-// deterministic HTTP Mock Provider (cmd/mockprovider), which accepts one asynchronous task
-// and reports its result later as a callback.
+// Package mocktask normalises the deterministic HTTP Mock Provider's (cmd/mockprovider)
+// asynchronous task interactions, one request per call: POST /v1/tasks accepts one task
+// whose result is reported later as a callback, and GET /v1/tasks/{externalTaskId}
+// answers one status query for an accepted task.
 //
 // It converts Emberling's dispatch inputs into that Provider's wire format and the
-// Provider's answer back into a registry.ExternalTask. It never retries, never writes
-// Runtime state, never emits an Event and never selects a replacement Provider: a failed
-// dispatch is reported upward as a DispatchError, and the Execution Service decides what
+// Provider's answer back into a registry.ExternalTask or a normalised poll status. It
+// never retries, never writes Runtime state, never emits an Event and never selects a
+// replacement Provider: a failed dispatch is reported upward as a DispatchError, a status
+// query that got no HTTP response as a PollError, and the Execution Service decides what
 // happens next.
 //
-// The one-time plaintext callback token travels in the request body and nowhere else. This
+// The one-time plaintext callback token travels in the dispatch body and nowhere else. This
 // package logs nothing at all, and its errors carry only the stable Provider identifier,
 // the external task id (when the Provider already named one), a short operation label and
 // an HTTP status code - never the token, the callback URL, the prompt or a response body.
