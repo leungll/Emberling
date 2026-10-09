@@ -149,6 +149,10 @@ func (s *QueryService) NodeRunDetail(ctx context.Context, runID, nodeRunID strin
 type AgentTrace struct {
 	AgentRun domain.AgentRun
 	Turns    []AgentTraceTurn
+	// Facts is the Agent Run's execution fact ledger and Budget its generation budget,
+	// both read in the same transaction as the Turns.
+	Facts  AgentTraceFacts
+	Budget AgentGenerationBudget
 }
 
 // AgentTraceTurn is one round: the Turn, the single Decision and Action it committed (both
@@ -164,8 +168,9 @@ type AgentTraceTurn struct {
 	CallbackBindings map[string]domain.CallbackBinding
 }
 
-// AgentTrace reads one Agent NodeRun's Agent Run, Turns, Decisions, Actions and Tool
-// Attempts in a single read transaction, so the returned rounds are mutually consistent.
+// AgentTrace reads one Agent NodeRun's Agent Run, Turns, Decisions, Actions, Tool
+// Attempts, execution facts and generation budget in a single read transaction, so the
+// returned rounds, ledger and budget are mutually consistent.
 //
 // It returns domain.ErrNotFound when the NodeRun does not exist, belongs to a different
 // Run than runID, or has no Agent Run: from this query's point of view all three mean
@@ -237,7 +242,15 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 
 			rounds = append(rounds, round)
 		}
-		trace = AgentTrace{AgentRun: agentRun, Turns: rounds}
+		facts, err := agentTraceFacts(ctx, tx, agentRun.ID)
+		if err != nil {
+			return err
+		}
+		budget, err := s.agentGenerationBudget(ctx, tx, agentRun)
+		if err != nil {
+			return err
+		}
+		trace = AgentTrace{AgentRun: agentRun, Turns: rounds, Facts: facts, Budget: budget}
 		return nil
 	})
 	if err != nil {

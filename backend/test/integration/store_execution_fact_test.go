@@ -291,6 +291,52 @@ func TestExecutionFactStore_ListByRunAndType_OldestFirstScopedAndBounded(t *test
 	}
 }
 
+func TestExecutionFactStore_ListByAgentRun_OldestFirstScopedAndBounded(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedToolAttempts(ctx, t, uow, f, "ar_1", []string{"generate_image", "generate_image", "review_asset"})
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.NodeRuns().Create(ctx, newNodeRun("nr_second_agent", f.runID, "node_second_agent"))
+	}); err != nil {
+		t.Fatalf("seed a second Agent NodeRun: %v", err)
+	}
+	seedToolAttemptsOn(ctx, t, uow, "nr_second_agent", "ar_2", []string{"generate_image"})
+
+	newest := newExecutionFact("fact_newest", f.runID, "ar_1", "tool_attempt_ar_1_3", "asset_reviewed", "asset_a")
+	newest.CreatedAt = fixtureTime.Add(2 * time.Minute)
+	sameTimeHigherID := newExecutionFact("fact_b", f.runID, "ar_1", "tool_attempt_ar_1_2", "image_generated", "asset_b")
+	sameTimeHigherID.CreatedAt = fixtureTime.Add(time.Minute)
+	sameTimeLowerID := newExecutionFact("fact_a", f.runID, "ar_1", "tool_attempt_ar_1_1", "image_generated", "asset_a")
+	sameTimeLowerID.CreatedAt = fixtureTime.Add(time.Minute)
+	otherAgentRun := newExecutionFact("fact_other_agent_run", f.runID, "ar_2", "tool_attempt_ar_2_1", "image_generated", "asset_x")
+	// Insert the newest first so insertion order cannot explain the result.
+	for _, fact := range []domain.ExecutionFact{newest, sameTimeHigherID, otherAgentRun, sameTimeLowerID} {
+		insertExecutionFact(ctx, t, uow, fact)
+	}
+
+	if ids := factIDs(listFactsByAgentRunLimit(ctx, t, uow, "ar_1", 10)); len(ids) != 3 ||
+		ids[0] != "fact_a" || ids[1] != "fact_b" || ids[2] != "fact_newest" {
+		t.Fatalf("ListByAgentRun: want [fact_a fact_b fact_newest], got %v", ids)
+	}
+	if ids := factIDs(listFactsByAgentRunLimit(ctx, t, uow, "ar_1", 2)); len(ids) != 2 ||
+		ids[0] != "fact_a" || ids[1] != "fact_b" {
+		t.Fatalf("ListByAgentRun with limit 2: want the two oldest [fact_a fact_b], got %v", ids)
+	}
+	if ids := factIDs(listFactsByAgentRunLimit(ctx, t, uow, "ar_2", 10)); len(ids) != 1 || ids[0] != "fact_other_agent_run" {
+		t.Fatalf("ListByAgentRun for another Agent Run: want [fact_other_agent_run], got %v", ids)
+	}
+	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		_, err := tx.ExecutionFacts().ListByAgentRun(ctx, "ar_1", 0)
+		return err
+	})
+	if err == nil {
+		t.Fatal("ListByAgentRun with a zero limit: want an error, got an unbounded read")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Generation limit: frozen value and the calls already made
 // ---------------------------------------------------------------------------
@@ -549,10 +595,15 @@ func listFactsForRequirement(ctx context.Context, t *testing.T, uow store.UnitOf
 
 func listFactsByAgentRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, agentRunID string) []domain.ExecutionFact {
 	t.Helper()
+	return listFactsByAgentRunLimit(ctx, t, uow, agentRunID, 100)
+}
+
+func listFactsByAgentRunLimit(ctx context.Context, t *testing.T, uow store.UnitOfWork, agentRunID string, limit int) []domain.ExecutionFact {
+	t.Helper()
 	var facts []domain.ExecutionFact
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		var err error
-		facts, err = tx.ExecutionFacts().ListByAgentRun(ctx, agentRunID)
+		facts, err = tx.ExecutionFacts().ListByAgentRun(ctx, agentRunID, limit)
 		return err
 	}); err != nil {
 		t.Fatalf("ListByAgentRun %s: %v", agentRunID, err)

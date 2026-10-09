@@ -205,6 +205,8 @@ describe('api client', () => {
             toolAttempts: [],
           },
         ],
+        facts: { items: [], truncated: false },
+        generationBudget: { maxGenerationCalls: null, generationCallsUsed: 0 },
       }),
     );
     vi.stubGlobal('fetch', fetchMock);

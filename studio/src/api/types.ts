@@ -501,6 +501,42 @@ export interface AgentTurnTrace {
 export interface AgentTrace {
   agentRun: AgentRunTrace;
   turns: AgentTurnTrace[];
+  facts: AgentTraceFacts;
+  generationBudget: GenerationBudgetTrace;
+}
+
+/**
+ * One execution fact the Agent Run recorded from a Tool result. `bindings` hold only
+ * references and digests; `verdict` and `basisFactId` are `null` for a fact that carries
+ * no judgement.
+ */
+export interface ExecutionFactTrace {
+  id: string;
+  factType: string;
+  subject: string;
+  bindings: Record<string, unknown>;
+  verdict: boolean | null;
+  basisFactId: string | null;
+  toolAttemptId: string;
+  createdAt: string;
+}
+
+/**
+ * The bounded fact ledger, oldest first. `truncated` means the Agent Run recorded more
+ * facts than `items` shows; the stored facts are never cut.
+ */
+export interface AgentTraceFacts {
+  items: ExecutionFactTrace[];
+  truncated: boolean;
+}
+
+/**
+ * `maxGenerationCalls` is the frozen limit, `null` when the Agent has none.
+ * `generationCallsUsed` counts every generation call already made, whatever its outcome.
+ */
+export interface GenerationBudgetTrace {
+  maxGenerationCalls: number | null;
+  generationCallsUsed: number;
 }
 
 // ---------------------------------------------------------------------------

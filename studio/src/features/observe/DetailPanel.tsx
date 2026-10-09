@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
+import { AgentFactsLedger } from './AgentFactsLedger';
 import { SectionLabel } from './Panel';
 import { StatusDot } from './StatusGlyph';
 import { API_BASE, ApiRequestError, getAgentTrace, getNodeRunDetail } from '@/api/client';
@@ -119,6 +120,7 @@ export function DetailPanel({
               />
             ) : null}
             <AgentRunSummary trace={trace.value} />
+            <AgentFactsLedger trace={trace.value} />
             <NodeRunFacts nodeRun={selectedNodeRun} compact />
             <NodeRunValues nodeRun={selectedNodeRun} />
             {detail.error ? <p className="text-[var(--destructive)]">{detail.error}</p> : null}

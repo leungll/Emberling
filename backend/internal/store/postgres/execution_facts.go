@@ -110,13 +110,18 @@ func (r *executionFactRepository) ListForRequirement(ctx context.Context, runID,
 	return facts, nil
 }
 
-func (r *executionFactRepository) ListByAgentRun(ctx context.Context, agentRunID string) ([]domain.ExecutionFact, error) {
+func (r *executionFactRepository) ListByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.ExecutionFact, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres execution_facts.ListByAgentRun: limit must be positive, got %d", limit)
+	}
+
 	const query = `SELECT ` + executionFactColumns + `
 		  FROM execution_facts
 		 WHERE agent_run_id = $1
-		 ORDER BY created_at ASC, id ASC`
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT $2`
 
-	rows, err := r.conn.Query(ctx, query, agentRunID)
+	rows, err := r.conn.Query(ctx, query, agentRunID, limit)
 	if err != nil {
 		return nil, mapError("execution_facts.ListByAgentRun", err, agentRunID)
 	}

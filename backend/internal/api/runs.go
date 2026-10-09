@@ -171,11 +171,40 @@ func (d Deps) getNodeRunDetail(w http.ResponseWriter, r *http.Request) {
 // is a Secret: none of them is a field here, so no future change to a domain
 // struct can leak one through this response.
 
-// agentTraceResponse is the whole projection: the Agent Run and its Turns in persisted
-// order.
+// agentTraceResponse is the whole projection: the Agent Run, its Turns in persisted
+// order, the execution facts it recorded, and its generation budget.
 type agentTraceResponse struct {
-	AgentRun agentRunDTO         `json:"agentRun"`
-	Turns    []agentTraceTurnDTO `json:"turns"`
+	AgentRun         agentRunDTO         `json:"agentRun"`
+	Turns            []agentTraceTurnDTO `json:"turns"`
+	Facts            agentTraceFactsDTO  `json:"facts"`
+	GenerationBudget generationBudgetDTO `json:"generationBudget"`
+}
+
+// agentTraceFactsDTO is the bounded fact ledger, oldest first. Truncated reports that the
+// Agent Run recorded more facts than Items shows; the stored facts are never cut.
+type agentTraceFactsDTO struct {
+	Items     []executionFactDTO `json:"items"`
+	Truncated bool               `json:"truncated"`
+}
+
+// executionFactDTO projects one recorded fact. Bindings hold only the references and
+// digests the Tool's fact declaration binds, never a credential or storage key.
+type executionFactDTO struct {
+	ID            string          `json:"id"`
+	FactType      string          `json:"factType"`
+	Subject       string          `json:"subject"`
+	Bindings      json.RawMessage `json:"bindings"`
+	Verdict       *bool           `json:"verdict"`
+	BasisFactID   *string         `json:"basisFactId"`
+	ToolAttemptID string          `json:"toolAttemptId"`
+	CreatedAt     time.Time       `json:"createdAt"`
+}
+
+// generationBudgetDTO is the frozen generation limit (null when the Agent Run has none)
+// and the generation calls already made, counted whatever their outcome.
+type generationBudgetDTO struct {
+	MaxGenerationCalls  *int `json:"maxGenerationCalls"`
+	GenerationCallsUsed int  `json:"generationCallsUsed"`
 }
 
 // agentRunDTO projects the Agent Run's identity, recovery pointers, deadline and outcome.
@@ -283,7 +312,33 @@ func toAgentTraceResponse(trace service.AgentTrace) agentTraceResponse {
 			Error:                 trace.AgentRun.Error,
 		},
 		Turns: turns,
+		Facts: toAgentTraceFactsDTO(trace.Facts),
+		GenerationBudget: generationBudgetDTO{
+			MaxGenerationCalls:  trace.Budget.MaxGenerationCalls,
+			GenerationCallsUsed: trace.Budget.Used,
+		},
 	}
+}
+
+func toAgentTraceFactsDTO(ledger service.AgentTraceFacts) agentTraceFactsDTO {
+	items := make([]executionFactDTO, len(ledger.Facts))
+	for i, fact := range ledger.Facts {
+		bindings := fact.Binding
+		if !hasJSONValue(bindings) {
+			bindings = json.RawMessage(`{}`)
+		}
+		items[i] = executionFactDTO{
+			ID:            fact.ID,
+			FactType:      fact.FactType,
+			Subject:       fact.SubjectRef,
+			Bindings:      bindings,
+			Verdict:       fact.Verdict,
+			BasisFactID:   fact.BasisFactID,
+			ToolAttemptID: fact.ToolAttemptID,
+			CreatedAt:     utcTime(fact.CreatedAt),
+		}
+	}
+	return agentTraceFactsDTO{Items: items, Truncated: ledger.Truncated}
 }
 
 func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {

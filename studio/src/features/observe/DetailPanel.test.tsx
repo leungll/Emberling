@@ -475,6 +475,8 @@ const AGENT_TRACE_BODY = {
       toolAttempts: [],
     },
   ],
+  facts: { items: [], truncated: false },
+  generationBudget: { maxGenerationCalls: null, generationCallsUsed: 0 },
 };
 
 function renderAgentPanel(events: RunEvent[] = []) {
@@ -557,6 +559,10 @@ describe('DetailPanel — Agent Trace', () => {
 
     // Turn 2 committed no Decision and created no Action; neither is invented for it.
     expect(screen.getAllByText('Decision')).toHaveLength(1);
+
+    // The fact ledger and generation budget sit in the detail panel, as received.
+    expect(screen.getByTestId('generation-budget')).toHaveTextContent('0 · no limit');
+    expect(screen.getByText('No facts recorded')).toBeInTheDocument();
   });
 
   it('renders the termination and the Agent error of a TIMEOUT trace', async () => {
@@ -597,6 +603,8 @@ describe('DetailPanel — Agent Trace', () => {
                     toolAttempts: [],
                   },
                 ],
+                facts: { items: [], truncated: false },
+                generationBudget: { maxGenerationCalls: 3, generationCallsUsed: 0 },
               })
             : jsonResponse(200, { nodeRun: AGENT_NODE_RUN, attempts: [] }),
         ),
