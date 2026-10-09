@@ -14,6 +14,16 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /out/service ./cmd/${CMD}
 RUN mkdir -p /out/assets /out/mockprovider /out/mockproduction
+RUN mkdir -p /out/sandboxrunner
+
+# Sandbox runner with the docker backend, for the local-only sandbox-docker compose
+# profile. It is the one image that carries a docker CLI, which it uses to start each test
+# container on the host daemon through a mounted socket. It is not the default target:
+# the distroless stage below stays last so every other build is unchanged.
+FROM docker:27.4.0-cli@sha256:561338cb111f09a755c9c28e00b66a2466a3dacd88bca6f2f0aeaf909e95730a AS sandboxrunner-docker
+COPY --from=build /out/service /usr/local/bin/service
+COPY --from=build /out/sandboxrunner /var/lib/emberling/sandboxrunner
+ENTRYPOINT ["/usr/local/bin/service"]
 
 # distroless/static has no shell and no package manager: the runtime image carries the
 # binary and nothing that could read a mounted Secret interactively.
@@ -28,5 +38,7 @@ COPY --from=build --chown=nonroot:nonroot /out/assets /var/lib/emberling/assets
 COPY --from=build --chown=nonroot:nonroot /out/mockprovider /var/lib/emberling/mockprovider
 # Same reason for the mock production service's request record directory.
 COPY --from=build --chown=nonroot:nonroot /out/mockproduction /var/lib/emberling/mockproduction
+# Same reason for the sandbox runner's record directory.
+COPY --from=build --chown=nonroot:nonroot /out/sandboxrunner /var/lib/emberling/sandboxrunner
 USER nonroot:nonroot
 ENTRYPOINT ["/usr/local/bin/service"]

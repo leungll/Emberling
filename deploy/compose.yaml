@@ -94,6 +94,56 @@ services:
     volumes:
       - emberling-mockproduction-record:/var/lib/emberling/mockproduction
 
+  # Sandbox test runner behind the sandbox_test Tool. In this profile it runs its mock
+  # backend: no container is started and the verdict comes from the request's mock mode.
+  # Its control surface mirrors the Mock Provider's (pause, release, barrier, record); the
+  # record holds identifiers, digests and statuses only, never a callback token or a patch.
+  sandboxrunner:
+    profiles: ["mock"]
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+      args:
+        CMD: sandboxrunner
+    ports:
+      - "9103:9103"
+    environment:
+      SANDBOXRUNNER_BACKEND: mock
+      SANDBOXRUNNER_TEST_CONTROLS: "true"
+      SANDBOXRUNNER_RECORD_PATH: /var/lib/emberling/sandboxrunner/test-record.jsonl
+    volumes:
+      - emberling-sandboxrunner-record:/var/lib/emberling/sandboxrunner
+
+  # LOCAL ONLY, OFF BY DEFAULT. The same runner with its docker backend, which runs
+  # `go test` on a patched fixture module in a fresh, network-less, read-only container of
+  # one digest-pinned image. It mounts the host Docker socket, which grants control of the
+  # host daemon, so it must never run in a shared or deployed environment. Start it
+  # instead of the mock runner with `docker compose --profile sandbox-docker up`; it takes
+  # the same service address, so the backend needs no other setting.
+  sandboxrunner-docker:
+    profiles: ["sandbox-docker"]
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+      target: sandboxrunner-docker
+      args:
+        CMD: sandboxrunner
+    # The socket is root-owned with a host-specific group, so this local-only image runs
+    # as root to reach it.
+    user: root
+    ports:
+      - "9103:9103"
+    networks:
+      default:
+        aliases: ["sandboxrunner"]
+    environment:
+      SANDBOXRUNNER_BACKEND: docker
+      SANDBOXRUNNER_TEST_CONTROLS: "true"
+      SANDBOXRUNNER_RECORD_PATH: /var/lib/emberling/sandboxrunner/test-record.jsonl
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - emberling-sandboxrunner-record:/var/lib/emberling/sandboxrunner
+
   backend:
     build:
       context: ../backend
@@ -123,6 +173,9 @@ services:
       # Registers the deploy Tool against the mockproduction service (container DNS, like
       # the Model Provider above). Without this key the Backend does not register the Tool.
       EMBERLING_PRODUCTION_BASE_URL: ${EMBERLING_PRODUCTION_BASE_URL:-http://mockproduction:9102}
+      # The sandbox_test Tool is registered only when this is set. Set it to an empty value
+      # to run without a sandbox runner.
+      EMBERLING_SANDBOX_RUNNER_BASE_URL: ${EMBERLING_SANDBOX_RUNNER_BASE_URL-http://sandboxrunner:9103}
       EMBERLING_RECONCILE_INTERVAL: 5s
       EMBERLING_RECONCILE_BATCH_SIZE: "100"
       EMBERLING_PENDING_CALLBACK_TTL: 24h
@@ -152,3 +205,4 @@ volumes:
   emberling-asset-data:
   emberling-mockprovider-record:
   emberling-mockproduction-record:
+  emberling-sandboxrunner-record:

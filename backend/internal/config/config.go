@@ -65,6 +65,7 @@ type Config struct {
 	OpenAIModel     OpenAIModel
 	Production      Production
 	Callback        Callback
+	SandboxRunner   SandboxRunner
 	Reconciliation  Reconciliation
 	PendingCallback PendingCallback
 	Projection      Projection
@@ -204,6 +205,7 @@ func Load(env func(string) string) (Config, error) {
 			BaseURL:       l.requiredURL(KeyCallbackBaseURL),
 			SigningSecret: Secret{value: l.required(KeyCallbackSigningSecret)},
 		},
+		SandboxRunner: l.sandboxRunner(),
 		Reconciliation: Reconciliation{
 			Interval:  l.requiredDuration(KeyReconcileInterval),
 			BatchSize: l.requiredInt(KeyReconcileBatchSize),
