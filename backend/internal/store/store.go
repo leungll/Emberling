@@ -223,7 +223,8 @@ type NodeAttemptRepository interface {
 	ClaimPoll(ctx context.Context, attemptID string, now time.Time, interval time.Duration, maxPolls int) (bool, error)
 
 	// ClearPoll unschedules polling of a DISPATCHED Attempt by setting next_poll_at to
-	// NULL, for a registration that no longer declares a usable poll policy. A false
+	// NULL, for a registration that no longer declares a usable poll policy or a Callback
+	// Binding that does not route a poll to the Attempt. A false
 	// result means the Attempt is no longer DISPATCHED and nothing changed.
 	ClearPoll(ctx context.Context, attemptID string) (bool, error)
 

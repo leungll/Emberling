@@ -86,8 +86,9 @@ type PollAttemptOutcome struct {
 // the claim.
 //
 // A poll that cannot be claimed is skipped without error. A registration that no longer
-// declares polling clears the poll schedule and skips; it never fails the Attempt, which
-// a callback or the deadline still resolves.
+// declares polling clears the poll schedule and skips; a Callback Binding that does not
+// route to the Attempt clears the schedule too and skips with the mismatch error. Neither
+// fails the Attempt, which a callback or the deadline still resolves.
 func (s *ExecutionService) PollAttempt(ctx context.Context, req PollAttempt) (PollAttemptOutcome, error) {
 	if req.AttemptID == "" {
 		return PollAttemptOutcome{}, errors.New("execution: a poll names no attempt")
@@ -149,7 +150,8 @@ type pollClaim struct {
 }
 
 // claimPoll is the claim transaction. It commits either nothing, a cleared poll schedule
-// (registry drift) or one claimed poll; the returned outcome is SKIPPED unless the claim
+// (registry drift, or a Callback Binding that does not route to the Attempt) or one
+// claimed poll; the returned outcome is SKIPPED unless the claim
 // won, in which case it is CLAIMED_NOT_FINAL until the Provider answers.
 func (s *ExecutionService) claimPoll(ctx context.Context, attemptID string) (pollClaim, error) {
 	claim := pollClaim{outcome: PollAttemptOutcome{Kind: PollAttemptSkipped, AttemptID: attemptID}}
@@ -158,6 +160,7 @@ func (s *ExecutionService) claimPoll(ctx context.Context, attemptID string) (pol
 		claim.outcome.SkipReason = reason
 	}
 
+	var mismatch error
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		attempt, err := tx.NodeAttempts().Get(ctx, attemptID)
 		if err != nil {
@@ -182,10 +185,18 @@ func (s *ExecutionService) claimPoll(ctx context.Context, attemptID string) (pol
 		// must name exactly this Attempt.
 		binding, err := s.pollBinding(ctx, tx, attemptID)
 		if err != nil {
-			if errors.Is(err, ErrPollBindingMismatch) || errors.Is(err, ErrToolPollNotSupported) {
-				skip(PollSkipBindingMismatch)
+			if !errors.Is(err, ErrPollBindingMismatch) && !errors.Is(err, ErrToolPollNotSupported) {
+				return err
 			}
-			return err
+			// No poll can ever route to this Attempt, so its schedule is cleared and
+			// discovery stops listing it on every scan; a callback or the deadline still
+			// resolves it. The clear commits and the mismatch is still reported.
+			if _, clearErr := tx.NodeAttempts().ClearPoll(ctx, attemptID); clearErr != nil {
+				return clearErr
+			}
+			skip(PollSkipBindingMismatch)
+			mismatch = err
+			return nil
 		}
 
 		reg, ok := s.deps.Nodes.Get(nodeRun.NodeType)
@@ -256,6 +267,9 @@ func (s *ExecutionService) claimPoll(ctx context.Context, attemptID string) (pol
 			claim.outcome.Kind = PollAttemptSkipped
 		}
 		return claim, err
+	}
+	if mismatch != nil {
+		return claim, mismatch
 	}
 	return claim, nil
 }

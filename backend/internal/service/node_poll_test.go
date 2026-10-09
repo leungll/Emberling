@@ -350,8 +350,8 @@ func TestPollAttempt_RegistrationWithoutPollPolicy_ClearsScheduleAndSkips(t *tes
 }
 
 // TestPollAttempt_BindingRoutesElsewhere_RefusedWithoutClaim proves a poll whose Callback
-// Binding does not name the polled Attempt is refused with the mismatch sentinel and
-// claims nothing.
+// Binding does not name the polled Attempt is refused with the mismatch sentinel, claims
+// nothing, and clears the poll schedule so discovery stops listing the Attempt.
 func TestPollAttempt_BindingRoutesElsewhere_RefusedWithoutClaim(t *testing.T) {
 	h := newPollHarness(t, PollHooks{})
 	binding := h.store.state.bindings[cbExternalTaskID]
@@ -367,6 +367,12 @@ func TestPollAttempt_BindingRoutesElsewhere_RefusedWithoutClaim(t *testing.T) {
 	}
 	if h.poller.calls != 0 || h.attempt().PollCount != 0 {
 		t.Fatalf("binding mismatch: want no claim and no query, got pollCount %d and %d queries", h.attempt().PollCount, h.poller.calls)
+	}
+	if got := h.attempt(); got.Status != domain.NodeAttemptDispatched || got.NextPollAt != nil {
+		t.Fatalf("binding mismatch: want DISPATCHED with the poll schedule cleared, got %s/%v", got.Status, got.NextPollAt)
+	}
+	if len(h.store.state.events) != 0 {
+		t.Fatalf("binding mismatch: want no Event, got %v", h.eventTypes())
 	}
 }
 

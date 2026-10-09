@@ -562,7 +562,8 @@ func TestPollAttempt_RegistryDrift_ClearsPollAndSkips(t *testing.T) {
 // TestPollAttempt_BindingNamesOtherAttempt_Skips repoints the current Attempt's Callback
 // Binding at the superseded Attempt of a keyed retry. A poll carries no callback token, so
 // the Binding is its only route: the poll is refused with the mismatch sentinel before any
-// claim, and nothing is written or queried.
+// claim, nothing is queried, and the only write is the cleared poll schedule, so discovery
+// stops listing the Attempt and the deadline decides.
 func TestPollAttempt_BindingNamesOtherAttempt_Skips(t *testing.T) {
 	h, poller := newPollingHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed},
@@ -594,10 +595,16 @@ func TestPollAttempt_BindingNamesOtherAttempt_Skips(t *testing.T) {
 	if outcome.Kind != service.PollAttemptSkipped || outcome.SkipReason != service.PollSkipBindingMismatch {
 		t.Fatalf("poll with a binding naming another attempt: want SKIPPED BINDING_MISMATCH, got %+v", outcome)
 	}
+	if beforeAttempt.NextPollAt == nil {
+		t.Fatal("precondition: want a scheduled poll before the refused poll")
+	}
 	afterAttempt := getAttempt(h.ctx, t, h.uow, second.attemptID)
-	if afterAttempt.PollCount != beforeAttempt.PollCount || !equalTimePtr(afterAttempt.NextPollAt, beforeAttempt.NextPollAt) {
-		t.Fatalf("poll schedule after a refused poll: want unchanged %d/%v, got %d/%v",
-			beforeAttempt.PollCount, beforeAttempt.NextPollAt, afterAttempt.PollCount, afterAttempt.NextPollAt)
+	if afterAttempt.PollCount != beforeAttempt.PollCount || afterAttempt.NextPollAt != nil {
+		t.Fatalf("poll schedule after a refused poll: want poll_count %d kept and next_poll_at NULL, got %d/%v",
+			beforeAttempt.PollCount, afterAttempt.PollCount, afterAttempt.NextPollAt)
+	}
+	if containsID(duePollAttemptIDs(h.ctx, t, h.uow, h.clock.Now()), second.attemptID) {
+		t.Fatal("discovery after a refused poll: want the Attempt no longer due")
 	}
 	if after := h.pollFacts(second); after != before {
 		t.Fatalf("facts after a refused poll: want unchanged %+v, got %+v", before, after)
