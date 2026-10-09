@@ -667,15 +667,25 @@ func (h *cbHarness) eventOfType(typ domain.EventType) (domain.Event, bool) {
 // TestNodeResume_ProviderPollCompletion_OmitsNodeCallbackReceivedAndSetsProviderPollSource
 // proves that only a callback that wins the completion right writes
 // NODE_CALLBACK_RECEIVED, and a Provider Poll completion records completionSource
-// PROVIDER_POLL on the completion Event instead.
+// PROVIDER_POLL on the completion Event instead. The poll result is already normalized,
+// so the Executor's OnCallback is never asked to interpret it.
 func TestNodeResume_ProviderPollCompletion_OmitsNodeCallbackReceivedAndSetsProviderPollSource(t *testing.T) {
 	h := newCbHarness(t, domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown})
 	h.seedWaiting("")
+	h.exec.onCallback = func(registry.NodeAsyncState, []byte) (registry.NodeOutput, error) {
+		t.Error("OnCallback was called for a normalized poll result")
+		return registry.NodeOutput{}, errors.New("unexpected OnCallback")
+	}
 
 	outcome, err := h.svc.ResumeNode(context.Background(), ResumeNode{
 		ExternalTaskID: cbExternalTaskID,
-		Payload:        json.RawMessage(`{"text":"generated"}`),
-		Source:         domain.CompletionProviderPoll,
+		Polled: &PolledResult{
+			AttemptID: cbAttemptID,
+			Result: registry.PollResult{
+				Status: registry.PollSucceeded,
+				Output: &registry.NodeOutput{Ports: map[string]json.RawMessage{"text": json.RawMessage(`"generated"`)}},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("resume: %v", err)
@@ -1012,4 +1022,36 @@ func (h *cbHarness) seedReadyTask() {
 		Status: domain.NodeRunReady, Input: json.RawMessage(`{}`), ReadyAt: now,
 	}
 	st.lastSeq = 3
+}
+
+// TestResumeNode_MixedCallbackAndPollShape_RejectedBeforeAnyRead pins the request shape of
+// the single resume use case: a poll result never carries a callback body, never replays a
+// Pending Callback, and PROVIDER_POLL is never handed to OnCallback as a raw body. Each
+// mixed shape is refused before any routing read, so nothing is written.
+func TestResumeNode_MixedCallbackAndPollShape_RejectedBeforeAnyRead(t *testing.T) {
+	polled := &PolledResult{AttemptID: cbAttemptID, Result: registry.PollResult{Status: registry.PollRunning}}
+	cases := map[string]ResumeNode{
+		"poll source without a poll result": {ExternalTaskID: cbExternalTaskID, Payload: json.RawMessage(`{"text":"x"}`), Source: domain.CompletionProviderPoll},
+		"poll result with callback source":  {ExternalTaskID: cbExternalTaskID, Source: domain.CompletionCallback, Polled: polled},
+		"poll result with a callback body":  {ExternalTaskID: cbExternalTaskID, Payload: json.RawMessage(`{"text":"x"}`), Polled: polled},
+		"poll result replaying a pending":   {ExternalTaskID: cbExternalTaskID, ConsumePending: true, Polled: polled},
+		"poll result with a payload hash":   {ExternalTaskID: cbExternalTaskID, PayloadHash: "h", Polled: polled},
+		"poll result naming no attempt":     {ExternalTaskID: cbExternalTaskID, Polled: &PolledResult{Result: registry.PollResult{Status: registry.PollRunning}}},
+	}
+	for name, req := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := newCbHarness(t, domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown})
+			h.seedWaiting("")
+			before := len(h.store.state.events)
+			if _, err := h.svc.ResumeNode(context.Background(), req); !errors.Is(err, ErrInvalidResumeRequest) {
+				t.Fatalf("ResumeNode(%s): want ErrInvalidResumeRequest, got %v", name, err)
+			}
+			if got := len(h.store.state.events); got != before {
+				t.Fatalf("events after a refused request: want %d, got %d", before, got)
+			}
+			if got := h.store.state.attempts[cbAttemptID].Status; got != domain.NodeAttemptDispatched {
+				t.Fatalf("Attempt after a refused request: want DISPATCHED, got %s", got)
+			}
+		})
+	}
 }

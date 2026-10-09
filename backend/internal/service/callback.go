@@ -61,15 +61,24 @@ func (e *CallbackPayloadRejectedError) Error() string {
 
 func (e *CallbackPayloadRejectedError) Unwrap() error { return e.Err }
 
-// ResumeNode is the parameter struct for ExecutionService.ResumeNode.
+// ResumeNode is the parameter struct for ExecutionService.ResumeNode. A callback delivery
+// sets Payload and Source CALLBACK; a Provider Poll result sets Polled instead, and its
+// Source is PROVIDER_POLL.
 type ResumeNode struct {
 	// ExternalTaskID routes the delivery through its Callback Binding.
 	ExternalTaskID string
-	// Payload is the raw Provider body handed to the Executor's OnCallback.
+	// Payload is the raw Provider body handed to the Executor's OnCallback. It is empty
+	// for a Provider Poll result, which is already normalized.
 	Payload json.RawMessage
 	// Source records which path delivered the result; it decides whether
 	// NODE_CALLBACK_RECEIVED is written and what completionSource NODE_COMPLETED carries.
+	// It may be left empty when Polled is set; any value other than PROVIDER_POLL is then
+	// refused.
 	Source domain.CompletionSource
+	// Polled carries a Provider Poll result. It replaces the OnCallback interpretation
+	// step and nothing else: routing, the conditional update from DISPATCHED, the Event
+	// write and aggregation are the ones a callback goes through.
+	Polled *PolledResult
 	// ConsumePending marks this delivery as the replay of a stored early callback, which
 	// must be consumed exactly once in the same transaction that acts on it.
 	ConsumePending bool
@@ -81,9 +90,65 @@ type ResumeNode struct {
 	PayloadHash string
 }
 
+// PolledResult is a Provider Poll result the Executor's Poll has already normalized
+// outside every transaction.
+type PolledResult struct {
+	// AttemptID is the Node Attempt the poll was taken for. A poll carries no callback
+	// token, so the Callback Binding is its only route, and that Binding must point at
+	// exactly this Attempt.
+	AttemptID string
+	// Result is what Poll returned. RUNNING, and any status other than SUCCEEDED or
+	// FAILED, changes nothing; SUCCEEDED needs Output and FAILED needs Error.
+	Result registry.PollResult
+}
+
+// ErrPollBindingMismatch reports a poll result whose external task id is bound to a
+// different Attempt than the one the poll was taken for. Nothing is written.
+var ErrPollBindingMismatch = errors.New("execution: callback binding does not route to the polled attempt")
+
+// ErrToolPollNotSupported reports a poll result for an external task bound to an Agent
+// Tool Attempt. Asynchronous Tools resume by callback only; nothing is written.
+var ErrToolPollNotSupported = errors.New("execution: provider poll results are not supported for tool attempts")
+
+// ErrInvalidResumeRequest reports a ResumeNode request that mixes the callback and the
+// Provider Poll delivery shapes. Nothing is read or written.
+var ErrInvalidResumeRequest = errors.New("execution: invalid resume request")
+
+// validate rejects a request whose shape could make a poll result look like a callback:
+// a poll must not consume or be checked against a Pending Callback, and PROVIDER_POLL
+// must not reach OnCallback with a raw body.
+func (r ResumeNode) validate() error {
+	if r.Polled == nil {
+		if r.Source == domain.CompletionProviderPoll {
+			return fmt.Errorf("%w: a PROVIDER_POLL resume for external task %s carries no normalized poll result", ErrInvalidResumeRequest, r.ExternalTaskID)
+		}
+		return nil
+	}
+	switch {
+	case r.Source != "" && r.Source != domain.CompletionProviderPoll:
+		return fmt.Errorf("%w: a poll result for external task %s cannot carry source %s", ErrInvalidResumeRequest, r.ExternalTaskID, r.Source)
+	case len(r.Payload) > 0, r.ConsumePending, r.PayloadHash != "":
+		return fmt.Errorf("%w: a poll result for external task %s cannot carry a callback payload or replay a pending callback", ErrInvalidResumeRequest, r.ExternalTaskID)
+	case r.Polled.AttemptID == "":
+		return fmt.Errorf("%w: a poll result for external task %s names no attempt", ErrInvalidResumeRequest, r.ExternalTaskID)
+	}
+	return nil
+}
+
+// source is the completion source this delivery records.
+func (r ResumeNode) source() domain.CompletionSource {
+	if r.Polled != nil {
+		return domain.CompletionProviderPoll
+	}
+	return r.Source
+}
+
 // hash identifies this delivery for the Pending Callback guard and for the bounded
-// NODE_CALLBACK_RECEIVED payload.
+// NODE_CALLBACK_RECEIVED payload. A poll result has no body and is neither.
 func (r ResumeNode) hash() string {
+	if r.Polled != nil {
+		return ""
+	}
 	if r.PayloadHash != "" {
 		return r.PayloadHash
 	}
@@ -124,8 +189,13 @@ type CallbackOutcome struct {
 // ResumeNode is the single idempotent resume use case shared by callback intake, Provider
 // polling and the Reconciler. It never calls the Provider or the Executor
 // while holding the Run lock: OnCallback runs between the routing reads and the single
-// state-changing transaction, which executes no Node and calls no Provider.
+// state-changing transaction, which executes no Node and calls no Provider. A Provider
+// Poll result arrives already normalized, so it skips OnCallback and enters the same
+// state-changing transaction.
 func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (ResumeOutcome, error) {
+	if err := req.validate(); err != nil {
+		return ResumeOutcome{}, err
+	}
 	var (
 		binding  domain.CallbackBinding
 		attempt  domain.NodeAttempt
@@ -144,6 +214,11 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 				return ErrNoCallbackBinding
 			}
 			return err
+		}
+		if req.Polled != nil {
+			if err := checkPollRoute(binding, req.Polled.AttemptID); err != nil {
+				return err
+			}
 		}
 		if binding.TargetType != domain.CallbackTargetNodeAttempt {
 			// A TOOL_ATTEMPT Binding is resumed by resumeToolAttempt below; any other
@@ -187,6 +262,11 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 	default:
 		return ResumeOutcome{}, fmt.Errorf("execution: callback binding %s targets unknown type %s", binding.ID, binding.TargetType)
 	}
+	if req.Polled != nil && !pollIsFinal(req.Polled.Result.Status) {
+		// The Provider has not finished, or its answer could not be classified: nothing is
+		// written, and a later callback, poll or the deadline decides the Attempt.
+		return ResumeOutcome{RunID: run.ID, NodeRunID: attempt.NodeRunID, AttemptID: attempt.ID}, nil
+	}
 	if !resolved {
 		return ResumeOutcome{
 			NodeRunID: attempt.NodeRunID,
@@ -195,43 +275,34 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 		}, nil
 	}
 
-	executor, err := s.asyncExecutor(nodeRun.NodeType, run)
-	if err != nil {
-		return ResumeOutcome{}, err
-	}
-	node, ok := nodeByID(def, nodeRun.NodeID)
-	if !ok {
-		return ResumeOutcome{}, fmt.Errorf("execution: definition %s v%d no longer declares node %q", def.WorkflowID, def.Version, nodeRun.NodeID)
-	}
-	config, err := decodeConfig(node.Config)
-	if err != nil {
-		return ResumeOutcome{}, err
+	// Phase 2: interpret the result outside every transaction and every lock.
+	var (
+		output          registry.NodeOutput
+		providerFailure *domain.ExecutionError
+	)
+	if req.Polled != nil {
+		output, providerFailure, err = polledNodeOutcome(req.ExternalTaskID, req.Polled.Result)
+		if err != nil {
+			return ResumeOutcome{}, err
+		}
+	} else {
+		output, providerFailure, err = s.interpretNodeCallback(ctx, req, binding, attempt, nodeRun, run, def)
+		if err != nil {
+			return ResumeOutcome{RunID: run.ID, NodeRunID: nodeRun.ID, AttemptID: attempt.ID}, err
+		}
 	}
 
-	// Phase 2: interpret the payload outside every transaction and every lock.
-	output, cbErr := executor.OnCallback(ctx, registry.NodeAsyncState{
-		RunID:     run.ID,
-		NodeRunID: nodeRun.ID,
-		AttemptNo: attempt.AttemptNo,
-		ExternalTask: registry.ExternalTask{
-			ProviderID:     binding.ProviderID,
-			ExternalTaskID: binding.ExternalTaskID,
-		},
-		Config: config,
-	}, req.Payload)
-
+	source := req.source()
 	failureSource := domain.FailureCallback
-	if req.Source == domain.CompletionProviderPoll {
+	if source == domain.CompletionProviderPoll {
 		failureSource = domain.FailureProviderPoll
 	}
 
 	// Phase 3: one transaction that changes state and writes its Events together.
-	var providerFailure *registry.ProviderFailure
-	switch {
-	case cbErr != nil && errors.As(cbErr, &providerFailure):
+	if providerFailure != nil {
 		result, err := s.failNode(ctx, failNodeParams{
 			attemptID:   attempt.ID,
-			execError:   providerFailure.Err,
+			execError:   *providerFailure,
 			uncertain:   false,
 			source:      failureSource,
 			fromAttempt: domain.NodeAttemptDispatched,
@@ -253,14 +324,6 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 			Failed:        !result.duplicate,
 			FailureSource: failureSource,
 		}, nil
-	case cbErr != nil:
-		// Not a Provider failure: the payload could not be interpreted. Leave the NodeRun
-		// WAITING_CALLBACK and persist nothing.
-		return ResumeOutcome{
-			RunID:     run.ID,
-			NodeRunID: nodeRun.ID,
-			AttemptID: attempt.ID,
-		}, &CallbackPayloadRejectedError{ExternalTaskID: req.ExternalTaskID, Err: cbErr}
 	}
 
 	result, err := s.completeNode(ctx, completeNodeParams{
@@ -268,7 +331,7 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 		output:            output,
 		fromAttempt:       domain.NodeAttemptDispatched,
 		fromNodeRun:       domain.NodeRunWaitingCallback,
-		completionSource:  req.Source,
+		completionSource:  source,
 		callbackBindingID: binding.ID,
 		consumePending:    s.pendingToConsume(req),
 		payloadHash:       req.hash(),
@@ -282,6 +345,93 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 		AttemptID: attempt.ID,
 		Duplicate: result.duplicate,
 	}, nil
+}
+
+// interpretNodeCallback asks the registered Executor to interpret a callback body. A
+// ProviderFailure is returned as the failure to commit; any other OnCallback error is a
+// CallbackPayloadRejectedError, which must leave the NodeRun WAITING_CALLBACK.
+func (s *ExecutionService) interpretNodeCallback(
+	ctx context.Context,
+	req ResumeNode,
+	binding domain.CallbackBinding,
+	attempt domain.NodeAttempt,
+	nodeRun domain.NodeRun,
+	run domain.Run,
+	def domain.Definition,
+) (registry.NodeOutput, *domain.ExecutionError, error) {
+	executor, err := s.asyncExecutor(nodeRun.NodeType, run)
+	if err != nil {
+		return registry.NodeOutput{}, nil, err
+	}
+	node, ok := nodeByID(def, nodeRun.NodeID)
+	if !ok {
+		return registry.NodeOutput{}, nil, fmt.Errorf("execution: definition %s v%d no longer declares node %q", def.WorkflowID, def.Version, nodeRun.NodeID)
+	}
+	config, err := decodeConfig(node.Config)
+	if err != nil {
+		return registry.NodeOutput{}, nil, err
+	}
+	output, cbErr := executor.OnCallback(ctx, registry.NodeAsyncState{
+		RunID:     run.ID,
+		NodeRunID: nodeRun.ID,
+		AttemptNo: attempt.AttemptNo,
+		ExternalTask: registry.ExternalTask{
+			ProviderID:     binding.ProviderID,
+			ExternalTaskID: binding.ExternalTaskID,
+		},
+		Config: config,
+	}, req.Payload)
+	if cbErr == nil {
+		return output, nil, nil
+	}
+	var providerFailure *registry.ProviderFailure
+	if errors.As(cbErr, &providerFailure) {
+		failure := providerFailure.Err
+		return registry.NodeOutput{}, &failure, nil
+	}
+	return registry.NodeOutput{}, nil, &CallbackPayloadRejectedError{ExternalTaskID: req.ExternalTaskID, Err: cbErr}
+}
+
+// checkPollRoute enforces that a poll result reaches only the Attempt it was taken for,
+// through its Callback Binding. Polling an Agent Tool's external task is not supported:
+// asynchronous Tools resume by callback only.
+func checkPollRoute(binding domain.CallbackBinding, attemptID string) error {
+	switch binding.TargetType {
+	case domain.CallbackTargetToolAttempt:
+		return fmt.Errorf("%w: external task %s is bound to tool attempt %s", ErrToolPollNotSupported, binding.ExternalTaskID, binding.TargetID)
+	case domain.CallbackTargetNodeAttempt:
+		if binding.TargetID != attemptID {
+			return fmt.Errorf("%w: external task %s is bound to attempt %s, the poll was taken for attempt %s", ErrPollBindingMismatch, binding.ExternalTaskID, binding.TargetID, attemptID)
+		}
+	}
+	return nil
+}
+
+// pollIsFinal reports whether a poll status resolves the Attempt. Only SUCCEEDED and
+// FAILED do; RUNNING and any status this service does not know change nothing.
+func pollIsFinal(status registry.PollStatus) bool {
+	return status == registry.PollSucceeded || status == registry.PollFailed
+}
+
+// polledNodeOutcome turns a final poll result into what the completion transaction
+// commits. A SUCCEEDED result without Output, or a FAILED one without Error, is an
+// Executor contract violation and changes nothing.
+func polledNodeOutcome(externalTaskID string, result registry.PollResult) (registry.NodeOutput, *domain.ExecutionError, error) {
+	switch result.Status {
+	case registry.PollSucceeded:
+		if result.Output == nil {
+			return registry.NodeOutput{}, nil, fmt.Errorf("execution: poll result for external task %s reports SUCCEEDED without an output", externalTaskID)
+		}
+		return *result.Output, nil, nil
+	case registry.PollFailed:
+		if result.Error == nil {
+			return registry.NodeOutput{}, nil, fmt.Errorf("execution: poll result for external task %s reports FAILED without an error", externalTaskID)
+		}
+		failure := *result.Error
+		return registry.NodeOutput{}, &failure, nil
+	default:
+		return registry.NodeOutput{}, nil, fmt.Errorf("execution: poll result for external task %s has non-final status %q", externalTaskID, result.Status)
+	}
 }
 
 // pendingToConsume returns the external task id whose Pending Callback row this resume

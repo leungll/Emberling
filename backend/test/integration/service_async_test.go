@@ -721,7 +721,8 @@ func TestNodeResume_OldAttemptCallback_DoesNotOverwriteNewerAttempt(t *testing.T
 
 // TestNodeResume_ProviderPollCompletion_OmitsCallbackEventInPostgres is the PostgreSQL
 // counterpart of the unit-level PROVIDER_POLL test: the same resume use case, entered with
-// a different Source, must not write NODE_CALLBACK_RECEIVED.
+// a normalized poll result instead of a callback body, must not write
+// NODE_CALLBACK_RECEIVED.
 func TestNodeResume_ProviderPollCompletion_OmitsCallbackEventInPostgres(t *testing.T) {
 	h := newAsyncHarness(t,
 		domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
@@ -731,8 +732,13 @@ func TestNodeResume_ProviderPollCompletion_OmitsCallbackEventInPostgres(t *testi
 
 	outcome, err := h.svc.ResumeNode(h.ctx, service.ResumeNode{
 		ExternalTaskID: dispatch.externalTaskID,
-		Payload:        json.RawMessage(`{"text":"polled"}`),
-		Source:         domain.CompletionProviderPoll,
+		Polled: &service.PolledResult{
+			AttemptID: dispatch.attemptID,
+			Result: registry.PollResult{
+				Status: registry.PollSucceeded,
+				Output: &registry.NodeOutput{Ports: map[string]json.RawMessage{"text": json.RawMessage(`"polled"`)}},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("resume from poll: %v", err)
