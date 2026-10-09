@@ -185,7 +185,16 @@ func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutc
 		now := s.deps.Clock.Now()
 		committedAt = now
 
-		if err := tx.NodeAttempts().MarkDispatched(ctx, attempt.ID, now, nil); err != nil {
+		// A registration that declares a poll policy schedules its first poll one
+		// interval after dispatch, as a scheduling fact in this same transaction; it
+		// carries no Event. Registrations without a policy are never polled.
+		var firstPollAt *time.Time
+		if md, ok := s.deps.Nodes.NodeMetadata(nodeRun.NodeType); ok && md.Poll != nil {
+			first := now.Add(time.Duration(md.Poll.IntervalMs) * time.Millisecond)
+			firstPollAt = &first
+		}
+
+		if err := tx.NodeAttempts().MarkDispatched(ctx, attempt.ID, now, firstPollAt); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				// The Attempt is no longer STARTED: a timeout already expired it while the
 				// Provider call was in flight. Nothing is written; the external task is

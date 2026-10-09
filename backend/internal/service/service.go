@@ -63,6 +63,9 @@ type Deps struct {
 	Notifier EventNotifier
 	Logger   *slog.Logger
 	Callback CallbackConfig
+	// PollHooks lets a test stop or synchronize PollAttempt between its claim commit and
+	// the Provider query. The zero value installs no hook.
+	PollHooks PollHooks
 }
 
 // defaultPendingCallbackTTL bounds an early callback that arrived before its Callback
