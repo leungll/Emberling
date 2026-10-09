@@ -185,6 +185,12 @@ type testEnvOptions struct {
 	// not ship (e.g. one storing a nil Capabilities slice) and observe how GET /api/models
 	// serialises it.
 	ExtraModelProviders []registry.ModelProvider
+
+	// ExtraNodeRegistrations and ExtraToolRegistrations are registered after the built-in
+	// Node Types and Tools, so a catalogue test can add a registration the built-ins do not
+	// ship (e.g. one declaring a poll policy) and observe how the catalogue serialises it.
+	ExtraNodeRegistrations []registry.NodeRegistration
+	ExtraToolRegistrations []registry.ToolRegistration
 }
 
 // defaultTestCallbackMaxPayloadBytes bounds POST /api/callbacks bodies in every testEnv
@@ -259,7 +265,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		}
 	}
 	dispatcher := &fakeAsyncDispatcher{}
-	for _, reg := range []registry.NodeRegistration{
+	for _, reg := range append([]registry.NodeRegistration{
 		textinput.Registration(),
 		imageinput.Registration(),
 		prompttemplate.Registration(),
@@ -269,7 +275,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		imagegeneration.Registration(modelRegistry, mocktask.New(mockTaskBaseURL, opts.TaskClient)),
 		agent.Registration(),
 		testAsyncNodeRegistration(dispatcher),
-	} {
+	}, opts.ExtraNodeRegistrations...) {
 		if err := nodeRegistry.Register(reg); err != nil {
 			t.Fatalf("register node type %s: %v", reg.Metadata.Type, err)
 		}
@@ -281,6 +287,11 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	}
 	if err := toolRegistry.Register(remotelookup.Registration(mockTaskBaseURL, opts.TaskClient)); err != nil {
 		t.Fatalf("register tool %s: %v", remotelookup.ToolName, err)
+	}
+	for _, reg := range opts.ExtraToolRegistrations {
+		if err := toolRegistry.Register(reg); err != nil {
+			t.Fatalf("register tool %s: %v", reg.Metadata.Name, err)
+		}
 	}
 
 	compiler := runtime.NewCompiler(nodeRegistry, clock)

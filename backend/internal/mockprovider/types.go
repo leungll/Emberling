@@ -22,6 +22,12 @@
 // all. An explicit `payload` is still forwarded verbatim and overrides outcome's default
 // payload.
 //
+// GET /v1/tasks/{externalTaskId} reports an accepted task's status: RUNNING until its
+// callback first becomes due, then SUCCEEDED or FAILED (per outcome) together with the
+// payload that callback carries. A task whose callback is never scheduled (delayMs "lost")
+// stays RUNNING. An unknown or evicted id answers 404. The response never contains the
+// callback token. The query is available with or without test controls.
+//
 // GET /v1/images/{name}.png serves one fixed, deterministic PNG under any name, with no
 // credential of any kind. It is what makes an image reference in a task callback payload
 // genuinely readable instead of a URL that resolves to nothing.
@@ -30,7 +36,8 @@
 // an external barrier (pause, release and GET /control/barrier) that records a dispatch's
 // arrival and then holds it unanswered until release, an append-only JSON-lines dispatch
 // record served by GET /control/record, and POST /control/tasks/{externalTaskId}/callback
-// to deliver an accepted task's callback again on command. Together they let a script
+// to deliver an accepted task's callback again on command. Each status query is also
+// written to the record as a "polled" line of kind "poll". Together they let a script
 // prove that the external service itself received a request, independently of what
 // Emberling committed.
 package mockprovider

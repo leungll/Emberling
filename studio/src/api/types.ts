@@ -187,6 +187,15 @@ export interface UiSchema {
   fields: UiSchemaField[];
 }
 
+/**
+ * Registered Provider polling bounds for an ASYNC Node Type or Tool. Absent when the
+ * registration declares no polling; Studio only displays it.
+ */
+export interface PollPolicy {
+  intervalMs: number;
+  maxPolls: number;
+}
+
 export interface NodeMetadata {
   type: string;
   displayName: string;
@@ -197,6 +206,7 @@ export interface NodeMetadata {
   configSchema: JsonSchema;
   uiSchema: UiSchema;
   sideEffect: SideEffectPolicy;
+  poll?: PollPolicy | null;
 }
 
 export interface ModelMetadata {
@@ -213,6 +223,7 @@ export interface ToolMetadata {
   outputSchema: JsonSchema;
   sideEffect: SideEffectPolicy;
   executionKind: ExecutionKind;
+  poll?: PollPolicy | null;
 }
 
 export interface NodeTypeListResponse {

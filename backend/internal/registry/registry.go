@@ -83,6 +83,16 @@ func validateNodeBinding(metadata domain.NodeMetadata, binding NodeBinding) []er
 				errs = append(errs, fmt.Errorf("node type %q: executionKind ASYNC requires an AsyncNodeExecutor", metadata.Type))
 			}
 		}
+		// A poll policy and a Poll implementation must be declared together, so the
+		// Runtime never schedules polls an executor cannot answer and never ignores a
+		// Poll method whose bounds were not registered.
+		_, pollable := executorBinding.Executor.(PollableAsyncNodeExecutor)
+		switch {
+		case metadata.Poll != nil && !pollable:
+			errs = append(errs, fmt.Errorf("node type %q: poll declared but executor does not implement PollableAsyncNodeExecutor", metadata.Type))
+		case metadata.Poll == nil && pollable:
+			errs = append(errs, fmt.Errorf("node type %q: executor implements PollableAsyncNodeExecutor but metadata declares no poll policy", metadata.Type))
+		}
 	case domain.NodeExecutionManagedAgent:
 		if _, ok := binding.(ManagedAgentBinding); !ok {
 			errs = append(errs, fmt.Errorf("node type %q: executionKind MANAGED_AGENT requires a ManagedAgentBinding", metadata.Type))
@@ -336,6 +346,16 @@ func (r *ToolRegistry) Register(reg ToolRegistration) error {
 	} else if reg.Metadata.ExecutionKind == domain.ToolExecutionAsync {
 		if _, ok := reg.Executor.(AsyncToolExecutor); !ok {
 			errs = append(errs, fmt.Errorf("tool %q: executionKind ASYNC requires an AsyncToolExecutor", reg.Metadata.Name))
+		}
+	}
+	if reg.Executor != nil {
+		// A poll policy and a Poll implementation must be declared together.
+		_, pollable := reg.Executor.(PollableAsyncToolExecutor)
+		switch {
+		case reg.Metadata.Poll != nil && !pollable:
+			errs = append(errs, fmt.Errorf("tool %q: poll declared but executor does not implement PollableAsyncToolExecutor", reg.Metadata.Name))
+		case reg.Metadata.Poll == nil && pollable:
+			errs = append(errs, fmt.Errorf("tool %q: executor implements PollableAsyncToolExecutor but metadata declares no poll policy", reg.Metadata.Name))
 		}
 	}
 

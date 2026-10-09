@@ -160,6 +160,10 @@ type NodeMetadata struct {
 	ConfigSchema  json.RawMessage   `json:"configSchema"`
 	UISchema      NodeUISchema      `json:"uiSchema"`
 	SideEffect    SideEffectPolicy  `json:"sideEffect"`
+	// Poll declares that the Executor can query the Provider for an async task's status,
+	// and bounds how often and how many times the Runtime may ask. Nil means the Node
+	// Type is never polled; only an ASYNC Node may declare it.
+	Poll *PollPolicy `json:"poll,omitempty"`
 }
 
 // Validate checks the structural rules a registration must satisfy before the Backend can
@@ -182,6 +186,7 @@ func (m NodeMetadata) Validate() error {
 	}
 	errs = append(errs, validateUISchema(m.UISchema)...)
 	errs = append(errs, validateSideEffect(m.SideEffect)...)
+	errs = append(errs, validatePollPolicy(m.Poll, m.ExecutionKind == NodeExecutionAsync)...)
 
 	if len(errs) == 0 {
 		return nil
@@ -210,6 +215,37 @@ type ModelMetadata struct {
 	ConfigSchema json.RawMessage `json:"configSchema"`
 }
 
+// PollPolicy bounds Provider status polling for one async registration. Both bounds come
+// from the registration itself: the Runtime never substitutes a process default, and
+// polling never extends an Attempt's deadline, which still ends a task that no poll or
+// callback resolved.
+type PollPolicy struct {
+	// IntervalMs is the minimum delay between two status queries for one Attempt.
+	IntervalMs int64 `json:"intervalMs"`
+	// MaxPolls is the most status queries the Runtime issues for one Attempt.
+	MaxPolls int `json:"maxPolls"`
+}
+
+// validatePollPolicy checks an optional poll declaration. Polling only queries a task an
+// async dispatch already created, so a declaration on any other execution kind is a
+// registration error rather than something to ignore.
+func validatePollPolicy(policy *PollPolicy, async bool) []error {
+	if policy == nil {
+		return nil
+	}
+	var errs []error
+	if !async {
+		errs = append(errs, errors.New("poll is only allowed with executionKind ASYNC"))
+	}
+	if policy.IntervalMs <= 0 {
+		errs = append(errs, fmt.Errorf("poll.intervalMs must be greater than 0, got %d", policy.IntervalMs))
+	}
+	if policy.MaxPolls <= 0 {
+		errs = append(errs, fmt.Errorf("poll.maxPolls must be greater than 0, got %d", policy.MaxPolls))
+	}
+	return errs
+}
+
 // ToolExecutionKind tells the Agent Runtime whether a Tool call finishes in one
 // invocation or waits for a callback.
 type ToolExecutionKind string
@@ -233,6 +269,8 @@ type ToolMetadata struct {
 	OutputSchema  json.RawMessage   `json:"outputSchema"`
 	SideEffect    SideEffectPolicy  `json:"sideEffect"`
 	ExecutionKind ToolExecutionKind `json:"executionKind"`
+	// Poll has the same meaning as NodeMetadata.Poll; only an ASYNC Tool may declare it.
+	Poll *PollPolicy `json:"poll,omitempty"`
 }
 
 // Validate mirrors NodeMetadata.Validate for Tool registrations. Executor presence and
@@ -253,6 +291,7 @@ func (m ToolMetadata) Validate() error {
 		errs = append(errs, err)
 	}
 	errs = append(errs, validateSideEffect(m.SideEffect)...)
+	errs = append(errs, validatePollPolicy(m.Poll, m.ExecutionKind == ToolExecutionAsync)...)
 
 	if len(errs) == 0 {
 		return nil

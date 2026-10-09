@@ -347,3 +347,137 @@ func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 		t.Fatalf("Marshal() = %s, want %s", encoded, wire)
 	}
 }
+
+func TestMetadata_PollPolicyValidOnAsync_Accepted(t *testing.T) {
+	node := validNodeMetadata()
+	node.Poll = &PollPolicy{IntervalMs: 1000, MaxPolls: 5}
+	if err := node.Validate(); err != nil {
+		t.Fatalf("NodeMetadata.Validate() = %v, want nil", err)
+	}
+
+	tool := ToolMetadata{
+		Name:          "remote_lookup",
+		InputSchema:   json.RawMessage(`{"type":"object"}`),
+		OutputSchema:  json.RawMessage(`{"type":"object"}`),
+		SideEffect:    SideEffectPolicy{Kind: SideEffectExternal, Idempotency: IdempotencyKeyed},
+		ExecutionKind: ToolExecutionAsync,
+		Poll:          &PollPolicy{IntervalMs: 1000, MaxPolls: 5},
+	}
+	if err := tool.Validate(); err != nil {
+		t.Fatalf("ToolMetadata.Validate() = %v, want nil", err)
+	}
+}
+
+func TestMetadata_PollPolicyInvalidBounds_Rejected(t *testing.T) {
+	cases := []struct {
+		name    string
+		policy  PollPolicy
+		wantMsg string
+	}{
+		{"zero interval", PollPolicy{IntervalMs: 0, MaxPolls: 3}, "poll.intervalMs must be greater than 0, got 0"},
+		{"negative interval", PollPolicy{IntervalMs: -1, MaxPolls: 3}, "poll.intervalMs must be greater than 0, got -1"},
+		{"zero max polls", PollPolicy{IntervalMs: 500, MaxPolls: 0}, "poll.maxPolls must be greater than 0, got 0"},
+		{"negative max polls", PollPolicy{IntervalMs: 500, MaxPolls: -2}, "poll.maxPolls must be greater than 0, got -2"},
+	}
+	for _, tc := range cases {
+		t.Run("node "+tc.name, func(t *testing.T) {
+			metadata := validNodeMetadata()
+			policy := tc.policy
+			metadata.Poll = &policy
+			err := metadata.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Fatalf("NodeMetadata.Validate() = %v, want it to mention %q", err, tc.wantMsg)
+			}
+		})
+		t.Run("tool "+tc.name, func(t *testing.T) {
+			metadata := ToolMetadata{
+				Name:          "remote_lookup",
+				InputSchema:   json.RawMessage(`{"type":"object"}`),
+				OutputSchema:  json.RawMessage(`{"type":"object"}`),
+				SideEffect:    SideEffectPolicy{Kind: SideEffectExternal, Idempotency: IdempotencyKeyed},
+				ExecutionKind: ToolExecutionAsync,
+			}
+			policy := tc.policy
+			metadata.Poll = &policy
+			err := metadata.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Fatalf("ToolMetadata.Validate() = %v, want it to mention %q", err, tc.wantMsg)
+			}
+		})
+	}
+}
+
+func TestMetadata_PollPolicyOnNonAsyncKind_Rejected(t *testing.T) {
+	const wantMsg = "poll is only allowed with executionKind ASYNC"
+	for _, kind := range []NodeExecutionKind{NodeExecutionSync, NodeExecutionManagedAgent} {
+		t.Run("node "+string(kind), func(t *testing.T) {
+			metadata := validNodeMetadata()
+			metadata.ExecutionKind = kind
+			metadata.Poll = &PollPolicy{IntervalMs: 1000, MaxPolls: 5}
+			err := metadata.Validate()
+			if err == nil || !strings.Contains(err.Error(), wantMsg) {
+				t.Fatalf("NodeMetadata.Validate() = %v, want it to mention %q", err, wantMsg)
+			}
+		})
+	}
+	t.Run("tool SYNC", func(t *testing.T) {
+		metadata := ToolMetadata{
+			Name:          "lookup",
+			InputSchema:   json.RawMessage(`{"type":"object"}`),
+			OutputSchema:  json.RawMessage(`{"type":"object"}`),
+			SideEffect:    SideEffectPolicy{Kind: SideEffectNone, Idempotency: IdempotencySafe},
+			ExecutionKind: ToolExecutionSync,
+			Poll:          &PollPolicy{IntervalMs: 1000, MaxPolls: 5},
+		}
+		err := metadata.Validate()
+		if err == nil || !strings.Contains(err.Error(), wantMsg) {
+			t.Fatalf("ToolMetadata.Validate() = %v, want it to mention %q", err, wantMsg)
+		}
+	})
+}
+
+func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
+	tool := ToolMetadata{
+		Name:          "remote_lookup",
+		Description:   "Look up a record asynchronously",
+		InputSchema:   json.RawMessage(`{}`),
+		OutputSchema:  json.RawMessage(`{}`),
+		SideEffect:    SideEffectPolicy{Kind: SideEffectExternal, Idempotency: IdempotencyKeyed},
+		ExecutionKind: ToolExecutionAsync,
+		Poll:          &PollPolicy{IntervalMs: 2000, MaxPolls: 10},
+	}
+	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10}}`
+	encoded, err := json.Marshal(tool)
+	if err != nil {
+		t.Fatalf("Marshal() error: %v", err)
+	}
+	if string(encoded) != wantTool {
+		t.Fatalf("Marshal() = %s, want %s", encoded, wantTool)
+	}
+
+	node := validNodeMetadata()
+	node.Poll = &PollPolicy{IntervalMs: 2000, MaxPolls: 10}
+	encoded, err = json.Marshal(node)
+	if err != nil {
+		t.Fatalf("Marshal() error: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"poll":{"intervalMs":2000,"maxPolls":10}`) {
+		t.Fatalf("Marshal() = %s, want a poll object", encoded)
+	}
+	var decoded NodeMetadata
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("Unmarshal() error: %v", err)
+	}
+	if decoded.Poll == nil || *decoded.Poll != *node.Poll {
+		t.Fatalf("decoded Poll = %+v, want %+v", decoded.Poll, node.Poll)
+	}
+
+	node.Poll = nil
+	encoded, err = json.Marshal(node)
+	if err != nil {
+		t.Fatalf("Marshal() error: %v", err)
+	}
+	if strings.Contains(string(encoded), `"poll"`) {
+		t.Fatalf("Marshal() = %s, want no poll key for an undeclared policy", encoded)
+	}
+}

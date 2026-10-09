@@ -31,12 +31,16 @@ const (
 	recordResponded = "responded"
 	// recordCallback is written after each callback delivery attempt completes.
 	recordCallback = "callback"
+	// recordPolled is written when a task status query is answered.
+	recordPolled = "polled"
 )
 
 // Request kinds the record and the barrier distinguish.
 const (
 	kindTask     = "task"
 	kindGenerate = "generate"
+	// kindPoll marks a task status query. It is never held by the barrier.
+	kindPoll = "poll"
 )
 
 // maxRecordTasks bounds the per-task delivery counters the record keeps in memory, the
@@ -69,6 +73,9 @@ type recordEntry struct {
 	// Status is the HTTP status this Provider answered with (responded) or the callback
 	// receiver answered with (callback).
 	Status int `json:"status,omitempty"`
+	// TaskStatus is the task status a poll line reported (RUNNING, SUCCEEDED or FAILED);
+	// empty when the task was unknown.
+	TaskStatus string `json:"taskStatus,omitempty"`
 	// Replayed is true when a responded task request reused an idempotency key, so no new
 	// task and no new callback were created.
 	Replayed bool `json:"replayed,omitempty"`

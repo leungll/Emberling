@@ -43,6 +43,10 @@ type Dispatcher struct {
 	// it before serving when test controls are enabled, to append the attempt to the
 	// dispatch record; it is never changed afterwards.
 	observe func(task callbackTask, status int, err error)
+	// due, if non-nil, is told that a callback for task is about to be delivered, before
+	// the delivery is attempted. The Server sets it before serving so a status query
+	// reports the task as finished from then on; it is never changed afterwards.
+	due func(task callbackTask)
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -109,6 +113,9 @@ func (d *Dispatcher) SendNow(ctx context.Context, task callbackTask) error {
 // deliver performs one delivery attempt and reports it to observe. It returns the
 // receiver's HTTP status, or 0 when no response arrived.
 func (d *Dispatcher) deliver(ctx context.Context, task callbackTask) (int, error) {
+	if d.due != nil {
+		d.due(task)
+	}
 	status, err := d.send(ctx, task)
 	if d.observe != nil {
 		d.observe(task, status, err)

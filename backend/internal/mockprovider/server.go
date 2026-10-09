@@ -44,9 +44,9 @@ func mustDecodeBase64(encoded string) []byte {
 	return decoded
 }
 
-// Server implements the Mock Provider's four routes: a liveness probe, a synchronous
-// text-generation simulation, an asynchronous task/callback simulation, and the image route
-// an asynchronous result's EXTERNAL reference points at.
+// Server implements the Mock Provider's routes: a liveness probe, a synchronous
+// text-generation simulation, an asynchronous task/callback simulation with a task status
+// query, and the image route an asynchronous result's EXTERNAL reference points at.
 type Server struct {
 	dispatcher *Dispatcher
 	newTaskID  func() (string, error)
@@ -67,6 +67,10 @@ type Server struct {
 	// redelivery). It is nil unless WithTestControls was passed, and every use of it is a
 	// no-op when nil, so the default request path is unchanged.
 	controls *testControls
+
+	// statuses answers GET /v1/tasks/{externalTaskId}. It exists with or without test
+	// controls and is independent of the redeliver control's task map.
+	statuses *taskStatuses
 }
 
 // NewServer wires dispatcher into a ready-to-serve Server. dispatcher is owned by the
@@ -78,14 +82,17 @@ func NewServer(dispatcher *Dispatcher, opts ...Option) *Server {
 		dispatcher:            dispatcher,
 		newTaskID:             randomExternalTaskID,
 		tasksByIdempotencyKey: make(map[string]string),
+		statuses:              newTaskStatuses(),
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
+	dispatcher.due = s.statuses.markDue
 	r := chi.NewRouter()
 	r.Get("/healthz", s.handleHealthz)
 	r.Post("/v1/text/generate", s.handleGenerate)
 	r.Post("/v1/tasks", s.handleTasks)
+	r.Get("/v1/tasks/{externalTaskId}", s.handleTaskStatus)
 	r.Get("/v1/images/{name}", s.handleImage)
 	if s.controls != nil {
 		dispatcher.observe = s.controls.record.appendDelivery
@@ -244,6 +251,7 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		Payload:        callbackPayload(req),
 	}
 	s.rememberTask(task)
+	s.statuses.accept(externalTaskID, task.Payload, req.Outcome == outcomeFailed)
 
 	switch req.DelayMs.Mode {
 	case delayLost:
