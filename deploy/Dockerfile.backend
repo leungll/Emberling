@@ -1,5 +1,5 @@
 # Build context is backend/. One Dockerfile builds every Backend binary: CMD selects the
-# package under cmd/, so the Backend and the Mock Provider cannot drift apart in base
+# package under cmd/, so the Backend and the mock services cannot drift apart in base
 # image, Go version or build flags.
 ARG GO_VERSION=1.27.1
 
@@ -13,7 +13,7 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /out/service ./cmd/${CMD}
-RUN mkdir -p /out/assets /out/mockprovider
+RUN mkdir -p /out/assets /out/mockprovider /out/mockproduction
 
 # distroless/static has no shell and no package manager: the runtime image carries the
 # binary and nothing that could read a mounted Secret interactively.
@@ -26,5 +26,7 @@ COPY --from=build --chown=nonroot:nonroot /out/assets /var/lib/emberling/assets
 # Same reason for the Mock Provider's dispatch record directory: the compose stack mounts a
 # named volume here, and the record file must be writable by nonroot.
 COPY --from=build --chown=nonroot:nonroot /out/mockprovider /var/lib/emberling/mockprovider
+# Same reason for the mock production service's request record directory.
+COPY --from=build --chown=nonroot:nonroot /out/mockproduction /var/lib/emberling/mockproduction
 USER nonroot:nonroot
 ENTRYPOINT ["/usr/local/bin/service"]

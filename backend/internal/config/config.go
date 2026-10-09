@@ -34,6 +34,8 @@ const (
 	KeyModelOpenAIModel   = EnvPrefix + "MODEL_OPENAI_MODEL"
 	KeyModelOpenAITimeout = EnvPrefix + "MODEL_OPENAI_TIMEOUT"
 
+	KeyProductionBaseURL = EnvPrefix + "PRODUCTION_BASE_URL"
+
 	KeyCallbackBaseURL       = EnvPrefix + "CALLBACK_BASE_URL"
 	KeyCallbackSigningSecret = EnvPrefix + "CALLBACK_SIGNING_SECRET"
 
@@ -61,6 +63,7 @@ type Config struct {
 	AssetStorage    AssetStorage
 	ModelProvider   ModelProvider
 	OpenAIModel     OpenAIModel
+	Production      Production
 	Callback        Callback
 	Reconciliation  Reconciliation
 	PendingCallback PendingCallback
@@ -105,6 +108,17 @@ type OpenAIModel struct {
 // Enabled reports whether the OpenAI-compatible Model Adapter is configured.
 func (m OpenAIModel) Enabled() bool {
 	return m.BaseURL != "" || !m.APIKey.IsZero() || m.Model != ""
+}
+
+// Production addresses the optional production deployment service the deploy Tool calls.
+// An empty BaseURL means the Tool is not registered.
+type Production struct {
+	BaseURL string
+}
+
+// Enabled reports whether the production deployment service is configured.
+func (p Production) Enabled() bool {
+	return p.BaseURL != ""
 }
 
 // Callback carries the externally reachable base URL and the signing Secret used to
@@ -183,6 +197,9 @@ func Load(env func(string) string) (Config, error) {
 			APIKey:  Secret{value: l.required(KeyModelProviderAPIKey)},
 		},
 		OpenAIModel: l.openAIModel(),
+		Production: Production{
+			BaseURL: l.optionalProviderURL(KeyProductionBaseURL),
+		},
 		Callback: Callback{
 			BaseURL:       l.requiredURL(KeyCallbackBaseURL),
 			SigningSecret: Secret{value: l.required(KeyCallbackSigningSecret)},
@@ -372,6 +389,15 @@ func (l *loader) requiredProviderURL(key string) string {
 		return ""
 	}
 	return value
+}
+
+// optionalProviderURL is requiredProviderURL for a key that may be absent: an unset key
+// yields "", a set one must be a usable base URL.
+func (l *loader) optionalProviderURL(key string) string {
+	if strings.TrimSpace(l.env(key)) == "" {
+		return ""
+	}
+	return l.requiredProviderURL(key)
 }
 
 func (l *loader) optionalDuration(key string) time.Duration {

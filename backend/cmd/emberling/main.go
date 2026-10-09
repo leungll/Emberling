@@ -208,6 +208,9 @@ func run(logger *slog.Logger) error {
 					return fmt.Errorf("register tool: %w", err)
 				}
 			}
+			if err := registerProductionTools(toolRegistry, cfg.Production); err != nil {
+				return err
+			}
 			// Fact declarations may name a producer Tool registered after its consumer, so
 			// they are checked only once every registration is in.
 			return registry.ValidateFactDeclarations(toolRegistry.ListMetadata(), nodeRegistry.ListMetadata())

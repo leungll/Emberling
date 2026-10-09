@@ -107,6 +107,8 @@ func role(pkg string) string {
 		return "trace"
 	case pkg == "internal/mockprovider":
 		return "mockprovider"
+	case pkg == "internal/mockproduction":
+		return "mockproduction"
 	case pkg == "internal/mockcontrol":
 		return "mockcontrol"
 	case pkg == "migrations":
@@ -233,6 +235,12 @@ var allowedInternalImports = map[string]map[string]bool{
 	// test-fixture barrier and request record, which itself imports nothing internal: not
 	// even internal/domain or internal/registry may be reached from here.
 	"mockprovider": set("internal/mockcontrol"),
+
+	// mockproduction: the deterministic production deployment stand-in the deploy Tool
+	// calls, served as a process by cmd/mockproduction and in-process by tests. It stands in
+	// for an external service exactly as mockprovider does and holds to the same rule: its
+	// only internal import is internal/mockcontrol.
+	"mockproduction": set("internal/mockcontrol"),
 
 	// mockcontrol: the barrier and request record shared by the HTTP fixtures that stand
 	// in for external services. It is fixture code like mockprovider and holds to the same

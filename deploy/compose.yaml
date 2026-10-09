@@ -74,6 +74,26 @@ services:
     volumes:
       - emberling-mockprovider-record:/var/lib/emberling/mockprovider
 
+  # Deterministic production deployment stand-in the deploy Tool calls. Like mockprovider
+  # it is a demo and test fixture: its control surface (POST /control/pause and
+  # /control/release, GET /control/barrier, GET /control/record) is enabled here, and the
+  # request record lives on its own volume so a script can count how many times production
+  # was reached for one operationId. The record holds identifiers only, never parameters.
+  mockproduction:
+    profiles: ["mock"]
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+      args:
+        CMD: mockproduction
+    ports:
+      - "9102:9102"
+    environment:
+      MOCKPRODUCTION_TEST_CONTROLS: "true"
+      MOCKPRODUCTION_RECORD_PATH: /var/lib/emberling/mockproduction/request-record.jsonl
+    volumes:
+      - emberling-mockproduction-record:/var/lib/emberling/mockproduction
+
   backend:
     build:
       context: ../backend
@@ -100,6 +120,9 @@ services:
       # host loopback.
       EMBERLING_CALLBACK_BASE_URL: ${EMBERLING_CALLBACK_BASE_URL:-http://backend:8080}
       EMBERLING_CALLBACK_SIGNING_SECRET: ${EMBERLING_CALLBACK_SIGNING_SECRET:?set EMBERLING_CALLBACK_SIGNING_SECRET in your shell or .env}
+      # Registers the deploy Tool against the mockproduction service (container DNS, like
+      # the Model Provider above). Without this key the Backend does not register the Tool.
+      EMBERLING_PRODUCTION_BASE_URL: ${EMBERLING_PRODUCTION_BASE_URL:-http://mockproduction:9102}
       EMBERLING_RECONCILE_INTERVAL: 5s
       EMBERLING_RECONCILE_BATCH_SIZE: "100"
       EMBERLING_PENDING_CALLBACK_TTL: 24h
@@ -128,3 +151,4 @@ volumes:
   emberling-postgres-data:
   emberling-asset-data:
   emberling-mockprovider-record:
+  emberling-mockproduction-record:
