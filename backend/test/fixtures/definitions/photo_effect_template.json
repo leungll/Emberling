@@ -1,0 +1,58 @@
+{
+  "workflowId": "wf_photo_effect_template",
+  "name": "Photo Effect Template",
+  "description": "An Agent applies one effect template across a photo set, reviews every generation, and delivers one reviewed example per photo",
+  "nodes": [
+    {
+      "id": "node_brief",
+      "type": "text_input",
+      "name": "Creative Brief",
+      "position": {"x": 0, "y": 0},
+      "config": {"inputKey": "brief", "label": "Creative Brief", "required": true}
+    },
+    {
+      "id": "node_photos",
+      "type": "media_brief",
+      "name": "Photo Set",
+      "position": {"x": 200, "y": 0},
+      "config": {"inputKey": "photos"}
+    },
+    {
+      "id": "node_agent",
+      "type": "agent",
+      "name": "Effect Template Agent",
+      "position": {"x": 400, "y": 0},
+      "config": {
+        "instructions": "Apply one shared set of effect settings to every photo. Generate each image, review every generation before using it, adjust the shared settings when a review fails, and render a short video from one reviewed asset. Finish with {\"examples\":[{\"photoAssetId\",\"assetRef\"}],\"settingsDigest\"}: one reviewed example per photo, all produced with the same settings.",
+        "modelId": "text-model-v1",
+        "modelConfig": {"script": "photo-set"},
+        "allowedTools": ["generate_image", "review_asset", "generate_video"],
+        "maxTurns": 16,
+        "maxGenerationCalls": 12,
+        "timeoutMs": 120000
+      }
+    },
+    {
+      "id": "node_result",
+      "type": "media_result",
+      "name": "Media Result",
+      "position": {"x": 600, "y": 0},
+      "config": {}
+    },
+    {
+      "id": "node_output",
+      "type": "media_output",
+      "name": "Media Output",
+      "position": {"x": 800, "y": 0},
+      "config": {}
+    }
+  ],
+  "edges": [
+    {"id": "edge_brief_photos", "source": "node_brief", "sourceHandle": "text", "target": "node_photos", "targetHandle": "brief"},
+    {"id": "edge_photos_agent", "source": "node_photos", "sourceHandle": "text", "target": "node_agent", "targetHandle": "input"},
+    {"id": "edge_agent_result", "source": "node_agent", "sourceHandle": "text", "target": "node_result", "targetHandle": "text"},
+    {"id": "edge_photos_result", "source": "node_photos", "sourceHandle": "text", "target": "node_result", "targetHandle": "brief"},
+    {"id": "edge_result_image", "source": "node_result", "sourceHandle": "image", "target": "node_output", "targetHandle": "image"},
+    {"id": "edge_result_caption", "source": "node_result", "sourceHandle": "caption", "target": "node_output", "targetHandle": "caption"}
+  ]
+}

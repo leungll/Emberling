@@ -1,0 +1,10 @@
+{
+  "turns": [
+    {"toolCall": {"toolName": "generate_image", "arguments": {"photoAssetId": "{{task:/photos/0/photoAssetId}}", "settings": {"style": "film", "strength": 0.6}}}},
+    {"toolCall": {"toolName": "review_asset", "arguments": {"assetRef": "{{tool:0:/assetRef}}", "photoAssetId": "{{task:/photos/0/photoAssetId}}", "mock": "pass"}}},
+    {"toolCall": {"toolName": "generate_image", "arguments": {"photoAssetId": "{{task:/photos/1/photoAssetId}}", "settings": {"style": "film", "strength": 0.6}}}},
+    {"toolCall": {"toolName": "review_asset", "arguments": {"assetRef": "{{tool:2:/assetRef}}", "photoAssetId": "{{task:/photos/1/photoAssetId}}", "mock": "pass"}}},
+    {"toolCall": {"toolName": "generate_image", "arguments": {"photoAssetId": "{{task:/photos/2/photoAssetId}}", "settings": {"style": "film", "strength": 0.6}}}},
+    {"final": {"outputText": {"examples": [{"photoAssetId": "{{task:/photos/0/photoAssetId}}", "assetRef": "{{tool:0:/assetRef}}"}, {"photoAssetId": "{{task:/photos/1/photoAssetId}}", "assetRef": "{{tool:2:/assetRef}}"}, {"photoAssetId": "{{task:/photos/2/photoAssetId}}", "assetRef": "{{tool:4:/assetRef}}"}], "settingsDigest": "{{tool:0:/settingsDigest}}"}}}
+  ]
+}

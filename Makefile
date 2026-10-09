@@ -226,13 +226,16 @@ check: fmt-check lint check-doc-refs check-migrations check-file-size test-engin
 
 .PHONY: demo demo-down
 
-## demo: fault-injection demo on the Compose stack. Builds and starts postgres, the Mock
-## Provider and the Backend when needed, then runs two variants in turn: SIGKILL the
-## Backend while the image dispatch is held before the Provider accepts it, and SIGKILL it
-## after the Provider accepted the task so its callback is lost and Provider polling must
-## complete the Attempt. Each variant restarts the Backend and ends with the invariant
-## report and the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=held-before-accept
-## or after-accept runs one. Needs Docker, curl and jq; deliberately not part of `check`.
+## demo: fault-injection and photo-set demo on the Compose stack. Builds and starts
+## postgres, the Mock Provider and the Backend when needed, then runs each variant in turn.
+## Two fault variants SIGKILL the Backend while the image dispatch is held before the
+## Provider accepts it, and after the Provider accepted the task so its callback is lost
+## and Provider polling must complete the Attempt; each restarts the Backend. Three photo
+## variants run the scripted effect-template Agent over three photos: the reviewed main
+## story, the review gate before video, and the generation limit. Every variant ends with
+## the invariant report and the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=
+## held-before-accept, after-accept, photo-set, photo-gate or photo-limit runs one.
+## Needs Docker, curl and jq; deliberately not part of `check`.
 demo:
 	@bash scripts/demo/demo.sh run
 

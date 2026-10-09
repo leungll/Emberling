@@ -56,9 +56,14 @@ type TrajectoryToolCall struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-// TrajectoryFinal is a scripted FINAL Decision; Output is any JSON value.
+// TrajectoryFinal is a scripted FINAL Decision: exactly one of Output, sent as the JSON
+// value it resolves to, or OutputText, a JSON document whose placeholders are resolved and
+// which is then sent as one JSON string. OutputText is how a script answers with a
+// structured result through an Agent whose output is text, because a placeholder only
+// ever replaces a whole string and so cannot be spliced into hand-written JSON text.
 type TrajectoryFinal struct {
-	Output json.RawMessage `json:"output"`
+	Output     json.RawMessage `json:"output,omitempty"`
+	OutputText json.RawMessage `json:"outputText,omitempty"`
 }
 
 // trajectories is the immutable set of embedded trajectories, loaded once at start-up. A
@@ -113,7 +118,9 @@ func parseTrajectory(raw []byte) (Trajectory, error) {
 			return Trajectory{}, fmt.Errorf("turn %d must set exactly one of toolCall and final", index)
 		case turn.ToolCall != nil && (turn.ToolCall.ToolName == "" || !json.Valid(turn.ToolCall.Arguments)):
 			return Trajectory{}, fmt.Errorf("turn %d tool call needs a toolName and JSON arguments", index)
-		case turn.Final != nil && !json.Valid(turn.Final.Output):
+		case turn.Final != nil && (len(turn.Final.Output) == 0) == (len(turn.Final.OutputText) == 0):
+			return Trajectory{}, fmt.Errorf("turn %d final must set exactly one of output and outputText", index)
+		case turn.Final != nil && !json.Valid(turn.Final.Output) && !json.Valid(turn.Final.OutputText):
 			return Trajectory{}, fmt.Errorf("turn %d final needs a JSON output", index)
 		case turn.Final != nil && index != len(trajectory.Turns)-1:
 			return Trajectory{}, fmt.Errorf("turn %d is final but is not the last turn", index)
@@ -168,6 +175,17 @@ func scriptedScenario(request registry.ModelRequest, name string) (Scenario, err
 			return Scenario{}, fmt.Errorf("script %q turn %d: %w", name, turnIndex, err)
 		}
 		return Scenario{Kind: ScenarioToolCall, ToolName: turn.ToolCall.ToolName, ToolArguments: arguments}, nil
+	}
+	if len(turn.Final.OutputText) > 0 {
+		document, err := resolver.resolve(turn.Final.OutputText)
+		if err != nil {
+			return Scenario{}, fmt.Errorf("script %q turn %d: %w", name, turnIndex, err)
+		}
+		output, err := json.Marshal(string(document))
+		if err != nil {
+			return Scenario{}, fmt.Errorf("script %q turn %d: encode output text: %w", name, turnIndex, err)
+		}
+		return Scenario{Kind: ScenarioFinal, FinalOutput: output}, nil
 	}
 	output, err := resolver.resolve(turn.Final.Output)
 	if err != nil {

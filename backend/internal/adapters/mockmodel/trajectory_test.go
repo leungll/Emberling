@@ -10,7 +10,10 @@ import (
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
 
-const briefDocument = `{"brief":"make it cinematic","photos":[{"mediaType":"image/jpeg","photoAssetId":"asset_photo_1","sha256":"abc","sizeBytes":10}]}`
+const briefDocument = `{"brief":"make it cinematic","photos":[` +
+	`{"mediaType":"image/jpeg","photoAssetId":"asset_photo_1","sha256":"abc","sizeBytes":10},` +
+	`{"mediaType":"image/jpeg","photoAssetId":"asset_photo_2","sha256":"def","sizeBytes":11},` +
+	`{"mediaType":"image/jpeg","photoAssetId":"asset_photo_3","sha256":"fed","sizeBytes":12}]}`
 
 func scriptedRequest(t *testing.T, script string, toolResults ...string) registry.ModelRequest {
 	t.Helper()
@@ -43,42 +46,120 @@ func assertToolCall(t *testing.T, response registry.ModelResponse, wantTool, wan
 	}
 }
 
-func TestProvider_Generate_ScriptedTrajectory_AnswersEachTurnFromToolResultCount(t *testing.T) {
-	p := NewProvider()
-	ctx := context.Background()
-	imageResult := `{"assetRef":"img_0011","imageUrl":"http://mock/v1/assets/img_0011.png","settingsDigest":"sha256:00"}`
-	reviewResult := `{"passed":true,"policyVersion":"mock-policy-v1","reasons":[]}`
-	videoResult := `{"videoUrl":"http://mock/v1/videos/vid_0011.mp4"}`
+// scriptedTurn is one expected Turn of a trajectory and the tool result the Runtime would
+// feed back for it before the next Turn is requested.
+type scriptedTurn struct {
+	tool      string
+	arguments string
+	result    string
+}
 
-	turn0, err := p.Generate(ctx, scriptedRequest(t, "photo-set"))
-	if err != nil {
-		t.Fatalf("turn 0 Generate() error = %v", err)
+func imageResult(assetRef, digest string) string {
+	return `{"assetRef":"` + assetRef + `","imageUrl":"http://mock/v1/assets/` + assetRef + `.png","settingsDigest":"` + digest + `"}`
+}
+
+func reviewResult(passed bool) string {
+	if passed {
+		return `{"passed":true,"policyVersion":"mock-review-policy-v1","reasons":[]}`
 	}
-	assertToolCall(t, turn0, "generate_image", `{"photoAssetId":"asset_photo_1","settings":{"strength":0.6,"style":"film"}}`)
+	return `{"passed":false,"policyVersion":"mock-review-policy-v1","reasons":["mock rejection"]}`
+}
 
-	turn1, err := p.Generate(ctx, scriptedRequest(t, "photo-set", imageResult))
+// playTrajectory requests every scripted Turn in order, feeding back each Turn's tool result,
+// and returns the decision of the Turn after the last scripted tool call.
+func playTrajectory(t *testing.T, script string, turns []scriptedTurn) registry.ModelResponse {
+	t.Helper()
+	p := NewProvider()
+	results := make([]string, 0, len(turns))
+	for index, want := range turns {
+		response, err := p.Generate(context.Background(), scriptedRequest(t, script, results...))
+		if err != nil {
+			t.Fatalf("turn %d Generate() error = %v", index, err)
+		}
+		assertToolCall(t, response, want.tool, want.arguments)
+		results = append(results, want.result)
+	}
+	response, err := p.Generate(context.Background(), scriptedRequest(t, script, results...))
+	if err != nil {
+		t.Fatalf("turn %d Generate() error = %v", len(turns), err)
+	}
+	return response
+}
+
+func generateArgs(photo, strength string) string {
+	return `{"photoAssetId":"` + photo + `","settings":{"strength":` + strength + `,"style":"film"}}`
+}
+
+func reviewArgs(assetRef, verdict, photo string) string {
+	return `{"assetRef":"` + assetRef + `","mock":"` + verdict + `","photoAssetId":"` + photo + `"}`
+}
+
+func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExamples(t *testing.T) {
+	const first, second = "sha256:first", "sha256:second"
+	turns := []scriptedTurn{
+		{"generate_image", generateArgs("asset_photo_1", "0.6"), imageResult("img_a1", first)},
+		{"review_asset", reviewArgs("img_a1", "pass", "asset_photo_1"), reviewResult(true)},
+		{"generate_image", generateArgs("asset_photo_2", "0.6"), imageResult("img_a2", first)},
+		{"review_asset", reviewArgs("img_a2", "fail", "asset_photo_2"), reviewResult(false)},
+		{"generate_image", generateArgs("asset_photo_3", "0.6"), imageResult("img_a3", first)},
+		{"review_asset", reviewArgs("img_a3", "fail", "asset_photo_3"), reviewResult(false)},
+		{"generate_image", generateArgs("asset_photo_1", "0.4"), imageResult("img_b1", second)},
+		{"review_asset", reviewArgs("img_b1", "pass", "asset_photo_1"), reviewResult(true)},
+		{"generate_image", generateArgs("asset_photo_2", "0.4"), imageResult("img_b2", second)},
+		{"review_asset", reviewArgs("img_b2", "pass", "asset_photo_2"), reviewResult(true)},
+		{"generate_image", generateArgs("asset_photo_3", "0.4"), imageResult("img_b3", second)},
+		{"review_asset", reviewArgs("img_b3", "pass", "asset_photo_3"), reviewResult(true)},
+		{"generate_video", `{"assetRef":"img_b1","photoAssetId":"asset_photo_1","settings":{"durationSeconds":4}}`, `{"videoUrl":"http://mock/v1/videos/vid_b1.mp4"}`},
+	}
+
+	final := playTrajectory(t, "photo-set", turns)
+
+	if final.Decision.Kind != registry.DecisionFinal {
+		t.Fatalf("turn %d Decision.Kind = %q, want FINAL", len(turns), final.Decision.Kind)
+	}
+	// The FINAL is one JSON string, as the Agent's text output requires, holding one
+	// second-round example per photo and the settings digest those examples share: the
+	// document the media result delivery check consumes.
+	var text string
+	if err := json.Unmarshal(final.Decision.Output, &text); err != nil {
+		t.Fatalf("FINAL Output %s is not a JSON string: %v", final.Decision.Output, err)
+	}
+	wantText := `{"examples":[` +
+		`{"assetRef":"img_b1","photoAssetId":"asset_photo_1"},` +
+		`{"assetRef":"img_b2","photoAssetId":"asset_photo_2"},` +
+		`{"assetRef":"img_b3","photoAssetId":"asset_photo_3"}],` +
+		`"settingsDigest":"sha256:second"}`
+	if text != wantText {
+		t.Fatalf("FINAL text =\n%s\nwant\n%s", text, wantText)
+	}
+}
+
+func TestProvider_Generate_PhotoSetSkipReviewTrajectory_DispatchesVideoForUnreviewedAsset(t *testing.T) {
+	p := NewProvider()
+	results := []string{imageResult("img_a1", "sha256:first")}
+
+	response, err := p.Generate(context.Background(), scriptedRequest(t, "photo-set-skip-review", results...))
+
 	if err != nil {
 		t.Fatalf("turn 1 Generate() error = %v", err)
 	}
-	assertToolCall(t, turn1, "review_asset", `{"assetRef":"img_0011","mock":"pass","photoAssetId":"asset_photo_1"}`)
+	assertToolCall(t, response, "generate_video", `{"assetRef":"img_a1","photoAssetId":"asset_photo_1","settings":{"durationSeconds":4}}`)
+}
 
-	turn2, err := p.Generate(ctx, scriptedRequest(t, "photo-set", imageResult, reviewResult))
-	if err != nil {
-		t.Fatalf("turn 2 Generate() error = %v", err)
+func TestProvider_Generate_PhotoSetLimitTrajectory_RequestsAThirdGeneration(t *testing.T) {
+	const digest = "sha256:first"
+	turns := []scriptedTurn{
+		{"generate_image", generateArgs("asset_photo_1", "0.6"), imageResult("img_a1", digest)},
+		{"review_asset", reviewArgs("img_a1", "pass", "asset_photo_1"), reviewResult(true)},
+		{"generate_image", generateArgs("asset_photo_2", "0.6"), imageResult("img_a2", digest)},
+		{"review_asset", reviewArgs("img_a2", "pass", "asset_photo_2"), reviewResult(true)},
 	}
-	assertToolCall(t, turn2, "generate_video", `{"assetRef":"img_0011","photoAssetId":"asset_photo_1","settings":{"durationSeconds":4}}`)
 
-	turn3, err := p.Generate(ctx, scriptedRequest(t, "photo-set", imageResult, reviewResult, videoResult))
-	if err != nil {
-		t.Fatalf("turn 3 Generate() error = %v", err)
-	}
-	if turn3.Decision.Kind != registry.DecisionFinal {
-		t.Fatalf("turn 3 Decision.Kind = %q, want FINAL", turn3.Decision.Kind)
-	}
-	wantFinal := `{"assetRef":"img_0011","imageUrl":"http://mock/v1/assets/img_0011.png","photoAssetId":"asset_photo_1","videoUrl":"http://mock/v1/videos/vid_0011.mp4"}`
-	if string(turn3.Decision.Output) != wantFinal {
-		t.Fatalf("turn 3 Output =\n%s\nwant\n%s", turn3.Decision.Output, wantFinal)
-	}
+	third := playTrajectory(t, "photo-set-limit", turns)
+
+	// With a generation limit of two, the Runtime rejects this call at claim; the script
+	// only has to ask for it.
+	assertToolCall(t, third, "generate_image", generateArgs("asset_photo_3", "0.6"))
 }
 
 func TestProvider_Generate_ScriptedTrajectory_ReplayedTurnReturnsSameDecision(t *testing.T) {
@@ -119,9 +200,9 @@ func TestProvider_Generate_ScriptedTrajectory_FailsExplicitly(t *testing.T) {
 		{
 			name: "turn beyond the script",
 			request: func(t *testing.T) registry.ModelRequest {
-				return scriptedRequest(t, "photo-set", `{}`, `{}`, `{}`, `{}`)
+				return scriptedRequest(t, "photo-set", slices.Repeat([]string{`{}`}, 14)...)
 			},
-			wantErr: `script "photo-set" has no turn 4`,
+			wantErr: `script "photo-set" has no turn 14`,
 		},
 	}
 	for _, tc := range cases {
@@ -148,7 +229,7 @@ func TestProvider_Generate_ScriptDirective_SelectsTrajectory(t *testing.T) {
 
 func TestTrajectories_EmbeddedFixtures_LoadAndAppearInTextModelConfigSchema(t *testing.T) {
 	names := TrajectoryNames()
-	for _, want := range []string{"photo-set", "photo-set-skip-review"} {
+	for _, want := range []string{"photo-set", "photo-set-limit", "photo-set-skip-review"} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("TrajectoryNames() = %v, want to contain %q", names, want)
 		}
@@ -168,12 +249,14 @@ func TestTrajectories_EmbeddedFixtures_LoadAndAppearInTextModelConfigSchema(t *t
 
 func TestParseTrajectory_MalformedFixture_Rejected(t *testing.T) {
 	cases := map[string]string{
-		"no turns":          `{"turns":[]}`,
-		"both shapes":       `{"turns":[{"toolCall":{"toolName":"t","arguments":{}},"final":{"output":1}}]}`,
-		"last not final":    `{"turns":[{"toolCall":{"toolName":"t","arguments":{}}}]}`,
-		"final not last":    `{"turns":[{"final":{"output":1}},{"final":{"output":2}}]}`,
-		"unknown member":    `{"turns":[{"final":{"output":1}}],"extra":true}`,
-		"tool without name": `{"turns":[{"toolCall":{"toolName":"","arguments":{}}},{"final":{"output":1}}]}`,
+		"no turns":                `{"turns":[]}`,
+		"both shapes":             `{"turns":[{"toolCall":{"toolName":"t","arguments":{}},"final":{"output":1}}]}`,
+		"last not final":          `{"turns":[{"toolCall":{"toolName":"t","arguments":{}}}]}`,
+		"final not last":          `{"turns":[{"final":{"output":1}},{"final":{"output":2}}]}`,
+		"unknown member":          `{"turns":[{"final":{"output":1}}],"extra":true}`,
+		"tool without name":       `{"turns":[{"toolCall":{"toolName":"","arguments":{}}},{"final":{"output":1}}]}`,
+		"final without output":    `{"turns":[{"final":{}}]}`,
+		"final with both outputs": `{"turns":[{"final":{"output":1,"outputText":{}}}]}`,
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {
