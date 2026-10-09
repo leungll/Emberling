@@ -224,3 +224,15 @@ check: fmt-check lint check-doc-refs check-migrations check-file-size test-engin
 	@echo "==> git: whitespace check"
 	@git diff --check
 
+.PHONY: demo demo-down
+
+## demo: fault-injection demo on the Compose stack. Builds and starts postgres, the Mock
+## Provider and the Backend when needed, SIGKILLs the Backend while an external dispatch
+## is held, restarts it, then runs the invariant report and the ledger-vs-record
+## comparison. Needs Docker, curl and jq; deliberately not part of `check`.
+demo:
+	@bash scripts/demo/demo.sh run
+
+## demo-down: stop the demo stack and remove the Mock Provider dispatch-record volume.
+demo-down:
+	@bash scripts/demo/demo.sh down
