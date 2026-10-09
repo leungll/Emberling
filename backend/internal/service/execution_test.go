@@ -293,7 +293,7 @@ func (r *execFakeNodeRunRepo) SetInput(_ context.Context, nodeRunID string, _ js
 func (r *execFakeNodeRunRepo) MarkSucceeded(context.Context, string, domain.NodeRunStatus, time.Time, store.NodeRunOutcome) error {
 	return errExecFakeNotImplemented
 }
-func (r *execFakeNodeRunRepo) MarkFailed(context.Context, string, domain.NodeRunStatus, time.Time, domain.ExecutionError) error {
+func (r *execFakeNodeRunRepo) MarkFailed(context.Context, string, domain.NodeRunStatus, time.Time, domain.ExecutionError, *domain.TokenUsage) error {
 	return errExecFakeNotImplemented
 }
 func (r *execFakeNodeRunRepo) MarkWaiting(context.Context, string, time.Time) error {

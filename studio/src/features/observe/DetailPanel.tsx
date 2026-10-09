@@ -564,6 +564,12 @@ function AgentTurnCard({
           <Stat label="State patch" value={turn.decision.hasStatePatch ? 'yes' : 'no'} />
         </div>
       ) : null}
+      {turn.usage ? (
+        <div data-testid="agent-turn-usage" className="text-[13px] text-[var(--muted-foreground)]">
+          {turn.usage.totalTokens} tokens ({turn.usage.inputTokens} in · {turn.usage.outputTokens}{' '}
+          out)
+        </div>
+      ) : null}
       {turn.action ? (
         <div className="flex items-center justify-between gap-2">
           <span className="text-[var(--muted-foreground)]">Action {turn.action.type}</span>

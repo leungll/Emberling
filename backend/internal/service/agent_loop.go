@@ -297,6 +297,8 @@ func (s *ExecutionService) agentInputPort(nodeType string) (string, error) {
 //
 // agentRunID is nil when no Agent Run exists yet, which is exactly what makes the
 // initialisation failure distinguishable in Trace from a failure inside a running Agent.
+// When it is set, the failed NodeRun carries the sum of that Agent Run's Turn usage,
+// written with the FAILED transition, exactly as the success path does.
 func (s *ExecutionService) failAgentNodeRun(
 	ctx context.Context,
 	tx store.Tx,
@@ -314,7 +316,14 @@ func (s *ExecutionService) failAgentNodeRun(
 	if nr.Status == domain.NodeRunWaitingCallback {
 		from = domain.NodeRunWaitingCallback
 	}
-	if err := tx.NodeRuns().MarkFailed(ctx, nr.ID, from, now, execError); err != nil {
+	var usage *domain.TokenUsage
+	if agentRunID != nil {
+		var err error
+		if usage, err = agentRunTokenUsage(ctx, tx, *agentRunID); err != nil {
+			return err
+		}
+	}
+	if err := tx.NodeRuns().MarkFailed(ctx, nr.ID, from, now, execError, usage); err != nil {
 		return err
 	}
 	if err := s.appendEvent(ctx, tx, lock, run.ID, &nr.ID, domain.EventNodeFailed, now, nodeFailedPayload{
@@ -351,4 +360,21 @@ func (s *ExecutionService) failAgentNodeRun(
 		}
 	}
 	return tx.Runs().UpdateAggregate(ctx, lock, newStatus, now)
+}
+
+// agentRunTokenUsage sums the usage every Turn of one Agent Run persisted. It is read in
+// the Agent termination transaction, under the Run aggregate lock the caller holds, so
+// the total written onto the Agent NodeRun is exactly the committed Turns' usage: no Turn
+// of a terminated Agent Run can complete afterwards. The Agent Run keeps no running total
+// of its own.
+func agentRunTokenUsage(ctx context.Context, tx store.Tx, agentRunID string) (*domain.TokenUsage, error) {
+	turns, err := tx.AgentTurns().ListByAgentRunID(ctx, agentRunID)
+	if err != nil {
+		return nil, fmt.Errorf("execution: list turns of agent run %s for token usage: %w", agentRunID, err)
+	}
+	usages := make([]*domain.TokenUsage, len(turns))
+	for i, turn := range turns {
+		usages[i] = turn.TokenUsage
+	}
+	return runtime.SumTokenUsage(usages...), nil
 }

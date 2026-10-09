@@ -15,6 +15,7 @@ function run(status: RunStatus): Run {
     input: {},
     output: null,
     error: null,
+    tokenUsage: null,
   };
 }
 

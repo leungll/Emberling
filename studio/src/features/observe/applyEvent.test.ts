@@ -32,6 +32,7 @@ function snapshot(runStatus: RunStatus, nodeRuns: NodeRun[], lastSeq = 0): RunSn
       input: {},
       output: null,
       error: null,
+      tokenUsage: null,
     },
     nodeRuns,
     lastSeq,

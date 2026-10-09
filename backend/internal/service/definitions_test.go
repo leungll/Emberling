@@ -336,7 +336,7 @@ func (r *defsFakeNodeRunRepo) SetInput(context.Context, string, json.RawMessage)
 func (r *defsFakeNodeRunRepo) MarkSucceeded(context.Context, string, domain.NodeRunStatus, time.Time, store.NodeRunOutcome) error {
 	return errDefsFakeNotImplemented
 }
-func (r *defsFakeNodeRunRepo) MarkFailed(context.Context, string, domain.NodeRunStatus, time.Time, domain.ExecutionError) error {
+func (r *defsFakeNodeRunRepo) MarkFailed(context.Context, string, domain.NodeRunStatus, time.Time, domain.ExecutionError, *domain.TokenUsage) error {
 	return errDefsFakeNotImplemented
 }
 func (r *defsFakeNodeRunRepo) MarkWaiting(context.Context, string, time.Time) error {

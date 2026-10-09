@@ -178,10 +178,11 @@ type NodeRunRepository interface {
 	// stale claim leaves the row untouched.
 	MarkSucceeded(ctx context.Context, nodeRunID string, from domain.NodeRunStatus, now time.Time, outcome NodeRunOutcome) error
 
-	// MarkFailed conditionally moves a NodeRun to FAILED and writes its error and
-	// completed_at, with the same domain.ErrStaleClaim /
-	// *domain.InvalidStateTransitionError semantics as MarkSucceeded.
-	MarkFailed(ctx context.Context, nodeRunID string, from domain.NodeRunStatus, now time.Time, execErr domain.ExecutionError) error
+	// MarkFailed conditionally moves a NodeRun to FAILED and writes its error, token
+	// usage and completed_at, with the same domain.ErrStaleClaim /
+	// *domain.InvalidStateTransitionError semantics as MarkSucceeded. usage is nil for
+	// every failure except an Agent NodeRun's, which carries the sum of its Turns' usage.
+	MarkFailed(ctx context.Context, nodeRunID string, from domain.NodeRunStatus, now time.Time, execErr domain.ExecutionError, usage *domain.TokenUsage) error
 
 	// MarkWaiting conditionally moves a RUNNING NodeRun to WAITING_CALLBACK and stamps
 	// waiting_at. It returns domain.ErrStaleClaim when the row is not RUNNING.

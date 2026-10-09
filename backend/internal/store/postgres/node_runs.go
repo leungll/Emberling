@@ -269,10 +269,11 @@ func (r *nodeRunRepository) MarkSucceeded(ctx context.Context, nodeRunID string,
 	return nil
 }
 
-// MarkFailed conditionally moves a NodeRun to FAILED and writes its error, latency and
-// completed_at. latency_ms is always derived from started_at here: an unrecoverable
-// failure carries no separate outcome to override it with.
-func (r *nodeRunRepository) MarkFailed(ctx context.Context, nodeRunID string, from domain.NodeRunStatus, now time.Time, execErr domain.ExecutionError) error {
+// MarkFailed conditionally moves a NodeRun to FAILED and writes its error, token usage,
+// latency and completed_at in the same statement. latency_ms is always derived from
+// started_at here: an unrecoverable failure carries no separate outcome to override it
+// with.
+func (r *nodeRunRepository) MarkFailed(ctx context.Context, nodeRunID string, from domain.NodeRunStatus, now time.Time, execErr domain.ExecutionError, usage *domain.TokenUsage) error {
 	if !from.CanTransitionTo(domain.NodeRunFailed) {
 		return &domain.InvalidStateTransitionError{
 			Entity: "NodeRun", ID: nodeRunID, From: string(from), To: string(domain.NodeRunFailed),
@@ -282,11 +283,16 @@ func (r *nodeRunRepository) MarkFailed(ctx context.Context, nodeRunID string, fr
 	if err != nil {
 		return fmt.Errorf("store/postgres node_runs.MarkFailed: node_run=%s: %w", nodeRunID, err)
 	}
+	tokenUsage, err := marshalTokenUsage(usage)
+	if err != nil {
+		return fmt.Errorf("store/postgres node_runs.MarkFailed: node_run=%s: %w", nodeRunID, err)
+	}
 
 	const update = `
 		UPDATE node_runs
 		   SET status       = 'FAILED',
 		       error        = $4,
+		       token_usage  = $5,
 		       latency_ms   = CASE WHEN started_at IS NOT NULL
 		                           THEN ROUND(EXTRACT(EPOCH FROM ($3 - started_at)) * 1000)::BIGINT
 		                           ELSE latency_ms END,
@@ -294,7 +300,7 @@ func (r *nodeRunRepository) MarkFailed(ctx context.Context, nodeRunID string, fr
 		       updated_at   = $3
 		 WHERE id = $1 AND status = $2`
 	affected, err := affectedRows(ctx, r.conn, "node_runs.MarkFailed", update,
-		nodeRunID, string(from), now, errPayload)
+		nodeRunID, string(from), now, errPayload, tokenUsage)
 	if err != nil {
 		return err
 	}

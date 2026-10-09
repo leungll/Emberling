@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { RunSummaryCard } from './RunSummaryCard';
+import { RunSummaryCard, RunSummaryCompact } from './RunSummaryCard';
 import type { NodeRun, RunSnapshot, RunStatus } from '@/api/types';
 
 function waitingNodeRun(): NodeRun {
@@ -33,6 +33,7 @@ function snapshot(status: RunStatus, nodeRuns: NodeRun[]): RunSnapshot {
       input: {},
       output: null,
       error: status === 'FAILED' ? { code: 'NODE_FAILED', message: 'provider rejected' } : null,
+      tokenUsage: null,
       startedAt: '2026-08-03T12:00:00Z',
       completedAt: status === 'COMPLETED' || status === 'FAILED' ? '2026-08-03T12:01:05Z' : null,
     },
@@ -107,5 +108,30 @@ describe('RunSummaryCard', () => {
     rerender(<RunSummaryCard snapshot={snapshot('FAILED', [])} events={[]} followLive={false} />);
     expect(screen.getByTestId('run-summary-banner')).toHaveAttribute('data-tone', 'failed');
     expect(screen.getByText('NODE_FAILED: provider rejected')).toBeInTheDocument();
+  });
+
+  it('shows the server Run token total only when the Backend reported one', () => {
+    const metered = snapshot('COMPLETED', []);
+    metered.run.tokenUsage = { inputTokens: 120, outputTokens: 48, totalTokens: 168 };
+    const { rerender } = render(
+      <RunSummaryCard snapshot={metered} events={[]} followLive={false} />,
+    );
+    expect(screen.getByTestId('run-token-total')).toHaveTextContent('168 tokens');
+
+    rerender(
+      <RunSummaryCard snapshot={snapshot('COMPLETED', [])} events={[]} followLive={false} />,
+    );
+    expect(screen.queryByTestId('run-token-total')).not.toBeInTheDocument();
+    expect(screen.getByText('latest seq 8')).toBeInTheDocument();
+  });
+
+  it('adds a Tokens row to the compact summary only when the Run total is reported', () => {
+    const metered = snapshot('RUNNING', []);
+    metered.run.tokenUsage = { inputTokens: 3, outputTokens: 4, totalTokens: 7 };
+    const { rerender } = render(<RunSummaryCompact snapshot={metered} />);
+    expect(screen.getByText('Tokens').nextElementSibling).toHaveTextContent('7');
+
+    rerender(<RunSummaryCompact snapshot={snapshot('RUNNING', [])} />);
+    expect(screen.queryByText('Tokens')).not.toBeInTheDocument();
   });
 });

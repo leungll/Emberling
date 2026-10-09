@@ -236,7 +236,7 @@ func (s *ExecutionService) CompleteAgentFinal(ctx context.Context, actionID stri
 			return err
 		}
 
-		if err := s.succeedAgentNodeRun(ctx, tx, lock, run, nodeRun, def, plan, decision.Output, now); err != nil {
+		if err := s.succeedAgentNodeRun(ctx, tx, lock, run, nodeRun, agentRun.ID, def, plan, decision.Output, now); err != nil {
 			return err
 		}
 
@@ -305,14 +305,15 @@ func (s *ExecutionService) appendFinalContext(
 // Attempt, and the Agent NodeRun's result must commit with the Action's. The downstream
 // scheduling and Run aggregation that follow are the shared ones, not a second copy.
 //
-// TokenUsage is deliberately absent: the authoritative per-model-call usage is recorded on
-// each Agent Turn, and no design document defines an Agent-level aggregate.
+// The NodeRun's TokenUsage is the sum of its Agent Run's Turn usage, written with the
+// SUCCEEDED transition; each Turn keeps its own usage as the per-call record.
 func (s *ExecutionService) succeedAgentNodeRun(
 	ctx context.Context,
 	tx store.Tx,
 	lock *store.RunLock,
 	run domain.Run,
 	nodeRun domain.NodeRun,
+	agentRunID string,
 	def domain.Definition,
 	plan *runtime.CompiledDefinition,
 	output json.RawMessage,
@@ -323,19 +324,26 @@ func (s *ExecutionService) succeedAgentNodeRun(
 		return err
 	}
 
+	usage, err := agentRunTokenUsage(ctx, tx, agentRunID)
+	if err != nil {
+		return err
+	}
+
 	var latencyMs int64
 	if nodeRun.StartedAt != nil {
 		latencyMs = now.Sub(*nodeRun.StartedAt).Milliseconds()
 	}
 	if err := tx.NodeRuns().MarkSucceeded(ctx, nodeRun.ID, domain.NodeRunRunning, now, store.NodeRunOutcome{
-		Output:    outputBytes,
-		LatencyMs: &latencyMs,
+		Output:     outputBytes,
+		TokenUsage: usage,
+		LatencyMs:  &latencyMs,
 	}); err != nil {
 		return err
 	}
 	if err := s.appendEvent(ctx, tx, lock, run.ID, &nodeRun.ID, domain.EventNodeCompleted, now, nodeCompletedPayload{
 		Output:           summarize(outputBytes),
 		LatencyMs:        latencyMs,
+		TokenUsage:       usage,
 		CompletionSource: domain.CompletionSyncExecution,
 	}); err != nil {
 		return err

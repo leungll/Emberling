@@ -212,7 +212,7 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 			return nil
 		}
 
-		if err := tx.NodeRuns().MarkFailed(ctx, nodeRun.ID, p.fromNodeRun, now, p.execError); err != nil {
+		if err := tx.NodeRuns().MarkFailed(ctx, nodeRun.ID, p.fromNodeRun, now, p.execError, nil); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) && p.fromNodeRun == domain.NodeRunWaitingCallback {
 				return errResumeSuperseded
 			}

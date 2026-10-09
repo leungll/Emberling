@@ -170,6 +170,9 @@ export function RunSummaryCard({
           <StatusDot tone={live && followLive ? 'succeeded' : 'neutral'} className="h-2 w-2" />
         </span>
         <span className="text-[13px] text-[var(--muted-foreground)] tabular-nums">
+          {run.tokenUsage ? (
+            <span data-testid="run-token-total">{run.tokenUsage.totalTokens} tokens · </span>
+          ) : null}
           latest seq {latestSeq}
         </span>
       </div>
@@ -253,6 +256,7 @@ export function RunSummaryCompact({
         />
         {deadline ? <Row label="Deadline" value={formatClock(deadline)} /> : null}
         <Row label="Definition" value={`v${run.definitionVersion}`} />
+        {run.tokenUsage ? <Row label="Tokens" value={String(run.tokenUsage.totalTokens)} /> : null}
       </dl>
     </section>
   );

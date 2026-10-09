@@ -33,6 +33,7 @@ function snapshot(nodeRuns: NodeRun[]): RunSnapshot {
       input: {},
       output: null,
       error: null,
+      tokenUsage: null,
     },
     nodeRuns,
     lastSeq: 9,

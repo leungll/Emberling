@@ -57,11 +57,20 @@ func (d Deps) createRun(w http.ResponseWriter, r *http.Request) {
 }
 
 // runSnapshotResponse mirrors Studio's RunSnapshot. domain.Run and domain.NodeRun already
-// carry wire-matching JSON tags, so only the envelope is defined here.
+// carry wire-matching JSON tags, so only the envelope and the Run's read-time fields are
+// defined here.
 type runSnapshotResponse struct {
-	Run      domain.Run       `json:"run"`
-	NodeRuns []domain.NodeRun `json:"nodeRuns"`
-	LastSeq  int64            `json:"lastSeq"`
+	Run      runSnapshotRunDTO `json:"run"`
+	NodeRuns []domain.NodeRun  `json:"nodeRuns"`
+	LastSeq  int64             `json:"lastSeq"`
+}
+
+// runSnapshotRunDTO is the persisted Run plus tokenUsage, the Token total the query
+// computed from the NodeRuns of the same read. The key is always present and holds null
+// when no NodeRun carries usage.
+type runSnapshotRunDTO struct {
+	domain.Run
+	TokenUsage *domain.TokenUsage `json:"tokenUsage"`
 }
 
 // getRunSnapshot serves GET /runs/{runId}.
@@ -76,7 +85,11 @@ func (d Deps) getRunSnapshot(w http.ResponseWriter, r *http.Request) {
 	if nodeRuns == nil {
 		nodeRuns = []domain.NodeRun{}
 	}
-	writeJSON(w, http.StatusOK, runSnapshotResponse{Run: snap.Run, NodeRuns: nodeRuns, LastSeq: snap.LastSeq})
+	writeJSON(w, http.StatusOK, runSnapshotResponse{
+		Run:      runSnapshotRunDTO{Run: snap.Run, TokenUsage: snap.TokenUsage},
+		NodeRuns: nodeRuns,
+		LastSeq:  snap.LastSeq,
+	})
 }
 
 // callbackBindingDTO mirrors Studio's CallbackBindingSummary (studio/src/api/types.ts):
@@ -224,15 +237,18 @@ type agentRunDTO struct {
 // Turn which committed none of them serialises the JSON literal null (and an empty array
 // for toolAttempts), because every key is required by the response shape.
 type agentTraceTurnDTO struct {
-	ID           string                 `json:"id"`
-	TurnNo       int                    `json:"turnNo"`
-	Status       domain.AgentTurnStatus `json:"status"`
-	StartedAt    *time.Time             `json:"startedAt"`
-	CompletedAt  *time.Time             `json:"completedAt"`
-	Error        *domain.ExecutionError `json:"error"`
-	Decision     *agentDecisionDTO      `json:"decision"`
-	Action       *agentActionDTO        `json:"action"`
-	ToolAttempts []toolAttemptDTO       `json:"toolAttempts"`
+	ID          string                 `json:"id"`
+	TurnNo      int                    `json:"turnNo"`
+	Status      domain.AgentTurnStatus `json:"status"`
+	StartedAt   *time.Time             `json:"startedAt"`
+	CompletedAt *time.Time             `json:"completedAt"`
+	Error       *domain.ExecutionError `json:"error"`
+	// Usage is the Token usage this Turn's model call reported, null when the Provider
+	// reported none or the Turn has no committed model result.
+	Usage        *domain.TokenUsage `json:"usage"`
+	Decision     *agentDecisionDTO  `json:"decision"`
+	Action       *agentActionDTO    `json:"action"`
+	ToolAttempts []toolAttemptDTO   `json:"toolAttempts"`
 }
 
 // agentDecisionDTO says what the model committed to, without saying what it said: the
@@ -349,6 +365,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 		StartedAt:    utcTimePtr(round.Turn.StartedAt),
 		CompletedAt:  utcTimePtr(round.Turn.CompletedAt),
 		Error:        round.Turn.Error,
+		Usage:        round.Turn.TokenUsage,
 		ToolAttempts: []toolAttemptDTO{},
 	}
 	if round.Decision != nil {

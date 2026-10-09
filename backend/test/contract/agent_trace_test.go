@@ -362,7 +362,7 @@ func TestAgentTrace_ResponseCarriesNoSecretsOrPayloads(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{"storage_key", "storagekey", "token", "authorization", "secret", "credential"} {
-		if strings.Contains(strings.ToLower(raw), forbidden) {
+		if strings.Contains(strings.ToLower(withoutTokenUsageFieldNames(raw)), forbidden) {
 			t.Errorf("agent trace response contains %q: %s", forbidden, raw)
 		}
 	}

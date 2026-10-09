@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
@@ -31,10 +32,16 @@ func NewQueryService(deps Deps) *QueryService {
 // RunSnapshot is the Run, its NodeRuns and the LastSeq they are mutually consistent with
 // — the Snapshot-to-SSE handoff contract: a client resumes the Event stream at exactly
 // LastSeq.
+//
+// TokenUsage is the Run's read-time Token total: the sum of the NodeRuns' usage in this
+// same read, nil when none carries usage. It is never persisted and never feeds the Run
+// status, which stays derived from NodeRun state alone. An Agent's Turns reach it once,
+// through the Agent NodeRun's own sum.
 type RunSnapshot struct {
-	Run      domain.Run
-	NodeRuns []domain.NodeRun
-	LastSeq  int64
+	Run        domain.Run
+	NodeRuns   []domain.NodeRun
+	LastSeq    int64
+	TokenUsage *domain.TokenUsage
 }
 
 // NodeRunDetail is one NodeRun together with its Attempts, ordered by AttemptNo.
@@ -66,7 +73,16 @@ func (s *QueryService) Snapshot(ctx context.Context, runID string) (RunSnapshot,
 		if err != nil {
 			return err
 		}
-		snapshot = RunSnapshot{Run: run, NodeRuns: nodeRuns, LastSeq: run.LastSeq}
+		usages := make([]*domain.TokenUsage, len(nodeRuns))
+		for i, nodeRun := range nodeRuns {
+			usages[i] = nodeRun.TokenUsage
+		}
+		snapshot = RunSnapshot{
+			Run:        run,
+			NodeRuns:   nodeRuns,
+			LastSeq:    run.LastSeq,
+			TokenUsage: runtime.SumTokenUsage(usages...),
+		}
 		return nil
 	})
 	if err != nil {

@@ -345,6 +345,11 @@ export interface Run {
   output: JsonValue | null;
   error: ExecutionError | null;
   /**
+   * Read-time total of the NodeRuns' `tokenUsage`, summed field by field; `null` when no
+   * NodeRun reported usage. It is a counter, never an input to the Run status.
+   */
+  tokenUsage: TokenUsage | null;
+  /**
    * Timestamps beyond the spec's minimal Run shape. The Run Rail derives start time and
    * duration from them; they are optional here so a minimal Snapshot still type-checks.
    */
@@ -486,6 +491,8 @@ export interface AgentTurnTrace {
   startedAt: string | null;
   completedAt: string | null;
   error: ExecutionError | null;
+  /** Usage the model reported for this Turn; `null` when unreported or not yet known. */
+  usage: TokenUsage | null;
   /** `null` before the Turn committed a Decision. */
   decision: AgentDecisionTrace | null;
   /** `null` for a Turn whose Decision created no Action. */

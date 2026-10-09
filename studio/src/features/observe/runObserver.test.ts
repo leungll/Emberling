@@ -122,6 +122,7 @@ class FakeServer {
         input: {},
         output: null,
         error: null,
+        tokenUsage: null,
       },
       nodeRuns: this.nodeRuns,
       lastSeq: this.log.length,

@@ -20,6 +20,7 @@ function run(): Run {
     input: {},
     output: null,
     error: null,
+    tokenUsage: null,
   };
 }
 
@@ -516,6 +517,7 @@ const AGENT_TRACE_BODY = {
       startedAt: '2026-08-03T12:00:01Z',
       completedAt: '2026-08-03T12:00:05Z',
       error: null,
+      usage: { inputTokens: 40, outputTokens: 12, totalTokens: 52 },
       decision: { kind: 'TOOL_CALL', tool: 'lookup', hasStatePatch: true },
       action: {
         id: 'action_1',
@@ -550,6 +552,7 @@ const AGENT_TRACE_BODY = {
       startedAt: '2026-08-03T12:00:06Z',
       completedAt: null,
       error: null,
+      usage: null,
       decision: null,
       action: null,
       toolAttempts: [],
@@ -639,6 +642,11 @@ describe('DetailPanel — Agent Trace', () => {
 
     // Turn 2 committed no Decision and created no Action; neither is invented for it.
     expect(screen.getAllByText('Decision')).toHaveLength(1);
+
+    // Only the Turn whose model call reported usage shows it; a null usage prints nothing.
+    const usages = screen.getAllByTestId('agent-turn-usage');
+    expect(usages).toHaveLength(1);
+    expect(usages[0]).toHaveTextContent('52 tokens (40 in · 12 out)');
 
     // The fact ledger and generation budget sit in the detail panel, as received.
     expect(screen.getByTestId('generation-budget')).toHaveTextContent('0 · no limit');

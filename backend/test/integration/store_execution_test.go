@@ -386,7 +386,7 @@ func TestNodeRuns_MarkFailed_WritesErrorAndCompletedAt(t *testing.T) {
 	completedAt := fixtureTime.Add(time.Minute)
 	execErr := domain.ExecutionError{Code: "PROVIDER_ERROR", Message: "model call failed"}
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.NodeRuns().MarkFailed(ctx, f.nodeRunID, domain.NodeRunRunning, completedAt, execErr)
+		return tx.NodeRuns().MarkFailed(ctx, f.nodeRunID, domain.NodeRunRunning, completedAt, execErr, nil)
 	}); err != nil {
 		t.Fatalf("MarkFailed: %v", err)
 	}

@@ -285,7 +285,7 @@ func (r *cbNodeRunRepo) MarkSucceeded(_ context.Context, nodeRunID string, from 
 	r.tx.state.nodeRuns[nodeRunID] = nr
 	return nil
 }
-func (r *cbNodeRunRepo) MarkFailed(_ context.Context, nodeRunID string, from domain.NodeRunStatus, now time.Time, execErr domain.ExecutionError) error {
+func (r *cbNodeRunRepo) MarkFailed(_ context.Context, nodeRunID string, from domain.NodeRunStatus, now time.Time, execErr domain.ExecutionError, usage *domain.TokenUsage) error {
 	if !from.CanTransitionTo(domain.NodeRunFailed) {
 		return &domain.InvalidStateTransitionError{Entity: "NodeRun", ID: nodeRunID, From: string(from), To: string(domain.NodeRunFailed)}
 	}
@@ -296,6 +296,7 @@ func (r *cbNodeRunRepo) MarkFailed(_ context.Context, nodeRunID string, from dom
 	e := execErr
 	nr.Status = domain.NodeRunFailed
 	nr.Error = &e
+	nr.TokenUsage = usage
 	nr.CompletedAt = &now
 	nr.UpdatedAt = now
 	r.tx.state.nodeRuns[nodeRunID] = nr
