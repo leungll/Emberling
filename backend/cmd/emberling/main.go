@@ -16,7 +16,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
 	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
 	"github.com/leungll/Emberling/backend/internal/api"
 	"github.com/leungll/Emberling/backend/internal/asset"
@@ -167,12 +166,12 @@ func run(logger *slog.Logger) error {
 		},
 		// Step 2: required configuration and Secrets are present and usable.
 		Configuration: func(context.Context) error { return cfg.Validate() },
-		// Step 3: every Node Type, Tool and the Mock Model Provider must register
+		// Step 3: every Node Type, Tool and configured Model Provider must register
 		// cleanly. A Registry that fails this must not let the Backend become ready
 		// (registry.ModelRegistry.Register's own doc comment).
 		Registry: func(ctx context.Context) error {
-			if err := modelRegistry.Register(ctx, mockmodel.NewProvider()); err != nil {
-				return fmt.Errorf("register mock model provider: %w", err)
+			if err := registerModelProviders(ctx, modelRegistry, cfg.OpenAIModel); err != nil {
+				return err
 			}
 			taskClient := &http.Client{Timeout: defaultTaskDispatchTimeout}
 			// TODO: Move built-in node registration into a dedicated package or helper so adding

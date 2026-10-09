@@ -29,6 +29,11 @@ const (
 	KeyModelProviderBaseURL = EnvPrefix + "MODEL_PROVIDER_BASE_URL"
 	KeyModelProviderAPIKey  = EnvPrefix + "MODEL_PROVIDER_API_KEY"
 
+	KeyModelOpenAIBaseURL = EnvPrefix + "MODEL_OPENAI_BASE_URL"
+	KeyModelOpenAIAPIKey  = EnvPrefix + "MODEL_OPENAI_API_KEY"
+	KeyModelOpenAIModel   = EnvPrefix + "MODEL_OPENAI_MODEL"
+	KeyModelOpenAITimeout = EnvPrefix + "MODEL_OPENAI_TIMEOUT"
+
 	KeyCallbackBaseURL       = EnvPrefix + "CALLBACK_BASE_URL"
 	KeyCallbackSigningSecret = EnvPrefix + "CALLBACK_SIGNING_SECRET"
 
@@ -55,6 +60,7 @@ type Config struct {
 	Database        Database
 	AssetStorage    AssetStorage
 	ModelProvider   ModelProvider
+	OpenAIModel     OpenAIModel
 	Callback        Callback
 	Reconciliation  Reconciliation
 	PendingCallback PendingCallback
@@ -82,6 +88,23 @@ type AssetStorage struct {
 type ModelProvider struct {
 	BaseURL string
 	APIKey  Secret
+}
+
+// OpenAIModel addresses the optional OpenAI-compatible Model Adapter. Either every
+// required field is set and the Adapter is registered, or none is and it is not; a
+// partial configuration is a startup error rather than a silently missing model.
+type OpenAIModel struct {
+	BaseURL string
+	APIKey  Secret
+	Model   string
+	// Timeout bounds one HTTP request. Zero leaves the call bounded only by the caller's
+	// context, such as the Agent Run deadline.
+	Timeout time.Duration
+}
+
+// Enabled reports whether the OpenAI-compatible Model Adapter is configured.
+func (m OpenAIModel) Enabled() bool {
+	return m.BaseURL != "" || !m.APIKey.IsZero() || m.Model != ""
 }
 
 // Callback carries the externally reachable base URL and the signing Secret used to
@@ -159,6 +182,7 @@ func Load(env func(string) string) (Config, error) {
 			BaseURL: l.requiredURL(KeyModelProviderBaseURL),
 			APIKey:  Secret{value: l.required(KeyModelProviderAPIKey)},
 		},
+		OpenAIModel: l.openAIModel(),
 		Callback: Callback{
 			BaseURL:       l.requiredURL(KeyCallbackBaseURL),
 			SigningSecret: Secret{value: l.required(KeyCallbackSigningSecret)},
@@ -209,6 +233,20 @@ func (c Config) Validate() error {
 			missing = append(missing, item.key)
 		}
 	}
+	if c.OpenAIModel.Enabled() {
+		for _, item := range []struct {
+			key   string
+			empty bool
+		}{
+			{KeyModelOpenAIBaseURL, c.OpenAIModel.BaseURL == ""},
+			{KeyModelOpenAIAPIKey, c.OpenAIModel.APIKey.IsZero()},
+			{KeyModelOpenAIModel, c.OpenAIModel.Model == ""},
+		} {
+			if item.empty {
+				missing = append(missing, item.key)
+			}
+		}
+	}
 	if len(missing) > 0 {
 		return &MissingConfigError{Keys: missing}
 	}
@@ -243,6 +281,12 @@ func (c Config) Validate() error {
 		if item.value <= 0 {
 			return &InvalidConfigError{Key: item.key, Reason: "must be a positive duration"}
 		}
+	}
+	if c.OpenAIModel.Timeout < 0 {
+		return &InvalidConfigError{Key: KeyModelOpenAITimeout, Reason: "must be a positive duration"}
+	}
+	if c.OpenAIModel.Timeout > 0 && !c.OpenAIModel.Enabled() {
+		return &InvalidConfigError{Key: KeyModelOpenAITimeout, Reason: "set only together with " + KeyModelOpenAIBaseURL}
 	}
 	return nil
 }
@@ -287,6 +331,64 @@ func (l *loader) requiredURL(key string) string {
 		return ""
 	}
 	return strings.TrimSuffix(value, "/")
+}
+
+// openAIModel reads the optional OpenAI-compatible Model Adapter group. When none of its
+// required keys is set the group is disabled; once any is set, every required key is.
+func (l *loader) openAIModel() OpenAIModel {
+	keys := []string{KeyModelOpenAIBaseURL, KeyModelOpenAIAPIKey, KeyModelOpenAIModel}
+	enabled := false
+	for _, key := range keys {
+		if strings.TrimSpace(l.env(key)) != "" {
+			enabled = true
+		}
+	}
+	timeout := l.optionalDuration(KeyModelOpenAITimeout)
+	if !enabled {
+		if timeout > 0 {
+			l.fail(KeyModelOpenAITimeout, "set only together with "+KeyModelOpenAIBaseURL)
+		}
+		return OpenAIModel{}
+	}
+	return OpenAIModel{
+		BaseURL: l.requiredProviderURL(KeyModelOpenAIBaseURL),
+		APIKey:  Secret{value: l.required(KeyModelOpenAIAPIKey)},
+		Model:   l.required(KeyModelOpenAIModel),
+		Timeout: timeout,
+	}
+}
+
+// requiredProviderURL is requiredURL that additionally refuses user information, a query
+// and a fragment: the value is a base for request paths and appears in error messages, so
+// it may not carry a credential of its own.
+func (l *loader) requiredProviderURL(key string) string {
+	value := l.requiredURL(key)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		l.fail(key, "must not carry user information, a query or a fragment")
+		return ""
+	}
+	return value
+}
+
+func (l *loader) optionalDuration(key string) time.Duration {
+	value := strings.TrimSpace(l.env(key))
+	if value == "" {
+		return 0
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		l.fail(key, "must be a Go duration such as 5s or 24h")
+		return 0
+	}
+	if parsed <= 0 {
+		l.fail(key, "must be a positive duration")
+		return 0
+	}
+	return parsed
 }
 
 func (l *loader) requiredInt(key string) int {
