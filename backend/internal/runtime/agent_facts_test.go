@@ -301,11 +301,11 @@ func TestMatchRequirement(t *testing.T) {
 			wantFactID: "fact-new",
 		},
 		{
-			name:       "older satisfying candidate behind a newer mismatch",
-			req:        videoRequirement(),
-			arguments:  videoArgs("gen-a1", "photo-a"),
-			candidates: []domain.ExecutionFact{reviewFact("fact-new", "gen-a1", "photo-a", "v2", false), reviewFact("fact-old", "gen-a1", "photo-a", "v1", true)},
-			wantFactID: "fact-old",
+			name:        "newer rejection overrides an older approval",
+			req:         videoRequirement(),
+			arguments:   videoArgs("gen-a1", "photo-a"),
+			candidates:  []domain.ExecutionFact{reviewFact("fact-new", "gen-a1", "photo-a", "v2", false), reviewFact("fact-old", "gen-a1", "photo-a", "v1", true)},
+			wantFailure: &RequirementFailure{FactType: "asset_reviewed", Subject: "gen-a1", Reason: RequirementVerdictMismatch},
 		},
 		{
 			name:        "photo A's fact does not satisfy a request about photo B's asset",

@@ -325,9 +325,10 @@ func (f RequirementFailure) ExecutionError() domain.ExecutionError {
 // the requirement when its fact type matches, its subject equals the subject, every
 // MatchBindings name's recorded value equals the canonical string of the top-level
 // argument of that name, and, when RequireVerdict is set, its verdict equals it.
-// Candidates are passed newest first and that order is kept: the first satisfying
-// candidate is returned. When none satisfies, the failure describes the newest
-// same-subject candidate, so a fact about another subject never explains a rejection.
+// Candidates are passed newest first, and only the newest candidate of the required type
+// about the subject is considered: when it fails its bindings or verdict the requirement
+// is unmet, and no older fact is consulted, so a newer rejection always overrides an
+// older approval. A fact about another subject never satisfies or explains a rejection.
 func MatchRequirement(req domain.FactRequirement, arguments json.RawMessage, candidates []domain.ExecutionFact) (RequirementMatch, *RequirementFailure) {
 	doc, err := decodeFactDocument(arguments)
 	if err != nil {
@@ -354,21 +355,14 @@ func MatchRequirement(req domain.FactRequirement, arguments json.RawMessage, can
 		}
 	}
 
-	var first *RequirementFailure
 	for _, candidate := range candidates {
 		if candidate.FactType != req.FactType || candidate.SubjectRef != subject {
 			continue
 		}
-		failure := checkCandidate(req, subject, expected, candidate)
-		if failure == nil {
-			return RequirementMatch{Fact: candidate}, nil
+		if failure := checkCandidate(req, subject, expected, candidate); failure != nil {
+			return RequirementMatch{}, failure
 		}
-		if first == nil {
-			first = failure
-		}
-	}
-	if first != nil {
-		return RequirementMatch{}, first
+		return RequirementMatch{Fact: candidate}, nil
 	}
 	return RequirementMatch{}, &RequirementFailure{FactType: req.FactType, Subject: subject, Reason: RequirementNoFact}
 }
