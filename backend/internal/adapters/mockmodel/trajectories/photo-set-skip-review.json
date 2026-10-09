@@ -21,9 +21,14 @@
     },
     {
       "final": {
-        "output": {
-          "photoAssetId": "{{task:/photos/0/photoAssetId}}",
-          "videoUrl": "{{tool:1:/videoUrl}}"
+        "outputText": {
+          "examples": [
+            {
+              "photoAssetId": "{{task:/photos/0/photoAssetId}}",
+              "assetRef": "{{tool:0:/assetRef}}"
+            }
+          ],
+          "settingsDigest": "{{tool:0:/settingsDigest}}"
         }
       }
     }
