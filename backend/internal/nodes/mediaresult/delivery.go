@@ -67,7 +67,10 @@ func (l *reasonList) add(code, photoAssetID, assetRef string) {
 }
 
 // generation and review are the bindings of the newest fact about one generated asset.
+// ImageURL is the Provider's credential-free address of the generated image; facts
+// recorded before the generation Tool bound it leave it empty.
 type generation struct {
+	ImageURL       string `json:"imageUrl"`
 	PhotoAssetID   string `json:"photoAssetId"`
 	SettingsDigest string `json:"settingsDigest"`
 }
@@ -81,7 +84,12 @@ type review struct {
 // checkDelivery is the pure delivery decision. Every value it reports comes from the
 // photo set and the facts; the FINAL only names which generated asset is each photo's
 // example and which settings the template uses.
-func checkDelivery(photos []photo, final finalOutput, generated, reviewed registry.FactSet) summary {
+//
+// It also returns the cover example's image URL: the imageUrl bound by the newest
+// generation fact of the example declared for the first photo, provided that fact records
+// the generation for that photo. It is empty when no such fact or binding exists. A URL
+// the FINAL reports for itself is never read.
+func checkDelivery(photos []photo, final finalOutput, generated, reviewed registry.FactSet) (summary, string) {
 	var reasons reasonList
 	inSet := make(map[string]bool, len(photos))
 	for _, p := range photos {
@@ -183,7 +191,7 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 		out.Reasons = []reason{}
 	}
 	out.Accepted = len(out.Reasons) == 0
-	return out
+	return out, generations[exampleOf[photos[0].PhotoAssetID]].ImageURL
 }
 
 // decodeBinding reads a fact binding into dst and reports whether it names a photo.

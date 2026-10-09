@@ -55,11 +55,23 @@ func finalValue(t *testing.T, digest string, photoIDs ...string) json.RawMessage
 	return textValue(t, string(doc))
 }
 
+// generatedURL is the credential-free address the generation fact binds for assetRef.
+func generatedURL(assetRef string) string {
+	return "http://mock-provider.test/v1/assets/" + assetRef + ".png"
+}
+
 func genFact(photoID, assetRef, digest string) domain.ExecutionFact {
 	return domain.ExecutionFact{
 		ID: "fact_gen_" + assetRef, FactType: factImageGenerated, SubjectRef: assetRef,
-		Binding: json.RawMessage(fmt.Sprintf(`{"photoAssetId":%q,"settingsDigest":%q}`, photoID, digest)),
+		Binding: json.RawMessage(fmt.Sprintf(`{"imageUrl":%q,"photoAssetId":%q,"settingsDigest":%q}`, generatedURL(assetRef), photoID, digest)),
 	}
+}
+
+// genFactWithoutURL is a generation fact whose binding carries no imageUrl.
+func genFactWithoutURL(photoID, assetRef, digest string) domain.ExecutionFact {
+	fact := genFact(photoID, assetRef, digest)
+	fact.Binding = json.RawMessage(fmt.Sprintf(`{"photoAssetId":%q,"settingsDigest":%q}`, photoID, digest))
+	return fact
 }
 
 func reviewFact(photoID, assetRef, policy string, passed bool) domain.ExecutionFact {
@@ -139,9 +151,66 @@ func TestMediaResult_EveryRuleHolds_AcceptedWithPassCountFromFacts(t *testing.T)
 	if got.PolicyVersion != testPolicy || got.SettingsDigest != testDigest {
 		t.Fatalf("policyVersion/settingsDigest = %q/%q, want %q/%q", got.PolicyVersion, got.SettingsDigest, testPolicy, testDigest)
 	}
-	if image.Source != domain.ImageSourceAsset || image.Asset.AssetID != "photo_a" {
+	wantGeneratedCover(t, image)
+}
+
+// wantGeneratedCover asserts the image port carries the cover example through the URL its
+// generation fact binds.
+func wantGeneratedCover(t *testing.T, image domain.ImageRef) {
+	t.Helper()
+	if image.Source != domain.ImageSourceExternal || image.URI != generatedURL("gen_photo_a") || image.MediaType != "image/png" {
+		t.Fatalf("image = %+v, want the EXTERNAL image at the cover example's generation fact URL", image)
+	}
+}
+
+// wantCoverPhoto asserts the image port fell back to the cover photo's own AssetRef.
+func wantCoverPhoto(t *testing.T, image domain.ImageRef) {
+	t.Helper()
+	if image.Source != domain.ImageSourceAsset || image.Asset == nil || image.Asset.AssetID != "photo_a" {
 		t.Fatalf("image = %+v, want the cover photo's AssetRef", image)
 	}
+}
+
+func TestMediaResult_CoverExampleWithoutGenerationFact_FallsBackToCoverPhoto(t *testing.T) {
+	generated, reviewed := happyFacts()
+	got, image := runNode(t, finalValue(t, testDigest, testPhotos...), generated[1:], reviewed)
+
+	wantRejected(t, got, reasonNotGenerated, "photo_a")
+	wantCoverPhoto(t, image)
+}
+
+func TestMediaResult_GenerationFactWithoutImageURL_FallsBackToCoverPhoto(t *testing.T) {
+	generated, reviewed := happyFacts()
+	generated[0] = genFactWithoutURL("photo_a", "gen_photo_a", testDigest)
+	got, image := runNode(t, finalValue(t, testDigest, testPhotos...), generated, reviewed)
+
+	if !got.Accepted {
+		t.Fatalf("reasons = %+v, want accepted: imageUrl is not a delivery check", got.Reasons)
+	}
+	wantCoverPhoto(t, image)
+}
+
+func TestMediaResult_FinalReportsItsOwnURL_IgnoredInFavourOfFact(t *testing.T) {
+	generated, reviewed := happyFacts()
+	reported := "http://elsewhere.test/model-chosen.png"
+	examples := make([]map[string]string, len(testPhotos))
+	for i, id := range testPhotos {
+		examples[i] = map[string]string{"photoAssetId": id, "assetRef": "gen_" + id, "imageUrl": reported}
+	}
+	doc, err := json.Marshal(map[string]any{"examples": examples, "settingsDigest": testDigest, "imageUrl": reported, "coverUrl": reported})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, image := runNode(t, textValue(t, string(doc)), generated, reviewed)
+	if !got.Accepted {
+		t.Fatalf("reasons = %+v, want accepted", got.Reasons)
+	}
+	wantGeneratedCover(t, image)
+
+	// Without a fact URL the self-reported URL still does not reach the port.
+	generated[0] = genFactWithoutURL("photo_a", "gen_photo_a", testDigest)
+	_, image = runNode(t, textValue(t, string(doc)), generated, reviewed)
+	wantCoverPhoto(t, image)
 }
 
 func TestMediaResult_SameInput_ByteIdenticalCaption(t *testing.T) {

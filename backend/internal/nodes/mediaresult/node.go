@@ -39,6 +39,10 @@ const (
 	factAssetReviewed  = "asset_reviewed"
 )
 
+// generatedMediaType is the media type of a generated image: the generation Provider
+// serves every generated asset as PNG, and the generation fact binds no media type.
+const generatedMediaType = "image/png"
+
 // configSchema is empty: every check is fixed, so there is nothing to configure.
 const configSchema = `{
   "type": "object",
@@ -90,17 +94,11 @@ func (Executor) Execute(_ context.Context, input registry.NodeInput, _ map[strin
 		return registry.NodeResult{}, err
 	}
 
-	summary := checkDelivery(photos, final, input.Facts[factImageGenerated], input.Facts[factAssetReviewed])
+	summary, coverURL := checkDelivery(photos, final, input.Facts[factImageGenerated], input.Facts[factAssetReviewed])
 
-	// The cover is the first photo of the set. No execution fact carries a servable
-	// reference to a generated image, so the port carries the cover photo's own AssetRef:
-	// the one image reference this node can verify without trusting the model.
-	cover := photos[0]
-	image := domain.ImageRef{Source: domain.ImageSourceAsset, Asset: &domain.AssetRef{
-		AssetID: cover.PhotoAssetID, MediaType: cover.MediaType, SizeBytes: cover.SizeBytes, SHA256: cover.SHA256,
-	}}
-	if err := image.Validate(); err != nil {
-		return registry.NodeResult{}, fmt.Errorf("media_result: input port %q: cover photo is not a valid image reference: %w", briefPort, err)
+	image, err := coverImage(photos[0], coverURL)
+	if err != nil {
+		return registry.NodeResult{}, err
 	}
 	imageValue, err := json.Marshal(image)
 	if err != nil {
@@ -116,6 +114,26 @@ func (Executor) Execute(_ context.Context, input registry.NodeInput, _ map[strin
 		return registry.NodeResult{}, fmt.Errorf("media_result: encode %q port value: %w", captionPort, err)
 	}
 	return registry.CompletedResult(map[string]json.RawMessage{imagePort: imageValue, captionPort: captionValue}), nil
+}
+
+// coverImage is the `image` port value. The cover is the first photo of the set, and its
+// example is shown through the imageUrl its generation fact binds, so the delivered image
+// is one this Run provably generated rather than one the model names. When no fact
+// supplies a usable URL, the port carries the cover photo's own AssetRef instead.
+func coverImage(cover photo, generatedURL string) (domain.ImageRef, error) {
+	if generatedURL != "" {
+		external := domain.ImageRef{Source: domain.ImageSourceExternal, URI: generatedURL, MediaType: generatedMediaType}
+		if external.Validate() == nil {
+			return external, nil
+		}
+	}
+	image := domain.ImageRef{Source: domain.ImageSourceAsset, Asset: &domain.AssetRef{
+		AssetID: cover.PhotoAssetID, MediaType: cover.MediaType, SizeBytes: cover.SizeBytes, SHA256: cover.SHA256,
+	}}
+	if err := image.Validate(); err != nil {
+		return domain.ImageRef{}, fmt.Errorf("media_result: input port %q: cover photo is not a valid image reference: %w", briefPort, err)
+	}
+	return image, nil
 }
 
 // photo is one entry of the Media Brief photo set.

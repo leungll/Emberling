@@ -45,13 +45,20 @@ func mediaResultDefinition(workflowID string) domain.Definition {
 	}
 }
 
-// mediaResultFacts is one generation fact per photo, made with digest, and one review per
-// example under policy-v1; the review of the last photo fails.
+// mediaResultImageURL is the credential-free address a generation fact binds for assetRef.
+func mediaResultImageURL(assetRef string) string {
+	return "http://mock-provider.test/v1/assets/" + assetRef + ".png"
+}
+
+// mediaResultFacts is one generation fact per photo, made with digest and bound to the
+// generated image's URL, and one review per example under policy-v1; the review of the
+// last photo fails.
 func mediaResultFacts(photos []domain.AssetRef, digest string) []domain.ExecutionFact {
 	var facts []domain.ExecutionFact
 	for i, p := range photos {
 		gen := newExecutionFact("fact_gen_"+p.AssetID, "", "", "", "image_generated", "gen_"+p.AssetID)
-		gen.Binding = json.RawMessage(fmt.Sprintf(`{"photoAssetId":%q,"settingsDigest":%q}`, p.AssetID, digest))
+		gen.Binding = json.RawMessage(fmt.Sprintf(`{"imageUrl":%q,"photoAssetId":%q,"settingsDigest":%q}`,
+			mediaResultImageURL("gen_"+p.AssetID), p.AssetID, digest))
 		gen.CreatedAt = fixtureTime.Add(time.Duration(i) * time.Minute)
 		passed := i < len(photos)-1
 		review := newExecutionFact("fact_review_"+p.AssetID, "", "", "", "asset_reviewed", "gen_"+p.AssetID)
@@ -80,8 +87,8 @@ func mediaResultInput(t *testing.T, photos []domain.AssetRef, digest string) str
 	return string(input)
 }
 
-// mediaResultCaption reads the caption the Output Node delivered into Run.output.
-func mediaResultCaption(t *testing.T, h *execHarness, runID string) (map[string]any, domain.Run) {
+// mediaResultCaption reads the caption and image the Output Node delivered into Run.output.
+func mediaResultCaption(t *testing.T, h *execHarness, runID string) (map[string]any, domain.ImageRef, domain.Run) {
 	t.Helper()
 	run, err := h.getRun(runID)
 	if err != nil {
@@ -94,14 +101,15 @@ func mediaResultCaption(t *testing.T, h *execHarness, runID string) (map[string]
 	if err := json.Unmarshal(run.Output, &output); err != nil {
 		t.Fatalf("Run.output %s is not the Media Output result: %v", run.Output, err)
 	}
-	if _, err := domain.ParseImageRef(output.Image); err != nil {
+	image, err := domain.ParseImageRef(output.Image)
+	if err != nil {
 		t.Fatalf("Run.output image is not a valid ImageRef: %v", err)
 	}
 	var caption map[string]any
 	if err := json.Unmarshal([]byte(output.Caption), &caption); err != nil {
 		t.Fatalf("caption %q is not JSON: %v", output.Caption, err)
 	}
-	return caption, run
+	return caption, image, run
 }
 
 // The delivery is checked against each Run's own committed facts. Two Runs declare the
@@ -140,7 +148,7 @@ func TestMediaResult_FactsFromStore_CheckedPerRunThroughServicePath(t *testing.T
 	h.drain(accepted.ID)
 	h.drain(refused.ID)
 
-	caption, run := mediaResultCaption(t, h, accepted.ID)
+	caption, image, run := mediaResultCaption(t, h, accepted.ID)
 	if run.Status != domain.RunCompleted {
 		t.Fatalf("accepted Run status = %s, want COMPLETED", run.Status)
 	}
@@ -148,8 +156,11 @@ func TestMediaResult_FactsFromStore_CheckedPerRunThroughServicePath(t *testing.T
 		caption["policyVersion"] != "policy-v1" || caption["settingsDigest"] != digest {
 		t.Fatalf("accepted Run caption = %v, want accepted, 2 of 3 passed, policy-v1 and the template digest", caption)
 	}
+	if want := mediaResultImageURL("gen_asset_photo_one"); image.Source != domain.ImageSourceExternal || image.URI != want {
+		t.Fatalf("accepted Run image = %+v, want the EXTERNAL cover example at %s from its generation fact", image, want)
+	}
 
-	caption, run = mediaResultCaption(t, h, refused.ID)
+	caption, _, run = mediaResultCaption(t, h, refused.ID)
 	if run.Status != domain.RunCompleted {
 		t.Fatalf("refused Run status = %s, want COMPLETED: a refused delivery is not an execution failure", run.Status)
 	}
