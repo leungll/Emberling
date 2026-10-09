@@ -22,6 +22,11 @@ const (
 	CodePreconditionUnmet      = "PRECONDITION_UNMET"
 	CodeGenerationLimitReached = "GENERATION_LIMIT_REACHED"
 	CodeFactBasisMissing       = "FACT_BASIS_MISSING"
+	// CodeFactExtractionFailed fails the Action in the Tool result transaction when a
+	// successful result does not carry what the Tool's own production declaration
+	// promises. It is a Tool-declaration violation, not a Provider failure: the Provider
+	// completed the call, so the Tool Attempt keeps its result.
+	CodeFactExtractionFailed = "FACT_EXTRACTION_FAILED"
 )
 
 // ProducedFact is the fact a successful Tool result establishes under the Tool's

@@ -183,6 +183,24 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return nil
 		}
 
+		// The declared fact is decided, like the patch, before any write that belongs only
+		// to a successful round, so a result that cannot establish it commits the shared
+		// Action failure in place of the round: the Attempt keeps its result, no fact, patch
+		// or next Turn is written, and the failure keeps this delivery's source.
+		factErr, err := s.recordProducedFactLocked(ctx, tx, call, decision.Arguments, result, now)
+		if err != nil {
+			return err
+		}
+		if factErr != nil {
+			attemptID := call.attemptID
+			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, call.actionID, &attemptID,
+				src.fromAction, src.failureSource, domain.TerminationInvalidAction, *factErr, now); err != nil {
+				return err
+			}
+			commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq(), terminal: true}
+			return nil
+		}
+
 		if err := tx.AgentActions().MarkSucceeded(ctx, call.actionID, src.fromAction, now); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
