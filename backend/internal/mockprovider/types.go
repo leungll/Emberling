@@ -25,6 +25,14 @@
 // GET /v1/images/{name}.png serves one fixed, deterministic PNG under any name, with no
 // credential of any kind. It is what makes an image reference in a task callback payload
 // genuinely readable instead of a URL that resolves to nothing.
+//
+// WithTestControls adds a demo and test control surface under /control, absent otherwise:
+// an external barrier (pause, release and GET /control/barrier) that records a dispatch's
+// arrival and then holds it unanswered until release, an append-only JSON-lines dispatch
+// record served by GET /control/record, and POST /control/tasks/{externalTaskId}/callback
+// to deliver an accepted task's callback again on command. Together they let a script
+// prove that the external service itself received a request, independently of what
+// Emberling committed.
 package mockprovider
 
 import (

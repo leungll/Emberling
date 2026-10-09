@@ -55,6 +55,18 @@ services:
         CMD: mockprovider
     ports:
       - "9101:9101"
+    # This stack is a demo and test configuration, so the Mock Provider's control surface
+    # is enabled here: POST /control/pause and /control/release (external barrier),
+    # GET /control/barrier, GET /control/record (append-only dispatch record) and
+    # POST /control/tasks/{externalTaskId}/callback (redeliver on command). Without
+    # MOCKPROVIDER_TEST_CONTROLS these routes do not exist. The record lives on its own
+    # volume so it survives a Mock Provider restart; it holds identifiers and short
+    # summaries only, never a callback token or an authorization header.
+    environment:
+      MOCKPROVIDER_TEST_CONTROLS: "true"
+      MOCKPROVIDER_RECORD_PATH: /var/lib/emberling/mockprovider/dispatch-record.jsonl
+    volumes:
+      - emberling-mockprovider-record:/var/lib/emberling/mockprovider
 
   backend:
     build:
@@ -109,3 +121,4 @@ services:
 volumes:
   emberling-postgres-data:
   emberling-asset-data:
+  emberling-mockprovider-record:

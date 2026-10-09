@@ -62,22 +62,35 @@ type Server struct {
 	// idempotencyKeyOrder records insertion order so the oldest key can be evicted once
 	// maxIdempotencyKeys is reached.
 	idempotencyKeyOrder []string
+
+	// controls is the demo and test control surface (barrier, dispatch record, callback
+	// redelivery). It is nil unless WithTestControls was passed, and every use of it is a
+	// no-op when nil, so the default request path is unchanged.
+	controls *testControls
 }
 
 // NewServer wires dispatcher into a ready-to-serve Server. dispatcher is owned by the
 // caller, which is also responsible for calling dispatcher.Shutdown during graceful
-// shutdown.
-func NewServer(dispatcher *Dispatcher) *Server {
+// shutdown. With WithTestControls, the caller also owns the Record and calls StopHolding
+// before shutting the HTTP server down.
+func NewServer(dispatcher *Dispatcher, opts ...Option) *Server {
 	s := &Server{
 		dispatcher:            dispatcher,
 		newTaskID:             randomExternalTaskID,
 		tasksByIdempotencyKey: make(map[string]string),
+	}
+	for _, opt := range opts {
+		opt(s)
 	}
 	r := chi.NewRouter()
 	r.Get("/healthz", s.handleHealthz)
 	r.Post("/v1/text/generate", s.handleGenerate)
 	r.Post("/v1/tasks", s.handleTasks)
 	r.Get("/v1/images/{name}", s.handleImage)
+	if s.controls != nil {
+		dispatcher.observe = s.controls.record.appendDelivery
+		s.mountControlRoutes(r)
+	}
 	s.router = r
 	return s
 }
@@ -94,9 +107,10 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 // handleGenerate simulates a synchronous external text-generation call. It never logs the
 // prompt; the request body only ever lives in this handler's local scope.
 func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
+	arrival := recordEntry{Kind: kindGenerate}
 	var req generateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "request body is not valid JSON"})
+		s.reject(w, arrival, http.StatusBadRequest, "request body is not valid JSON")
 		return
 	}
 
@@ -104,28 +118,39 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	if scenario == "" {
 		scenario = "final"
 	}
+	arrival.Scenario = "scenario=" + truncateSummary(scenario)
+	if err := s.admit(r, arrival); err != nil {
+		s.respondHeldError(w, kindGenerate, "", err)
+		return
+	}
 
+	var (
+		status int
+		body   any
+	)
 	switch scenario {
 	case "final":
-		writeJSON(w, http.StatusOK, generateResponse{Decision: decision{
+		status, body = http.StatusOK, generateResponse{Decision: decision{
 			Kind:   "FINAL",
 			Output: "echo: " + req.Prompt,
-		}})
+		}}
 	case "tool-call":
-		writeJSON(w, http.StatusOK, generateResponse{Decision: decision{
+		status, body = http.StatusOK, generateResponse{Decision: decision{
 			Kind:      "TOOL_CALL",
 			ToolName:  req.ToolName,
 			Arguments: json.RawMessage(`{}`),
-		}})
+		}}
 	case "invalid-decision":
 		// A TOOL_CALL missing its required toolName/arguments: structurally recognised
 		// but not a valid Decision, for exercising the caller's own validation path.
-		writeJSON(w, http.StatusOK, generateResponse{Decision: decision{Kind: "TOOL_CALL"}})
+		status, body = http.StatusOK, generateResponse{Decision: decision{Kind: "TOOL_CALL"}}
 	case "fail":
-		writeJSON(w, http.StatusBadGateway, errorResponse{Error: "mock provider: generate failed"})
+		status, body = http.StatusBadGateway, errorResponse{Error: "mock provider: generate failed"}
 	default:
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: fmt.Sprintf("unknown scenario %q", scenario)})
+		status, body = http.StatusBadRequest, errorResponse{Error: fmt.Sprintf("unknown scenario %q", scenario)}
 	}
+	s.recordResponse(kindGenerate, "", status, false)
+	writeJSON(w, status, body)
 }
 
 // handleImage serves the image an asynchronous task's callback refers to. A caller that
@@ -157,17 +182,21 @@ func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
 // delivering its result later, as a callback POST to the caller-supplied CallbackURL. It
 // never persists callbackToken beyond forwarding it unchanged in that callback.
 func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
+	arrival := recordEntry{Kind: kindTask}
 	var req taskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "request body is not valid JSON"})
+		s.reject(w, arrival, http.StatusBadRequest, "request body is not valid JSON")
 		return
 	}
+	arrival.ExternalTaskID = truncateSummary(req.ExternalTaskID)
+	arrival.CallbackTarget = truncateSummary(callbackTarget(req.CallbackURL))
+	arrival.Scenario = taskScenarioSummary(req)
 	if strings.TrimSpace(req.CallbackURL) == "" {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "callbackUrl is required"})
+		s.reject(w, arrival, http.StatusBadRequest, "callbackUrl is required")
 		return
 	}
 	if strings.TrimSpace(req.CallbackToken) == "" {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "callbackToken is required"})
+		s.reject(w, arrival, http.StatusBadRequest, "callbackToken is required")
 		return
 	}
 
@@ -175,10 +204,18 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 	if externalTaskID == "" {
 		generated, err := s.newTaskID()
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to generate externalTaskId"})
+			s.reject(w, arrival, http.StatusInternalServerError, "failed to generate externalTaskId")
 			return
 		}
 		externalTaskID = generated
+	}
+	arrival.ExternalTaskID = truncateSummary(externalTaskID)
+
+	// The barrier holds the request after it is recorded and before the Provider accepts
+	// anything, so a held request has created no task and scheduled no callback yet.
+	if err := s.admit(r, arrival); err != nil {
+		s.respondHeldError(w, kindTask, arrival.ExternalTaskID, err)
+		return
 	}
 
 	if key := req.IdempotencyKey; key != "" {
@@ -187,6 +224,7 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 			// A replayed dispatch of an already-accepted task: the Provider answers with
 			// the original task id and does not start a second one, so the retry produces
 			// no second callback and no duplicate external side effect (KEYED).
+			s.recordResponse(kindTask, truncateSummary(existing), http.StatusOK, true)
 			writeJSON(w, http.StatusOK, taskResponse{ExternalTaskID: existing})
 			return
 		}
@@ -205,6 +243,7 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		CallbackToken:  callbackToken,
 		Payload:        callbackPayload(req),
 	}
+	s.rememberTask(task)
 
 	switch req.DelayMs.Mode {
 	case delayLost:
@@ -224,6 +263,7 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		s.dispatcher.Schedule(task, 0)
 	}
 
+	s.recordResponse(kindTask, arrival.ExternalTaskID, http.StatusAccepted, false)
 	writeJSON(w, http.StatusAccepted, taskResponse{ExternalTaskID: externalTaskID})
 }
 

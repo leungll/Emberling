@@ -39,6 +39,10 @@ type Dispatcher struct {
 	// notify, if non-nil, receives one callbackOutcome per completed delivery attempt.
 	// It is a test-only barrier hook; Schedule sends best-effort and never blocks on it.
 	notify chan callbackOutcome
+	// observe, if non-nil, is told the outcome of every delivery attempt. The Server sets
+	// it before serving when test controls are enabled, to append the attempt to the
+	// dispatch record; it is never changed afterwards.
+	observe func(task callbackTask, status int, err error)
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -84,7 +88,7 @@ func (d *Dispatcher) Schedule(task callbackTask, delay time.Duration) {
 				return
 			}
 		}
-		err := d.send(d.ctx, task)
+		_, err := d.deliver(d.ctx, task)
 		if d.notify != nil {
 			select {
 			case d.notify <- callbackOutcome{Task: task, Err: err}:
@@ -98,24 +102,35 @@ func (d *Dispatcher) Schedule(task callbackTask, delay time.Duration) {
 // the inbound request's context) rather than the Dispatcher's own lifetime. It backs the
 // delayBeforeResponse scenario, where the callback must complete before /v1/tasks answers.
 func (d *Dispatcher) SendNow(ctx context.Context, task callbackTask) error {
-	return d.send(ctx, task)
+	_, err := d.deliver(ctx, task)
+	return err
+}
+
+// deliver performs one delivery attempt and reports it to observe. It returns the
+// receiver's HTTP status, or 0 when no response arrived.
+func (d *Dispatcher) deliver(ctx context.Context, task callbackTask) (int, error) {
+	status, err := d.send(ctx, task)
+	if d.observe != nil {
+		d.observe(task, status, err)
+	}
+	return status, err
 }
 
 // send performs one callback POST. It never retries: a real external Provider gets exactly
 // as many delivery attempts as this call graph gives it, matching the "no autonomous
 // retry" rule for anything simulating an Adapter's external boundary.
-func (d *Dispatcher) send(ctx context.Context, task callbackTask) error {
+func (d *Dispatcher) send(ctx context.Context, task callbackTask) (int, error) {
 	payload := task.Payload
 	if payload == nil {
 		payload = json.RawMessage(`{}`)
 	}
 	body, err := json.Marshal(callbackBody{ExternalTaskID: task.ExternalTaskID, Payload: payload})
 	if err != nil {
-		return fmt.Errorf("mockprovider: encode callback body: %w", err)
+		return 0, fmt.Errorf("mockprovider: encode callback body: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, task.CallbackURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("mockprovider: build callback request: %w", err)
+		return 0, fmt.Errorf("mockprovider: build callback request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// The callback token is forwarded exactly as received and never logged:
@@ -124,15 +139,15 @@ func (d *Dispatcher) send(ctx context.Context, task callbackTask) error {
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("mockprovider: deliver callback: %w", err)
+		return 0, fmt.Errorf("mockprovider: deliver callback: %w", err)
 	}
 	// The receiver's status is deliberately not inspected: a rejection such as the
 	// callback contract's 401 for a mismatched token is a completed delivery attempt with
 	// a defined answer, not a transport failure, and this Provider stand-in never retries
-	// on its own either way.
+	// on its own either way. The status is only passed on to observe for the record.
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
-	return nil
+	return resp.StatusCode, nil
 }
 
 // Shutdown stops Schedule from accepting new work and waits for every in-flight delivery

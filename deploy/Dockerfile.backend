@@ -13,7 +13,7 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /out/service ./cmd/${CMD}
-RUN mkdir -p /out/assets
+RUN mkdir -p /out/assets /out/mockprovider
 
 # distroless/static has no shell and no package manager: the runtime image carries the
 # binary and nothing that could read a mounted Secret interactively.
@@ -23,5 +23,8 @@ COPY --from=build /out/service /usr/local/bin/service
 # volume mounted here inherits that ownership, otherwise it is root-owned and the
 # readiness write check fails.
 COPY --from=build --chown=nonroot:nonroot /out/assets /var/lib/emberling/assets
+# Same reason for the Mock Provider's dispatch record directory: the compose stack mounts a
+# named volume here, and the record file must be writable by nonroot.
+COPY --from=build --chown=nonroot:nonroot /out/mockprovider /var/lib/emberling/mockprovider
 USER nonroot:nonroot
 ENTRYPOINT ["/usr/local/bin/service"]
