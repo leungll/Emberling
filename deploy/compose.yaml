@@ -153,6 +153,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # The deploy and sandbox_test Tools call these two services. They exist only under
+      # the mock profile, so they are optional: without it the backend starts alone.
+      mockproduction:
+        condition: service_started
+        required: false
+      sandboxrunner:
+        condition: service_started
+        required: false
     ports:
       - "8080:8080"
     environment:

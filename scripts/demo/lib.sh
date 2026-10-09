@@ -2,13 +2,16 @@
 # Shared settings for the fault-injection demo scripts. Sourced, never executed.
 #
 # The scripts drive the local Compose stack in deploy/compose.yaml only. They read the
-# Backend's public REST API and the Mock Provider's test-control routes, and run SQL
-# through the postgres container, so the host needs docker, curl and jq but not psql.
+# Backend's public REST API and the test-control routes of the Mock Provider, the mock
+# production service and the sandbox runner, and run SQL through the postgres container,
+# so the host needs docker, curl and jq but not psql.
 
 DEMO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 COMPOSE_FILE="$DEMO_ROOT/deploy/compose.yaml"
 BACKEND_URL=${EMBERLING_DEMO_BACKEND_URL:-http://localhost:8080}
 MOCK_URL=${EMBERLING_DEMO_MOCK_URL:-http://localhost:9101}
+PRODUCTION_URL=${EMBERLING_DEMO_PRODUCTION_URL:-http://localhost:9102}
+RUNNER_URL=${EMBERLING_DEMO_RUNNER_URL:-http://localhost:9103}
 
 # The backend service refuses to start without these two values. When the developer has
 # not set them, each script invocation generates throwaway local values. They are never
@@ -66,13 +69,22 @@ mock_ready() {
   curl -fsS -o /dev/null "$MOCK_URL/control/barrier" 2>/dev/null
 }
 
-# record_last_seq prints the highest seq in the Mock Provider's dispatch record, paging
-# with ?after= while the provider reports a truncated response.
+production_ready() {
+  curl -fsS -o /dev/null "$PRODUCTION_URL/control/barrier" 2>/dev/null
+}
+
+runner_ready() {
+  curl -fsS -o /dev/null "$RUNNER_URL/control/barrier" 2>/dev/null
+}
+
+# record_last_seq [URL] prints the highest seq in a service's request record, the Mock
+# Provider's dispatch record by default, paging with ?after= while the service reports a
+# truncated response. The three services share one record format and control surface.
 record_last_seq() {
-  local after=0 page headers
+  local url=${1:-$MOCK_URL} after=0 page headers
   headers=$(mktemp)
   while :; do
-    page=$(curl -fsS -D "$headers" "$MOCK_URL/control/record?after=$after")
+    page=$(curl -fsS -D "$headers" "$url/control/record?after=$after")
     if [[ -n "$page" ]]; then
       after=$(jq -s 'map(.seq) | max' <<<"$page")
     fi
@@ -82,12 +94,13 @@ record_last_seq() {
   printf '%s\n' "$after"
 }
 
-# record_after SEQ prints every dispatch record line with seq greater than SEQ.
+# record_after SEQ [URL] prints every line of a service's request record, the Mock
+# Provider's dispatch record by default, with seq greater than SEQ.
 record_after() {
-  local after=$1 page headers
+  local after=$1 url=${2:-$MOCK_URL} page headers
   headers=$(mktemp)
   while :; do
-    page=$(curl -fsS -D "$headers" "$MOCK_URL/control/record?after=$after")
+    page=$(curl -fsS -D "$headers" "$url/control/record?after=$after")
     if [[ -n "$page" ]]; then
       printf '%s\n' "$page"
       after=$(jq -s 'map(.seq) | max' <<<"$page")

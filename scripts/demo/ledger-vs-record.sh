@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Compares a Run's Event ledger, read through the Backend's public API, with what the Mock
-# Provider itself observed in its append-only dispatch record.
+# Provider, the sandbox runner and the mock production service themselves observed in
+# their append-only request records.
 #
 # Usage: scripts/demo/ledger-vs-record.sh RUN_ID [RECORD_AFTER_SEQ]
 #
@@ -29,7 +30,18 @@
 #   - accepted callback deliveries are at least the callback-received Events;
 #   - status queries the Provider answered with a finished task (`polled` with taskStatus
 #     SUCCEEDED or FAILED) are at least the completions whose source is PROVIDER_POLL. A
-#     poll that finds the task still RUNNING changes nothing and is only counted.
+#     poll that finds the task still RUNNING changes nothing and is only counted;
+#   - every test the Run bound to the sandbox runner arrived, started and completed exactly
+#     once there, and the runner's 2xx callback deliveries for it are at least the callback
+#     completions of its Tool Attempt. Further 2xx deliveries are duplicates the Backend
+#     answered without a new Event and are only noted;
+#   - every deploy Attempt of the Run reached the mock production service at most once
+#     under its operationId, was deployed exactly once when it SUCCEEDED and at most once
+#     otherwise, and production deployed nothing else under the Run's deploy Actions.
+#
+# The sandbox runner and production records are read whole and filtered by the ids the
+# Run's Trace names, because a restarted runner redelivers results of earlier Runs too.
+# Their bindings and callbacks are excluded from the Mock Provider checks above.
 set -euo pipefail
 
 # shellcheck source=scripts/demo/lib.sh
@@ -53,6 +65,7 @@ events=$(run_events "$run_id")
 # the Tool Attempt's Action for an Agent node. Ids are read from the read-only Node
 # detail and Agent Trace projections, never from the Provider.
 bindings='[]'
+tool_calls='[]'
 while IFS=$'\t' read -r node_run_id node_type; do
   [[ -n "$node_run_id" ]] || continue
   detail=$(curl -fsS "$BACKEND_URL/api/runs/$run_id/nodes/$node_run_id")
@@ -63,10 +76,19 @@ while IFS=$'\t' read -r node_run_id node_type; do
     trace=$(curl -fsS "$BACKEND_URL/api/runs/$run_id/nodes/$node_run_id/agent")
     rows=$(jq --argjson rows "$rows" --arg unit "$node_run_id" '$rows + [paths(objects) as $p
         | getpath($p) | select(type == "object" and (.externalTaskId? | type) == "string")
-        | {unit: ($unit + ":" + ($p | map(tostring) | join("."))), attempt: (.attemptNo // null), id: .externalTaskId}]' <<<"$trace")
+        | {unit: ($unit + ":" + ($p | map(tostring) | join("."))), attempt: (.attemptNo // null), id: .externalTaskId,
+           provider: (.providerId // null)}]' <<<"$trace")
+    calls=$(jq '[.turns[] | .action as $a | .toolAttempts[]
+        | {attemptId: .id, toolName, attemptNo, status, actionId: $a.id, actionStatus: $a.status,
+           provider: (.callbackBinding.providerId // null), testId: (.callbackBinding.externalTaskId // null)}]' <<<"$trace")
+    tool_calls=$(jq -s 'add' <(printf '%s' "$tool_calls") <(printf '%s' "$calls"))
   fi
   bindings=$(jq -s 'add' <(printf '%s' "$bindings") <(printf '%s' "$rows"))
 done < <(jq -r '.nodeRuns[] | [.id, .nodeType] | @tsv' <<<"$snapshot")
+runner_calls=$(jq '[.[] | select(.provider == "sandboxrunner")]' <<<"$tool_calls")
+runner_attempt_ids=$(jq '[.[].attemptId]' <<<"$runner_calls")
+deploy_calls=$(jq '[.[] | select(.toolName == "deploy") | . + {operationId: "op_\(.actionId)_\(.attemptNo)"}]' <<<"$tool_calls")
+bindings=$(jq '[.[] | select(.provider != "sandboxrunner") | del(.provider)]' <<<"$bindings")
 
 window=$(record_after "$record_after_seq" | jq -s '.')
 record=$(jq '[.[] | select(.kind == "task")]' <<<"$window")
@@ -117,9 +139,10 @@ jq -r --argjson created "$created" '. as $all | [.[] | select(.event == "arrived
 deliveries=$(jq --argjson created "$created" '[.[] | select(.event == "callback" and (.externalTaskId as $id | $created | index($id)))]' <<<"$record")
 attempted=$(jq 'length' <<<"$deliveries")
 accepted=$(jq '[.[] | select(.status >= 200 and .status < 300)] | length' <<<"$deliveries")
-received=$(jq '[.[] | select(.type == "NODE_CALLBACK_RECEIVED"
+received=$(jq --argjson runner "$runner_attempt_ids" '[.[] | select(.type == "NODE_CALLBACK_RECEIVED"
     or ((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED")
-        and ((.payload.completionSource // .payload.failureSource) == "CALLBACK")))] | length' <<<"$events")
+        and ((.payload.completionSource // .payload.failureSource) == "CALLBACK")
+        and (.payload.toolAttemptId as $id | $runner | index($id) | not)))] | length' <<<"$events")
 if ((accepted >= received)); then
   pass "callback_deliveries_cover_events  deliveries=$attempted accepted=$accepted callback_received_events=$received"
 else
@@ -144,6 +167,53 @@ fi
 jq -r '[.[] | select(.type == "NODE_COMPLETED")] | group_by(.payload.completionSource)
     | .[] | "\(length) NODE_COMPLETED event(s) with completionSource \(.[0].payload.completionSource)"' <<<"$events" |
   while IFS= read -r line; do note "$line"; done
+
+# 5. Each test bound to the sandbox runner ran there once and its callback completions
+# were delivered.
+if [[ $(jq 'length' <<<"$runner_calls") -gt 0 ]]; then
+  runner_record=$(record_after 0 "$RUNNER_URL" | jq -s '.')
+  runner_rows=$(jq --argjson record "$runner_record" --argjson events "$events" '[.[] | . as $c | {
+      testId, attemptId,
+      arrived: ([$record[] | select(.event == "arrived" and .kind == "test" and .testId == $c.testId)] | length),
+      started: ([$record[] | select(.event == "started" and .testId == $c.testId)] | length),
+      completed: ([$record[] | select(.event == "completed" and .testId == $c.testId)] | length),
+      delivered: ([$record[] | select(.event == "callback" and .testId == $c.testId and .httpStatus >= 200 and .httpStatus < 300)] | length),
+      completions: ([$events[] | select((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED")
+          and ((.payload.completionSource // .payload.failureSource) == "CALLBACK")
+          and .payload.toolAttemptId == $c.attemptId)] | length)}]' <<<"$runner_calls")
+  bad=$(jq '[.[] | select(.arrived != 1 or .started != 1 or .completed != 1 or .delivered < .completions)]' <<<"$runner_rows")
+  if [[ $(jq 'length' <<<"$bad") -eq 0 ]]; then
+    pass "runner_ran_each_bound_test_once   $(jq -c 'map({testId, arrived, started, completed, delivered, completions})' <<<"$runner_rows")"
+  else
+    fail "runner_ran_each_bound_test_once   $(jq -c '.' <<<"$bad")"
+  fi
+  jq -r '.[] | select(.delivered > .completions)
+      | "test \(.testId): \(.delivered - .completions) further 2xx callback delivery(ies) answered as duplicates, no new Event"' <<<"$runner_rows" |
+    while IFS= read -r line; do note "$line"; done
+fi
+
+# 6. Each deploy Attempt reached production at most once and deployed at most once.
+if [[ $(jq 'length' <<<"$deploy_calls") -gt 0 ]]; then
+  production_record=$(record_after 0 "$PRODUCTION_URL" | jq -s '.')
+  deploy_rows=$(jq --argjson record "$production_record" '[.[] | . as $c | {
+      operationId, status,
+      arrived: ([$record[] | select(.event == "arrived" and .operationId == $c.operationId)] | length),
+      deployed: ([$record[] | select(.event == "deployed" and .operationId == $c.operationId and (.replayed | not))] | length),
+      abandoned: ([$record[] | select(.event == "abandoned" and .operationId == $c.operationId)] | length)}]' <<<"$deploy_calls")
+  stray=$(jq --argjson calls "$deploy_calls" '($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
+      | [.[] | select(.event == "deployed" and (.operationId as $op | $known | index($op) | not)
+          and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
+        | .operationId]' <<<"$production_record")
+  bad=$(jq '[.[] | select(.arrived > 1 or .deployed > 1 or (.status == "SUCCEEDED" and .deployed != 1))]' <<<"$deploy_rows")
+  if [[ $(jq 'length' <<<"$bad") -eq 0 && $(jq 'length' <<<"$stray") -eq 0 ]]; then
+    pass "deploy_reached_production_once    $(jq -c 'map({operationId, status, arrived, deployed, abandoned})' <<<"$deploy_rows")"
+  else
+    fail "deploy_reached_production_once    $(jq -c '.' <<<"$bad") deployed-outside-ledger=$(jq -c '.' <<<"$stray")"
+  fi
+  jq -r '.[] | select(.abandoned > 0)
+      | "deployment \(.operationId) was abandoned: the caller disconnected while it was held, so nothing was deployed"' <<<"$deploy_rows" |
+    while IFS= read -r line; do note "$line"; done
+fi
 
 printf '\n'
 if ((failures > 0)); then

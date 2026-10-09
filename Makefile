@@ -226,19 +226,24 @@ check: fmt-check lint check-doc-refs check-migrations check-file-size test-engin
 
 .PHONY: demo demo-down
 
-## demo: fault-injection and photo-set demo on the Compose stack. Builds and starts
-## postgres, the Mock Provider and the Backend when needed, then runs each variant in turn.
-## Two fault variants SIGKILL the Backend while the image dispatch is held before the
-## Provider accepts it, and after the Provider accepted the task so its callback is lost
-## and Provider polling must complete the Attempt; each restarts the Backend. Three photo
-## variants run the scripted effect-template Agent over three photos: the reviewed main
-## story, the review gate before video, and the generation limit. Every variant ends with
-## the invariant report and the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=
-## held-before-accept, after-accept, photo-set, photo-gate or photo-limit runs one.
+## demo: fault-injection, photo-set and software-delivery demo on the Compose stack. Builds
+## and starts postgres, the Mock Provider, the mock production service, the sandbox runner
+## and the Backend when needed, then runs each variant in turn. Two fault variants SIGKILL
+## the Backend while the image dispatch is held before the Provider accepts it, and after
+## the Provider accepted the task so its callback is lost and Provider polling must
+## complete the Attempt; each restarts the Backend. Three photo variants run the scripted
+## effect-template Agent over three photos: the reviewed main story, the review gate before
+## video, and the generation limit. Four delivery variants run the scripted delivery Agent
+## that tests a patch in the sandbox runner and deploys it: the main story, a SIGKILL while
+## the test waits for its callback, a SIGKILL while production holds the deployment so the
+## Agent times out, and a runner restart that redelivers a finished test. Every variant ends
+## with the invariant report and the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=
+## held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery,
+## delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery runs one.
 ## Needs Docker, curl and jq; deliberately not part of `check`.
 demo:
 	@bash scripts/demo/demo.sh run
 
-## demo-down: stop the demo stack and remove the Mock Provider dispatch-record volume.
+## demo-down: stop the demo stack and remove the request-record volumes of the three mock services.
 demo-down:
 	@bash scripts/demo/demo.sh down

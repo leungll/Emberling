@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Entry point for `make demo` and `make demo-down`.
 #
-#   demo.sh run   build and start postgres, the Mock Provider and the Backend when needed,
+#   demo.sh run   build and start postgres, the Mock Provider, the mock production service,
+#                 the sandbox runner and the Backend when needed,
 #                 then run each fault variant in turn, each followed by
 #                 ledger-vs-record.sh, then print a summary per variant:
 #                   held-before-accept  fault-kill.sh: SIGKILL while the image dispatch is
@@ -16,11 +17,27 @@
 #                   photo-gate          photo-set.sh gate: a video request for an unreviewed
 #                                       asset is rejected before any dispatch;
 #                   photo-limit         photo-set.sh limit: a generation past the frozen
-#                                       limit is rejected before any dispatch.
-#                 Each photo variant is followed by the invariant report as well.
+#                                       limit is rejected before any dispatch;
+#                   delivery            delivery.sh main: an Agent tests a patch in the
+#                                       sandbox runner, answered by callback, then deploys
+#                                       it once to the mock production service;
+#                   delivery-restart-during-test
+#                                       delivery.sh restart: SIGKILL while the test Attempt
+#                                       waits for its callback; the callback, delivered
+#                                       twice, completes the original Attempt once;
+#                   delivery-deploy-lost
+#                                       delivery.sh deploy-lost: SIGKILL while production
+#                                       holds the deployment; the Agent times out without a
+#                                       second deployment;
+#                   delivery-runner-redelivery
+#                                       delivery.sh redelivery: the restarted runner
+#                                       delivers a finished test again and the ledger gains
+#                                       no Event.
+#                 Each photo and delivery variant is followed by the invariant report as well.
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
-#   demo.sh down  stop the stack and remove the Mock Provider dispatch-record volume, so
-#                 the next demo starts from an empty record. The PostgreSQL and asset
+#   demo.sh down  stop the stack and remove the request-record volumes of the Mock
+#                 Provider, the mock production service and the sandbox runner, so the next
+#                 demo starts from empty records. The PostgreSQL and asset
 #                 volumes are kept: they also hold the developer's own `make dev` data.
 set -euo pipefail
 
@@ -30,15 +47,21 @@ require_tools docker curl jq
 
 case "${1:-}" in
 run)
-  log "building the backend and mockprovider images (cached when sources are unchanged)"
-  compose build --quiet mockprovider backend
-  log "starting postgres, mockprovider and backend"
-  compose up -d --wait postgres mockprovider backend
+  log "building the backend, mockprovider, mockproduction and sandboxrunner images (cached when sources are unchanged)"
+  compose build --quiet mockprovider mockproduction sandboxrunner backend
+  log "starting postgres, mockprovider, mockproduction, sandboxrunner and backend"
+  compose up -d --wait postgres mockprovider mockproduction sandboxrunner backend
 
   case "${EMBERLING_DEMO_VARIANT:-all}" in
-  all) variants=(held-before-accept after-accept photo-set photo-gate photo-limit) ;;
-  held-before-accept | after-accept | photo-set | photo-gate | photo-limit) variants=("$EMBERLING_DEMO_VARIANT") ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate or photo-limit" ;;
+  all)
+    variants=(held-before-accept after-accept photo-set photo-gate photo-limit
+      delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery)
+    ;;
+  held-before-accept | after-accept | photo-set | photo-gate | photo-limit | delivery | \
+    delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
+    variants=("$EMBERLING_DEMO_VARIANT")
+    ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery, delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -55,6 +78,10 @@ run)
     photo-set) script=photo-set.sh story=main ;;
     photo-gate) script=photo-set.sh story=gate ;;
     photo-limit) script=photo-set.sh story=limit ;;
+    delivery) script=delivery.sh story=main ;;
+    delivery-restart-during-test) script=delivery.sh story=restart ;;
+    delivery-deploy-lost) script=delivery.sh story=deploy-lost ;;
+    delivery-runner-redelivery) script=delivery.sh story=redelivery ;;
     esac
     printf '\n==== variant %s (%s%s) ====\n' "$variant" "$script" "${story:+ $story}"
     : >"$state"
@@ -66,7 +93,7 @@ run)
     run_status=$(sed -n 's/^RUN_STATUS=//p' "$state")
     story_summary=$(sed -n 's/^SUMMARY=//p' "$state")
 
-    # The fault scripts end with the invariant report; a photo story ends with its own
+    # The fault scripts end with the invariant report; a photo or delivery story ends with its own
     # checks, so the invariant report runs here.
     invariant_status=$script_status
     story_status=""
@@ -97,11 +124,15 @@ run)
   ;;
 down)
   compose down --remove-orphans
-  record_volume="$(compose config --format json | jq -r '.volumes["emberling-mockprovider-record"].name')"
-  if docker volume inspect "$record_volume" >/dev/null 2>&1; then
-    docker volume rm "$record_volume" >/dev/null
-    log "removed volume $record_volume"
-  fi
+  volumes=$(compose config --format json | jq -r '.volumes')
+  for key in emberling-mockprovider-record emberling-mockproduction-record emberling-sandboxrunner-record; do
+    record_volume=$(jq -r --arg key "$key" '.[$key].name // empty' <<<"$volumes")
+    [[ -n "$record_volume" ]] || continue
+    if docker volume inspect "$record_volume" >/dev/null 2>&1; then
+      docker volume rm "$record_volume" >/dev/null
+      log "removed volume $record_volume"
+    fi
+  done
   ;;
 *)
   die "usage: demo.sh run|down"
