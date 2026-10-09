@@ -41,11 +41,31 @@ func (r *fakeNodeRunRepo) ListReadyOrRetryable(context.Context, time.Time, int) 
 
 type fakeNodeAttemptRepo struct {
 	store.NodeAttemptRepository
-	expired []domain.NodeAttempt
+	expired  []domain.NodeAttempt
+	duePolls []store.DuePoll
+	// duePollLimits records the limit of every ListDuePolls call; pollWrites records any
+	// attempt to claim or clear a poll schedule, which only the service may do.
+	duePollLimits []int
+	pollWrites    []string
 }
 
 func (r *fakeNodeAttemptRepo) ListExpired(context.Context, time.Time, int) ([]domain.NodeAttempt, error) {
 	return r.expired, nil
+}
+
+func (r *fakeNodeAttemptRepo) ListDuePolls(_ context.Context, _ time.Time, limit int) ([]store.DuePoll, error) {
+	r.duePollLimits = append(r.duePollLimits, limit)
+	return r.duePolls, nil
+}
+
+func (r *fakeNodeAttemptRepo) ClaimPoll(_ context.Context, attemptID string, _ time.Time, _ time.Duration, _ int) (bool, error) {
+	r.pollWrites = append(r.pollWrites, "ClaimPoll "+attemptID)
+	return false, nil
+}
+
+func (r *fakeNodeAttemptRepo) ClearPoll(_ context.Context, attemptID string) (bool, error) {
+	r.pollWrites = append(r.pollWrites, "ClearPoll "+attemptID)
+	return false, nil
 }
 
 type fakePendingCallbackRepo struct {
@@ -128,6 +148,9 @@ type fakeExecutor struct {
 	resumeCalls []service.ResumeNode
 	resumeFunc  func(service.ResumeNode) (service.ResumeOutcome, error)
 
+	pollCalls []service.PollAttempt
+	pollFunc  func(service.PollAttempt) (service.PollAttemptOutcome, error)
+
 	agentTurnCalls    []agentCall
 	agentToolCalls    []agentCall
 	agentFinalCalls   []agentCall
@@ -175,6 +198,14 @@ func (e *fakeExecutor) ResumeNode(_ context.Context, req service.ResumeNode) (se
 		return e.resumeFunc(req)
 	}
 	return service.ResumeOutcome{}, nil
+}
+
+func (e *fakeExecutor) PollAttempt(_ context.Context, req service.PollAttempt) (service.PollAttemptOutcome, error) {
+	e.pollCalls = append(e.pollCalls, req)
+	if e.pollFunc != nil {
+		return e.pollFunc(req)
+	}
+	return service.PollAttemptOutcome{Kind: service.PollAttemptSkipped, SkipReason: service.PollSkipNotClaimed}, nil
 }
 
 func newTestReconciler(t *testing.T, exec *fakeExecutor, tx *fakeTx, logBuf *bytes.Buffer) *Reconciler {
@@ -441,5 +472,72 @@ func TestReconciler_RunOnce_DeletesExpiredPendingCallbacks(t *testing.T) {
 	}
 	if logBuf2.Len() != 0 {
 		t.Fatalf("log output when nothing was deleted: want empty, got %q", logBuf2.String())
+	}
+}
+
+// TestReconciler_DuePolls_OnlyCallsPollAttempt proves the due-poll scan only discovers
+// work: every row ListDuePolls returns is handed to the PollAttempt use case with its
+// persisted identifiers, the Reconciler never claims or clears a poll itself, each outcome
+// kind lands in its own Report count, and an error from one Attempt is collected without
+// stopping the polls of the others.
+func TestReconciler_DuePolls_OnlyCallsPollAttempt(t *testing.T) {
+	tx := emptyFakeTx()
+	tx.attempts.duePolls = []store.DuePoll{
+		{AttemptID: "at_running", NodeRunID: "nr_1", RunID: "run_1", PollCount: 0},
+		{AttemptID: "at_broken", NodeRunID: "nr_2", RunID: "run_2", PollCount: 4},
+		{AttemptID: "at_resumed", NodeRunID: "nr_3", RunID: "run_3", PollCount: 1},
+		{AttemptID: "at_duplicate", NodeRunID: "nr_4", RunID: "run_4", PollCount: 2},
+		{AttemptID: "at_skipped", NodeRunID: "nr_5", RunID: "run_5", PollCount: 3},
+	}
+	providerDown := errors.New("provider connection refused")
+	exec := &fakeExecutor{
+		pollFunc: func(req service.PollAttempt) (service.PollAttemptOutcome, error) {
+			switch req.AttemptID {
+			case "at_running":
+				return service.PollAttemptOutcome{Kind: service.PollAttemptClaimedNotFinal}, nil
+			case "at_broken":
+				return service.PollAttemptOutcome{Kind: service.PollAttemptClaimedNotFinal}, providerDown
+			case "at_resumed":
+				return service.PollAttemptOutcome{Kind: service.PollAttemptResumed}, nil
+			case "at_duplicate":
+				return service.PollAttemptOutcome{Kind: service.PollAttemptDuplicate}, nil
+			default:
+				return service.PollAttemptOutcome{Kind: service.PollAttemptSkipped, SkipReason: service.PollSkipNotClaimed}, nil
+			}
+		},
+	}
+	var logBuf bytes.Buffer
+	rec := newTestReconciler(t, exec, tx, &logBuf)
+
+	report, err := rec.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if len(exec.pollCalls) != len(tx.attempts.duePolls) {
+		t.Fatalf("PollAttempt calls: want %d (one error must not stop the scan), got %d", len(tx.attempts.duePolls), len(exec.pollCalls))
+	}
+	for i, row := range tx.attempts.duePolls {
+		want := service.PollAttempt{AttemptID: row.AttemptID, NodeRunID: row.NodeRunID, RunID: row.RunID}
+		if exec.pollCalls[i] != want {
+			t.Fatalf("PollAttempt call %d: want %+v, got %+v", i, want, exec.pollCalls[i])
+		}
+	}
+	if len(tx.attempts.duePollLimits) != 1 || tx.attempts.duePollLimits[0] != 50 {
+		t.Fatalf("ListDuePolls: want one call bounded by the batch limit 50, got %v", tx.attempts.duePollLimits)
+	}
+	if len(tx.attempts.pollWrites) != 0 {
+		t.Fatalf("poll schedule writes by the Reconciler: want none, got %v", tx.attempts.pollWrites)
+	}
+	if len(exec.resumeCalls) != 0 {
+		t.Fatalf("ResumeNode calls: want none (only PollAttempt enters the resume path), got %d", len(exec.resumeCalls))
+	}
+
+	if report.DuePollsFound != 5 || report.PollsClaimed != 2 || report.PollsResumed != 1 ||
+		report.PollsDuplicate != 1 || report.PollsSkipped != 1 {
+		t.Fatalf("report: want found 5, claimed 2, resumed 1, duplicate 1, skipped 1, got %+v", report)
+	}
+	if len(report.Errors) != 1 || !errors.Is(report.Errors[0], providerDown) || !strings.Contains(report.Errors[0].Error(), "at_broken") {
+		t.Fatalf("report.Errors: want only the at_broken error, got %v", report.Errors)
 	}
 }

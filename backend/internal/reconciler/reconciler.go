@@ -31,6 +31,11 @@ import (
 // enter: the Reconciler calls it to replay an early callback that was stored as a Pending
 // Callback, never a second, Reconciler-owned resume path.
 //
+// PollAttempt is the Provider poll use case. The Reconciler hands it each Attempt whose
+// persisted poll time is due; the use case owns the conditional poll claim, the single
+// Provider query and the entry into ResumeNode, so the Reconciler never claims a poll,
+// queries a Provider or reschedules anything itself.
+//
 // The Agent use cases are the same ones immediate advancement calls, entered with
 // domain.ClaimReconciler instead of domain.ClaimImmediate. Each one owns its own
 // conditional claim and chains the rest of the Agent Loop itself, so the Reconciler hands
@@ -40,6 +45,7 @@ type Advancer interface {
 	Execute(ctx context.Context, outcome service.AdvanceOutcome) error
 	TimeoutAttempt(ctx context.Context, attemptID string) error
 	ResumeNode(ctx context.Context, req service.ResumeNode) (service.ResumeOutcome, error)
+	PollAttempt(ctx context.Context, req service.PollAttempt) (service.PollAttemptOutcome, error)
 	AdvanceAgentTurn(ctx context.Context, turnID string, claimSource domain.ClaimSource) error
 	ExecuteAgentAction(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
 	CompleteAgentFinal(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
@@ -112,6 +118,17 @@ type Report struct {
 	// same scan table.
 	ExpiredAgentRunsFound int
 	AgentRunsTimedOut     int
+	// DuePollsFound is how many DISPATCHED Attempts ListDuePolls found with a due poll.
+	// PollsClaimed counts the polls this pass claimed whose answer either resolved
+	// nothing or won the resume; PollsResumed is the subset that won the resume.
+	// PollsSkipped counts polls the use case did not claim, and PollsDuplicate final
+	// answers that lost to a callback, timeout or other poll. Neither is an error: another
+	// path owned that Attempt. Only an error returned by the use case is collected.
+	DuePollsFound  int
+	PollsClaimed   int
+	PollsResumed   int
+	PollsSkipped   int
+	PollsDuplicate int
 	// ConsumablePendingFound is how many stored early callbacks
 	// ListConsumableForWaiting found routed to a still-waiting Attempt.
 	ConsumablePendingFound int
@@ -128,7 +145,8 @@ type Report struct {
 // RunOnce performs one reconciliation pass: it lists persisted READY NodeRuns and
 // RUNNING NodeRuns whose retry backoff has elapsed, drives Advance/Execute for each
 // distinct Run until no further claim is made; lists expired (deadline passed) STARTED or
-// DISPATCHED Attempts and calls TimeoutAttempt on each; lists Pending Callbacks that now
+// DISPATCHED Attempts and calls TimeoutAttempt on each; lists DISPATCHED Attempts whose
+// Provider poll is due and calls PollAttempt on each; lists Pending Callbacks that now
 // route to a still-waiting Attempt and replays each through ResumeNode; and finally
 // deletes Pending Callbacks past their retention TTL. Every list call is a read-only store
 // scan wrapped in its own throwaway transaction; RunOnce itself never mutates business
@@ -179,6 +197,10 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 			continue
 		}
 		report.AttemptsTimedOut++
+	}
+
+	if err := r.scanDuePolls(ctx, now, &report); err != nil {
+		return report, err
 	}
 
 	var consumable []store.PendingForWaiting
@@ -288,6 +310,47 @@ func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *R
 			continue
 		}
 		report.AgentActionsAdvanced++
+	}
+	return nil
+}
+
+// scanDuePolls hands every DISPATCHED Attempt whose persisted poll time is due to the
+// Provider poll use case. It runs after the timeout scan so an Attempt already past its
+// deadline is failed rather than polled, and before the Pending Callback replay, which
+// does not depend on it. A poll and a callback or timeout racing for the same Attempt are
+// decided by the use case's conditional updates; the Reconciler only discovers the work.
+func (r *Reconciler) scanDuePolls(ctx context.Context, now time.Time, report *Report) error {
+	var due []store.DuePoll
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		due, err = tx.NodeAttempts().ListDuePolls(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list due polls: %w", err)
+	}
+	report.DuePollsFound = len(due)
+
+	for _, row := range due {
+		outcome, err := r.cfg.Executor.PollAttempt(ctx, service.PollAttempt{
+			AttemptID: row.AttemptID,
+			NodeRunID: row.NodeRunID,
+			RunID:     row.RunID,
+		})
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: poll attempt %s: %w", row.AttemptID, err))
+			continue
+		}
+		switch outcome.Kind {
+		case service.PollAttemptClaimedNotFinal:
+			report.PollsClaimed++
+		case service.PollAttemptResumed:
+			report.PollsClaimed++
+			report.PollsResumed++
+		case service.PollAttemptDuplicate:
+			report.PollsDuplicate++
+		default:
+			report.PollsSkipped++
+		}
 	}
 	return nil
 }
