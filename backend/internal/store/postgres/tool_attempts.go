@@ -183,6 +183,31 @@ func (r *toolAttemptRepository) MarkTimedOut(ctx context.Context, attemptID stri
 	return affected == 1, nil
 }
 
+// CountByAgentRunForTools counts every Tool Attempt of the Agent Run whose Tool is in
+// toolNames, whatever its status. Attempts reach the Agent Run through their Action and
+// Turn. Counting Attempts rather than Actions is deliberate: an Action rejected at claim
+// never gets an Attempt and so never consumes the generation limit, while a failed
+// Attempt may already have reached the Provider and does.
+func (r *toolAttemptRepository) CountByAgentRunForTools(ctx context.Context, agentRunID string, toolNames []string) (int, error) {
+	if len(toolNames) == 0 {
+		return 0, nil
+	}
+
+	const query = `
+		SELECT count(*)
+		  FROM tool_attempts ta
+		  JOIN agent_actions aa ON aa.id = ta.action_id
+		  JOIN agent_turns   t  ON t.id  = aa.turn_id
+		 WHERE t.agent_run_id = $1
+		   AND ta.tool_name = ANY($2)`
+
+	var count int
+	if err := r.conn.QueryRow(ctx, query, agentRunID, toolNames).Scan(&count); err != nil {
+		return 0, mapError("tool_attempts.CountByAgentRunForTools", err, agentRunID)
+	}
+	return count, nil
+}
+
 func scanToolAttempts(rows pgx.Rows) ([]domain.ToolAttempt, error) {
 	defer rows.Close()
 

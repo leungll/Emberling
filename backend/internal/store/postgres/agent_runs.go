@@ -19,7 +19,7 @@ type agentRunRepository struct {
 const agentRunColumns = `id, node_run_id, instructions, model_id, model_config, allowed_tools,
 	context_schema, state_schema, output_schema, max_turns, current_turn_no,
 	current_context_version, current_state_version, started_at, deadline,
-	terminated_at, termination, error`
+	terminated_at, termination, error, max_generation_calls`
 
 // Create inserts the Agent Run with its frozen configuration. UNIQUE (node_run_id) is
 // what enforces "one Agent NodeRun has at most one Agent Run": a duplicated
@@ -36,12 +36,12 @@ func (r *agentRunRepository) Create(ctx context.Context, run domain.AgentRun) er
 
 	const insert = `
 		INSERT INTO agent_runs (` + agentRunColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`
 	if _, err := r.conn.Exec(ctx, insert,
 		run.ID, run.NodeRunID, run.Instructions, run.ModelID, run.ModelConfig, allowedTools,
 		run.ContextSchema, run.StateSchema, run.OutputSchema, run.MaxTurns, run.CurrentTurnNo,
 		run.CurrentContextVersion, run.CurrentStateVersion, run.StartedAt, run.Deadline,
-		run.TerminatedAt, nullableTermination(run.Termination), errPayload,
+		run.TerminatedAt, nullableTermination(run.Termination), errPayload, run.MaxGenerationCalls,
 	); err != nil {
 		return mapError("agent_runs.Create", err, run.ID, run.NodeRunID)
 	}
@@ -169,7 +169,7 @@ func scanAgentRuns(rows pgx.Rows) ([]domain.AgentRun, error) {
 			&run.ID, &run.NodeRunID, &run.Instructions, &run.ModelID, &run.ModelConfig, &allowedTools,
 			&run.ContextSchema, &run.StateSchema, &run.OutputSchema, &run.MaxTurns, &run.CurrentTurnNo,
 			&run.CurrentContextVersion, &run.CurrentStateVersion, &run.StartedAt, &run.Deadline,
-			&run.TerminatedAt, &termination, &errPayload,
+			&run.TerminatedAt, &termination, &errPayload, &run.MaxGenerationCalls,
 		); err != nil {
 			return nil, err
 		}

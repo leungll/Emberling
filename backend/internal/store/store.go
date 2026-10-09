@@ -46,6 +46,7 @@ type Tx interface {
 	ToolAttempts() ToolAttemptRepository
 	AgentContextVersions() AgentContextVersionRepository
 	AgentStateVersions() AgentStateVersionRepository
+	ExecutionFacts() ExecutionFactRepository
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
@@ -505,6 +506,39 @@ type ToolAttemptRepository interface {
 	// DISPATCHED one. It reports false when the Attempt already completed, which is what
 	// lets a result that committed first keep its outcome.
 	MarkTimedOut(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) (bool, error)
+
+	// CountByAgentRunForTools counts the Tool Attempts of one Agent Run whose Tool is
+	// one of toolNames, in every Attempt status. This is the number of generation calls
+	// already made: an Attempt exists only once its Action won the claim, and a started,
+	// dispatched, succeeded or failed Attempt may each have reached the Provider, so all
+	// of them consume the limit. An Action rejected at claim creates no Attempt and does
+	// not count. The caller holds the Run lock so concurrent claims cannot both see the
+	// last free slot. An empty toolNames counts nothing.
+	CountByAgentRunForTools(ctx context.Context, agentRunID string, toolNames []string) (int, error)
+}
+
+// ExecutionFactRepository persists the trusted facts Tool results produce. Facts are
+// written once, in the Tool result transaction, and never updated.
+type ExecutionFactRepository interface {
+	// Insert writes one fact and returns the stored row. A second fact of the same type
+	// for the same Tool Attempt yields domain.ErrExecutionFactDuplicate; the caller rolls
+	// the whole transaction back instead of ignoring it.
+	Insert(ctx context.Context, fact domain.ExecutionFact) (domain.ExecutionFact, error)
+
+	// FindLatest returns the newest fact of factType about subjectRef in the Run, ordered
+	// by created_at then id, or nil when there is none. Basis resolution and precondition
+	// checks use it.
+	FindLatest(ctx context.Context, runID, factType, subjectRef string) (*domain.ExecutionFact, error)
+
+	// ListForRequirement returns up to limit facts of factType in the Run, newest first
+	// (created_at then id, descending). A non-nil subjectRef restricts the result to that
+	// subject. The caller matches bindings against the requested arguments.
+	ListForRequirement(ctx context.Context, runID, factType string, subjectRef *string, limit int) ([]domain.ExecutionFact, error)
+
+	// ListByAgentRun returns every fact of one Agent Run, oldest first (created_at then
+	// id), for Trace projection. It is bounded by the Agent Run itself: each Tool Attempt
+	// produces at most one fact per type, and Tool Attempts are bounded by maxTurns.
+	ListByAgentRun(ctx context.Context, agentRunID string) ([]domain.ExecutionFact, error)
 }
 
 // AgentContextVersionRepository persists the immutable message chain a restarted process

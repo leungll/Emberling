@@ -27,6 +27,9 @@ type AgentRun struct {
 	StateSchema   json.RawMessage `json:"stateSchema"`
 	OutputSchema  json.RawMessage `json:"outputSchema"`
 	MaxTurns      int             `json:"maxTurns"`
+	// MaxGenerationCalls is the optional generation limit; nil means unlimited. The
+	// calls already made are derived from persisted Tool Attempts, never counted here.
+	MaxGenerationCalls *int `json:"maxGenerationCalls"`
 
 	// CurrentTurnNo is the highest Turn number created so far; the initialisation
 	// transaction sets it to 1. CurrentContextVersion and CurrentStateVersion point at

@@ -123,6 +123,7 @@ func (t *cbTx) ToolAttempts() store.ToolAttemptRepository     { return nil }
 
 func (t *cbTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *cbTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
+func (t *cbTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
 
 type cbDefinitionRepo struct{ tx *cbTx }
 
