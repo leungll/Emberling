@@ -185,7 +185,7 @@ func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutc
 		now := s.deps.Clock.Now()
 		committedAt = now
 
-		if err := tx.NodeAttempts().MarkDispatched(ctx, attempt.ID, now); err != nil {
+		if err := tx.NodeAttempts().MarkDispatched(ctx, attempt.ID, now, nil); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				// The Attempt is no longer STARTED: a timeout already expired it while the
 				// Provider call was in flight. Nothing is written; the external task is

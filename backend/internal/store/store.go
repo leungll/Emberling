@@ -208,8 +208,29 @@ type NodeAttemptRepository interface {
 	Transition(ctx context.Context, attemptID string, from, to domain.NodeAttemptStatus, now time.Time) error
 
 	// MarkDispatched conditionally moves an Attempt from STARTED to DISPATCHED and
-	// stamps dispatched_at. It returns domain.ErrStaleClaim when the row is not STARTED.
-	MarkDispatched(ctx context.Context, attemptID string, now time.Time) error
+	// stamps dispatched_at. In the same UPDATE it writes firstPollAt as the first
+	// next_poll_at; firstPollAt is nil when the registration declares no poll policy.
+	// It returns domain.ErrStaleClaim when the row is not STARTED.
+	MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error
+
+	// ClaimPoll conditionally claims one Provider poll of a DISPATCHED Attempt whose
+	// next_poll_at is due and whose poll_count is below maxPolls. It increments
+	// poll_count and schedules next_poll_at at now+interval, or clears it when this
+	// claim reaches maxPolls. The bounds come from the caller, which reads them from
+	// the current registration. A false result is not an error: the poll is not due,
+	// the bound was reached, the Attempt left DISPATCHED, or another claimer won.
+	// Claiming a poll is a scheduling fact; the caller writes no Event for it.
+	ClaimPoll(ctx context.Context, attemptID string, now time.Time, interval time.Duration, maxPolls int) (bool, error)
+
+	// ClearPoll unschedules polling of a DISPATCHED Attempt by setting next_poll_at to
+	// NULL, for a registration that no longer declares a usable poll policy. A false
+	// result means the Attempt is no longer DISPATCHED and nothing changed.
+	ClearPoll(ctx context.Context, attemptID string) (bool, error)
+
+	// ListDuePolls returns DISPATCHED Attempts whose next_poll_at is at or before now,
+	// oldest first, bounded by limit. It only discovers persisted work; claiming each
+	// poll is the caller's conditional update.
+	ListDuePolls(ctx context.Context, now time.Time, limit int) ([]DuePoll, error)
 
 	// MarkSucceeded conditionally moves an Attempt to SUCCEEDED and writes its result
 	// and completed_at. Result is written once: a stale or illegal caller never
@@ -228,6 +249,14 @@ type NodeAttemptRepository interface {
 
 	// Latest returns the highest attempt_no Attempt of a NodeRun, or nil if none exists.
 	Latest(ctx context.Context, nodeRunID string) (*domain.NodeAttempt, error)
+}
+
+// DuePoll identifies one persisted Node Attempt whose Provider poll is due.
+type DuePoll struct {
+	AttemptID string
+	NodeRunID string
+	RunID     string
+	PollCount int
 }
 
 // CallbackBindingRepository persists the only authoritative route from an external task

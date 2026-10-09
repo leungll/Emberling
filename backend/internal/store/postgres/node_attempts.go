@@ -17,7 +17,8 @@ type nodeAttemptRepository struct {
 }
 
 const nodeAttemptColumns = `id, node_run_id, attempt_no, status, input, result,
-	callback_token_hash, started_at, deadline_at, dispatched_at, completed_at, error`
+	callback_token_hash, started_at, deadline_at, dispatched_at, completed_at, error,
+	next_poll_at, poll_count`
 
 // Create inserts a new Attempt. A retry always creates another row: an old Attempt is
 // never overwritten, so UNIQUE (node_run_id, attempt_no) rejects a duplicated retry.
@@ -29,11 +30,12 @@ func (r *nodeAttemptRepository) Create(ctx context.Context, attempt domain.NodeA
 
 	const insert = `
 		INSERT INTO node_attempts (` + nodeAttemptColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 	if _, err := r.conn.Exec(ctx, insert,
 		attempt.ID, attempt.NodeRunID, attempt.AttemptNo, string(attempt.Status),
 		attempt.Input, nullableJSON(attempt.Result), attempt.CallbackTokenHash,
 		attempt.StartedAt, attempt.DeadlineAt, attempt.DispatchedAt, attempt.CompletedAt, errPayload,
+		attempt.NextPollAt, attempt.PollCount,
 	); err != nil {
 		return mapError("node_attempts.Create", err, attempt.ID, attempt.NodeRunID, attempt.AttemptNo)
 	}
@@ -106,13 +108,16 @@ func (r *nodeAttemptRepository) Transition(ctx context.Context, attemptID string
 // MarkDispatched conditionally moves an Attempt from STARTED to DISPATCHED and stamps
 // dispatched_at. The dispatch transaction that commits the external hand-off owns this
 // write; a later retry or timeout that also targets a STARTED row loses here instead.
-func (r *nodeAttemptRepository) MarkDispatched(ctx context.Context, attemptID string, now time.Time) error {
+// The first next_poll_at is written in the same UPDATE, so a restart can rediscover a
+// due poll from the committed dispatch alone; firstPollAt is nil when no poll policy is
+// registered.
+func (r *nodeAttemptRepository) MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error {
 	const update = `
 		UPDATE node_attempts
-		   SET status = 'DISPATCHED', dispatched_at = $2
+		   SET status = 'DISPATCHED', dispatched_at = $2, next_poll_at = $3
 		 WHERE id = $1 AND status = 'STARTED'`
 
-	affected, err := affectedRows(ctx, r.conn, "node_attempts.MarkDispatched", update, attemptID, now)
+	affected, err := affectedRows(ctx, r.conn, "node_attempts.MarkDispatched", update, attemptID, now, firstPollAt)
 	if err != nil {
 		return err
 	}
@@ -213,6 +218,99 @@ func (r *nodeAttemptRepository) ListExpired(ctx context.Context, before time.Tim
 	return attempts, nil
 }
 
+// ClaimPoll conditionally claims one Provider poll. The WHERE clause is the single
+// arbiter between the in-process scheduler, the Reconciler and a concurrent completion:
+// only a DISPATCHED Attempt that is due and below the bound is claimed, and the row lock
+// taken by the UPDATE serialises racing claimers so exactly one sees an affected row.
+// In SET, poll_count still reads the pre-update value, so the claim that reaches
+// maxPolls clears next_poll_at instead of scheduling another poll.
+func (r *nodeAttemptRepository) ClaimPoll(ctx context.Context, attemptID string, now time.Time, interval time.Duration, maxPolls int) (bool, error) {
+	if interval <= 0 {
+		return false, fmt.Errorf("store/postgres node_attempts.ClaimPoll: attempt=%s: interval must be positive, got %s", attemptID, interval)
+	}
+	if maxPolls <= 0 {
+		return false, fmt.Errorf("store/postgres node_attempts.ClaimPoll: attempt=%s: maxPolls must be positive, got %d", attemptID, maxPolls)
+	}
+
+	const update = `
+		UPDATE node_attempts
+		   SET poll_count   = poll_count + 1,
+		       next_poll_at = CASE WHEN poll_count + 1 >= $3 THEN NULL ELSE $4::timestamptz END
+		 WHERE id = $1
+		   AND status = 'DISPATCHED'
+		   AND next_poll_at IS NOT NULL
+		   AND next_poll_at <= $2
+		   AND poll_count < $3`
+	affected, err := affectedRows(ctx, r.conn, "node_attempts.ClaimPoll", update,
+		attemptID, now, maxPolls, now.Add(interval))
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case affected == 0:
+		return false, nil
+	case affected > 1:
+		return false, errUnexpectedRows("node_attempts.ClaimPoll", attemptID, affected)
+	}
+	return true, nil
+}
+
+// ClearPoll unschedules polling of a DISPATCHED Attempt. A terminal Attempt is left
+// untouched: its next_poll_at no longer matters because only DISPATCHED rows are due.
+func (r *nodeAttemptRepository) ClearPoll(ctx context.Context, attemptID string) (bool, error) {
+	const update = `
+		UPDATE node_attempts
+		   SET next_poll_at = NULL
+		 WHERE id = $1 AND status = 'DISPATCHED'`
+	affected, err := affectedRows(ctx, r.conn, "node_attempts.ClearPoll", update, attemptID)
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case affected == 0:
+		return false, nil
+	case affected > 1:
+		return false, errUnexpectedRows("node_attempts.ClearPoll", attemptID, affected)
+	}
+	return true, nil
+}
+
+// ListDuePolls discovers DISPATCHED Attempts whose next poll is due, using the partial
+// due-poll index. It returns identities only; it claims nothing.
+func (r *nodeAttemptRepository) ListDuePolls(ctx context.Context, now time.Time, limit int) ([]store.DuePoll, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres node_attempts.ListDuePolls: limit must be positive, got %d", limit)
+	}
+
+	const query = `
+		SELECT a.id, a.node_run_id, nr.run_id, a.poll_count
+		  FROM node_attempts a
+		  JOIN node_runs nr ON nr.id = a.node_run_id
+		 WHERE a.status = 'DISPATCHED'
+		   AND a.next_poll_at IS NOT NULL AND a.next_poll_at <= $1
+		 ORDER BY a.next_poll_at ASC, a.id ASC
+		 LIMIT $2`
+
+	rows, err := r.conn.Query(ctx, query, now, limit)
+	if err != nil {
+		return nil, mapError("node_attempts.ListDuePolls", err)
+	}
+	defer rows.Close()
+
+	out := []store.DuePoll{}
+	for rows.Next() {
+		var due store.DuePoll
+		if err := rows.Scan(&due.AttemptID, &due.NodeRunID, &due.RunID, &due.PollCount); err != nil {
+			return nil, mapError("node_attempts.ListDuePolls", err)
+		}
+		out = append(out, due)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapError("node_attempts.ListDuePolls", err)
+	}
+	return out, nil
+}
+
 // Latest returns the highest attempt_no Attempt of a NodeRun, or nil if none exists.
 func (r *nodeAttemptRepository) Latest(ctx context.Context, nodeRunID string) (*domain.NodeAttempt, error) {
 	const query = `SELECT ` + nodeAttemptColumns + `
@@ -251,6 +349,7 @@ func scanNodeAttempts(rows pgx.Rows) ([]domain.NodeAttempt, error) {
 			&attempt.Input, &result, &attempt.CallbackTokenHash,
 			&attempt.StartedAt, &attempt.DeadlineAt, &attempt.DispatchedAt,
 			&attempt.CompletedAt, &errPayload,
+			&attempt.NextPollAt, &attempt.PollCount,
 		); err != nil {
 			return nil, err
 		}

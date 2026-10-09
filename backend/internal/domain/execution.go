@@ -71,6 +71,12 @@ type NodeAttempt struct {
 	DispatchedAt *time.Time      `json:"dispatchedAt"`
 	CompletedAt  *time.Time      `json:"completedAt"`
 	Error        *ExecutionError `json:"error"`
+	// NextPollAt and PollCount are Provider polling scheduling facts, not business
+	// state. NextPollAt is nil when no poll is scheduled: the registration declares no
+	// poll policy or the poll bound was reached. Only a DISPATCHED Attempt is ever due.
+	// Claiming a poll increments PollCount, writes no Event and never moves DeadlineAt.
+	NextPollAt *time.Time `json:"nextPollAt"`
+	PollCount  int        `json:"pollCount"`
 }
 
 // ExecutionError is the persisted failure summary. It carries no stack traces, database

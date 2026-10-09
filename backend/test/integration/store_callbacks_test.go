@@ -58,7 +58,7 @@ func TestCallbackBindings_BindingAndDispatchedAttempt_CommitTogether(t *testing.
 	// DISPATCHED Attempt without its binding is unroutable, and a binding without a
 	// DISPATCHED Attempt routes a callback at a state that never waited for it.
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		if err := tx.NodeAttempts().MarkDispatched(ctx, attemptID, fixtureTime); err != nil {
+		if err := tx.NodeAttempts().MarkDispatched(ctx, attemptID, fixtureTime, nil); err != nil {
 			return err
 		}
 		if err := tx.CallbackBindings().Create(ctx,
@@ -584,7 +584,7 @@ func seedAttempt(
 			return err
 		}
 		if dispatched {
-			return tx.NodeAttempts().MarkDispatched(ctx, attemptID, fixtureTime)
+			return tx.NodeAttempts().MarkDispatched(ctx, attemptID, fixtureTime, nil)
 		}
 		return nil
 	}); err != nil {

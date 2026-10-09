@@ -106,7 +106,7 @@ func commitDispatchWithoutConsumingEarlyCallback(h *asyncHarness, attemptID, nod
 	h.t.Helper()
 	now := h.clock.Now()
 	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
-		if err := tx.NodeAttempts().MarkDispatched(ctx, attemptID, now); err != nil {
+		if err := tx.NodeAttempts().MarkDispatched(ctx, attemptID, now, nil); err != nil {
 			return err
 		}
 		if err := tx.NodeRuns().MarkWaiting(ctx, nodeRunID, now); err != nil {

@@ -331,13 +331,14 @@ func (r *cbNodeAttemptRepo) ListByNodeRun(context.Context, string) ([]domain.Nod
 func (r *cbNodeAttemptRepo) Transition(context.Context, string, domain.NodeAttemptStatus, domain.NodeAttemptStatus, time.Time) error {
 	return errCbNotImplemented
 }
-func (r *cbNodeAttemptRepo) MarkDispatched(_ context.Context, attemptID string, now time.Time) error {
+func (r *cbNodeAttemptRepo) MarkDispatched(_ context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error {
 	attempt := r.tx.state.attempts[attemptID]
 	if attempt.Status != domain.NodeAttemptStarted {
 		return domain.ErrStaleClaim
 	}
 	attempt.Status = domain.NodeAttemptDispatched
 	attempt.DispatchedAt = &now
+	attempt.NextPollAt = firstPollAt
 	r.tx.state.attempts[attemptID] = attempt
 	return nil
 }
@@ -374,6 +375,15 @@ func (r *cbNodeAttemptRepo) ListExpired(context.Context, time.Time, int) ([]doma
 	return nil, errCbNotImplemented
 }
 func (r *cbNodeAttemptRepo) Latest(context.Context, string) (*domain.NodeAttempt, error) {
+	return nil, errCbNotImplemented
+}
+func (r *cbNodeAttemptRepo) ClaimPoll(context.Context, string, time.Time, time.Duration, int) (bool, error) {
+	return false, errCbNotImplemented
+}
+func (r *cbNodeAttemptRepo) ClearPoll(context.Context, string) (bool, error) {
+	return false, errCbNotImplemented
+}
+func (r *cbNodeAttemptRepo) ListDuePolls(context.Context, time.Time, int) ([]store.DuePoll, error) {
 	return nil, errCbNotImplemented
 }
 
