@@ -28,6 +28,20 @@
 // stays RUNNING. An unknown or evicted id answers 404. The response never contains the
 // callback token. The query is available with or without test controls.
 //
+// POST /v1/tasks with `media: "video"` is a video generation task: it behaves as any task,
+// writes a "video_dispatched" record line once accepted, and, unless the caller supplies a
+// payload or asks for a failure, its callback reports {"status":"SUCCEEDED","videoUrl":...}
+// with a deterministic URL derived from the externalTaskId.
+//
+// POST /v1/assets generates one image synchronously from {photoAssetId, settingsDigest}:
+// it answers {assetId, imageUrl}, where assetId is derived from those two values alone and
+// imageUrl addresses GET /v1/assets/{assetId}.png on the host the caller used. With
+// `outcome: "failed"` it answers 422 and generates nothing. Each generation writes a
+// "generated" record line naming the assetId.
+//
+// GET /v1/assets/{assetId}.png serves a generated asset as a small PNG whose colour is
+// derived from the asset id. It takes no credential.
+//
 // GET /v1/images/{name}.png serves one fixed, deterministic PNG under any name, with no
 // credential of any kind. It is what makes an image reference in a task callback payload
 // genuinely readable instead of a URL that resolves to nothing.
@@ -226,6 +240,10 @@ type taskRequest struct {
 	// idempotency key). A replayed key returns the first task's externalTaskId and
 	// schedules no further callback. Keys are scoped to one server instance.
 	IdempotencyKey string `json:"idempotencyKey,omitempty"`
+	// Media "video" marks the task as a video generation: acceptance writes a
+	// video_dispatched record line, and without an explicit payload a successful callback
+	// reports the generated video's URL. Any other non-empty value is rejected.
+	Media string `json:"media,omitempty"`
 }
 
 // taskResponse is the synchronous 202 response to POST /v1/tasks.

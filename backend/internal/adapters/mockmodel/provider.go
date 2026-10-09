@@ -27,8 +27,8 @@ const ModelID = "text-model-v1"
 const ImageModelID = "image-model-v1"
 
 // mockDirectivePrefix marks the last user message as a scenario trigger instead of plain
-// prompt content: "mock:fail", "mock:tool-call:<name>[:<json-arguments>]" or
-// "mock:invalid-decision". The optional JSON arguments let a caller reach this Provider's
+// prompt content: "mock:fail", "mock:tool-call:<name>[:<json-arguments>]",
+// "mock:invalid-decision" or "mock:script:<trajectory>". The optional JSON arguments let a caller reach this Provider's
 // TOOL_CALL scenario over the public HTTP surface (Run input, not the in-process Script
 // hook) with a non-empty, schema-satisfying argument value -- e.g. remote_lookup's
 // required "key" (internal/tools/remotelookup). Everything after the second colon is taken
@@ -78,6 +78,9 @@ type Scenario struct {
 
 	// Output overrides the FINAL output text; empty means the default `echo: <prompt>`.
 	Output string
+	// FinalOutput, when set, is the FINAL output as any JSON value and takes precedence
+	// over Output. A scripted trajectory uses it to finish with a structured result.
+	FinalOutput json.RawMessage
 	// ToolName and ToolArguments are used only by ScenarioToolCall.
 	ToolName      string
 	ToolArguments json.RawMessage
@@ -121,6 +124,25 @@ func NewProvider() *Provider {
 	return &Provider{maxRecorded: defaultMaxRecorded}
 }
 
+// textConfigSchema is the text model's parameter contract: configSchema plus an optional
+// `script` naming one embedded trajectory, so an Agent Definition selects a scripted
+// multi-Turn conversation by configuration alone.
+var textConfigSchema = mustTextConfigSchema()
+
+func mustTextConfigSchema() json.RawMessage {
+	var schema map[string]any
+	if err := json.Unmarshal([]byte(configSchema), &schema); err != nil {
+		panic("mockmodel: config schema constant is not JSON: " + err.Error())
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	properties["script"] = map[string]any{"type": "string", "enum": TrajectoryNames()}
+	encoded, err := json.Marshal(schema)
+	if err != nil {
+		panic("mockmodel: encode text config schema: " + err.Error())
+	}
+	return encoded
+}
+
 // Models returns the models this Provider serves.
 func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error) {
 	return []registry.ModelRegistration{
@@ -128,7 +150,7 @@ func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error)
 			ID:           ModelID,
 			DisplayName:  "Mock Text Model v1",
 			Capabilities: []string{domain.ModelCapabilityTextGeneration, domain.ModelCapabilityStructuredDecision},
-			ConfigSchema: json.RawMessage(configSchema),
+			ConfigSchema: textConfigSchema,
 		}},
 		{ModelMetadata: domain.ModelMetadata{
 			ID:           ImageModelID,
@@ -189,6 +211,12 @@ func (p *Provider) Generate(ctx context.Context, request registry.ModelRequest) 
 		return p.finish(scenario, decision, promptText, ""), nil
 
 	default:
+		if scenario.FinalOutput != nil {
+			decision := registry.ModelDecision{
+				Kind: registry.DecisionFinal, Output: scenario.FinalOutput, StatePatch: scenario.StatePatch,
+			}
+			return p.finish(scenario, decision, promptText, string(scenario.FinalOutput)), nil
+		}
 		output := scenario.Output
 		if output == "" {
 			output = "echo: " + promptText
@@ -234,8 +262,8 @@ func (p *Provider) finish(scenario Scenario, decision registry.ModelDecision, pr
 	return response
 }
 
-// resolveScenario applies Script first, then the `mock:` directive in the last user
-// message, and defaults to ScenarioFinal. An error return means the directive itself was
+// resolveScenario applies Script first, then the `script` model config parameter, then the
+// `mock:` directive in the last user message, and defaults to ScenarioFinal. An error return means the directive itself was
 // malformed (invalid syntax, not merely an unrecognised kind); every other outcome is a
 // valid Scenario and a nil error.
 func (p *Provider) resolveScenario(request registry.ModelRequest) (Scenario, error) {
@@ -243,6 +271,9 @@ func (p *Provider) resolveScenario(request registry.ModelRequest) (Scenario, err
 		if scenario := p.Script(request); scenario != nil {
 			return *scenario, nil
 		}
+	}
+	if name := configuredScript(request); name != "" {
+		return scriptedScenario(request, name)
 	}
 	text := lastUserMessageText(request)
 	if !strings.HasPrefix(text, mockDirectivePrefix) {
@@ -257,6 +288,8 @@ func (p *Provider) resolveScenario(request registry.ModelRequest) (Scenario, err
 		return p.resolveToolCallDirective(request, arg)
 	case ScenarioInvalidDecision:
 		return Scenario{Kind: ScenarioInvalidDecision}, nil
+	case ScenarioScript:
+		return scriptedScenario(request, arg)
 	default:
 		return Scenario{Kind: ScenarioFinal}, nil
 	}

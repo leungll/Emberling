@@ -1,0 +1,31 @@
+{
+  "turns": [
+    {
+      "toolCall": {
+        "toolName": "generate_image",
+        "arguments": {
+          "photoAssetId": "{{task:/photos/0/photoAssetId}}",
+          "settings": {"style": "film", "strength": 0.6}
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "generate_video",
+        "arguments": {
+          "assetRef": "{{tool:0:/assetRef}}",
+          "photoAssetId": "{{task:/photos/0/photoAssetId}}",
+          "settings": {"durationSeconds": 4}
+        }
+      }
+    },
+    {
+      "final": {
+        "output": {
+          "photoAssetId": "{{task:/photos/0/photoAssetId}}",
+          "videoUrl": "{{tool:1:/videoUrl}}"
+        }
+      }
+    }
+  ]
+}

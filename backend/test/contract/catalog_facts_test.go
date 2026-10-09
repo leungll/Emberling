@@ -121,6 +121,23 @@ func TestAPI_ToolsCatalog_FactDeclarations_SerialisedInDTOShape(t *testing.T) {
 			countsToward: `false`,
 		},
 		{
+			name:         "generate_image",
+			produces:     `{"factType":"image_generated","subjectPointer":{"source":"RESULT","pointer":"/assetRef"},"bindArguments":{"photoAssetId":{"source":"ARGUMENTS","pointer":"/photoAssetId"},"settingsDigest":{"source":"RESULT","pointer":"/settingsDigest"}}}`,
+			requires:     `[]`,
+			countsToward: `true`,
+		},
+		{
+			name:         "review_asset",
+			produces:     `{"factType":"asset_reviewed","subjectPointer":{"source":"ARGUMENTS","pointer":"/assetRef"},"bindArguments":{"photoAssetId":{"source":"ARGUMENTS","pointer":"/photoAssetId"},"policyVersion":{"source":"RESULT","pointer":"/policyVersion"}},"verdictPointer":{"source":"RESULT","pointer":"/passed"},"basisFactType":"image_generated"}`,
+			requires:     `[{"factType":"image_generated","subjectArgument":"/assetRef","matchBindings":["photoAssetId"]}]`,
+			countsToward: `false`,
+		},
+		{
+			name:         "generate_video",
+			requires:     `[{"factType":"asset_reviewed","subjectArgument":"/assetRef","matchBindings":["photoAssetId"],"requireVerdict":true}]`,
+			countsToward: `false`,
+		},
+		{
 			// A built-in Tool declaring no facts.
 			name:         "lookup",
 			requires:     `[]`,

@@ -48,8 +48,11 @@ import (
 	"github.com/leungll/Emberling/backend/internal/service"
 	"github.com/leungll/Emberling/backend/internal/store"
 	"github.com/leungll/Emberling/backend/internal/store/postgres"
+	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
+	"github.com/leungll/Emberling/backend/internal/tools/generatevideo"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"
 	"github.com/leungll/Emberling/backend/internal/tools/remotelookup"
+	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 	"github.com/leungll/Emberling/backend/internal/work"
 	"github.com/leungll/Emberling/backend/test/testdb"
 )
@@ -289,6 +292,15 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	}
 	if err := toolRegistry.Register(remotelookup.Registration(mockTaskBaseURL, opts.TaskClient)); err != nil {
 		t.Fatalf("register tool %s: %v", remotelookup.ToolName, err)
+	}
+	for _, reg := range []registry.ToolRegistration{
+		generateimage.Registration(mockTaskBaseURL, opts.TaskClient),
+		reviewasset.Registration(),
+		generatevideo.Registration(mockTaskBaseURL, opts.TaskClient),
+	} {
+		if err := toolRegistry.Register(reg); err != nil {
+			t.Fatalf("register tool %s: %v", reg.Metadata.Name, err)
+		}
 	}
 	for _, reg := range opts.ExtraToolRegistrations {
 		if err := toolRegistry.Register(reg); err != nil {

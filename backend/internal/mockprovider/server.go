@@ -45,8 +45,10 @@ func mustDecodeBase64(encoded string) []byte {
 }
 
 // Server implements the Mock Provider's routes: a liveness probe, a synchronous
-// text-generation simulation, an asynchronous task/callback simulation with a task status
-// query, and the image route an asynchronous result's EXTERNAL reference points at.
+// text-generation simulation, a synchronous image generation with the route serving each
+// generated asset, an asynchronous task/callback simulation (including video tasks) with a
+// task status query, and the image route an asynchronous result's EXTERNAL reference
+// points at.
 type Server struct {
 	dispatcher *Dispatcher
 	newTaskID  func() (string, error)
@@ -94,6 +96,8 @@ func NewServer(dispatcher *Dispatcher, opts ...Option) *Server {
 	r.Post("/v1/tasks", s.handleTasks)
 	r.Get("/v1/tasks/{externalTaskId}", s.handleTaskStatus)
 	r.Get("/v1/images/{name}", s.handleImage)
+	r.Post("/v1/assets", s.handleGenerateImage)
+	r.Get("/v1/assets/{name}", s.handleAsset)
 	if s.controls != nil {
 		dispatcher.observe = s.controls.record.appendDelivery
 		s.mountControlRoutes(r)
@@ -206,6 +210,10 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		s.reject(w, arrival, http.StatusBadRequest, "callbackToken is required")
 		return
 	}
+	if req.Media != "" && req.Media != mediaVideo {
+		s.reject(w, arrival, http.StatusBadRequest, `media must be absent or "video"`)
+		return
+	}
 
 	externalTaskID := req.ExternalTaskID
 	if externalTaskID == "" {
@@ -250,6 +258,9 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		CallbackToken:  callbackToken,
 		Payload:        callbackPayload(req),
 	}
+	if req.Media == mediaVideo && len(req.Payload) == 0 && req.Outcome != outcomeFailed {
+		task.Payload = videoSucceededPayload(requestBaseURL(r), externalTaskID)
+	}
 	s.rememberTask(task)
 	s.statuses.accept(externalTaskID, task.Payload, req.Outcome == outcomeFailed)
 
@@ -271,6 +282,9 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		s.dispatcher.Schedule(task, 0)
 	}
 
+	if req.Media == mediaVideo {
+		s.recordMedia(recordEntry{Event: recordVideoDispatched, Kind: kindTask, ExternalTaskID: arrival.ExternalTaskID})
+	}
 	s.recordResponse(kindTask, arrival.ExternalTaskID, http.StatusAccepted, false)
 	writeJSON(w, http.StatusAccepted, taskResponse{ExternalTaskID: externalTaskID})
 }

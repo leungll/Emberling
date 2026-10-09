@@ -38,8 +38,11 @@ import (
 	"github.com/leungll/Emberling/backend/internal/service"
 	"github.com/leungll/Emberling/backend/internal/store"
 	"github.com/leungll/Emberling/backend/internal/store/postgres"
+	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
+	"github.com/leungll/Emberling/backend/internal/tools/generatevideo"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"
 	"github.com/leungll/Emberling/backend/internal/tools/remotelookup"
+	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 	"github.com/leungll/Emberling/backend/internal/work"
 )
 
@@ -194,6 +197,15 @@ func run(logger *slog.Logger) error {
 			}
 			if err := toolRegistry.Register(remotelookup.Registration(cfg.ModelProvider.BaseURL, taskClient)); err != nil {
 				return fmt.Errorf("register tool: %w", err)
+			}
+			for _, reg := range []registry.ToolRegistration{
+				generateimage.Registration(cfg.ModelProvider.BaseURL, taskClient),
+				reviewasset.Registration(),
+				generatevideo.Registration(cfg.ModelProvider.BaseURL, taskClient),
+			} {
+				if err := toolRegistry.Register(reg); err != nil {
+					return fmt.Errorf("register tool: %w", err)
+				}
 			}
 			// Fact declarations may name a producer Tool registered after its consumer, so
 			// they are checked only once every registration is in.

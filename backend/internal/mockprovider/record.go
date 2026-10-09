@@ -64,6 +64,8 @@ type recordEntry struct {
 	Event          string `json:"event"`
 	Kind           string `json:"kind"`
 	ExternalTaskID string `json:"externalTaskId,omitempty"`
+	// AssetID is the generated asset a "generated" line reports.
+	AssetID string `json:"assetId,omitempty"`
 	// CallbackTarget is the callback URL reduced to scheme, host and path. Query string,
 	// fragment and user info are dropped because a receiver could carry a credential there.
 	CallbackTarget string `json:"callbackTarget,omitempty"`
