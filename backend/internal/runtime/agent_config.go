@@ -3,6 +3,7 @@ package runtime
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -23,6 +24,9 @@ type AgentNodeConfig struct {
 	OutputSchema  json.RawMessage `json:"outputSchema,omitempty"`
 	MaxTurns      int             `json:"maxTurns"`
 	TimeoutMs     int             `json:"timeoutMs"`
+	// MaxGenerationCalls optionally bounds how many calls of Tools that count toward the
+	// generation limit one Agent Run may start. Nil means unlimited.
+	MaxGenerationCalls *int `json:"maxGenerationCalls,omitempty"`
 }
 
 // AgentConfigError is one `agent` Node config violation found by ParseAgentNodeConfig.
@@ -47,6 +51,8 @@ func (e *AgentConfigError) Error() string {
 // express:
 //
 //   - maxTurns and timeoutMs are both present and >= 1 (AgentRun invariants).
+//   - maxGenerationCalls, when present, is an integer >= 1. It has no upper bound and is
+//     not tied to maxTurns; absent means unlimited.
 //   - contextSchema, stateSchema and outputSchema, when present, are each a compilable
 //     JSON Schema document.
 //   - stateSchema, when present, accepts `{}` -- an Agent Run's State Version 0
@@ -67,6 +73,10 @@ func ParseAgentNodeConfig(raw json.RawMessage) (AgentNodeConfig, error) {
 	dec.DisallowUnknownFields()
 	var cfg AgentNodeConfig
 	if err := dec.Decode(&cfg); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) && typeErr.Field == "maxGenerationCalls" {
+			return AgentNodeConfig{}, &AgentConfigError{Field: "maxGenerationCalls", Message: "maxGenerationCalls must be an integer"}
+		}
 		return AgentNodeConfig{}, &AgentConfigError{Message: "config has an unknown or malformed field: " + err.Error()}
 	}
 
@@ -78,6 +88,9 @@ func ParseAgentNodeConfig(raw json.RawMessage) (AgentNodeConfig, error) {
 	}
 	if cfg.TimeoutMs < 1 {
 		return AgentNodeConfig{}, &AgentConfigError{Field: "timeoutMs", Message: "timeoutMs must be >= 1"}
+	}
+	if cfg.MaxGenerationCalls != nil && *cfg.MaxGenerationCalls < 1 {
+		return AgentNodeConfig{}, &AgentConfigError{Field: "maxGenerationCalls", Message: "maxGenerationCalls must be >= 1 when present"}
 	}
 
 	if len(bytes.TrimSpace(cfg.ContextSchema)) > 0 {

@@ -109,3 +109,51 @@ func TestAgentNodeConfig_Parse_OutputSchemaRejectsString_Fails(t *testing.T) {
 		t.Errorf("Field = %q, want outputSchema", ace.Field)
 	}
 }
+
+func parseWithMaxGenerationCalls(t *testing.T, fragment string) (AgentNodeConfig, error) {
+	t.Helper()
+	raw := `{"modelId": "text-model-v1", "maxTurns": 4, "timeoutMs": 120000` + fragment + `}`
+	return ParseAgentNodeConfig(json.RawMessage(raw))
+}
+
+func TestAgentNodeConfig_Parse_MaxGenerationCallsAbsent_Unlimited(t *testing.T) {
+	cfg, err := parseWithMaxGenerationCalls(t, "")
+	if err != nil {
+		t.Fatalf("ParseAgentNodeConfig() error = %v", err)
+	}
+	if cfg.MaxGenerationCalls != nil {
+		t.Errorf("MaxGenerationCalls = %d, want nil (unlimited)", *cfg.MaxGenerationCalls)
+	}
+}
+
+func TestAgentNodeConfig_Parse_MaxGenerationCallsOne_Passes(t *testing.T) {
+	cfg, err := parseWithMaxGenerationCalls(t, `, "maxGenerationCalls": 1`)
+	if err != nil {
+		t.Fatalf("ParseAgentNodeConfig() error = %v", err)
+	}
+	if cfg.MaxGenerationCalls == nil || *cfg.MaxGenerationCalls != 1 {
+		t.Errorf("MaxGenerationCalls = %v, want 1", cfg.MaxGenerationCalls)
+	}
+}
+
+func TestAgentNodeConfig_Parse_MaxGenerationCallsInvalid_Fails(t *testing.T) {
+	cases := map[string]string{
+		"zero":       `, "maxGenerationCalls": 0`,
+		"negative":   `, "maxGenerationCalls": -3`,
+		"fractional": `, "maxGenerationCalls": 1.5`,
+		"string":     `, "maxGenerationCalls": "two"`,
+		"boolean":    `, "maxGenerationCalls": true`,
+	}
+	for name, fragment := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := parseWithMaxGenerationCalls(t, fragment)
+			var ace *AgentConfigError
+			if !errors.As(err, &ace) {
+				t.Fatalf("expected *AgentConfigError, got %T: %v", err, err)
+			}
+			if ace.Field != "maxGenerationCalls" {
+				t.Errorf("Field = %q, want maxGenerationCalls", ace.Field)
+			}
+		})
+	}
+}

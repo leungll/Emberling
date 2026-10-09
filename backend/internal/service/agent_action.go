@@ -140,7 +140,8 @@ func (s *ExecutionService) wake(c agentCommit) {
 //
 //  1. Lock the Run, conditionally claim the Action READY->RUNNING, validate the committed
 //     Decision against the frozen allowlist and the registered Tool InputSchema, check
-//     the fact requirements the Tool declares against the Run's committed facts, create
+//     the fact requirements the Tool declares against the Run's committed facts and the
+//     Agent Run's frozen generation limit, create
 //     the STARTED Tool Attempt and write AGENT_ACTION_STARTED. Losing the claim writes
 //     nothing; a Decision that may not be executed fails the Action in this same
 //     transaction and never reaches the Tool.
@@ -471,6 +472,22 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		if unmet != nil {
 			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
 				domain.FailureSyncExecution, domain.TerminationInvalidAction, *unmet, now); err != nil {
+				return err
+			}
+			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
+			return nil
+		}
+
+		// A counted Tool call past the Agent Run's frozen generation limit is rejected the
+		// same way, still before any Attempt exists; the Run lock serializes concurrent
+		// claims, so the limit can never be overrun.
+		overLimit, err := s.generationLimitReachedLocked(ctx, tx, agentRun, reg.Metadata)
+		if err != nil {
+			return err
+		}
+		if overLimit != nil {
+			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
+				domain.FailureSyncExecution, domain.TerminationInvalidAction, *overLimit, now); err != nil {
 				return err
 			}
 			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}

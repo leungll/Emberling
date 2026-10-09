@@ -13,8 +13,8 @@ import (
 )
 
 // This file owns the execution facts of Agent Tool calls: the fact a successful Tool result
-// establishes under its Tool's registered production declaration, and the check of a
-// Tool's declared fact requirements when its Action is claimed.
+// establishes under its Tool's registered production declaration, and the claim-time
+// checks of a Tool's declared fact requirements and of the Agent Run's generation limit.
 
 // recordProducedFactLocked writes the execution fact of one successful Tool result inside
 // the Tool result transaction, under the Run aggregate lock the caller holds, so the fact
@@ -172,4 +172,55 @@ func (s *ExecutionService) unmetFactRequirementLocked(
 		}
 	}
 	return nil, nil
+}
+
+// generationLimitReachedLocked decides whether one more call of a counted Tool would pass
+// the Agent Run's frozen generation limit. It runs inside the claim transaction, under the
+// Run aggregate lock the caller holds, after the fact requirements held and before any
+// Tool Attempt exists, so concurrent claims of the same Agent Run are serialized by that
+// lock and the count they read already includes every Attempt a previous claim committed.
+//
+// Nothing is checked when the Agent Run has no limit or the Tool's current registration
+// does not count toward it. Otherwise the calls already started are derived from the
+// persisted Tool Attempts of every Tool the current Registry marks as counting, whatever
+// their status: a call that reached the Provider and failed, or whose outcome is
+// uncertain, may still have generated something and keeps its share of the budget. There
+// is no counter column to drift from those Attempts.
+//
+// A reached limit is returned as the GENERATION_LIMIT_REACHED ExecutionError the caller
+// fails the Action with; its details carry only the limit and the calls used.
+func (s *ExecutionService) generationLimitReachedLocked(
+	ctx context.Context,
+	tx store.Tx,
+	agentRun domain.AgentRun,
+	tool domain.ToolMetadata,
+) (*domain.ExecutionError, error) {
+	if agentRun.MaxGenerationCalls == nil || !tool.CountsTowardGenerationLimit {
+		return nil, nil
+	}
+
+	var counted []string
+	for _, metadata := range s.deps.Tools.ListMetadata() {
+		if metadata.CountsTowardGenerationLimit {
+			counted = append(counted, metadata.Name)
+		}
+	}
+	used, err := tx.ToolAttempts().CountByAgentRunForTools(ctx, agentRun.ID, counted)
+	if err != nil {
+		return nil, fmt.Errorf("execution: count generation calls of agent run %s: %w", agentRun.ID, err)
+	}
+	if !runtime.GenerationLimitReached(agentRun.MaxGenerationCalls, used) {
+		return nil, nil
+	}
+
+	limit := *agentRun.MaxGenerationCalls
+	details, err := json.Marshal(map[string]int{"limit": limit, "used": used})
+	if err != nil {
+		return nil, fmt.Errorf("execution: encode generation limit details of agent run %s: %w", agentRun.ID, err)
+	}
+	return &domain.ExecutionError{
+		Code:    runtime.CodeGenerationLimitReached,
+		Message: fmt.Sprintf("tool %q would exceed the agent run's generation limit of %d calls (%d used)", tool.Name, limit, used),
+		Details: details,
+	}, nil
 }
