@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
@@ -107,6 +108,35 @@ func TestArtifactStore_Write_AlreadyPresent_SucceedsWithoutOverwriting(t *testin
 	}
 }
 
+// TestArtifactStore_Write_AlreadyPresent_RefreshesModTime covers the sweeper's grace
+// window: saving bytes that already have an object restarts the object's age, so a Run
+// about to commit a row for it is not racing a sweep of an old unreferenced copy.
+func TestArtifactStore_Write_AlreadyPresent_RefreshesModTime(t *testing.T) {
+	store, root := newArtifactStore(t, 1<<20)
+	content := pngContent("aged")
+	ref, err := store.Write(context.Background(), bytes.NewReader(content))
+	if err != nil {
+		t.Fatalf("first Write: %v", err)
+	}
+	key, _ := asset.ArtifactStorageKey(ref.SHA256)
+	path := filepath.Join(root, filepath.FromSlash(key))
+	aged := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(path, aged, aged); err != nil {
+		t.Fatalf("age the object: %v", err)
+	}
+
+	if _, err := store.Write(context.Background(), bytes.NewReader(content)); err != nil {
+		t.Fatalf("second Write: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if age := time.Since(info.ModTime()); age > time.Hour {
+		t.Fatalf("object age after the second Write = %s, want it refreshed", age)
+	}
+}
+
 func TestArtifactStore_Write_ExceedsMaxBytes_FailsAndLeavesNothing(t *testing.T) {
 	store, root := newArtifactStore(t, 16)
 
@@ -174,29 +204,58 @@ func TestArtifactStore_Write_ReaderFails_CleansStagingAndErrorHasNoPath(t *testi
 	}
 }
 
-func TestArtifactStore_Remove_DeletesAndIsIdempotent(t *testing.T) {
+func TestArtifactStore_RemoveIfOlder_DeletesAgedObjectAndIsIdempotent(t *testing.T) {
 	store, root := newArtifactStore(t, 1<<20)
 	ref, err := store.Write(context.Background(), bytes.NewReader(pngContent("gone")))
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 	key, _ := asset.ArtifactStorageKey(ref.SHA256)
+	path := filepath.Join(root, filepath.FromSlash(key))
+	aged := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(path, aged, aged); err != nil {
+		t.Fatalf("age the object: %v", err)
+	}
+	cutoff := time.Now().Add(-24 * time.Hour)
 
-	for i := 0; i < 2; i++ {
-		if err := store.Remove(key); err != nil {
-			t.Fatalf("Remove #%d: %v", i+1, err)
+	for i, want := range []bool{true, false} {
+		removed, err := store.RemoveIfOlder(key, cutoff)
+		if err != nil {
+			t.Fatalf("RemoveIfOlder #%d: %v", i+1, err)
+		}
+		if removed != want {
+			t.Fatalf("RemoveIfOlder #%d removed = %v, want %v", i+1, removed, want)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(key))); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("object still present: %v", err)
 	}
 }
 
-func TestArtifactStore_Remove_MalformedKey_IsRejected(t *testing.T) {
+// TestArtifactStore_RemoveIfOlder_RecentObject_IsKept covers the check made at removal
+// time: an object whose age was restarted after it was enumerated is kept.
+func TestArtifactStore_RemoveIfOlder_RecentObject_IsKept(t *testing.T) {
+	store, root := newArtifactStore(t, 1<<20)
+	ref, err := store.Write(context.Background(), bytes.NewReader(pngContent("fresh")))
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	key, _ := asset.ArtifactStorageKey(ref.SHA256)
+
+	removed, err := store.RemoveIfOlder(key, time.Now().Add(-24*time.Hour))
+	if err != nil || removed {
+		t.Fatalf("RemoveIfOlder = %v, %v; want kept without error", removed, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(key))); err != nil {
+		t.Fatalf("recent object removed: %v", err)
+	}
+}
+
+func TestArtifactStore_RemoveIfOlder_MalformedKey_IsRejected(t *testing.T) {
 	store, _ := newArtifactStore(t, 1<<20)
 	for _, key := range []string{"", "../etc/passwd", "artifacts/../x", "ab/asset_1", "artifacts/00/" + strings.Repeat("a", 64)} {
-		if err := store.Remove(key); err == nil {
-			t.Fatalf("Remove(%q) succeeded, want error", key)
+		if _, err := store.RemoveIfOlder(key, time.Now()); err == nil {
+			t.Fatalf("RemoveIfOlder(%q) succeeded, want error", key)
 		}
 	}
 }

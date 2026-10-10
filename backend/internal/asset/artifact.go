@@ -85,8 +85,8 @@ func (s *ArtifactStore) VerifyReadWrite(ctx context.Context) error {
 // Write streams r into content-addressed storage and returns its reference. Size is
 // capped while streaming; the media type is sniffed from the leading bytes and only
 // PNG, JPEG and WebP are accepted. An object already present under the derived key is a
-// success: it holds the same bytes, and it is never overwritten. Errors never carry a
-// path or storage key.
+// success: it holds the same bytes, it is never overwritten, and its modification time is
+// refreshed so the sweeper treats it as recent. Errors never carry a path or storage key.
 func (s *ArtifactStore) Write(ctx context.Context, r io.Reader) (domain.ArtifactRef, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.ArtifactRef{}, err
@@ -123,22 +123,49 @@ func (s *ArtifactStore) Write(ctx context.Context, r io.Reader) (domain.Artifact
 	if err != nil {
 		return domain.ArtifactRef{}, err
 	}
-	if err := linkImmutable(content, s.path(key)); err != nil && !errors.Is(err, os.ErrExist) {
+	err = linkImmutable(content, s.path(key))
+	switch {
+	case err == nil:
+	case errors.Is(err, os.ErrExist):
+		// The object may be old and still unreferenced. Restarting its age keeps the
+		// sweeper's grace window ahead of the result transaction that is about to
+		// reference it; the bytes themselves are never rewritten.
+		now := time.Now()
+		if err := os.Chtimes(s.path(key), now, now); err != nil {
+			return domain.ArtifactRef{}, fmt.Errorf("asset: artifact %s: refresh: %w", ref.ArtifactID, redactPath(err))
+		}
+	default:
 		return domain.ArtifactRef{}, fmt.Errorf("asset: artifact %s: %w", ref.ArtifactID, err)
 	}
 	return ref, nil
 }
 
-// Remove deletes the object under storageKey. It is the sweeper's path for an object no
-// metadata references, so an already absent object is not an error.
-func (s *ArtifactStore) Remove(storageKey string) error {
+// RemoveIfOlder deletes the object under storageKey when its modification time is before
+// cutoff, and reports whether it did. It is the sweeper's path for an object no metadata
+// references. The age is read again here, at removal time, because saving identical bytes
+// restarts it after enumeration; an already absent object is not an error.
+func (s *ArtifactStore) RemoveIfOlder(storageKey string, cutoff time.Time) (bool, error) {
 	if err := validateArtifactStorageKey(storageKey); err != nil {
-		return err
+		return false, err
 	}
-	if err := os.Remove(s.path(storageKey)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("asset: remove artifact: %w", redactPath(err))
+	path := s.path(storageKey)
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
 	}
-	return nil
+	if err != nil {
+		return false, fmt.Errorf("asset: stat artifact: %w", redactPath(err))
+	}
+	if !info.ModTime().Before(cutoff) {
+		return false, nil
+	}
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("asset: remove artifact: %w", redactPath(err))
+	}
+	return true, nil
 }
 
 // RemoveStaged deletes one staging leftover by the name enumeration returned. An already
