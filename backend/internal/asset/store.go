@@ -10,8 +10,6 @@ package asset
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -78,32 +76,7 @@ func (s *Store) VerifyReadWrite(ctx context.Context) error {
 		return err
 	}
 
-	probe, err := os.CreateTemp(staging, "readiness-*")
-	if err != nil {
-		return fmt.Errorf("asset: create readiness probe: %w", redactPath(err))
-	}
-	probePath := probe.Name()
-	defer func() { _ = os.Remove(probePath) }()
-
-	const marker = "emberling-readiness"
-	if _, err := probe.WriteString(marker); err != nil {
-		_ = probe.Close()
-		return fmt.Errorf("asset: write readiness probe: %w", err)
-	}
-	if err := probe.Close(); err != nil {
-		return fmt.Errorf("asset: close readiness probe: %w", err)
-	}
-	read, err := os.ReadFile(probePath)
-	if err != nil {
-		return fmt.Errorf("asset: read readiness probe: %w", redactPath(err))
-	}
-	if string(read) != marker {
-		return errors.New("asset: readiness probe read back different content")
-	}
-	if err := os.Remove(probePath); err != nil {
-		return fmt.Errorf("asset: remove readiness probe: %w", redactPath(err))
-	}
-	return nil
+	return probeReadWrite(staging)
 }
 
 // Write streams r into storage under a key derived from assetID and reports the size and
@@ -130,60 +103,29 @@ func (s *Store) Write(ctx context.Context, assetID string, r io.Reader) (StoredC
 		return StoredContent{}, err
 	}
 
-	staged, err := os.CreateTemp(staging, "upload-*")
+	content, err := stageContent(staging, "upload-*", r, s.maxBytes)
 	if err != nil {
-		return StoredContent{}, fmt.Errorf("asset: stage content: asset=%s: %w", assetID, redactPath(err))
+		if errors.Is(err, errContentTooLarge) {
+			return StoredContent{}, fmt.Errorf("asset: receive content: asset=%s: %w", assetID, domain.ErrAssetTooLarge)
+		}
+		return StoredContent{}, fmt.Errorf("asset: %w: asset=%s", err, assetID)
 	}
-	stagedPath := staged.Name()
-	// Removing the staging file covers every failure path below, and is a no-op once the
-	// content has been linked into place and removed explicitly.
-	defer func() { _ = os.Remove(stagedPath) }()
+	// Discarding the staging file covers every failure path below, and is a no-op once the
+	// content has been linked into place.
+	defer content.discard()
 
-	digest := sha256.New()
-	// maxBytes+1 is what makes the cap a streaming decision: reading one byte past the
-	// limit proves the content is too large without reading the rest of it.
-	written, copyErr := io.Copy(io.MultiWriter(staged, digest), io.LimitReader(r, s.maxBytes+1))
-	if copyErr != nil {
-		_ = staged.Close()
-		return StoredContent{}, fmt.Errorf("asset: receive content: asset=%s: %w", assetID, redactPath(copyErr))
-	}
-	if written > s.maxBytes {
-		_ = staged.Close()
-		return StoredContent{}, fmt.Errorf("asset: receive content: asset=%s: %w", assetID, domain.ErrAssetTooLarge)
-	}
-	if err := staged.Sync(); err != nil {
-		_ = staged.Close()
-		return StoredContent{}, fmt.Errorf("asset: flush content: asset=%s: %w", assetID, redactPath(err))
-	}
-	if err := staged.Close(); err != nil {
-		return StoredContent{}, fmt.Errorf("asset: close staged content: asset=%s: %w", assetID, redactPath(err))
-	}
-
-	destination := s.path(key)
-	shardDir := filepath.Dir(destination)
-	if err := os.MkdirAll(shardDir, dirPerm); err != nil {
-		return StoredContent{}, fmt.Errorf("asset: create shard directory: asset=%s: %w", assetID, redactPath(err))
-	}
-	// os.Link, not os.Rename: rename silently replaces an existing destination, which
-	// would break the immutability an AssetRef promises. Link fails with EEXIST instead,
-	// and is equally atomic.
-	if err := os.Link(stagedPath, destination); err != nil {
+	// An existing key is never overwritten: link fails with EEXIST instead.
+	if err := linkImmutable(content, s.path(key)); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return StoredContent{}, fmt.Errorf("asset: content already exists: asset=%s: %w", assetID, domain.ErrConflict)
 		}
-		return StoredContent{}, fmt.Errorf("asset: commit content: asset=%s: %w", assetID, redactPath(err))
-	}
-	if err := syncDir(shardDir); err != nil {
-		return StoredContent{}, fmt.Errorf("asset: flush shard directory: asset=%s: %w", assetID, redactPath(err))
-	}
-	if err := os.Remove(stagedPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return StoredContent{}, fmt.Errorf("asset: clear staged content: asset=%s: %w", assetID, redactPath(err))
+		return StoredContent{}, fmt.Errorf("asset: %w: asset=%s", err, assetID)
 	}
 
 	return StoredContent{
 		StorageKey: key,
-		SizeBytes:  written,
-		SHA256:     hex.EncodeToString(digest.Sum(nil)),
+		SizeBytes:  content.sizeBytes,
+		SHA256:     content.sha256,
 	}, nil
 }
 

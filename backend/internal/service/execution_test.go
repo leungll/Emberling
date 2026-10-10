@@ -172,7 +172,8 @@ func (t *execFakeTx) NodeAttempts() store.NodeAttemptRepository { return t.attem
 func (t *execFakeTx) Events() store.EventRepository             { return t.events }
 
 // Assets is unused here: advancing an execution never reads or writes Asset Metadata.
-func (t *execFakeTx) Assets() store.AssetRepository { return nil }
+func (t *execFakeTx) Assets() store.AssetRepository       { return nil }
+func (t *execFakeTx) Artifacts() store.ArtifactRepository { return nil }
 
 // Callback persistence is not exercised by these fakes: an async dispatch is proved
 // against a real database in test/integration, where the binding, the DISPATCHED Attempt

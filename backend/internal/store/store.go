@@ -33,6 +33,7 @@ type UnitOfWork interface {
 type Tx interface {
 	Definitions() DefinitionRepository
 	Assets() AssetRepository
+	Artifacts() ArtifactRepository
 	Runs() RunRepository
 	NodeRuns() NodeRunRepository
 	NodeAttempts() NodeAttemptRepository
@@ -94,6 +95,31 @@ type AssetRepository interface {
 
 	// Get returns the Metadata and storage key of one Asset, or domain.ErrNotFound.
 	Get(ctx context.Context, assetID string) (AssetRecord, error)
+}
+
+// ArtifactRecord is one execution_artifacts row: the Execution Artifact Metadata plus the
+// internal storage key of its content-addressed object. As with AssetRecord, the key is a
+// system Secret that travels only between this repository, the service layer and the
+// content store.
+type ArtifactRecord struct {
+	Artifact   domain.Artifact
+	StorageKey string
+}
+
+// ArtifactRepository persists Execution Artifact Metadata. It has no update or delete
+// method: an artifact_id is derived from the content digest and points at immutable
+// content.
+type ArtifactRepository interface {
+	// CreateIfAbsent inserts one Execution Artifact unless a row with the same
+	// artifact_id already exists. Identical content produced twice — by a duplicate
+	// completion or by two Runs — therefore leaves exactly one row. An existing row whose
+	// sha256, size_bytes or media_type differ yields domain.ErrConflict and is left
+	// untouched.
+	CreateIfAbsent(ctx context.Context, record ArtifactRecord) error
+
+	// Get returns the Metadata and storage key of one Execution Artifact, or
+	// domain.ErrNotFound.
+	Get(ctx context.Context, artifactID string) (ArtifactRecord, error)
 }
 
 // RunRepository persists Runs and serialises concurrent advancement of one Run.

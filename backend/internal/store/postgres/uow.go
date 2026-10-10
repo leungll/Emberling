@@ -75,6 +75,7 @@ func (u *UnitOfWork) WithinReadTx(ctx context.Context, fn func(ctx context.Conte
 type tx struct {
 	definitions      *definitionRepository
 	assets           *assetRepository
+	artifacts        *artifactRepository
 	runs             *runRepository
 	nodeRuns         *nodeRunRepository
 	nodeAttempts     *nodeAttemptRepository
@@ -96,6 +97,7 @@ func newTx(conn pgx.Tx) *tx {
 	return &tx{
 		definitions:      &definitionRepository{conn: conn},
 		assets:           &assetRepository{conn: conn},
+		artifacts:        &artifactRepository{conn: conn},
 		runs:             &runRepository{conn: conn},
 		nodeRuns:         &nodeRunRepository{conn: conn},
 		nodeAttempts:     &nodeAttemptRepository{conn: conn},
@@ -116,6 +118,7 @@ func newTx(conn pgx.Tx) *tx {
 
 func (t *tx) Definitions() store.DefinitionRepository   { return t.definitions }
 func (t *tx) Assets() store.AssetRepository             { return t.assets }
+func (t *tx) Artifacts() store.ArtifactRepository       { return t.artifacts }
 func (t *tx) Runs() store.RunRepository                 { return t.runs }
 func (t *tx) NodeRuns() store.NodeRunRepository         { return t.nodeRuns }
 func (t *tx) NodeAttempts() store.NodeAttemptRepository { return t.nodeAttempts }

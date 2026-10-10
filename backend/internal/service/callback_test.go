@@ -110,8 +110,9 @@ func (t *cbTx) CallbackBindings() store.CallbackBindingRepository { return &cbBi
 func (t *cbTx) PendingCallbacks() store.PendingCallbackRepository { return &cbPendingRepo{tx: t} }
 
 // Assets is unused here: callback handling never reads or writes Asset Metadata.
-func (t *cbTx) Assets() store.AssetRepository { return nil }
-func (t *cbTx) Events() store.EventRepository { return &cbEventRepo{tx: t} }
+func (t *cbTx) Assets() store.AssetRepository       { return nil }
+func (t *cbTx) Artifacts() store.ArtifactRepository { return nil }
+func (t *cbTx) Events() store.EventRepository       { return &cbEventRepo{tx: t} }
 
 // The callback use case never reads or writes Agent facts, so these accessors stay nil;
 // the Agent repositories are proved against a real database in test/integration.

@@ -122,7 +122,8 @@ func (t *defsFakeTx) NodeAttempts() store.NodeAttemptRepository { return t.attem
 func (t *defsFakeTx) Events() store.EventRepository             { return t.events }
 
 // Assets is unused here: the Definition use cases never read or write Asset Metadata.
-func (t *defsFakeTx) Assets() store.AssetRepository { return nil }
+func (t *defsFakeTx) Assets() store.AssetRepository       { return nil }
+func (t *defsFakeTx) Artifacts() store.ArtifactRepository { return nil }
 
 // CallbackBindings backs QueryService.NodeRunDetail's projection (internal/service/query.go);
 // these fakes never populate a binding, so ListByTargets always answers empty, matching a
