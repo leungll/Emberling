@@ -211,6 +211,10 @@ const defaultTestCallbackMaxPayloadBytes = 4096
 // not override it explicitly. Production configures 16 MiB (EMBERLING_ASSET_MAX_UPLOAD_BYTES).
 const defaultTestAssetMaxUploadBytes = 1 << 20
 
+// defaultTestArtifactMaxBytes bounds one generated image saved as an Execution Artifact.
+// Production defaults to 16 MiB (EMBERLING_ARTIFACT_MAX_BYTES).
+const defaultTestArtifactMaxBytes = 1 << 20
+
 // testCallbackSigningSecret is a fixed, non-empty HMAC key every testEnv signs callback
 // tokens with. It exists only in-process for this test binary and is never a real
 // production Secret.
@@ -295,6 +299,23 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 			t.Fatalf("register node type %s: %v", reg.Metadata.Type, err)
 		}
 	}
+	assetMaxUploadBytes := opts.AssetMaxUploadBytes
+	if assetMaxUploadBytes <= 0 {
+		assetMaxUploadBytes = defaultTestAssetMaxUploadBytes
+	}
+	// Each Backend gets its own storage root, removed with the test: Asset content is a
+	// file on a volume, so nothing here may outlive the test that uploaded it. A restart
+	// test passes the stopped Backend's root back in, which is the volume a restarted
+	// process would remount.
+	assetRoot := opts.AssetStorageRoot
+	if assetRoot == "" {
+		assetRoot = t.TempDir()
+	}
+	assetStore := asset.NewStore(assetRoot, assetMaxUploadBytes)
+	// Generated images land in the same root's artifact subtree, as they do in a
+	// deployment, so a restart test that reuses the root also keeps them.
+	artifactStore := asset.NewArtifactStore(assetRoot, defaultTestArtifactMaxBytes)
+
 	if !opts.SkipLookupTool {
 		if err := toolRegistry.Register(lookup.Registration()); err != nil {
 			t.Fatalf("register tool %s: %v", lookup.ToolName, err)
@@ -304,7 +325,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		t.Fatalf("register tool %s: %v", remotelookup.ToolName, err)
 	}
 	for _, reg := range []registry.ToolRegistration{
-		generateimage.Registration(mockTaskBaseURL, opts.TaskClient),
+		generateimage.Registration(mockTaskBaseURL, opts.TaskClient, artifactStore),
 		reviewasset.Registration(),
 		generatevideo.Registration(mockTaskBaseURL, opts.TaskClient),
 	} {
@@ -324,20 +345,6 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	compiler := runtime.NewCompiler(nodeRegistry, clock)
 	queue := work.NewQueue(0)
 	notifier := api.NewHub()
-
-	assetMaxUploadBytes := opts.AssetMaxUploadBytes
-	if assetMaxUploadBytes <= 0 {
-		assetMaxUploadBytes = defaultTestAssetMaxUploadBytes
-	}
-	// Each Backend gets its own storage root, removed with the test: Asset content is a
-	// file on a volume, so nothing here may outlive the test that uploaded it. A restart
-	// test passes the stopped Backend's root back in, which is the volume a restarted
-	// process would remount.
-	assetRoot := opts.AssetStorageRoot
-	if assetRoot == "" {
-		assetRoot = t.TempDir()
-	}
-	assetStore := asset.NewStore(assetRoot, assetMaxUploadBytes)
 
 	var serviceNotifier service.EventNotifier = notifier
 	if opts.WrapServiceNotifier != nil {
@@ -381,9 +388,14 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		Registry:      func(context.Context) error { return nil },
 		// Step 4 runs for real: the same check cmd/emberling gates startup with, so an
 		// Asset storage root this Backend cannot use fails here instead of at upload.
-		AssetStorage: assetStore.VerifyReadWrite,
-		Reconciler:   func(context.Context) error { return nil },
-		FirstScan:    func(context.Context) error { return nil },
+		AssetStorage: func(ctx context.Context) error {
+			if err := assetStore.VerifyReadWrite(ctx); err != nil {
+				return err
+			}
+			return artifactStore.VerifyReadWrite(ctx)
+		},
+		Reconciler: func(context.Context) error { return nil },
+		FirstScan:  func(context.Context) error { return nil },
 	}, noopObserver{}); err != nil {
 		t.Fatalf("probe.Run: %v", err)
 	}

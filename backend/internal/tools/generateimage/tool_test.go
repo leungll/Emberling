@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -19,6 +20,11 @@ func newProvider(t *testing.T) *httptest.Server {
 	server := httptest.NewServer(mockprovider.NewServer(mockprovider.NewDispatcher(nil)))
 	t.Cleanup(server.Close)
 	return server
+}
+
+func newArtifacts(t *testing.T) *asset.ArtifactStore {
+	t.Helper()
+	return asset.NewArtifactStore(t.TempDir(), 1<<20)
 }
 
 func action(arguments string) registry.ToolAction {
@@ -44,7 +50,7 @@ func validateOutput(t *testing.T, output json.RawMessage) {
 }
 
 func TestRegistration_SyncExternalProducerCountingTowardLimit_RegistersCleanly(t *testing.T) {
-	reg := Registration("http://mock-provider.test", nil)
+	reg := Registration("http://mock-provider.test", nil, nil)
 	if reg.Metadata.ExecutionKind != domain.ToolExecutionSync {
 		t.Errorf("executionKind = %s, want SYNC", reg.Metadata.ExecutionKind)
 	}
@@ -73,7 +79,7 @@ func TestRegistration_SyncExternalProducerCountingTowardLimit_RegistersCleanly(t
 func TestExecute_ProviderGenerates_ReturnsReachableAssetAndSettingsDigest(t *testing.T) {
 	provider := newProvider(t)
 
-	got, err := New(provider.URL, provider.Client()).Execute(context.Background(),
+	got, err := New(provider.URL, provider.Client(), newArtifacts(t)).Execute(context.Background(),
 		action(`{"photoAssetId":"asset_photo_1","settings":{"style":"film","strength":0.6}}`))
 	if err != nil {
 		t.Fatalf("execute: %v", err)
@@ -102,7 +108,7 @@ func TestExecute_ProviderGenerates_ReturnsReachableAssetAndSettingsDigest(t *tes
 		t.Errorf("GET imageUrl status = %d, want 200", image.StatusCode)
 	}
 
-	again, err := New(provider.URL, provider.Client()).Execute(context.Background(),
+	again, err := New(provider.URL, provider.Client(), newArtifacts(t)).Execute(context.Background(),
 		action(`{"settings":{"strength":0.6, "style":"film"},"photoAssetId":"asset_photo_1"}`))
 	if err != nil {
 		t.Fatalf("repeat execute: %v", err)
@@ -117,7 +123,7 @@ func TestExecute_ProviderWithPublicBaseURL_BindsBrowserReachableImageURL(t *test
 	provider := httptest.NewServer(mockprovider.NewServer(mockprovider.NewDispatcher(nil), mockprovider.WithPublicBaseURL(public)))
 	t.Cleanup(provider.Close)
 
-	got, err := New(provider.URL, provider.Client()).Execute(context.Background(),
+	got, err := New(provider.URL, provider.Client(), newArtifacts(t)).Execute(context.Background(),
 		action(`{"photoAssetId":"asset_photo_1","settings":{"style":"film"}}`))
 	if err != nil {
 		t.Fatalf("execute: %v", err)
@@ -140,7 +146,7 @@ func TestExecute_ProviderWithPublicBaseURL_BindsBrowserReachableImageURL(t *test
 func TestExecute_FailControl_FailsWithoutQuotingArguments(t *testing.T) {
 	provider := newProvider(t)
 
-	_, err := New(provider.URL, provider.Client()).Execute(context.Background(),
+	_, err := New(provider.URL, provider.Client(), newArtifacts(t)).Execute(context.Background(),
 		action(`{"photoAssetId":"asset_photo_secretish","settings":{"mock":"fail","style":"film"}}`))
 	if err == nil {
 		t.Fatal("execute error = nil, want a definite generation failure")
@@ -161,7 +167,7 @@ func TestExecute_InvalidArgumentsOrUnreachableProvider_Fails(t *testing.T) {
 		"settings missing":    `{"photoAssetId":"p"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := New(provider.URL, provider.Client()).Execute(context.Background(), action(arguments)); err == nil {
+			if _, err := New(provider.URL, provider.Client(), newArtifacts(t)).Execute(context.Background(), action(arguments)); err == nil {
 				t.Fatal("execute error = nil, want an explicit error")
 			}
 		})
@@ -169,7 +175,7 @@ func TestExecute_InvalidArgumentsOrUnreachableProvider_Fails(t *testing.T) {
 
 	closed := httptest.NewServer(http.NotFoundHandler())
 	closed.Close()
-	if _, err := New(closed.URL, nil).Execute(context.Background(), action(`{"photoAssetId":"p","settings":{}}`)); err == nil || strings.Contains(err.Error(), closed.URL) {
+	if _, err := New(closed.URL, nil, newArtifacts(t)).Execute(context.Background(), action(`{"photoAssetId":"p","settings":{}}`)); err == nil || strings.Contains(err.Error(), closed.URL) {
 		t.Fatalf("execute error = %v, want a transport failure that does not name the URL", err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/store"
@@ -19,8 +20,8 @@ import (
 // SUCCEEDED status, the appended Context Version, the new State Version when the Decision's
 // patch really changed the State, the Agent Run's pointers, and either the next READY Turn
 // or the termination the round or time limit demands.
-func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agentToolCall, result json.RawMessage) error {
-	outcome, err := s.commitAgentToolResult(ctx, call, syncToolOutcome, result)
+func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agentToolCall, result json.RawMessage, artifacts []domain.ArtifactRef) error {
+	outcome, err := s.commitAgentToolResult(ctx, call, syncToolOutcome, result, artifacts)
 	if err != nil || outcome.nextTurnID == "" {
 		return err
 	}
@@ -106,10 +107,43 @@ func (s *ExecutionService) consumeReplayedPendingLocked(ctx context.Context, tx 
 	return err
 }
 
+// recordToolArtifacts commits the metadata of each declared Execution Artifact. Content
+// addressing makes the row identical however often the same bytes are produced, so a row
+// that already exists with the same content is kept as it is; one that disagrees fails
+// the transaction. The storage key is derived from the digest here rather than taken from
+// the Tool, which never sees a storage location.
+func recordToolArtifacts(ctx context.Context, tx store.Tx, artifacts []domain.ArtifactRef, now time.Time) error {
+	for _, ref := range artifacts {
+		key, err := asset.ArtifactStorageKey(ref.SHA256)
+		if err != nil {
+			return fmt.Errorf("service: record artifact %s: %w", ref.ArtifactID, err)
+		}
+		record := store.ArtifactRecord{
+			Artifact: domain.Artifact{
+				ArtifactID: ref.ArtifactID,
+				MediaType:  ref.MediaType,
+				SizeBytes:  ref.SizeBytes,
+				SHA256:     ref.SHA256,
+				CreatedAt:  now,
+			},
+			StorageKey: key,
+		}
+		if err := tx.Artifacts().CreateIfAbsent(ctx, record); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // commitAgentToolResult is the transaction that commits one successful Tool outcome and
 // performs the post-COMMIT wake-up it owes. It does not chain the next Turn; the caller
 // decides that.
-func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agentToolCall, src agentToolOutcomeSource, result json.RawMessage) (agentToolCommit, error) {
+//
+// artifacts are the Execution Artifacts the Tool declared with its result. Their content
+// is already in content storage; their metadata commits here, in the same transaction as
+// the result that references them, so a result that loses its race or rolls back leaves
+// no row behind - only unreferenced content for the offline sweeper.
+func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agentToolCall, src agentToolOutcomeSource, result json.RawMessage, artifacts []domain.ArtifactRef) (agentToolCommit, error) {
 	var commit agentCommit
 	var nextTurnID string
 
@@ -148,6 +182,9 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		now := s.deps.Clock.Now()
 
 		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
+			return err
+		}
+		if err := recordToolArtifacts(ctx, tx, artifacts, now); err != nil {
 			return err
 		}
 		// The conditional Attempt update is what decides that this caller, and not a stale

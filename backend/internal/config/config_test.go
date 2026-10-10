@@ -111,6 +111,26 @@ func TestConfig_CompleteEnvironment_LoadsEveryCategory(t *testing.T) {
 	}
 }
 
+func TestConfig_ArtifactMaxBytes_IsOptionalWithDefault(t *testing.T) {
+	cfg, err := config.Load(lookup(completeEnv()))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AssetStorage.ArtifactMaxBytes != config.DefaultArtifactMaxBytes || config.DefaultArtifactMaxBytes != 16<<20 {
+		t.Errorf("artifact max bytes: want the 16 MiB default, got %d", cfg.AssetStorage.ArtifactMaxBytes)
+	}
+
+	env := completeEnv()
+	env[config.KeyArtifactMaxBytes] = "1024"
+	cfg, err = config.Load(lookup(env))
+	if err != nil {
+		t.Fatalf("Load with %s: %v", config.KeyArtifactMaxBytes, err)
+	}
+	if cfg.AssetStorage.ArtifactMaxBytes != 1024 {
+		t.Errorf("artifact max bytes: want 1024, got %d", cfg.AssetStorage.ArtifactMaxBytes)
+	}
+}
+
 func TestConfig_NonPositiveBound_ReturnsInvalidConfigError(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -121,6 +141,8 @@ func TestConfig_NonPositiveBound_ReturnsInvalidConfigError(t *testing.T) {
 		{"reconcile interval", config.KeyReconcileInterval, "-1s"},
 		{"pending callback payload limit", config.KeyPendingCallbackMaxPayloadBytes, "0"},
 		{"trace field limit", config.KeyTraceMaxFieldBytes, "-1"},
+		{"artifact size limit", config.KeyArtifactMaxBytes, "0"},
+		{"artifact size limit not an integer", config.KeyArtifactMaxBytes, "lots"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := completeEnv()

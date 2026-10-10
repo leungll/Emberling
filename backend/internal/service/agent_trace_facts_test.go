@@ -113,7 +113,7 @@ func traceLedgerTools(t *testing.T, regs ...registry.ToolRegistration) *registry
 }
 
 func TestQueryService_AgentGenerationBudget_CountsOnlyToolsRegisteredAsCounting(t *testing.T) {
-	tools := traceLedgerTools(t, generateimage.Registration("http://mock-provider.test", nil), lookup.Registration())
+	tools := traceLedgerTools(t, generateimage.Registration("http://mock-provider.test", nil, nil), lookup.Registration())
 	svc := NewQueryService(Deps{Tools: tools})
 	attempts := &traceLedgerAttemptRepo{used: 3}
 	limit := 12
@@ -132,7 +132,7 @@ func TestQueryService_AgentGenerationBudget_CountsOnlyToolsRegisteredAsCounting(
 }
 
 func TestQueryService_AgentGenerationBudget_NoLimit_StillCountsCalls(t *testing.T) {
-	tools := traceLedgerTools(t, generateimage.Registration("http://mock-provider.test", nil))
+	tools := traceLedgerTools(t, generateimage.Registration("http://mock-provider.test", nil, nil))
 	svc := NewQueryService(Deps{Tools: tools})
 	attempts := &traceLedgerAttemptRepo{used: 2}
 

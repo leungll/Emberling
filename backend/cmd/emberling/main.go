@@ -105,6 +105,7 @@ func run(logger *slog.Logger) error {
 	queue := work.NewQueue(0)
 	notifier := api.NewHub()
 	assetStore := asset.NewStore(cfg.AssetStorage.Root, int64(cfg.AssetStorage.MaxUploadBytes))
+	artifactStore := asset.NewArtifactStore(cfg.AssetStorage.Root, int64(cfg.AssetStorage.ArtifactMaxBytes))
 
 	serviceDeps := service.Deps{
 		UoW:      uow,
@@ -200,7 +201,7 @@ func run(logger *slog.Logger) error {
 				return fmt.Errorf("register tool: %w", err)
 			}
 			for _, reg := range []registry.ToolRegistration{
-				generateimage.Registration(cfg.ModelProvider.BaseURL, taskClient),
+				generateimage.Registration(cfg.ModelProvider.BaseURL, taskClient, artifactStore),
 				reviewasset.Registration(),
 				generatevideo.Registration(cfg.ModelProvider.BaseURL, taskClient),
 			} {
@@ -219,9 +220,15 @@ func run(logger *slog.Logger) error {
 			return registry.ValidateFactDeclarations(toolRegistry.ListMetadata(), nodeRegistry.ListMetadata())
 		},
 		// Step 4: the Asset storage volume must exist and accept the write, read and
-		// delete an upload performs. A Backend that cannot do this must not become
-		// ready, because an accepted upload would have nowhere to land.
-		AssetStorage: assetStore.VerifyReadWrite,
+		// delete an upload performs, in both the Asset tree and the Execution Artifact
+		// subtree. A Backend that cannot do this must not become ready, because an
+		// accepted upload or a generated image would have nowhere to land.
+		AssetStorage: func(ctx context.Context) error {
+			if err := assetStore.VerifyReadWrite(ctx); err != nil {
+				return err
+			}
+			return artifactStore.VerifyReadWrite(ctx)
+		},
 		// Step 5: start the Reconciler's ticker loop. It must be running before the
 		// Backend accepts requests, so a crash recovered only by the Reconciler cannot
 		// be missed by a request that arrives before the first tick.

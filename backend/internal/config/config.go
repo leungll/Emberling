@@ -25,6 +25,7 @@ const (
 
 	KeyAssetStorageRoot    = EnvPrefix + "ASSET_STORAGE_ROOT"
 	KeyAssetMaxUploadBytes = EnvPrefix + "ASSET_MAX_UPLOAD_BYTES"
+	KeyArtifactMaxBytes    = EnvPrefix + "ARTIFACT_MAX_BYTES"
 
 	KeyModelProviderBaseURL = EnvPrefix + "MODEL_PROVIDER_BASE_URL"
 	KeyModelProviderAPIKey  = EnvPrefix + "MODEL_PROVIDER_API_KEY"
@@ -86,7 +87,13 @@ type AssetStorage struct {
 	// MaxUploadBytes caps a single Asset upload. It is enforced while the content
 	// streams, so oversized content is refused before it is fully accepted.
 	MaxUploadBytes int
+	// ArtifactMaxBytes caps one Execution Artifact a Tool saves, such as a generated
+	// image. It is optional and defaults to DefaultArtifactMaxBytes.
+	ArtifactMaxBytes int
 }
+
+// DefaultArtifactMaxBytes is the Execution Artifact size cap when none is configured.
+const DefaultArtifactMaxBytes = 16 << 20
 
 // ModelProvider addresses the Model Provider used by the Registry.
 type ModelProvider struct {
@@ -190,8 +197,9 @@ func Load(env func(string) string) (Config, error) {
 			MaxConns: l.requiredInt(KeyDatabaseMaxConns),
 		},
 		AssetStorage: AssetStorage{
-			Root:           l.required(KeyAssetStorageRoot),
-			MaxUploadBytes: l.requiredInt(KeyAssetMaxUploadBytes),
+			Root:             l.required(KeyAssetStorageRoot),
+			MaxUploadBytes:   l.requiredInt(KeyAssetMaxUploadBytes),
+			ArtifactMaxBytes: l.optionalInt(KeyArtifactMaxBytes, DefaultArtifactMaxBytes),
 		},
 		ModelProvider: ModelProvider{
 			BaseURL: l.requiredURL(KeyModelProviderBaseURL),
@@ -276,6 +284,7 @@ func (c Config) Validate() error {
 	}{
 		{KeyDatabaseMaxConns, c.Database.MaxConns},
 		{KeyAssetMaxUploadBytes, c.AssetStorage.MaxUploadBytes},
+		{KeyArtifactMaxBytes, c.AssetStorage.ArtifactMaxBytes},
 		{KeyReconcileBatchSize, c.Reconciliation.BatchSize},
 		{KeyPendingCallbackMaxPayloadBytes, c.PendingCallback.MaxPayloadBytes},
 		{KeyTraceMaxFieldBytes, c.Projection.MaxFieldBytes},
@@ -423,6 +432,23 @@ func (l *loader) requiredInt(key string) int {
 	value := l.required(key)
 	if value == "" {
 		return 0
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		l.fail(key, "must be an integer")
+		return 0
+	}
+	if parsed <= 0 {
+		l.fail(key, "must be a positive integer")
+		return 0
+	}
+	return parsed
+}
+
+func (l *loader) optionalInt(key string, fallback int) int {
+	value := strings.TrimSpace(l.env(key))
+	if value == "" {
+		return fallback
 	}
 	parsed, err := strconv.Atoi(value)
 	if err != nil {

@@ -33,6 +33,11 @@ type ToolAction struct {
 // against the registered OutputSchema.
 type ToolResult struct {
 	Output json.RawMessage
+	// Artifacts declares the Execution Artifacts whose content the Tool already wrote to
+	// content storage. The Runtime commits their metadata in the same transaction as the
+	// result, so a result that never commits leaves only unreferenced content behind. A
+	// Tool that produces no binary leaves it nil.
+	Artifacts []domain.ArtifactRef
 }
 
 // ToolResultKind distinguishes a finished Tool call from a dispatch.

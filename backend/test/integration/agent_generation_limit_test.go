@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
+	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -72,8 +73,12 @@ func newGenerationProvider(t *testing.T) *generationProvider {
 // optional hook that runs before the Provider request.
 type generationExecutor struct {
 	delegate *generateimage.Executor
-	during   func(ctx context.Context, action registry.ToolAction)
-	calls    atomic.Int32
+	// artifacts is where the delegate saves generated images; artifactRoot is its
+	// storage root, for tests that inspect or sweep the saved objects.
+	artifacts    *asset.ArtifactStore
+	artifactRoot string
+	during       func(ctx context.Context, action registry.ToolAction)
+	calls        atomic.Int32
 }
 
 func (g *generationExecutor) Execute(ctx context.Context, action registry.ToolAction) (registry.ToolExecutionResult, error) {
@@ -88,8 +93,14 @@ func (g *generationExecutor) Execute(ctx context.Context, action registry.ToolAc
 // non-counting lookup Tool.
 func newGenerationHarness(t *testing.T, p *generationProvider, notifier service.EventNotifier) (*agentHarness, *generationExecutor) {
 	t.Helper()
-	executor := &generationExecutor{delegate: generateimage.New(p.url, &http.Client{Timeout: 5 * time.Second})}
-	registration := generateimage.Registration(p.url, nil)
+	artifactRoot := t.TempDir()
+	artifacts := asset.NewArtifactStore(artifactRoot, 1<<20)
+	executor := &generationExecutor{
+		delegate:     generateimage.New(p.url, &http.Client{Timeout: 5 * time.Second}, artifacts),
+		artifacts:    artifacts,
+		artifactRoot: artifactRoot,
+	}
+	registration := generateimage.Registration(p.url, nil, artifacts)
 	if !registration.Metadata.CountsTowardGenerationLimit {
 		t.Fatalf("generate_image must count toward the generation limit")
 	}

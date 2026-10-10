@@ -185,13 +185,29 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 	if outputErr == nil {
 		outputErr = runtime.ValidateToolResult(output, call.outputSchema)
 	}
+	var artifacts []domain.ArtifactRef
+	if outputErr == nil {
+		artifacts = result.Result.Artifacts
+		outputErr = validateDeclaredArtifacts(artifacts, call.toolName)
+	}
 	if outputErr != nil {
 		return s.failAgentToolCall(ctx, *call, domain.ExecutionError{
 			Code: "TOOL_RESULT_INVALID", Message: outputErr.Error(),
 		})
 	}
 
-	return s.completeAgentToolCall(ctx, *call, output)
+	return s.completeAgentToolCall(ctx, *call, output, artifacts)
+}
+
+// validateDeclaredArtifacts rejects a declared Execution Artifact whose reference is not
+// internally consistent, before any of its metadata can become a row.
+func validateDeclaredArtifacts(artifacts []domain.ArtifactRef, toolName string) error {
+	for _, ref := range artifacts {
+		if err := ref.Validate(); err != nil {
+			return fmt.Errorf("tool %q declared an invalid artifact: %w", toolName, err)
+		}
+	}
+	return nil
 }
 
 // agentToolOutput reads the completed result of one synchronous Tool call.
