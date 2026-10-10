@@ -4,8 +4,10 @@ package sandboxrunner
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -14,18 +16,49 @@ import (
 // database; without a reachable daemon they skip with the reason, since the docker backend
 // is a local-only, opt-in demo backend.
 
+// dockerUnavailable caches the probe result so a missing image costs one bounded pull per
+// test binary rather than one per test.
+var (
+	dockerProbeOnce   sync.Once
+	dockerUnavailable string
+)
+
 func requireDocker(t *testing.T) {
 	t.Helper()
+	dockerProbeOnce.Do(func() { dockerUnavailable = probeDocker() })
+	if dockerUnavailable != "" {
+		t.Skip(dockerUnavailable)
+	}
+}
+
+// probeDocker returns an empty string when the daemon is reachable and the pinned image is
+// available, and otherwise the reason the Docker backend tests must skip.
+func probeDocker() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := exec.CommandContext(ctx, "docker", "info").Run(); err != nil {
-		t.Skipf("docker daemon unavailable (docker info: %v)", err)
+		return fmt.Sprintf("docker daemon unavailable (docker info: %v)", err)
 	}
-	pullCtx, pullCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	inspectCtx, inspectCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer inspectCancel()
+	if exec.CommandContext(inspectCtx, "docker", "image", "inspect", DefaultImage).Run() == nil {
+		return ""
+	}
+	// The pull is bounded so an unreachable registry skips the tests instead of hanging
+	// until the whole test binary times out. WaitDelay is needed as well: a credential
+	// helper started by the docker CLI can outlive the killed CLI and keep the output pipe
+	// open, which would otherwise block the wait indefinitely.
+	pullCtx, pullCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer pullCancel()
-	if output, err := exec.CommandContext(pullCtx, "docker", "pull", "-q", DefaultImage).CombinedOutput(); err != nil {
-		t.Fatalf("pull %s: %v: %s", DefaultImage, err, output)
+	pull := exec.CommandContext(pullCtx, "docker", "pull", "-q", DefaultImage)
+	pull.WaitDelay = 5 * time.Second
+	if output, err := pull.CombinedOutput(); err != nil {
+		if pullCtx.Err() != nil {
+			return fmt.Sprintf("sandbox image %s is not present locally and pulling it did not finish within 60s", DefaultImage)
+		}
+		return fmt.Sprintf("sandbox image %s is not present locally and cannot be pulled: %v: %s", DefaultImage, err, strings.TrimSpace(string(output)))
 	}
+	return ""
 }
 
 func dockerJob(testID, patch string) Job {
