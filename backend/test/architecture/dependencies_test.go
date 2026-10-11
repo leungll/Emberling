@@ -115,6 +115,10 @@ func role(pkg string) string {
 	// service, like the Mock Provider.
 	case pkg == "internal/fixture/sandboxrunner":
 		return "sandboxrunner"
+	// The AX stand-in replaces an external system in the sandbox runner's tests, like the
+	// other fixtures.
+	case pkg == "internal/fixture/mockax":
+		return "mockax"
 	case pkg == "migrations":
 		return "migrations"
 	case pkg == "cmd" || strings.HasPrefix(pkg, "cmd/"):
@@ -260,6 +264,15 @@ var allowedInternalImports = map[string]map[string]bool{
 	// Tool reaches it only over HTTP, so like mockprovider it shares no Go type with the
 	// Runtime; its only internal import is the shared barrier and request record.
 	"sandboxrunner": set("internal/fixture/mockcontrol"),
+
+	// mockax: the deterministic AX stand-in the sandbox runner's ax backend is tested
+	// against, in the runner's own unit tests and in the contract tests. It has to be a
+	// package of its own because the contract tests cannot import a _test.go file, and the
+	// runner's production code must not depend on a test stand-in. It holds to the same
+	// rule as every other fixture: no Go type shared with the Runtime, and its only
+	// internal import is the shared barrier and request record. It does not import
+	// sandboxrunner either; it satisfies the runner's interfaces by method signature.
+	"mockax": set("internal/fixture/mockcontrol"),
 }
 
 // violation is one forbidden edge (or one unclassifiable package) found by
