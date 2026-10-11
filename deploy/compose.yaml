@@ -182,6 +182,9 @@ services:
       EMBERLING_MODEL_BASE_URL: ${EMBERLING_MODEL_BASE_URL:-}
       EMBERLING_MODEL_API_KEY: ${EMBERLING_MODEL_API_KEY:-}
       EMBERLING_MODEL_TIMEOUT: ${EMBERLING_MODEL_TIMEOUT:-}
+      # Optional OpenRouter switch, off when empty: "true" asks OpenRouter to route only to
+      # upstreams that honour strict structured output. Valid only with the model list.
+      EMBERLING_MODEL_OPENROUTER_REQUIRE_PARAMETERS: ${EMBERLING_MODEL_OPENROUTER_REQUIRE_PARAMETERS:-}
       # Reachable from the mockprovider container as the compose service name, not
       # "localhost": a callback is delivered container-to-container, never through the
       # host loopback.

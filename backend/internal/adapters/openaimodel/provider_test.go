@@ -10,8 +10,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -648,4 +650,121 @@ func decode(t *testing.T, raw []byte) any {
 		t.Fatalf("decode %s: %v", raw, err)
 	}
 	return value
+}
+
+func newOpenRouterProvider(t *testing.T, baseURL string, client *http.Client, requireParameters bool) *openaimodel.Provider {
+	t.Helper()
+	provider, err := openaimodel.New(openaimodel.Config{
+		ModelID:                     testModelID,
+		DisplayName:                 testDisplayName,
+		BaseURL:                     baseURL + "/v1",
+		APIKey:                      testKey,
+		Model:                       "gpt-test",
+		HTTPClient:                  client,
+		DecisionSchema:              registry.DecisionSchema(),
+		OpenRouterRequireParameters: requireParameters,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	return provider
+}
+
+// topLevelMembers decodes the request body's top-level members.
+func topLevelMembers(t *testing.T, body []byte) map[string]json.RawMessage {
+	t.Helper()
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(body, &members); err != nil {
+		t.Fatalf("request body is not a JSON object: %v", err)
+	}
+	return members
+}
+
+// TestProvider_Generate_OpenRouterSwitchOn_SendsOnlyRequireParameters pins the one routing
+// field the switch adds, provider.require_parameters, and nothing else such as
+// allow_fallbacks or order: routing and fallback stay outside the Adapter.
+func TestProvider_Generate_OpenRouterSwitchOn_SendsOnlyRequireParameters(t *testing.T) {
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
+	provider := newOpenRouterProvider(t, server.URL, server.Client(), true)
+
+	if _, err := provider.Generate(context.Background(), agentRequest()); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	routing, ok := topLevelMembers(t, seen.body)["provider"]
+	if !ok {
+		t.Fatalf("request body has no provider member: %s", seen.body)
+	}
+	if diff := cmp.Diff(decode(t, []byte(`{"require_parameters":true}`)), decode(t, routing)); diff != "" {
+		t.Errorf("provider member mismatch (-want +got):\n%s", diff)
+	}
+	if bytes.Contains(seen.body, []byte(testKey)) {
+		t.Errorf("request body carries the API key: %s", seen.body)
+	}
+}
+
+// TestProvider_Generate_OpenRouterSwitchOff_SendsNoProviderMember keeps the request free
+// of every Provider-specific field when the switch is off.
+func TestProvider_Generate_OpenRouterSwitchOff_SendsNoProviderMember(t *testing.T) {
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
+	provider := newOpenRouterProvider(t, server.URL, server.Client(), false)
+
+	if _, err := provider.Generate(context.Background(), agentRequest()); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	var got []string
+	for name := range topLevelMembers(t, seen.body) {
+		got = append(got, name)
+	}
+	sort.Strings(got)
+	want := []string{"messages", "model", "response_format", "temperature"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("request body members mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestProvider_Generate_OpenRouterSwitchOn_ProviderRejects_CallsOnce covers a rejected
+// call with the switch on: still exactly one HTTP request, no retry, and no key in the
+// returned error.
+func TestProvider_Generate_OpenRouterSwitchOn_ProviderRejects_CallsOnce(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, `{"error":{"type":"unavailable"}}`)
+	}))
+	t.Cleanup(server.Close)
+	provider := newOpenRouterProvider(t, server.URL, server.Client(), true)
+
+	_, err := provider.Generate(context.Background(), agentRequest())
+
+	var modelErr *openaimodel.Error
+	if !errors.As(err, &modelErr) || modelErr.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("Generate() error = %v, want an *openaimodel.Error with HTTP 503", err)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("HTTP calls = %d, want exactly 1", got)
+	}
+	if strings.Contains(err.Error(), testKey) {
+		t.Errorf("error leaks the API key: %q", err.Error())
+	}
+}
+
+func TestProvider_Rendering_OpenRouterSwitchOn_RedactsAPIKey(t *testing.T) {
+	provider := newOpenRouterProvider(t, "https://llm.example", nil, true)
+
+	var logged bytes.Buffer
+	slog.New(slog.NewJSONHandler(&logged, nil)).Info("provider", "value", provider)
+	for _, rendered := range []string{
+		fmt.Sprintf("%v", provider), fmt.Sprintf("%+v", provider), fmt.Sprintf("%#v", provider),
+		provider.String(), provider.GoString(), logged.String(),
+	} {
+		if strings.Contains(rendered, testKey) {
+			t.Errorf("rendering leaks the API key: %s", rendered)
+		}
+	}
 }
