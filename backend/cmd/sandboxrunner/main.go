@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -29,6 +30,7 @@ const defaultAddr = ":9103"
 const (
 	backendMock   = "mock"
 	backendDocker = "docker"
+	backendAX     = "ax"
 )
 
 // shutdownTimeout bounds how long main waits for in-flight requests, tests and callbacks
@@ -38,7 +40,11 @@ const shutdownTimeout = 10 * time.Second
 // readHeaderTimeout bounds how long a client may take to send request headers.
 const readHeaderTimeout = 10 * time.Second
 
-// startupTimeout bounds removing leftover sandbox containers at startup.
+// axRouterClientTimeout bounds one AX router request at the transport level; the ax
+// backend bounds each result query more tightly through its context.
+const axRouterClientTimeout = 30 * time.Second
+
+// startupTimeout bounds removing leftover sandbox containers or AX resources at startup.
 const startupTimeout = time.Minute
 
 // config is the process configuration read from the environment.
@@ -52,12 +58,18 @@ type config struct {
 	recordPath  string
 	image       string
 	testTimeout time.Duration
+	// The ax backend's settings; read and required only when the backend is ax.
+	axAtespace     string
+	axRouterURL    string
+	axCLI          string
+	axReadyTimeout time.Duration
 }
 
 // loadConfig reads SANDBOXRUNNER_ADDR, SANDBOXRUNNER_BACKEND, SANDBOXRUNNER_TEST_CONTROLS,
 // SANDBOXRUNNER_RECORD_PATH, SANDBOXRUNNER_IMAGE and SANDBOXRUNNER_TEST_TIMEOUT through
-// getenv. A record path without test controls is rejected rather than ignored, and an image
-// not pinned by digest is rejected, so a tag move cannot change what runs.
+// getenv, and the SANDBOXRUNNER_AX_* settings when the backend is ax. A record path without
+// test controls is rejected rather than ignored, and an image not pinned by digest is
+// rejected, so a tag move cannot change what runs.
 func loadConfig(getenv func(string) string) (config, error) {
 	cfg := config{
 		addr:        getenv("SANDBOXRUNNER_ADDR"),
@@ -72,10 +84,15 @@ func loadConfig(getenv func(string) string) (config, error) {
 	if cfg.backend == "" {
 		cfg.backend = backendMock
 	}
-	if cfg.backend != backendMock && cfg.backend != backendDocker {
-		return config{}, fmt.Errorf("SANDBOXRUNNER_BACKEND must be %q or %q", backendMock, backendDocker)
+	if cfg.backend != backendMock && cfg.backend != backendDocker && cfg.backend != backendAX {
+		return config{}, fmt.Errorf("SANDBOXRUNNER_BACKEND must be %q, %q or %q", backendMock, backendDocker, backendAX)
 	}
 	if cfg.image == "" {
+		// The default image is the docker backend's Go image; the ax backend needs the
+		// sandbox supervisor image, which has no default.
+		if cfg.backend == backendAX {
+			return config{}, errors.New("SANDBOXRUNNER_IMAGE is required when SANDBOXRUNNER_BACKEND is ax")
+		}
 		cfg.image = sandboxrunner.DefaultImage
 	}
 	// The image is passed to docker run as one argument; a leading dash or whitespace would
@@ -97,6 +114,11 @@ func loadConfig(getenv func(string) string) (config, error) {
 		}
 		cfg.testControls = enabled
 	}
+	if cfg.backend == backendAX {
+		if err := loadAXConfig(getenv, &cfg); err != nil {
+			return config{}, err
+		}
+	}
 	switch {
 	case cfg.testControls && cfg.recordPath == "":
 		return config{}, errors.New("SANDBOXRUNNER_RECORD_PATH is required when SANDBOXRUNNER_TEST_CONTROLS is enabled")
@@ -104,6 +126,38 @@ func loadConfig(getenv func(string) string) (config, error) {
 		return config{}, errors.New("SANDBOXRUNNER_RECORD_PATH is set but SANDBOXRUNNER_TEST_CONTROLS is not enabled")
 	}
 	return cfg, nil
+}
+
+// loadAXConfig reads the ax backend's settings. Every one is required; an error names
+// only the key, never a value.
+func loadAXConfig(getenv func(string) string, cfg *config) error {
+	cfg.axAtespace = getenv("SANDBOXRUNNER_AX_ATESPACE")
+	cfg.axRouterURL = getenv("SANDBOXRUNNER_AX_ROUTER_URL")
+	cfg.axCLI = getenv("SANDBOXRUNNER_AX_CLI")
+	rawReady := getenv("SANDBOXRUNNER_AX_READY_TIMEOUT")
+	for _, setting := range []struct{ key, value string }{
+		{"SANDBOXRUNNER_AX_ATESPACE", cfg.axAtespace},
+		{"SANDBOXRUNNER_AX_ROUTER_URL", cfg.axRouterURL},
+		{"SANDBOXRUNNER_AX_CLI", cfg.axCLI},
+		{"SANDBOXRUNNER_AX_READY_TIMEOUT", rawReady},
+	} {
+		if strings.TrimSpace(setting.value) == "" {
+			return fmt.Errorf("%s is required when SANDBOXRUNNER_BACKEND is ax", setting.key)
+		}
+	}
+	if !sandboxrunner.ValidAXName(cfg.axAtespace) {
+		return errors.New("SANDBOXRUNNER_AX_ATESPACE must be a lowercase RFC 1123 label of at most 63 characters")
+	}
+	router, err := url.Parse(cfg.axRouterURL)
+	if err != nil || (router.Scheme != "http" && router.Scheme != "https") || router.Host == "" {
+		return errors.New("SANDBOXRUNNER_AX_ROUTER_URL must be an absolute http or https URL")
+	}
+	readyTimeout, err := time.ParseDuration(rawReady)
+	if err != nil || readyTimeout <= 0 {
+		return errors.New("SANDBOXRUNNER_AX_READY_TIMEOUT must be a positive duration such as 2m")
+	}
+	cfg.axReadyTimeout = readyTimeout
+	return nil
 }
 
 func main() {
@@ -122,19 +176,6 @@ func run(logger *slog.Logger) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	var backend sandboxrunner.Backend = sandboxrunner.NewMockBackend()
-	if cfg.backend == backendDocker {
-		docker := sandboxrunner.NewDockerBackend(cfg.image, cfg.testTimeout, sandboxrunner.ExecRunner{})
-		startupCtx, cancel := context.WithTimeout(ctx, startupTimeout)
-		removed, err := docker.RemoveOrphans(startupCtx)
-		cancel()
-		if err != nil {
-			return err
-		}
-		logger.Info("sandboxrunner: docker backend ready", slog.String("image", cfg.image), slog.Int("orphans_removed", removed))
-		backend = docker
-	}
 
 	var (
 		opts   []sandboxrunner.Option
@@ -155,6 +196,39 @@ func run(logger *slog.Logger) error {
 		defer closeLogged(logger, "redelivery store", store.Close)
 		opts = append(opts, sandboxrunner.WithTestControls(record, store))
 		logger.Info("sandboxrunner: test controls enabled", slog.String("record_path", cfg.recordPath), slog.Int("results_to_redeliver", len(stored)))
+	}
+
+	var backend sandboxrunner.Backend = sandboxrunner.NewMockBackend()
+	switch cfg.backend {
+	case backendDocker:
+		docker := sandboxrunner.NewDockerBackend(cfg.image, cfg.testTimeout, sandboxrunner.ExecRunner{})
+		startupCtx, cancel := context.WithTimeout(ctx, startupTimeout)
+		removed, err := docker.RemoveOrphans(startupCtx)
+		cancel()
+		if err != nil {
+			return err
+		}
+		logger.Info("sandboxrunner: docker backend ready", slog.String("image", cfg.image), slog.Int("orphans_removed", removed))
+		backend = docker
+	case backendAX:
+		ax, err := sandboxrunner.NewAXBackend(sandboxrunner.AXBackendConfig{
+			Atespace: cfg.axAtespace, Image: cfg.image,
+			TestTimeout: cfg.testTimeout, ReadyTimeout: cfg.axReadyTimeout,
+			Control: sandboxrunner.NewAXCLI(sandboxrunner.ExecAXRunner{Path: cfg.axCLI}),
+			Results: sandboxrunner.NewAXRouterReader(cfg.axRouterURL, &http.Client{Timeout: axRouterClientTimeout}),
+			Logger:  logger, Record: record,
+		})
+		if err != nil {
+			return err
+		}
+		startupCtx, cancel := context.WithTimeout(ctx, startupTimeout)
+		removed, err := ax.RemoveOrphans(startupCtx)
+		cancel()
+		if err != nil {
+			return err
+		}
+		logger.Info("sandboxrunner: ax backend ready", slog.String("image", cfg.image), slog.String("atespace", cfg.axAtespace), slog.Int("orphans_removed", removed))
+		backend = ax
 	}
 
 	server := sandboxrunner.NewServer(backend, opts...)

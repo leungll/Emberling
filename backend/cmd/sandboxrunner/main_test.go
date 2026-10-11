@@ -61,3 +61,85 @@ func TestLoadConfig_InvalidValues_Rejected(t *testing.T) {
 		}
 	}
 }
+
+// axSettings is a complete ax backend configuration.
+func axSettings() map[string]string {
+	return map[string]string{
+		"SANDBOXRUNNER_BACKEND":          "ax",
+		"SANDBOXRUNNER_IMAGE":            "registry.local/sandboxsupervisor@sha256:" + strings.Repeat("b", 64),
+		"SANDBOXRUNNER_AX_ATESPACE":      "emberling-sandbox",
+		"SANDBOXRUNNER_AX_ROUTER_URL":    "http://127.0.0.1:18080",
+		"SANDBOXRUNNER_AX_CLI":           "/opt/ax/bin/ax",
+		"SANDBOXRUNNER_AX_READY_TIMEOUT": "90s",
+		"SANDBOXRUNNER_TEST_TIMEOUT":     "300s",
+	}
+}
+
+func TestLoadConfig_AXBackend_ReadsEveryKey(t *testing.T) {
+	cfg, err := loadConfig(env(axSettings()))
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	want := config{
+		addr: ":9103", backend: "ax", image: axSettings()["SANDBOXRUNNER_IMAGE"], testTimeout: 300 * time.Second,
+		axAtespace: "emberling-sandbox", axRouterURL: "http://127.0.0.1:18080", axCLI: "/opt/ax/bin/ax", axReadyTimeout: 90 * time.Second,
+	}
+	if cfg != want {
+		t.Fatalf("config = %+v, want %+v", cfg, want)
+	}
+}
+
+func TestLoadConfig_AXBackendMissingSetting_FailsNamingKeyOnly(t *testing.T) {
+	for _, key := range []string{
+		"SANDBOXRUNNER_IMAGE", "SANDBOXRUNNER_AX_ATESPACE", "SANDBOXRUNNER_AX_ROUTER_URL",
+		"SANDBOXRUNNER_AX_CLI", "SANDBOXRUNNER_AX_READY_TIMEOUT",
+	} {
+		values := axSettings()
+		delete(values, key)
+		_, err := loadConfig(env(values))
+		if err == nil || !strings.Contains(err.Error(), key) {
+			t.Fatalf("without %s: error = %v, want one naming the key", key, err)
+		}
+		for other, value := range values {
+			if other != "SANDBOXRUNNER_BACKEND" && strings.Contains(err.Error(), value) {
+				t.Fatalf("without %s: error %q echoes the value of %s", key, err, other)
+			}
+		}
+	}
+
+	invalid := map[string]string{
+		"SANDBOXRUNNER_AX_ATESPACE":      "Not_A_Label",
+		"SANDBOXRUNNER_AX_ROUTER_URL":    "router.internal:8080",
+		"SANDBOXRUNNER_AX_READY_TIMEOUT": "0s",
+	}
+	for key, value := range invalid {
+		values := axSettings()
+		values[key] = value
+		_, err := loadConfig(env(values))
+		if err == nil || !strings.Contains(err.Error(), key) || strings.Contains(err.Error(), value) {
+			t.Fatalf("%s=%q: error = %v, want one naming the key but not the value", key, value, err)
+		}
+	}
+}
+
+func TestLoadConfig_AXBackendImageNotPinnedByDigest_Fails(t *testing.T) {
+	for _, image := range []string{"registry.local/sandboxsupervisor:v1", "-x@sha256:" + strings.Repeat("c", 64)} {
+		values := axSettings()
+		values["SANDBOXRUNNER_IMAGE"] = image
+		if _, err := loadConfig(env(values)); err == nil || !strings.Contains(err.Error(), "SANDBOXRUNNER_IMAGE") {
+			t.Fatalf("image %q: error = %v, want a digest-pinning failure", image, err)
+		}
+	}
+}
+
+func TestLoadConfig_UnknownBackend_ListsMockDockerAndAX(t *testing.T) {
+	_, err := loadConfig(env(map[string]string{"SANDBOXRUNNER_BACKEND": "podman"}))
+	if err == nil {
+		t.Fatal("load config succeeded for an unknown backend")
+	}
+	for _, name := range []string{`"mock"`, `"docker"`, `"ax"`} {
+		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("error %q does not list %s", err, name)
+		}
+	}
+}
