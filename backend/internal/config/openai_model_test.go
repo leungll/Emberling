@@ -385,3 +385,105 @@ func TestConfig_OpenAIModel_SerialisationRedactsAPIKey(t *testing.T) {
 		}
 	}
 }
+
+func TestConfig_OpenRouterRequireParameters_DefaultsOff(t *testing.T) {
+	cfg, err := config.Load(lookup(withOpenAIModels(completeEnv())))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.OpenAIModel.OpenRouterRequireParameters {
+		t.Errorf("OpenRouterRequireParameters = true with %s unset, want false", config.KeyModelOpenRouterRequireParameters)
+	}
+}
+
+func TestConfig_OpenRouterRequireParameters_ParsesBoolean(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  bool
+	}{
+		{"true", true}, {"1", true}, {"TRUE", true}, {" true ", true},
+		{"false", false}, {"0", false}, {"", false},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			env := withOpenAIModels(completeEnv())
+			env[config.KeyModelOpenRouterRequireParameters] = tc.value
+
+			cfg, err := config.Load(lookup(env))
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.OpenAIModel.OpenRouterRequireParameters != tc.want {
+				t.Errorf("OpenRouterRequireParameters = %v for %q, want %v", cfg.OpenAIModel.OpenRouterRequireParameters, tc.value, tc.want)
+			}
+			if err := cfg.Validate(); err != nil {
+				t.Errorf("Validate on a loaded Config: %v", err)
+			}
+		})
+	}
+}
+
+// TestConfig_OpenRouterRequireParametersInvalid_FailsNamingKeyOnly covers a value that is
+// not a boolean: startup fails naming the key, and the value is not repeated.
+func TestConfig_OpenRouterRequireParametersInvalid_FailsNamingKeyOnly(t *testing.T) {
+	for _, value := range []string{"yes-xyzzy", "on", "2"} {
+		t.Run(value, func(t *testing.T) {
+			env := withOpenAIModels(completeEnv())
+			env[config.KeyModelOpenRouterRequireParameters] = value
+
+			_, err := config.Load(lookup(env))
+
+			var invalid *config.InvalidConfigError
+			if !errors.As(err, &invalid) || invalid.Key != config.KeyModelOpenRouterRequireParameters {
+				t.Fatalf("Load: want InvalidConfigError for %s, got %v", config.KeyModelOpenRouterRequireParameters, err)
+			}
+			if strings.Contains(err.Error(), `"`+value+`"`) || strings.Contains(err.Error(), "xyzzy") {
+				t.Errorf("error repeats the configured value: %q", err.Error())
+			}
+			assertNoConfiguredValue(t, err, "upstream-opus", "Opus Display")
+		})
+	}
+}
+
+// TestConfig_OpenRouterRequireParametersWithoutModels_Fails covers the switch turned on
+// for a model group that is not configured: a misconfiguration, not a silent no-op.
+func TestConfig_OpenRouterRequireParametersWithoutModels_Fails(t *testing.T) {
+	env := completeEnv()
+	env[config.KeyModelOpenRouterRequireParameters] = "true"
+
+	_, err := config.Load(lookup(env))
+
+	var invalid *config.InvalidConfigError
+	if !errors.As(err, &invalid) || invalid.Key != config.KeyModelOpenRouterRequireParameters {
+		t.Fatalf("Load: want InvalidConfigError for %s, got %v", config.KeyModelOpenRouterRequireParameters, err)
+	}
+}
+
+func TestConfig_OpenRouterRequireParametersOffWithoutModels_Loads(t *testing.T) {
+	env := completeEnv()
+	env[config.KeyModelOpenRouterRequireParameters] = "false"
+
+	cfg, err := config.Load(lookup(env))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.OpenAIModel.Enabled() || cfg.OpenAIModel.OpenRouterRequireParameters {
+		t.Errorf("OpenAIModel enabled %v, switch %v; want both off", cfg.OpenAIModel.Enabled(), cfg.OpenAIModel.OpenRouterRequireParameters)
+	}
+}
+
+// TestConfig_Validate_RejectsOpenRouterSwitchWithoutModels covers a Config assembled
+// without Load: the readiness sequence re-checks that the switch has a model group.
+func TestConfig_Validate_RejectsOpenRouterSwitchWithoutModels(t *testing.T) {
+	cfg, err := config.Load(lookup(completeEnv()))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	cfg.OpenAIModel.OpenRouterRequireParameters = true
+
+	err = cfg.Validate()
+
+	var invalid *config.InvalidConfigError
+	if !errors.As(err, &invalid) || invalid.Key != config.KeyModelOpenRouterRequireParameters {
+		t.Fatalf("Validate: want InvalidConfigError for %s, got %v", config.KeyModelOpenRouterRequireParameters, err)
+	}
+}

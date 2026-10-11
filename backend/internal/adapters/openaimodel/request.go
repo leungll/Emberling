@@ -34,6 +34,15 @@ type chatRequest struct {
 	Messages       []chatMessage  `json:"messages"`
 	ResponseFormat responseFormat `json:"response_format"`
 	Temperature    *float64       `json:"temperature,omitempty"`
+	// Provider is nil unless the OpenRouter switch is on, so the request otherwise carries
+	// no Provider-specific member at all.
+	Provider *providerRouting `json:"provider,omitempty"`
+}
+
+// providerRouting is OpenRouter's provider routing object, limited to the one member this
+// Adapter may send.
+type providerRouting struct {
+	RequireParameters bool `json:"require_parameters"`
 }
 
 type chatMessage struct {
@@ -102,6 +111,11 @@ func (p *Provider) buildChatRequest(request registry.ModelRequest) (chatRequest,
 		}
 	}
 
+	var routing *providerRouting
+	if p.requireParameters {
+		routing = &providerRouting{RequireParameters: true}
+	}
+
 	return chatRequest{
 		Model:    p.model,
 		Messages: messages,
@@ -114,6 +128,7 @@ func (p *Provider) buildChatRequest(request registry.ModelRequest) (chatRequest,
 			},
 		},
 		Temperature: config.Temperature,
+		Provider:    routing,
 	}, nil
 }
 

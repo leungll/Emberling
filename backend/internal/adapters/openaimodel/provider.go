@@ -60,6 +60,10 @@ type Config struct {
 	Model          string
 	HTTPClient     *http.Client
 	DecisionSchema json.RawMessage
+	// OpenRouterRequireParameters adds provider.require_parameters=true to every request,
+	// so OpenRouter routes only to upstreams that honour strict structured output. It adds
+	// no other routing field: model routing and fallback are not this Adapter's to choose.
+	OpenRouterRequireParameters bool
 }
 
 // Provider is the OpenAI-compatible registry.ModelProvider.
@@ -71,6 +75,8 @@ type Provider struct {
 	model       string
 	client      *http.Client
 	decision    strictDecision
+	// requireParameters mirrors Config.OpenRouterRequireParameters.
+	requireParameters bool
 }
 
 var (
@@ -117,6 +123,8 @@ func New(cfg Config) (*Provider, error) {
 		model:       cfg.Model,
 		client:      client,
 		decision:    decision,
+
+		requireParameters: cfg.OpenRouterRequireParameters,
 	}, nil
 }
 

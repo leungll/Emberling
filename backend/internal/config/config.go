@@ -36,6 +36,8 @@ const (
 	KeyModelBaseURL = EnvPrefix + "MODEL_BASE_URL"
 	KeyModelAPIKey  = EnvPrefix + "MODEL_API_KEY"
 	KeyModelTimeout = EnvPrefix + "MODEL_TIMEOUT"
+	// KeyModelOpenRouterRequireParameters is an optional boolean switch of the same group.
+	KeyModelOpenRouterRequireParameters = EnvPrefix + "MODEL_OPENROUTER_REQUIRE_PARAMETERS"
 
 	// Removed keys of the earlier single-model group. Setting any of them fails startup
 	// and names its replacement; see removedKeys.
@@ -122,6 +124,10 @@ type OpenAIModel struct {
 	// Timeout bounds one HTTP request. Zero leaves the call bounded only by the caller's
 	// context, such as the Agent Run deadline.
 	Timeout time.Duration
+	// OpenRouterRequireParameters asks OpenRouter to route each request only to upstreams
+	// that honour every request parameter, so strict structured output is not sent to one
+	// that ignores it. Off by default; it may be on only when the group is configured.
+	OpenRouterRequireParameters bool
 }
 
 // OpenAIModelEntry is one registered model. ID is the stable Model ID a Definition
@@ -337,6 +343,9 @@ func (c Config) Validate() error {
 	if c.OpenAIModel.Timeout > 0 && !c.OpenAIModel.Enabled() {
 		return &InvalidConfigError{Key: KeyModelTimeout, Reason: "set only together with " + KeyModelBaseURL}
 	}
+	if c.OpenAIModel.OpenRouterRequireParameters && !c.OpenAIModel.Enabled() {
+		return &InvalidConfigError{Key: KeyModelOpenRouterRequireParameters, Reason: "set only together with " + KeyModels}
+	}
 	if c.OpenAIModel.Enabled() {
 		if problems := validateModelList(c.OpenAIModel.Models); len(problems) > 0 {
 			return &InvalidConfigError{Key: KeyModels, Reason: strings.Join(problems, "; ")}
@@ -404,18 +413,40 @@ func (l *loader) openAIModel() OpenAIModel {
 		}
 	}
 	timeout := l.optionalDuration(KeyModelTimeout)
+	requireParameters := l.optionalBool(KeyModelOpenRouterRequireParameters)
 	if !enabled {
 		if timeout > 0 {
 			l.fail(KeyModelTimeout, "set only together with "+KeyModelBaseURL)
 		}
+		// A switch turned on for a group that is not configured is a misconfiguration,
+		// not a no-op; an explicit false changes nothing and is accepted.
+		if requireParameters {
+			l.fail(KeyModelOpenRouterRequireParameters, "set only together with "+KeyModels)
+		}
 		return OpenAIModel{}
 	}
 	return OpenAIModel{
-		BaseURL: l.requiredProviderURL(KeyModelBaseURL),
-		APIKey:  Secret{value: l.required(KeyModelAPIKey)},
-		Models:  l.modelList(),
-		Timeout: timeout,
+		BaseURL:                     l.requiredProviderURL(KeyModelBaseURL),
+		APIKey:                      Secret{value: l.required(KeyModelAPIKey)},
+		Models:                      l.modelList(),
+		Timeout:                     timeout,
+		OpenRouterRequireParameters: requireParameters,
 	}
+}
+
+// optionalBool reads a boolean that defaults to false. It accepts what strconv.ParseBool
+// accepts; the parse error is not passed on because its text quotes the value.
+func (l *loader) optionalBool(key string) bool {
+	value := strings.TrimSpace(l.env(key))
+	if value == "" {
+		return false
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		l.fail(key, "must be a boolean such as true or false")
+		return false
+	}
+	return parsed
 }
 
 // requiredProviderURL is requiredURL that additionally refuses user information, a query

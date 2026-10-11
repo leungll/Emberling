@@ -141,6 +141,89 @@ func TestRegisterModelProviders_DuplicateID_Fails(t *testing.T) {
 	}
 }
 
+// routingRecorder is a Chat Completions stand-in that records the provider member of
+// every request, or nil when a request has none, and answers each with a FINAL Decision.
+type routingRecorder struct {
+	mu   sync.Mutex
+	seen []json.RawMessage
+}
+
+func (u *routingRecorder) serve(t *testing.T) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var members map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &members)
+		u.mu.Lock()
+		u.seen = append(u.seen, members["provider"])
+		u.mu.Unlock()
+		content, _ := json.Marshal(`{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"chatcmpl-1","choices":[{"message":{"content":`+string(content)+`},"finish_reason":"stop"}]}`)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func (u *routingRecorder) last() json.RawMessage {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if len(u.seen) == 0 {
+		return nil
+	}
+	return u.seen[len(u.seen)-1]
+}
+
+// TestRegisterModelProviders_OpenRouterSwitch_ReachesEveryProvider covers the wiring of
+// the switch: every registered model sends provider.require_parameters when it is on, and
+// none sends a provider member when it is off.
+func TestRegisterModelProviders_OpenRouterSwitch_ReachesEveryProvider(t *testing.T) {
+	entries := []config.OpenAIModelEntry{
+		{ID: "opus-5.5", Model: "vendor/opus-upstream", DisplayName: "Opus 5.5"},
+		{ID: "gemini-3.1", Model: "vendor/gemini-upstream", DisplayName: "Gemini 3.1"},
+		{ID: "gpt-5.2", Model: "vendor/gpt-upstream", DisplayName: "GPT 5.2"},
+	}
+	for _, tc := range []struct {
+		name string
+		on   bool
+		want string
+	}{
+		{"on", true, `{"require_parameters":true}`},
+		{"off", false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := &routingRecorder{}
+			server := upstream.serve(t)
+			models := registry.NewModelRegistry()
+			err := registerModelProviders(context.Background(), models, config.OpenAIModel{
+				BaseURL: server.URL, APIKey: config.NewSecret("sk-routing"), Models: entries,
+				OpenRouterRequireParameters: tc.on,
+			})
+			if err != nil {
+				t.Fatalf("registerModelProviders() error = %v", err)
+			}
+			for _, entry := range entries {
+				_, provider, ok := models.Get(entry.ID)
+				if !ok {
+					t.Fatalf("model %q not registered", entry.ID)
+				}
+				_, err := provider.Generate(context.Background(), registry.ModelRequest{
+					ModelID:           entry.ID,
+					Messages:          []registry.ModelMessage{{Role: "user", Content: json.RawMessage(`"hello"`)}},
+					FinalOutputSchema: json.RawMessage(`{"type":"string"}`),
+					DecisionSchema:    registry.DecisionSchema(),
+				})
+				if err != nil {
+					t.Fatalf("Generate(%s) error = %v", entry.ID, err)
+				}
+				if got := string(upstream.last()); got != tc.want {
+					t.Errorf("model %q sent provider member %q, want %q", entry.ID, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestRegisterModelProviders_NotConfigured_RegistersMockOnly(t *testing.T) {
 	models := registry.NewModelRegistry()
 	if err := registerModelProviders(context.Background(), models, config.OpenAIModel{}); err != nil {
