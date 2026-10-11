@@ -30,10 +30,20 @@ const (
 	KeyModelProviderBaseURL = EnvPrefix + "MODEL_PROVIDER_BASE_URL"
 	KeyModelProviderAPIKey  = EnvPrefix + "MODEL_PROVIDER_API_KEY"
 
-	KeyModelOpenAIBaseURL = EnvPrefix + "MODEL_OPENAI_BASE_URL"
-	KeyModelOpenAIAPIKey  = EnvPrefix + "MODEL_OPENAI_API_KEY"
-	KeyModelOpenAIModel   = EnvPrefix + "MODEL_OPENAI_MODEL"
-	KeyModelOpenAITimeout = EnvPrefix + "MODEL_OPENAI_TIMEOUT"
+	// The OpenAI-compatible Model Adapter group: one shared endpoint, key and timeout,
+	// and the list of models registered behind them.
+	KeyModels       = EnvPrefix + "MODELS"
+	KeyModelBaseURL = EnvPrefix + "MODEL_BASE_URL"
+	KeyModelAPIKey  = EnvPrefix + "MODEL_API_KEY"
+	KeyModelTimeout = EnvPrefix + "MODEL_TIMEOUT"
+
+	// Removed keys of the earlier single-model group. Setting any of them fails startup
+	// and names its replacement; see removedKeys.
+	KeyRemovedOpenAIBaseURL = EnvPrefix + "MODEL_OPENAI_BASE_URL"
+	KeyRemovedOpenAIAPIKey  = EnvPrefix + "MODEL_OPENAI_API_KEY"
+	KeyRemovedOpenAIModel   = EnvPrefix + "MODEL_OPENAI_MODEL"
+	KeyRemovedOpenAIModels  = EnvPrefix + "MODEL_OPENAI_MODELS"
+	KeyRemovedOpenAITimeout = EnvPrefix + "MODEL_OPENAI_TIMEOUT"
 
 	KeyProductionBaseURL = EnvPrefix + "PRODUCTION_BASE_URL"
 
@@ -102,20 +112,30 @@ type ModelProvider struct {
 }
 
 // OpenAIModel addresses the optional OpenAI-compatible Model Adapter. Either every
-// required field is set and the Adapter is registered, or none is and it is not; a
-// partial configuration is a startup error rather than a silently missing model.
+// required field is set and one model is registered per list entry, or none is and the
+// Adapter is not registered; a partial configuration is a startup error rather than a
+// silently missing model. The base URL, key and timeout are shared by every model.
 type OpenAIModel struct {
 	BaseURL string
 	APIKey  Secret
-	Model   string
+	Models  []OpenAIModelEntry
 	// Timeout bounds one HTTP request. Zero leaves the call bounded only by the caller's
 	// context, such as the Agent Run deadline.
 	Timeout time.Duration
 }
 
+// OpenAIModelEntry is one registered model. ID is the stable Model ID a Definition
+// stores; Model is the Provider-side model name, which never enters a Definition;
+// DisplayName is what Studio shows.
+type OpenAIModelEntry struct {
+	ID          string
+	Model       string
+	DisplayName string
+}
+
 // Enabled reports whether the OpenAI-compatible Model Adapter is configured.
 func (m OpenAIModel) Enabled() bool {
-	return m.BaseURL != "" || !m.APIKey.IsZero() || m.Model != ""
+	return m.BaseURL != "" || !m.APIKey.IsZero() || len(m.Models) > 0
 }
 
 // Production addresses the optional production deployment service the deploy Tool calls.
@@ -190,6 +210,7 @@ func Load(env func(string) string) (Config, error) {
 		return Config{}, errors.New("config: env lookup function is required")
 	}
 	l := &loader{env: env}
+	l.checkRemovedKeys()
 
 	cfg := Config{
 		Database: Database{
@@ -265,9 +286,9 @@ func (c Config) Validate() error {
 			key   string
 			empty bool
 		}{
-			{KeyModelOpenAIBaseURL, c.OpenAIModel.BaseURL == ""},
-			{KeyModelOpenAIAPIKey, c.OpenAIModel.APIKey.IsZero()},
-			{KeyModelOpenAIModel, c.OpenAIModel.Model == ""},
+			{KeyModelBaseURL, c.OpenAIModel.BaseURL == ""},
+			{KeyModelAPIKey, c.OpenAIModel.APIKey.IsZero()},
+			{KeyModels, len(c.OpenAIModel.Models) == 0},
 		} {
 			if item.empty {
 				missing = append(missing, item.key)
@@ -311,10 +332,15 @@ func (c Config) Validate() error {
 		}
 	}
 	if c.OpenAIModel.Timeout < 0 {
-		return &InvalidConfigError{Key: KeyModelOpenAITimeout, Reason: "must be a positive duration"}
+		return &InvalidConfigError{Key: KeyModelTimeout, Reason: "must be a positive duration"}
 	}
 	if c.OpenAIModel.Timeout > 0 && !c.OpenAIModel.Enabled() {
-		return &InvalidConfigError{Key: KeyModelOpenAITimeout, Reason: "set only together with " + KeyModelOpenAIBaseURL}
+		return &InvalidConfigError{Key: KeyModelTimeout, Reason: "set only together with " + KeyModelBaseURL}
+	}
+	if c.OpenAIModel.Enabled() {
+		if problems := validateModelList(c.OpenAIModel.Models); len(problems) > 0 {
+			return &InvalidConfigError{Key: KeyModels, Reason: strings.Join(problems, "; ")}
+		}
 	}
 	return nil
 }
@@ -322,11 +348,17 @@ func (c Config) Validate() error {
 // loader accumulates every problem in one pass instead of failing on the first key.
 type loader struct {
 	env     func(string) string
+	removed []RemovedKey
 	missing []string
 	invalid error
 }
 
+// err reports removed keys first: a deployment still using one is configured for an older
+// release, and the remaining errors would only describe the consequences of that.
 func (l *loader) err() error {
+	if len(l.removed) > 0 {
+		return &RemovedConfigError{Keys: l.removed}
+	}
 	if len(l.missing) > 0 {
 		return &MissingConfigError{Keys: l.missing}
 	}
@@ -364,24 +396,24 @@ func (l *loader) requiredURL(key string) string {
 // openAIModel reads the optional OpenAI-compatible Model Adapter group. When none of its
 // required keys is set the group is disabled; once any is set, every required key is.
 func (l *loader) openAIModel() OpenAIModel {
-	keys := []string{KeyModelOpenAIBaseURL, KeyModelOpenAIAPIKey, KeyModelOpenAIModel}
+	keys := []string{KeyModelBaseURL, KeyModelAPIKey, KeyModels}
 	enabled := false
 	for _, key := range keys {
 		if strings.TrimSpace(l.env(key)) != "" {
 			enabled = true
 		}
 	}
-	timeout := l.optionalDuration(KeyModelOpenAITimeout)
+	timeout := l.optionalDuration(KeyModelTimeout)
 	if !enabled {
 		if timeout > 0 {
-			l.fail(KeyModelOpenAITimeout, "set only together with "+KeyModelOpenAIBaseURL)
+			l.fail(KeyModelTimeout, "set only together with "+KeyModelBaseURL)
 		}
 		return OpenAIModel{}
 	}
 	return OpenAIModel{
-		BaseURL: l.requiredProviderURL(KeyModelOpenAIBaseURL),
-		APIKey:  Secret{value: l.required(KeyModelOpenAIAPIKey)},
-		Model:   l.required(KeyModelOpenAIModel),
+		BaseURL: l.requiredProviderURL(KeyModelBaseURL),
+		APIKey:  Secret{value: l.required(KeyModelAPIKey)},
+		Models:  l.modelList(),
 		Timeout: timeout,
 	}
 }

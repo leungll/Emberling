@@ -173,6 +173,15 @@ services:
       # Secrets are placeholders resolved from the developer's own environment. They are
       # never committed, and they never reach a Definition, an Event or Trace.
       EMBERLING_MODEL_PROVIDER_API_KEY: ${EMBERLING_MODEL_PROVIDER_API_KEY:?set EMBERLING_MODEL_PROVIDER_API_KEY in your shell or .env}
+      # Optional real decision models behind one OpenAI-compatible endpoint. All four are
+      # empty by default, so only the mock models are registered; set the base URL, key and
+      # model list together, or the backend refuses to start. EMBERLING_MODELS is a JSON
+      # array of {"id","model","displayName"} entries; the key is a Secret from the
+      # developer's own environment, never committed.
+      EMBERLING_MODELS: ${EMBERLING_MODELS:-}
+      EMBERLING_MODEL_BASE_URL: ${EMBERLING_MODEL_BASE_URL:-}
+      EMBERLING_MODEL_API_KEY: ${EMBERLING_MODEL_API_KEY:-}
+      EMBERLING_MODEL_TIMEOUT: ${EMBERLING_MODEL_TIMEOUT:-}
       # Reachable from the mockprovider container as the compose service name, not
       # "localhost": a callback is delivered container-to-container, never through the
       # host loopback.
