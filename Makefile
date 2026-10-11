@@ -25,9 +25,9 @@ GOLANGCI_LINT         := $(TOOLS_BIN)/golangci-lint
 BACKEND := backend
 STUDIO  := studio
 
-.PHONY: bootstrap dev test test-integration test-e2e lint check \
-        check-go-version check-node-version fmt-check lint-go install-golangci-lint check-doc-refs \
-        check-migrations migrations-checksum check-file-size test-engineering
+.PHONY: bootstrap dev test test-integration test-e2e lint check check-fast \
+        check-go-version check-node-version fmt-check lint-go lint-studio install-golangci-lint check-doc-refs \
+        check-migrations migrations-checksum check-file-size test-engineering studio-build whitespace-check
 
 ## bootstrap: verify toolchain versions and install dependencies. Starts no service.
 bootstrap: check-go-version check-node-version install-golangci-lint
@@ -137,7 +137,9 @@ test-e2e:
 	fi
 
 ## lint: formatting check, golangci-lint (which includes go vet) and Studio lint.
-lint: fmt-check lint-go
+lint: fmt-check lint-go lint-studio
+
+lint-studio:
 	@if [ -d $(STUDIO) ]; then \
 		echo "==> studio: lint"; \
 		cd $(STUDIO) && pnpm lint; \
@@ -213,16 +215,32 @@ check-file-size:
 test-engineering:
 	@sh scripts/tests/check-engineering.sh
 
-## check: the full repository gate.
-check: fmt-check lint check-doc-refs check-migrations check-file-size test-engineering test test-integration
+studio-build:
 	@if [ -d $(STUDIO) ]; then \
 		echo "==> studio: build"; \
 		cd $(STUDIO) && pnpm build; \
 	else \
 		echo "studio: not present, skipped"; \
 	fi
+
+whitespace-check:
 	@echo "==> git: whitespace check"
 	@git diff --check
+
+# The gate phases in execution order. scripts/run-phases.sh runs each one as its own make
+# invocation, stops at the first failure and prints the elapsed seconds of every phase.
+CHECK_PHASES := fmt-check lint-go lint-studio check-doc-refs check-migrations check-file-size \
+                test-engineering test test-integration studio-build whitespace-check
+CHECK_FAST_PHASES := $(filter-out test-integration studio-build,$(CHECK_PHASES))
+
+## check: the full repository gate.
+check:
+	@MAKE='$(MAKE)' sh scripts/run-phases.sh $(CHECK_PHASES)
+
+## check-fast: the gate without integration tests and the Studio build, for iteration.
+## `make check` remains the required gate before handoff and in CI.
+check-fast:
+	@MAKE='$(MAKE)' sh scripts/run-phases.sh $(CHECK_FAST_PHASES)
 
 .PHONY: demo demo-down
 

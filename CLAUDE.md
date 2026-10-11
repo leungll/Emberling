@@ -119,7 +119,7 @@ Concurrency and failure tests use explicit barriers or injected hooks. Do not us
 
 Test the failure path that justifies the code: crash after COMMIT, duplicate delivery, stale Attempt, missing registration, timeout race, rollback on Event failure, or rediscovery after restart. A mock-only repository test is not sufficient evidence for a PostgreSQL transaction or locking guarantee.
 
-Run the narrowest relevant test while iterating, then run the repository gate before completion:
+Run the narrowest relevant test while iterating, then run the repository gate before completion. `make check-fast` covers the static guards and unit tests while iterating and does not replace the gate:
 
 ```sh
 make check
