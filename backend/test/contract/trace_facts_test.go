@@ -5,12 +5,14 @@
 // fact the Agent Run recorded (oldest first, bounded, with a truncation flag) and the
 // generation budget: the frozen limit, null when the Agent has none, and the generation
 // calls already made, counted from persisted Tool Attempts of Tools the Registry marks as
-// counting toward the limit.
+// counting toward the limit. A claim-time rejection of an Action leaves its arguments out
+// of that projection, the Run Snapshot, the NodeRun detail and the Backend logs.
 package contract
 
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -22,7 +24,9 @@ import (
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
 	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/registry"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
+	"github.com/leungll/Emberling/backend/internal/tools/generatevideo"
 	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 )
 
@@ -264,5 +268,146 @@ func TestAgentTraceFacts_Ledger_CarriesNoSecretsOrPayloads(t *testing.T) {
 		if strings.Contains(strings.ToLower(withoutTokenUsageFieldNames(raw)), forbidden) {
 			t.Errorf("agent trace response contains %q: %s", forbidden, raw)
 		}
+	}
+}
+
+// Rejection secrecy: a claim-time rejection keeps the rejected Action's arguments out of
+// every operator-facing surface. The signed URL below rides in a free-form settings
+// object the Tool schemas accept, so the rejected Decision carries it verbatim.
+const (
+	rejectionSignature = "deadbeefsecret"
+	rejectionToken     = "s3cr3t"
+	rejectionSignedURL = "https://cdn.example.test/photo.jpg?X-Amz-Signature=" + rejectionSignature + "&token=" + rejectionToken
+)
+
+// newRejectionSecrecyEnv starts a Backend whose generate_image calls reach a real Mock
+// Provider and whose service, work Pool and API log into the returned buffer at every
+// level.
+func newRejectionSecrecyEnv(t *testing.T) (*testEnv, *syncBuffer) {
+	t.Helper()
+	dispatcher := mockprovider.NewDispatcher(nil)
+	provider := httptest.NewServer(mockprovider.NewServer(dispatcher))
+	t.Cleanup(func() {
+		provider.Close()
+		_ = dispatcher.Shutdown(context.Background())
+	})
+	logs := &syncBuffer{}
+	logger := slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	return newTestEnvWithOptions(t, testEnvOptions{MockTaskBaseURL: provider.URL, Logger: logger}), logs
+}
+
+// saveRejectionDefinition saves the agent fixture allowing generate_image, review_asset
+// and generate_video, with maxGenerationCalls set to limit.
+func saveRejectionDefinition(t *testing.T, env *testEnv, limit int) (string, int) {
+	t.Helper()
+	fx := loadAgentLookupFixture(t)
+	for i, node := range fx.Nodes {
+		if node.ID != "node_agent" {
+			continue
+		}
+		var config map[string]any
+		if err := json.Unmarshal(node.Config, &config); err != nil {
+			t.Fatalf("decode node_agent config: %v", err)
+		}
+		config["allowedTools"] = []string{generateimage.ToolName, reviewasset.ToolName, generatevideo.ToolName}
+		config["maxTurns"] = 4
+		config["maxGenerationCalls"] = limit
+		encoded, err := json.Marshal(config)
+		if err != nil {
+			t.Fatalf("encode node_agent config: %v", err)
+		}
+		fx.Nodes[i].Config = encoded
+	}
+	resp, body := env.doJSON(t, http.MethodPost, "/api/definitions", map[string]any{
+		"name": fx.Name, "description": fx.Description, "nodes": fx.Nodes, "edges": fx.Edges,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /api/definitions status = %d, want %d, body=%s", resp.StatusCode, http.StatusCreated, body)
+	}
+	created := decodeBody[map[string]any](t, body)
+	workflowID, _ := created["workflowId"].(string)
+	version, _ := created["version"].(float64)
+	return workflowID, int(version)
+}
+
+// TestAgentTraceFacts_RejectedActions_TraceAndLogsCarryNoSecrets drives two claim-time
+// rejections whose arguments carry a signed URL: a video requested for an asset without a
+// passing review (PRECONDITION_UNMET), and a generation past a limit of 1
+// (GENERATION_LIMIT_REACHED). The Run fails with the expected code, and neither the Run
+// Snapshot, the Agent NodeRun detail, the Agent Trace nor the captured Backend logs carry
+// the URL signature, its token, or the configured callback signing secret.
+func TestAgentTraceFacts_RejectedActions_TraceAndLogsCarryNoSecrets(t *testing.T) {
+	signedSettings := `{"style":"natural","sourceUrl":"` + rejectionSignedURL + `"}`
+	cases := []struct {
+		name     string
+		script   []*mockmodel.Scenario
+		wantCode string
+	}{
+		{
+			name: "precondition_unmet",
+			script: []*mockmodel.Scenario{{
+				Kind:     mockmodel.ScenarioToolCall,
+				ToolName: generatevideo.ToolName,
+				ToolArguments: json.RawMessage(`{"assetRef":"img_unreviewed","photoAssetId":"` + traceFactsPhotoA +
+					`","settings":` + signedSettings + `}`),
+			}},
+			wantCode: runtime.CodePreconditionUnmet,
+		},
+		{
+			name: "generation_limit_reached",
+			script: []*mockmodel.Scenario{
+				traceFactsGeneration(traceFactsPhotoA),
+				{
+					Kind:     mockmodel.ScenarioToolCall,
+					ToolName: generateimage.ToolName,
+					ToolArguments: json.RawMessage(`{"photoAssetId":"` + traceFactsPhotoB +
+						`","settings":` + signedSettings + `}`),
+				},
+			},
+			wantCode: runtime.CodeGenerationLimitReached,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env, logs := newRejectionSecrecyEnv(t)
+			var calls atomic.Int32
+			env.provider.Script = func(registry.ModelRequest) *mockmodel.Scenario {
+				if n := int(calls.Add(1)); n <= len(tc.script) {
+					return tc.script[n-1]
+				}
+				return &mockmodel.Scenario{Kind: mockmodel.ScenarioFinal, Output: "unreachable"}
+			}
+			workflowID, version := saveRejectionDefinition(t, env, 1)
+			runID := createAgentRun(t, env, workflowID, version, "make a video")
+			snapshot := env.waitForTerminal(t, runID, agentTraceWait)
+			run, _ := snapshot["run"].(map[string]any)
+			if status, _ := run["status"].(string); status != "FAILED" {
+				t.Fatalf("Run status = %q, want FAILED; snapshot=%v", status, snapshot)
+			}
+			nodeRunID := nodeRunIDOf(t, snapshot, "node_agent")
+			status, trace := getAgentTrace(t, env, runID, nodeRunID)
+			if status != http.StatusOK {
+				t.Fatalf("GET agent trace status = %d, want %d, body=%s", status, http.StatusOK, trace)
+			}
+			if !strings.Contains(string(trace), `"code":"`+tc.wantCode+`"`) {
+				t.Errorf("agent trace does not report the %s rejection: %s", tc.wantCode, trace)
+			}
+			_, snapshotBody := env.doJSON(t, http.MethodGet, "/api/runs/"+runID, nil)
+			_, detail := env.doJSON(t, http.MethodGet, "/api/runs/"+runID+"/nodes/"+nodeRunID, nil)
+
+			surfaces := map[string]string{
+				"run snapshot":    string(snapshotBody),
+				"node run detail": string(detail),
+				"agent trace":     string(trace),
+				"backend logs":    logs.String(),
+			}
+			for surface, text := range surfaces {
+				for _, secret := range []string{rejectionSignature, rejectionToken, "X-Amz-Signature", testCallbackSigningSecret} {
+					if strings.Contains(text, secret) {
+						t.Errorf("%s carries %q: %s", surface, secret, text)
+					}
+				}
+			}
+		})
 	}
 }

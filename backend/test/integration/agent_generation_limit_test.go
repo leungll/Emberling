@@ -93,6 +93,13 @@ func (g *generationExecutor) Execute(ctx context.Context, action registry.ToolAc
 // non-counting lookup Tool.
 func newGenerationHarness(t *testing.T, p *generationProvider, notifier service.EventNotifier) (*agentHarness, *generationExecutor) {
 	t.Helper()
+	return newGenerationHarnessWith(t, p, agentHarnessOptions{Notifier: notifier})
+}
+
+// newGenerationHarnessWith is newGenerationHarness over caller-chosen harness options; a
+// Pool and Clock shared with an earlier harness make it a restarted Backend.
+func newGenerationHarnessWith(t *testing.T, p *generationProvider, opts agentHarnessOptions) (*agentHarness, *generationExecutor) {
+	t.Helper()
 	artifactRoot := t.TempDir()
 	artifacts := asset.NewArtifactStore(artifactRoot, 1<<20)
 	executor := &generationExecutor{
@@ -105,8 +112,8 @@ func newGenerationHarness(t *testing.T, p *generationProvider, notifier service.
 		t.Fatalf("generate_image must count toward the generation limit")
 	}
 	registration.Executor = executor
-	h := newAgentHarness(t, agentHarnessOptions{Tools: []registry.ToolRegistration{registration}, Notifier: notifier})
-	return h, executor
+	opts.Tools = []registry.ToolRegistration{registration}
+	return newAgentHarness(t, opts), executor
 }
 
 // generationDefinition is the fixture graph whose Agent may call generate_image and
@@ -574,4 +581,124 @@ func TestAgentGenerationLimit_FrozenOnAgentRun_NullMeansUnlimited(t *testing.T) 
 			}
 		}
 	})
+}
+
+// countRunFacts counts the execution facts committed for one Run.
+func countRunFacts(t *testing.T, h *agentHarness, runID string) int {
+	t.Helper()
+	var count int
+	if err := h.pool.QueryRow(h.ctx, `SELECT count(*) FROM execution_facts WHERE run_id = $1`, runID).Scan(&count); err != nil {
+		t.Fatalf("count execution facts of run %s: %v", runID, err)
+	}
+	return count
+}
+
+// TestAgentGenerationLimit_CrashAfterClaim_RecoveryNeverDuplicatesFactOrSlot covers a crash
+// after the claim of a fact-producing, counted generation committed its RUNNING Action
+// and STARTED Attempt but before the Provider request. Under a limit of 2 with one
+// generation already run, the claimed Attempt holds the last slot, so any second
+// evaluation of the claim-time checks would now reject with GENERATION_LIMIT_REACHED.
+// Recovery goes through the single existing path: a reconciler pass and a direct
+// re-entry leave the claimed Action alone, and the Agent deadline closes it as TIMEOUT.
+// Exactly one Attempt exists for the Action, the Run holds only the facts committed
+// before the claim, the calls used stay at the one claimed slot, and the Provider saw
+// only the first generation.
+func TestAgentGenerationLimit_CrashAfterClaim_RecoveryNeverDuplicatesFactOrSlot(t *testing.T) {
+	p := newGenerationProvider(t)
+	crashed, crashedExecutor := newGenerationHarness(t, p, nil)
+	run := startGenerationRun(crashed, "wf-generation-limit-crash", generationLimit(2),
+		generationCall("photo-a"), generationCall("photo-b"))
+	// The hook runs after the second generation's claim transaction committed and before
+	// the Executor sends anything to the Provider; it records what that commit left behind.
+	factsAtClaim, usedAtClaim := -1, -1
+	var agentRunID string
+	crashedExecutor.during = func(context.Context, registry.ToolAction) {
+		if crashedExecutor.calls.Load() != 2 {
+			return
+		}
+		factsAtClaim = countRunFacts(t, crashed, run.ID)
+		usedAtClaim = countAgentRunAttempts(t, crashed, agentRunID, generateimage.ToolName)
+		panic("simulated crash after the generation claim committed, before the Provider request")
+	}
+	outcome := crashed.claimAgentNode(run.ID)
+	agentRunID = factAgentRunID(t, crashed, outcome)
+	func() {
+		defer func() {
+			if recovered := recover(); recovered == nil {
+				t.Fatalf("the simulated crash did not happen")
+			}
+		}()
+		crashed.execute(outcome)
+	}()
+
+	if first := generationActionOfTurn(t, crashed, agentRunID, 1); first.Status != domain.AgentActionSucceeded {
+		t.Fatalf("first generation = %s, want SUCCEEDED before the crash", first.Status)
+	}
+	action := generationActionOfTurn(t, crashed, agentRunID, 2)
+	attempts := agentToolAttempts(crashed.ctx, t, crashed.uow, action.ID)
+	if action.Status != domain.AgentActionRunning || len(attempts) != 1 || attempts[0].Status != domain.ToolAttemptStarted {
+		t.Fatalf("after the crash: action %s with attempts %+v, want RUNNING with one STARTED attempt", action.Status, attempts)
+	}
+	attempt := attempts[0]
+	if factsAtClaim != 1 {
+		t.Fatalf("execution facts at the claim = %d, want the first generation's one", factsAtClaim)
+	}
+	if usedAtClaim != 2 {
+		t.Fatalf("generation calls used at the claim = %d, want 2 (the earlier call and the claimed slot)", usedAtClaim)
+	}
+	if got := p.generations.Load(); got != 1 {
+		t.Fatalf("mock provider generations after the crash = %d, want only the first", got)
+	}
+
+	restarted, executor := newGenerationHarnessWith(t, p, agentHarnessOptions{Pool: crashed.pool, Clock: crashed.clock})
+	rec := agentReconciler(restarted)
+	agentRunOnce(restarted, rec)
+	if err := restarted.svc.ExecuteAgentAction(restarted.ctx, action.ID, domain.ClaimReconciler); err != nil {
+		t.Fatalf("re-enter the claimed action: %v", err)
+	}
+	if got := getAgentAction(restarted.ctx, t, restarted.uow, action.ID); got.Status != domain.AgentActionRunning || got.Error != nil {
+		t.Fatalf("action before the deadline = status %s error %+v, want still RUNNING without error", got.Status, got.Error)
+	}
+
+	restarted.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
+	agentRunOnce(restarted, rec)
+
+	closed := getAgentAction(restarted.ctx, t, restarted.uow, action.ID)
+	if closed.Status != domain.AgentActionFailed || closed.Error == nil {
+		t.Fatalf("action after the deadline = status %s error %+v, want FAILED by the timeout", closed.Status, closed.Error)
+	}
+	if closed.Error.Code == runtime.CodeGenerationLimitReached || closed.Error.Code == runtime.CodePreconditionUnmet {
+		t.Errorf("action error = %+v, want the timeout, not a re-evaluated claim check", closed.Error)
+	}
+	agentRun, _ := agentRunOfNodeRun(restarted.ctx, t, restarted.uow, outcome.NodeRunID)
+	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationTimeout {
+		t.Errorf("agent run termination = %s, want TIMEOUT", agentTermination(agentRun))
+	}
+	final := agentToolAttempts(restarted.ctx, t, restarted.uow, action.ID)
+	if len(final) != 1 || final[0].ID != attempt.ID || final[0].Status != domain.ToolAttemptFailed {
+		t.Errorf("tool attempts = %+v, want only %s, closed FAILED", final, attempt.ID)
+	}
+	if got := countRunFacts(t, restarted, run.ID); got != factsAtClaim {
+		t.Errorf("execution facts after recovery = %d, want the %d committed before the claim", got, factsAtClaim)
+	}
+	for _, fact := range listFactsByAgentRun(restarted.ctx, t, restarted.uow, agentRunID) {
+		if fact.ToolAttemptID == attempt.ID {
+			t.Errorf("fact %s was written for the crashed attempt %s", fact.ID, attempt.ID)
+		}
+	}
+	if got := countAgentRunAttempts(t, restarted, agentRunID, generateimage.ToolName); got != usedAtClaim {
+		t.Errorf("generation calls used after recovery = %d, want the %d of the claim", got, usedAtClaim)
+	}
+	if got := executor.calls.Load(); got != 0 {
+		t.Errorf("generate_image executor calls after restart = %d, want 0", got)
+	}
+	if got := p.generations.Load(); got != 1 {
+		t.Errorf("mock provider generations = %d, want only the first", got)
+	}
+	events := listEvents(restarted.ctx, t, restarted.uow, run.ID)
+	agentOnlyPayloadFor(t, events, domain.EventAgentActionStarted, "actionId", action.ID)
+	failed := agentOnlyPayloadFor(t, events, domain.EventAgentActionFailed, "actionId", action.ID)
+	if failed["failureSource"] != string(domain.FailureTimeout) {
+		t.Errorf("AGENT_ACTION_FAILED failureSource = %v, want TIMEOUT", failed["failureSource"])
+	}
 }
