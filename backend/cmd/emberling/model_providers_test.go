@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
-	"github.com/leungll/Emberling/backend/internal/adapters/openaimodel"
 	"github.com/leungll/Emberling/backend/internal/config"
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
+
+const legacyOpenAIModelID = "openai-compatible"
 
 func registeredModelIDs(models *registry.ModelRegistry) []string {
 	var ids []string
@@ -28,8 +29,8 @@ func TestRegisterModelProviders_OpenAIConfigured_RegistersOpenAICompatible(t *te
 	if err != nil {
 		t.Fatalf("registerModelProviders() error = %v", err)
 	}
-	if _, _, ok := models.Get(openaimodel.ModelID); !ok {
-		t.Errorf("model %q not registered; registered %v", openaimodel.ModelID, registeredModelIDs(models))
+	if _, _, ok := models.Get(legacyOpenAIModelID); !ok {
+		t.Errorf("model %q not registered; registered %v", legacyOpenAIModelID, registeredModelIDs(models))
 	}
 	if _, _, ok := models.Get(mockmodel.ModelID); !ok {
 		t.Errorf("mock model %q not registered alongside; registered %v", mockmodel.ModelID, registeredModelIDs(models))
@@ -46,8 +47,8 @@ func TestRegisterModelProviders_NotConfigured_RegistersMockOnly(t *testing.T) {
 	if err := registerModelProviders(context.Background(), models, config.OpenAIModel{}); err != nil {
 		t.Fatalf("registerModelProviders() error = %v", err)
 	}
-	if _, _, ok := models.Get(openaimodel.ModelID); ok {
-		t.Errorf("model %q registered without configuration", openaimodel.ModelID)
+	if _, _, ok := models.Get(legacyOpenAIModelID); ok {
+		t.Errorf("model %q registered without configuration", legacyOpenAIModelID)
 	}
 	if _, _, ok := models.Get(mockmodel.ModelID); !ok {
 		t.Errorf("mock model %q not registered; registered %v", mockmodel.ModelID, registeredModelIDs(models))

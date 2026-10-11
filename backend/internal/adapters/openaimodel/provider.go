@@ -27,10 +27,6 @@ import (
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
 
-// ModelID is the stable Model ID this Adapter registers. A Definition selects it; the
-// Provider-side model name stays deployment configuration.
-const ModelID = "openai-compatible"
-
 const completionsPath = "/chat/completions"
 
 // maxResponseBytes bounds how much of a Provider answer is read.
@@ -51,9 +47,14 @@ const configSchema = `{
   }
 }`
 
-// Config is everything one Provider needs. HTTPClient may be nil, in which case calls are
-// bounded only by the caller's context.
+// Config is everything one Provider needs. One Provider serves exactly one model: ModelID
+// is the stable ID a Definition selects and DisplayName is what Studio shows, while Model
+// is the Provider-side model name, which stays deployment configuration and is never
+// written into a Definition. There is no default Model ID. HTTPClient may be nil, in which
+// case calls are bounded only by the caller's context.
 type Config struct {
+	ModelID        string
+	DisplayName    string
 	BaseURL        string
 	APIKey         string
 	Model          string
@@ -63,11 +64,13 @@ type Config struct {
 
 // Provider is the OpenAI-compatible registry.ModelProvider.
 type Provider struct {
-	endpoint string
-	apiKey   string
-	model    string
-	client   *http.Client
-	decision strictDecision
+	modelID     string
+	displayName string
+	endpoint    string
+	apiKey      string
+	model       string
+	client      *http.Client
+	decision    strictDecision
 }
 
 var (
@@ -80,6 +83,12 @@ var (
 // New validates cfg and derives the strict Decision form once.
 func New(cfg Config) (*Provider, error) {
 	var missing []string
+	if strings.TrimSpace(cfg.ModelID) == "" {
+		missing = append(missing, "model ID")
+	}
+	if strings.TrimSpace(cfg.DisplayName) == "" {
+		missing = append(missing, "display name")
+	}
 	if strings.TrimSpace(cfg.BaseURL) == "" {
 		missing = append(missing, "base URL")
 	}
@@ -101,28 +110,30 @@ func New(cfg Config) (*Provider, error) {
 		client = &http.Client{}
 	}
 	return &Provider{
-		endpoint: strings.TrimRight(cfg.BaseURL, "/") + completionsPath,
-		apiKey:   cfg.APIKey,
-		model:    cfg.Model,
-		client:   client,
-		decision: decision,
+		modelID:     cfg.ModelID,
+		displayName: cfg.DisplayName,
+		endpoint:    strings.TrimRight(cfg.BaseURL, "/") + completionsPath,
+		apiKey:      cfg.APIKey,
+		model:       cfg.Model,
+		client:      client,
+		decision:    decision,
 	}, nil
 }
 
 // String, GoString and LogValue keep the API key out of every rendering of a Provider.
 func (p *Provider) String() string {
-	return fmt.Sprintf("openaimodel.Provider{endpoint: %s, model: %s, apiKey: %s}", p.endpoint, p.model, redacted)
+	return fmt.Sprintf("openaimodel.Provider{modelID: %s, endpoint: %s, model: %s, apiKey: %s}", p.modelID, p.endpoint, p.model, redacted)
 }
 
 func (p *Provider) GoString() string { return p.String() }
 
 func (p *Provider) LogValue() slog.Value { return slog.StringValue(p.String()) }
 
-// Models returns the single model this Provider serves.
+// Models returns the single model this Provider serves, under its configured ID.
 func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error) {
 	return []registry.ModelRegistration{{ModelMetadata: domain.ModelMetadata{
-		ID:           ModelID,
-		DisplayName:  "OpenAI-compatible (" + p.model + ")",
+		ID:           p.modelID,
+		DisplayName:  p.displayName,
 		Capabilities: []string{domain.ModelCapabilityTextGeneration, domain.ModelCapabilityStructuredDecision},
 		ConfigSchema: json.RawMessage(configSchema),
 	}}}, nil

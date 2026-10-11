@@ -22,7 +22,11 @@ func registerModelProviders(ctx context.Context, models *registry.ModelRegistry,
 	if !cfg.Enabled() {
 		return nil
 	}
+	// The single configuration group keeps its existing Model ID until configuration
+	// moves to a model list.
 	provider, err := openaimodel.New(openaimodel.Config{
+		ModelID:        "openai-compatible",
+		DisplayName:    "OpenAI-compatible (" + cfg.Model + ")",
 		BaseURL:        cfg.BaseURL,
 		APIKey:         cfg.APIKey.Reveal(),
 		Model:          cfg.Model,

@@ -25,6 +25,11 @@ import (
 
 const testKey = "sk-test-0123456789abcdef"
 
+const (
+	testModelID     = "test-model.1"
+	testDisplayName = "Test Model 1"
+)
+
 // captured is what the fake Provider observed of one request.
 type captured struct {
 	path          string
@@ -55,6 +60,8 @@ func newProvider(t *testing.T, baseURL string, client *http.Client) *openaimodel
 		client = &http.Client{}
 	}
 	provider, err := openaimodel.New(openaimodel.Config{
+		ModelID:        testModelID,
+		DisplayName:    testDisplayName,
 		BaseURL:        baseURL + "/v1/",
 		APIKey:         testKey,
 		Model:          "gpt-test",
@@ -91,7 +98,7 @@ func agentRequest() registry.ModelRequest {
 	actionID := "act_1"
 	tool := "lookup"
 	return registry.ModelRequest{
-		ModelID:      openaimodel.ModelID,
+		ModelID:      testModelID,
 		Instructions: "Find the answer.",
 		Messages: []registry.ModelMessage{
 			{Role: "user", Content: raw(`"What is the capital?"`)},
@@ -496,9 +503,38 @@ func TestNew_MissingSetting_FailsWithoutRepeatingKey(t *testing.T) {
 	}
 }
 
+// TestNew_MissingModelIDOrDisplayName_Fails pins that the Adapter has no default Model
+// ID: every instance is told which stable ID and display name it serves.
+func TestNew_MissingModelIDOrDisplayName_Fails(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		modelID     string
+		displayName string
+		want        string
+	}{
+		{"no model ID", "", testDisplayName, "model ID"},
+		{"blank model ID", "  ", testDisplayName, "model ID"},
+		{"no display name", testModelID, "", "display name"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := openaimodel.New(openaimodel.Config{
+				ModelID: tc.modelID, DisplayName: tc.displayName,
+				BaseURL: "https://llm.example", APIKey: testKey, Model: "m", DecisionSchema: registry.DecisionSchema(),
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("New() error = %v, want a refusal naming the %s", err, tc.want)
+			}
+			if strings.Contains(err.Error(), testKey) {
+				t.Errorf("error leaks the API key: %q", err.Error())
+			}
+		})
+	}
+}
+
 func TestNew_DecisionSchemaWithUnknownMember_Fails(t *testing.T) {
 	schema := `{"oneOf":[{"properties":{"kind":{"const":"FINAL"},"output":{},"confidence":{"type":"number"}}}]}`
 	_, err := openaimodel.New(openaimodel.Config{
+		ModelID: testModelID, DisplayName: testDisplayName,
 		BaseURL: "https://llm.example", APIKey: testKey, Model: "m", DecisionSchema: raw(schema),
 	})
 	if err == nil || !strings.Contains(err.Error(), "confidence") {
@@ -506,15 +542,22 @@ func TestNew_DecisionSchemaWithUnknownMember_Fails(t *testing.T) {
 	}
 }
 
-func TestProvider_Models_RegistersStableModelID(t *testing.T) {
+func TestProvider_Models_RegistersConfiguredIDAndDisplayName(t *testing.T) {
 	provider := newProvider(t, "https://llm.example", nil)
 	models := registry.NewModelRegistry()
 	if err := models.Register(context.Background(), provider); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
-	registration, served, ok := models.Get(openaimodel.ModelID)
+	listed := models.ListMetadata()
+	if len(listed) != 1 {
+		t.Fatalf("ListMetadata() = %+v, want exactly the one configured model", listed)
+	}
+	registration, served, ok := models.Get(testModelID)
 	if !ok || served != registry.ModelProvider(provider) {
-		t.Fatalf("Get(%q) = %v, want this Provider", openaimodel.ModelID, ok)
+		t.Fatalf("Get(%q) = %v, want this Provider", testModelID, ok)
+	}
+	if registration.DisplayName != testDisplayName {
+		t.Errorf("DisplayName = %q, want the configured %q", registration.DisplayName, testDisplayName)
 	}
 	for _, capability := range []string{domain.ModelCapabilityStructuredDecision, domain.ModelCapabilityTextGeneration} {
 		if !registration.HasCapability(capability) {
@@ -523,6 +566,40 @@ func TestProvider_Models_RegistersStableModelID(t *testing.T) {
 	}
 	if strings.Contains(registration.DisplayName, testKey) {
 		t.Errorf("DisplayName leaks the API key: %q", registration.DisplayName)
+	}
+}
+
+// TestProvider_Generate_EachInstanceSendsOwnUpstreamModel pins one Provider instance per
+// model: two instances behind the same endpoint each send only the upstream model name
+// they were constructed with.
+func TestProvider_Generate_EachInstanceSendsOwnUpstreamModel(t *testing.T) {
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
+	for _, tc := range []struct{ id, upstream string }{
+		{"alpha-1", "vendor/alpha-1"},
+		{"beta-2", "vendor/beta-2"},
+	} {
+		provider, err := openaimodel.New(openaimodel.Config{
+			ModelID: tc.id, DisplayName: tc.id, BaseURL: server.URL, APIKey: testKey,
+			Model: tc.upstream, HTTPClient: server.Client(), DecisionSchema: registry.DecisionSchema(),
+		})
+		if err != nil {
+			t.Fatalf("New(%s) error = %v", tc.id, err)
+		}
+		request := agentRequest()
+		request.ModelID = tc.id
+		if _, err := provider.Generate(context.Background(), request); err != nil {
+			t.Fatalf("Generate(%s) error = %v", tc.id, err)
+		}
+		var body struct {
+			Model string `json:"model"`
+		}
+		if err := json.Unmarshal(seen.body, &body); err != nil {
+			t.Fatalf("request body is not JSON: %v", err)
+		}
+		if body.Model != tc.upstream {
+			t.Errorf("model %s sent upstream model %q, want %q", tc.id, body.Model, tc.upstream)
+		}
 	}
 }
 
