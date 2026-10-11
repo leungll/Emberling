@@ -4,7 +4,8 @@
 // sandbox runner's asynchronous callback, then deploys it once through the mock
 // production service. Both external services run in-process with their test controls, so
 // a test can hold a request at their barrier and compare the Runtime's facts with what
-// each service recorded.
+// each service recorded. Each story runs once per runner backend: the deterministic mock
+// backend, and the ax backend on the in-process AX stand-in.
 package contract
 
 import (
@@ -22,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leungll/Emberling/backend/internal/fixture/mockax"
 	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
 	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
 	"github.com/leungll/Emberling/backend/internal/fixture/sandboxrunner"
@@ -30,8 +32,12 @@ import (
 	"github.com/leungll/Emberling/backend/internal/tools/sandboxtest"
 )
 
-// deliveryPatch is the patch every story submits; only its digest is ever compared.
-const deliveryPatch = "--- a/greet.go\n+++ b/greet.go\n@@ -1 +1 @@\n-hello\n+hello, world\n"
+// deliveryPatch is the patch every story submits. It changes a comment of the runner's
+// fixture at deliveryBaseCommit and applies under the runner's strict patch applier, which
+// the ax backend runs before it creates any AX resource; the fixture's test still passes.
+const deliveryPatch = "--- a/greet.go\n+++ b/greet.go\n@@ -5 +5 @@\n" +
+	"-// Greeting returns the greeting for name.\n" +
+	"+// Greeting returns the friendly greeting for name.\n"
 
 // deliveryBaseCommit, deliveryService and deliveryEnvironment complete the task.
 const (
@@ -39,6 +45,35 @@ const (
 	deliveryService     = "checkout"
 	deliveryEnvironment = "staging"
 )
+
+// AX settings of the ax backend variant. The image is never pulled: the AX stand-in only
+// carries it in the Task document.
+const (
+	deliveryAXAtespace = "emberling-sandbox"
+	deliveryAXImage    = "registry.local/sandboxsupervisor@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+)
+
+// deliveryBackend is the sandbox runner backend a story runs on.
+type deliveryBackend struct {
+	name string
+	// ax configures the AX stand-in the ax backend runs on; nil runs the mock backend.
+	ax *mockax.Config
+}
+
+func (b deliveryBackend) isAX() bool { return b.ax != nil }
+
+// forEachDeliveryBackend runs story once on the mock backend and once on the ax backend
+// over an AX stand-in whose default scenario is a passing run of twelve tests, the same
+// verdict the mock backend reports, so both variants satisfy the same assertions.
+func forEachDeliveryBackend(t *testing.T, story func(t *testing.T, backend deliveryBackend)) {
+	t.Helper()
+	for _, backend := range []deliveryBackend{
+		{name: "mock_backend"},
+		{name: "ax_backend_on_mockax", ax: &mockax.Config{}},
+	} {
+		t.Run(backend.name, func(t *testing.T) { story(t, backend) })
+	}
+}
 
 // deliveryRunner is one in-process sandbox runner with its record and redelivery store.
 // Stopping it and starting another over the same record path is a runner restart.
@@ -68,19 +103,28 @@ func (r *deliveryRunner) stop(t *testing.T) {
 // against. Both outlive an Emberling restart: a real external service does not restart
 // because Emberling did.
 type deliveryFixture struct {
-	callbacks      *callbackTransport
+	callbacks *callbackTransport
+	// ax is the AX stand-in of the ax backend variant, nil otherwise. Like AX itself it
+	// outlives a runner restart.
+	ax             *mockax.Fake
 	runnerRecord   string
 	runner         *deliveryRunner
 	production     *httptest.Server
 	productionHeld chan string
 }
 
-func newDeliveryFixture(t *testing.T) *deliveryFixture {
+func newDeliveryFixture(t *testing.T, backend deliveryBackend) *deliveryFixture {
 	t.Helper()
 	f := &deliveryFixture{
 		callbacks:      newCallbackTransport(),
 		runnerRecord:   filepath.Join(t.TempDir(), "runner.jsonl"),
 		productionHeld: make(chan string, 4),
+	}
+	if backend.isAX() {
+		config := *backend.ax
+		config.Digest = sandboxrunner.WorkspaceDigest
+		f.ax = mockax.New(config)
+		t.Cleanup(f.ax.StopHolding)
 	}
 	// Holding is done at the runner's own barrier, never at this transport, so a story
 	// observes the hold exactly as the demo does.
@@ -116,7 +160,19 @@ func (f *deliveryFixture) startRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sandbox runner redelivery store: %v", err)
 	}
-	server := sandboxrunner.NewServer(sandboxrunner.NewMockBackend(),
+	var backend sandboxrunner.Backend = sandboxrunner.NewMockBackend()
+	if f.ax != nil {
+		ax, err := sandboxrunner.NewAXBackend(sandboxrunner.AXBackendConfig{
+			Atespace: deliveryAXAtespace, Image: deliveryAXImage,
+			TestTimeout: e2eWait, ReadyTimeout: e2eWait,
+			Control: f.ax, Results: f.ax, Record: record,
+		})
+		if err != nil {
+			t.Fatalf("new ax backend: %v", err)
+		}
+		backend = ax
+	}
+	server := sandboxrunner.NewServer(backend,
 		sandboxrunner.WithHTTPClient(&http.Client{Transport: f.callbacks, Timeout: e2eHTTPTimeout}),
 		sandboxrunner.WithTestControls(record, store))
 	f.runner = &deliveryRunner{server: server, http: httptest.NewServer(server), record: record, store: store}
@@ -507,27 +563,29 @@ func assertDeliveredOnce(t *testing.T, env *testEnv, f *deliveryFixture, runID s
 // with a result naming the deployment, and the Agent Trace, the sandbox runner record and
 // the production record agree on one test and one deployment.
 func TestE2E_SoftwareDelivery_HappyPath_TestsThenDeploysOnce(t *testing.T) {
-	f := newDeliveryFixture(t)
-	env := f.startBackend(t, testEnvOptions{})
+	forEachDeliveryBackend(t, func(t *testing.T, backend deliveryBackend) {
+		f := newDeliveryFixture(t, backend)
+		env := f.startBackend(t, testEnvOptions{})
 
-	runID := runHeldUntilWaiting(t, f, env, "software-delivery")
-	snapshot := env.waitForTerminal(t, runID, e2eWait)
-	delivered := assertDeliveredOnce(t, env, f, runID, snapshot)
+		runID := runHeldUntilWaiting(t, f, env, "software-delivery")
+		snapshot := env.waitForTerminal(t, runID, e2eWait)
+		delivered := assertDeliveredOnce(t, env, f, runID, snapshot)
 
-	delivery := f.nextDelivery(t)
-	if delivery.StatusCode != http.StatusOK || delivery.ExternalTaskID != delivered.testID {
-		t.Fatalf("callback = status %d test %q, want 200 for %q; body=%s",
-			delivery.StatusCode, delivery.ExternalTaskID, delivered.testID, delivery.Body)
-	}
-	if outcome := decodeBody[callbackResponseDTO](t, delivery.Body); !outcome.Accepted || outcome.Duplicate {
-		t.Errorf("callback outcome = %+v, want accepted and not a duplicate", outcome)
-	}
-	// The runner records the line only after the HTTP response returns.
-	waitRecordLine(t, f.runner.http.URL, "callback", "callback", nil)
-	callbacks := recordLines(serviceRecord(t, f.runner.http.URL), "callback", "callback")
-	if len(callbacks) != 1 || callbacks[0]["httpStatus"] != float64(http.StatusOK) || callbacks[0]["attempt"] != float64(1) {
-		t.Errorf("runner callback lines = %v, want one first delivery answered 200", callbacks)
-	}
+		delivery := f.nextDelivery(t)
+		if delivery.StatusCode != http.StatusOK || delivery.ExternalTaskID != delivered.testID {
+			t.Fatalf("callback = status %d test %q, want 200 for %q; body=%s",
+				delivery.StatusCode, delivery.ExternalTaskID, delivered.testID, delivery.Body)
+		}
+		if outcome := decodeBody[callbackResponseDTO](t, delivery.Body); !outcome.Accepted || outcome.Duplicate {
+			t.Errorf("callback outcome = %+v, want accepted and not a duplicate", outcome)
+		}
+		// The runner records the line only after the HTTP response returns.
+		waitRecordLine(t, f.runner.http.URL, "callback", "callback", nil)
+		callbacks := recordLines(serviceRecord(t, f.runner.http.URL), "callback", "callback")
+		if len(callbacks) != 1 || callbacks[0]["httpStatus"] != float64(http.StatusOK) || callbacks[0]["attempt"] != float64(1) {
+			t.Errorf("runner callback lines = %v, want one first delivery answered 200", callbacks)
+		}
+	})
 }
 
 // TestE2E_SoftwareDelivery_RunnerRedeliversCallback_BackendAnswersDuplicateWithoutNewEvent
@@ -535,50 +593,52 @@ func TestE2E_SoftwareDelivery_HappyPath_TestsThenDeploysOnce(t *testing.T) {
 // once more. The Backend answers the redelivery as a duplicate of the consumed Binding and
 // writes nothing: the Event log and the Run's terminal status are unchanged.
 func TestE2E_SoftwareDelivery_RunnerRedeliversCallback_BackendAnswersDuplicateWithoutNewEvent(t *testing.T) {
-	f := newDeliveryFixture(t)
-	env := f.startBackend(t, testEnvOptions{})
+	forEachDeliveryBackend(t, func(t *testing.T, backend deliveryBackend) {
+		f := newDeliveryFixture(t, backend)
+		env := f.startBackend(t, testEnvOptions{})
 
-	runID := runHeldUntilWaiting(t, f, env, "software-delivery")
-	snapshot := env.waitForTerminal(t, runID, e2eWait)
-	delivered := assertDeliveredOnce(t, env, f, runID, snapshot)
-	if first := f.nextDelivery(t); first.StatusCode != http.StatusOK {
-		t.Fatalf("first callback status = %d, want 200; body=%s", first.StatusCode, first.Body)
-	}
-	eventsBefore := env.listEvents(t, runID)
+		runID := runHeldUntilWaiting(t, f, env, "software-delivery")
+		snapshot := env.waitForTerminal(t, runID, e2eWait)
+		delivered := assertDeliveredOnce(t, env, f, runID, snapshot)
+		if first := f.nextDelivery(t); first.StatusCode != http.StatusOK {
+			t.Fatalf("first callback status = %d, want 200; body=%s", first.StatusCode, first.Body)
+		}
+		eventsBefore := env.listEvents(t, runID)
 
-	// --- runner restart: same record path, so the new runner finds the stored result.
-	f.runner.stop(t)
-	f.startRunner(t)
+		// --- runner restart: same record path, so the new runner finds the stored result.
+		f.runner.stop(t)
+		f.startRunner(t)
 
-	redelivery := f.nextDelivery(t)
-	if redelivery.StatusCode != http.StatusOK || redelivery.ExternalTaskID != delivered.testID {
-		t.Fatalf("redelivered callback = status %d test %q, want 200 for %q; body=%s",
-			redelivery.StatusCode, redelivery.ExternalTaskID, delivered.testID, redelivery.Body)
-	}
-	if outcome := decodeBody[callbackResponseDTO](t, redelivery.Body); !outcome.Accepted || !outcome.Duplicate || outcome.Pending {
-		t.Errorf("redelivered callback outcome = %+v, want an accepted duplicate", outcome)
-	}
-	waitRecordLine(t, f.runner.http.URL, "callback", "callback", func(line map[string]any) bool {
-		return line["testId"] == delivered.testID && line["attempt"] == float64(2) && line["httpStatus"] == float64(http.StatusOK)
+		redelivery := f.nextDelivery(t)
+		if redelivery.StatusCode != http.StatusOK || redelivery.ExternalTaskID != delivered.testID {
+			t.Fatalf("redelivered callback = status %d test %q, want 200 for %q; body=%s",
+				redelivery.StatusCode, redelivery.ExternalTaskID, delivered.testID, redelivery.Body)
+		}
+		if outcome := decodeBody[callbackResponseDTO](t, redelivery.Body); !outcome.Accepted || !outcome.Duplicate || outcome.Pending {
+			t.Errorf("redelivered callback outcome = %+v, want an accepted duplicate", outcome)
+		}
+		waitRecordLine(t, f.runner.http.URL, "callback", "callback", func(line map[string]any) bool {
+			return line["testId"] == delivered.testID && line["attempt"] == float64(2) && line["httpStatus"] == float64(http.StatusOK)
+		})
+		if redelivered := recordLines(serviceRecord(t, f.runner.http.URL), "redelivered", "callback"); len(redelivered) != 1 ||
+			redelivered[0]["testId"] != delivered.testID {
+			t.Errorf("runner redelivered lines = %v, want one for test %s", redelivered, delivered.testID)
+		}
+
+		eventsAfter := env.listEvents(t, runID)
+		if len(eventsAfter) != len(eventsBefore) {
+			t.Errorf("events after the redelivery = %d, want the %d before it: a duplicate writes nothing",
+				len(eventsAfter), len(eventsBefore))
+		}
+		if got := runStatusOf(env.runSnapshot(t, runID)); got != "COMPLETED" {
+			t.Errorf("Run status after the redelivery = %q, want COMPLETED", got)
+		}
+		trace := loadDeliveryTrace(t, env, runID, delivered.agentNodeRunID)
+		if tests := trace.callsOf(sandboxtest.ToolName); len(tests) != 1 || tests[0].attempt.ID != delivered.testAttemptID {
+			t.Errorf("sandbox_test Attempts after the redelivery = %+v, want only %s", tests, delivered.testAttemptID)
+		}
+		if started := recordLines(serviceRecord(t, f.runner.http.URL), "started", "test"); len(started) != 1 {
+			t.Errorf("runner started lines = %v, want 1: a redelivery runs no new test", started)
+		}
 	})
-	if redelivered := recordLines(serviceRecord(t, f.runner.http.URL), "redelivered", "callback"); len(redelivered) != 1 ||
-		redelivered[0]["testId"] != delivered.testID {
-		t.Errorf("runner redelivered lines = %v, want one for test %s", redelivered, delivered.testID)
-	}
-
-	eventsAfter := env.listEvents(t, runID)
-	if len(eventsAfter) != len(eventsBefore) {
-		t.Errorf("events after the redelivery = %d, want the %d before it: a duplicate writes nothing",
-			len(eventsAfter), len(eventsBefore))
-	}
-	if got := runStatusOf(env.runSnapshot(t, runID)); got != "COMPLETED" {
-		t.Errorf("Run status after the redelivery = %q, want COMPLETED", got)
-	}
-	trace := loadDeliveryTrace(t, env, runID, delivered.agentNodeRunID)
-	if tests := trace.callsOf(sandboxtest.ToolName); len(tests) != 1 || tests[0].attempt.ID != delivered.testAttemptID {
-		t.Errorf("sandbox_test Attempts after the redelivery = %+v, want only %s", tests, delivered.testAttemptID)
-	}
-	if started := recordLines(serviceRecord(t, f.runner.http.URL), "started", "test"); len(started) != 1 {
-		t.Errorf("runner started lines = %v, want 1: a redelivery runs no new test", started)
-	}
 }
