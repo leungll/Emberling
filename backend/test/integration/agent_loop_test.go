@@ -78,6 +78,9 @@ type agentHarnessOptions struct {
 	// Queue replaces the default agentInlineTurns enqueuer, so a test can hand post-COMMIT
 	// work to a real bounded work.Queue drained by a work.Pool, or refuse it outright.
 	Queue service.WorkEnqueuer
+	// ModelProviders registers additional Model Providers beside the mock one. Leaving one
+	// out of a restarted harness reproduces a Model ID removed from configuration.
+	ModelProviders []registry.ModelProvider
 }
 
 // agentInlineTurns is the harness's default WorkEnqueuer. A synchronous Tool round no
@@ -145,6 +148,11 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 	provider := mockmodel.NewProvider()
 	if err := modelRegistry.Register(ctx, provider); err != nil {
 		t.Fatalf("register mock model provider: %v", err)
+	}
+	for _, extra := range opts.ModelProviders {
+		if err := modelRegistry.Register(ctx, extra); err != nil {
+			t.Fatalf("register model provider: %v", err)
+		}
 	}
 	for _, reg := range []registry.NodeRegistration{
 		textinput.Registration(),

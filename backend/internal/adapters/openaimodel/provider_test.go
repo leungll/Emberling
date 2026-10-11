@@ -493,6 +493,34 @@ func TestProvider_Rendering_RedactsAPIKey(t *testing.T) {
 	}
 }
 
+// TestOpenAIProvider_String_RedactsKeyForEveryInstance covers one Provider per configured
+// model: every instance shares the deployment's key, and no rendering of any of them may
+// carry it.
+func TestOpenAIProvider_String_RedactsKeyForEveryInstance(t *testing.T) {
+	for _, id := range []string{"opus-5.5", "gemini-3.1", "gpt-5.2"} {
+		provider, err := openaimodel.New(openaimodel.Config{
+			ModelID: id, DisplayName: id, BaseURL: "https://llm.example/v1", APIKey: testKey,
+			Model: "vendor/" + id, DecisionSchema: registry.DecisionSchema(),
+		})
+		if err != nil {
+			t.Fatalf("New(%s) error = %v", id, err)
+		}
+		var logged bytes.Buffer
+		slog.New(slog.NewJSONHandler(&logged, nil)).Info("provider", "value", provider)
+		for _, rendered := range []string{
+			fmt.Sprintf("%v", provider), fmt.Sprintf("%+v", provider), fmt.Sprintf("%#v", provider),
+			provider.String(), provider.GoString(), logged.String(),
+		} {
+			if strings.Contains(rendered, testKey) {
+				t.Errorf("rendering of %s leaks the API key: %s", id, rendered)
+			}
+			if !strings.Contains(rendered, id) {
+				t.Errorf("rendering of %s does not name its Model ID: %s", id, rendered)
+			}
+		}
+	}
+}
+
 func TestNew_MissingSetting_FailsWithoutRepeatingKey(t *testing.T) {
 	_, err := openaimodel.New(openaimodel.Config{APIKey: testKey, DecisionSchema: registry.DecisionSchema()})
 	if err == nil {
