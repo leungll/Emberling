@@ -1,0 +1,20 @@
+# Build context is backend/. The sandbox image for the sandbox runner's AX backend: the same
+# Go image the docker backend runs, pinned by the same digest, with the in-sandbox
+# supervisor installed as the platform's runner entry point. Tests therefore run with the
+# same toolchain on either backend. Both stages are linux/amd64, the platform the sandbox
+# hosts run.
+#
+#   docker build --platform linux/amd64 -f deploy/Dockerfile.sandboxsupervisor backend
+#
+# Reference the pushed image by digest, never by tag.
+FROM --platform=linux/amd64 golang:1.27-alpine@sha256:738d1cf061836894ff6bb8c33881080ac66de8cf0586615012a0c8f592649cfa AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+# The supervisor's only dependency outside the standard library.
+RUN go mod download go.yaml.in/yaml/v3
+COPY cmd/sandboxsupervisor ./cmd/sandboxsupervisor
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/ax-task-runner ./cmd/sandboxsupervisor
+
+FROM --platform=linux/amd64 golang:1.27-alpine@sha256:738d1cf061836894ff6bb8c33881080ac66de8cf0586615012a0c8f592649cfa
+COPY --from=build /out/ax-task-runner /usr/local/bin/ax-task-runner
+ENTRYPOINT ["/usr/local/bin/ax-task-runner"]
