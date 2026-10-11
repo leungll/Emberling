@@ -5,7 +5,8 @@
 //
 // A Backend decides how a test runs. The deterministic mock Backend answers from the
 // request's mock mode; the docker Backend runs the embedded fixture module in a locked-down
-// container through the docker CLI. Either way the runner owns every goroutine it starts,
+// container through the docker CLI; the ax Backend runs it as an AX Task in a gVisor
+// sandbox through the ax CLI. Either way the runner owns every goroutine it starts,
 // bounds how many tests it accepts, delivers each callback without retrying, and keeps the
 // callback token out of logs, errors and the request record.
 package sandboxrunner
