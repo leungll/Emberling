@@ -3,7 +3,7 @@
 // This file is the AIGC Media Generation acceptance track (dispatch and resume, restart
 // while WAITING_CALLBACK, duplicate/wrong-token/early callbacks and the Reference Image),
 // driven end to end through the production pipeline only: the real image_generation Node,
-// the real mocktask Adapter, the real deterministic Mock Provider (internal/mockprovider,
+// the real mocktask Adapter, the real deterministic Mock Provider (internal/fixture/mockprovider,
 // served in-process here), the real POST /api/callbacks intake, the real work Pool, and
 // media_output as the sink. Nothing here uses the package's test_async_echo fixture Node
 // or its fakeAsyncDispatcher: the point of these tests is that the shipped components --
@@ -36,7 +36,7 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
 	"github.com/leungll/Emberling/backend/internal/domain"
-	"github.com/leungll/Emberling/backend/internal/mockprovider"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 

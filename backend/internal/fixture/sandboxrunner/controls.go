@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/leungll/Emberling/backend/internal/mockcontrol"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
 )
 
 // Request kinds the record and the barrier distinguish. A pause naming kindTest holds a

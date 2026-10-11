@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
-	"github.com/leungll/Emberling/backend/internal/mockproduction"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
 

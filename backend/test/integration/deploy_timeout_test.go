@@ -25,7 +25,7 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
 	"github.com/leungll/Emberling/backend/internal/domain"
-	"github.com/leungll/Emberling/backend/internal/mockproduction"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
 	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/tools/deploy"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"

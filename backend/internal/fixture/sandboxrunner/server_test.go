@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leungll/Emberling/backend/internal/mockcontrol"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
 )
 
 const (

@@ -11,7 +11,7 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
-	"github.com/leungll/Emberling/backend/internal/mockprovider"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
 

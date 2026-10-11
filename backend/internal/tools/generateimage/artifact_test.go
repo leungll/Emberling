@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/asset"
-	"github.com/leungll/Emberling/backend/internal/mockprovider"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 )
 
 // imageProvider is a scripted Provider: POST /v1/assets answers with an imageUrl on a

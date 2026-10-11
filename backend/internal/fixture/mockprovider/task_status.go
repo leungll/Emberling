@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/leungll/Emberling/backend/internal/mockcontrol"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
 )
 
 // maxTaskStatuses bounds the per-instance task status map the same way maxIdempotencyKeys

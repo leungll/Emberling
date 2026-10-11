@@ -1,5 +1,5 @@
 // Command mockproduction serves the deterministic production deployment stand-in
-// (internal/mockproduction) as a standalone process, the form deploy/compose.yaml starts
+// (internal/fixture/mockproduction) as a standalone process, the form deploy/compose.yaml starts
 // for the deploy Tool. All behaviour lives in that package; this command only owns the
 // listen address, the optional test controls and the graceful-shutdown sequence.
 package main
@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/leungll/Emberling/backend/internal/mockproduction"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
 )
 
 // defaultAddr matches deploy/compose.yaml, which maps port 9102:9102 for the

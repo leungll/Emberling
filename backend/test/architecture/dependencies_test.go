@@ -105,15 +105,15 @@ func role(pkg string) string {
 		return "config"
 	case pkg == "internal/trace" || strings.HasPrefix(pkg, "internal/trace/"):
 		return "trace"
-	case pkg == "internal/mockprovider":
+	case pkg == "internal/fixture/mockprovider":
 		return "mockprovider"
-	case pkg == "internal/mockproduction":
+	case pkg == "internal/fixture/mockproduction":
 		return "mockproduction"
-	case pkg == "internal/mockcontrol":
+	case pkg == "internal/fixture/mockcontrol":
 		return "mockcontrol"
 	// The sandbox test runner is a separate process standing in for an external test
 	// service, like the Mock Provider.
-	case pkg == "internal/sandboxrunner":
+	case pkg == "internal/fixture/sandboxrunner":
 		return "sandboxrunner"
 	case pkg == "migrations":
 		return "migrations"
@@ -231,20 +231,25 @@ var allowedInternalImports = map[string]map[string]bool{
 	// internal.
 	"migrations": set(),
 
+	// Fixture group (internal/fixture/...): mockprovider, mockproduction, mockcontrol and
+	// sandboxrunner are test fixtures that stand in for external services. They never
+	// import a Runtime package; the only internal edge allowed in the group is onto
+	// internal/fixture/mockcontrol.
+	//
 	// mockprovider: the deterministic HTTP Mock Provider, served as a process by
 	// cmd/mockprovider and in-process by the contract tests. It stands in for an external
 	// Provider, so it must not share a single Go type with the Runtime it is dispatched
 	// from (its own package doc: "a real external Provider would not share Go types with
-	// Emberling either"). The only internal import is internal/mockcontrol, the shared
-	// test-fixture barrier and request record, which itself imports nothing internal: not
-	// even internal/domain or internal/registry may be reached from here.
-	"mockprovider": set("internal/mockcontrol"),
+	// Emberling either"). The only internal import is internal/fixture/mockcontrol, the
+	// shared test-fixture barrier and request record, which itself imports nothing
+	// internal: not even internal/domain or internal/registry may be reached from here.
+	"mockprovider": set("internal/fixture/mockcontrol"),
 
 	// mockproduction: the deterministic production deployment stand-in the deploy Tool
 	// calls, served as a process by cmd/mockproduction and in-process by tests. It stands in
 	// for an external service exactly as mockprovider does and holds to the same rule: its
-	// only internal import is internal/mockcontrol.
-	"mockproduction": set("internal/mockcontrol"),
+	// only internal import is internal/fixture/mockcontrol.
+	"mockproduction": set("internal/fixture/mockcontrol"),
 
 	// mockcontrol: the barrier and request record shared by the HTTP fixtures that stand
 	// in for external services. It is fixture code like mockprovider and holds to the same
@@ -254,7 +259,7 @@ var allowedInternalImports = map[string]map[string]bool{
 	// sandboxrunner: the sandbox test runner served by cmd/sandboxrunner. The sandbox_test
 	// Tool reaches it only over HTTP, so like mockprovider it shares no Go type with the
 	// Runtime; its only internal import is the shared barrier and request record.
-	"sandboxrunner": set("internal/mockcontrol"),
+	"sandboxrunner": set("internal/fixture/mockcontrol"),
 }
 
 // violation is one forbidden edge (or one unclassifiable package) found by

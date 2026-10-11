@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leungll/Emberling/backend/internal/mockprovider"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
 	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 )

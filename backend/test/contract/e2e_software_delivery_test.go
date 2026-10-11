@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leungll/Emberling/backend/internal/mockcontrol"
-	"github.com/leungll/Emberling/backend/internal/mockproduction"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
+	"github.com/leungll/Emberling/backend/internal/fixture/sandboxrunner"
 	"github.com/leungll/Emberling/backend/internal/registry"
-	"github.com/leungll/Emberling/backend/internal/sandboxrunner"
 	"github.com/leungll/Emberling/backend/internal/tools/deploy"
 	"github.com/leungll/Emberling/backend/internal/tools/sandboxtest"
 )

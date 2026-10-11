@@ -3,7 +3,7 @@ package mockprovider
 import (
 	"net/url"
 
-	"github.com/leungll/Emberling/backend/internal/mockcontrol"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
 )
 
 // Record event names. Each names one fact the Mock Provider observed about one request it

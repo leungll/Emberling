@@ -14,7 +14,7 @@ import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-
  * `image_generation.prompt`, bypassing `prompt_template`/`text_generation` (whose default
  * `mockmodel` echo would otherwise destroy the leading "mock:" prefix). The Mock Provider
  * schedules its own callback after the delay
- * (`backend/internal/mockprovider/server.go`'s `Dispatcher.Schedule`), so this test posts
+ * (`backend/internal/fixture/mockprovider/server.go`'s `Dispatcher.Schedule`), so this test posts
  * nothing itself and only waits on state.
  */
 test('AIGC Media Generation waits for an external callback, then completes with an image preview', async ({

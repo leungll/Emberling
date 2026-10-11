@@ -1,5 +1,5 @@
 // Command mockprovider serves the deterministic HTTP Mock Provider
-// (internal/mockprovider) as a standalone process, the form deploy/compose.yaml starts for
+// (internal/fixture/mockprovider) as a standalone process, the form deploy/compose.yaml starts for
 // `make dev` and the MVP acceptance scenarios. All behaviour lives in that package, which
 // the contract tests serve in-process instead; this command only owns the listen address
 // and the graceful-shutdown sequence.
@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/leungll/Emberling/backend/internal/mockprovider"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 )
 
 // defaultAddr matches deploy/compose.yaml, which maps host:container port 9101:9101 for

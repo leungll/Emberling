@@ -126,7 +126,7 @@ export const documentProcessing: CreateDefinitionRequest = {
  * `backend/internal/nodes/mediaoutput/node.go`) lets the literal Run input reach the Mock
  * Provider unmodified, so `mock:delay:<ms>` (see aigc-media.spec.ts) produces a real,
  * observable `WAITING_CALLBACK` window before the Mock Provider's own scheduled callback
- * (`backend/internal/mockprovider/server.go`'s `Dispatcher.Schedule`) completes it.
+ * (`backend/internal/fixture/mockprovider/server.go`'s `Dispatcher.Schedule`) completes it.
  */
 export const aigcMedia: CreateDefinitionRequest = {
   name: 'AIGC Media Generation (E2E)',

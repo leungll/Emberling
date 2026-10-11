@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/leungll/Emberling/backend/internal/mockcontrol"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
 )
 
 // maxRedeliverableTasks bounds how many accepted tasks the redeliver control can still

@@ -1,4 +1,4 @@
-// Command sandboxrunner serves the sandbox runner (internal/sandboxrunner) as a standalone
+// Command sandboxrunner serves the sandbox runner (internal/fixture/sandboxrunner) as a standalone
 // process, the form deploy/compose.yaml starts. All behaviour lives in that package; this
 // command owns the configuration, the startup cleanup and redelivery, and the
 // graceful-shutdown sequence.
@@ -18,8 +18,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/leungll/Emberling/backend/internal/mockcontrol"
-	"github.com/leungll/Emberling/backend/internal/sandboxrunner"
+	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
+	"github.com/leungll/Emberling/backend/internal/fixture/sandboxrunner"
 )
 
 // defaultAddr matches the port deploy/compose.yaml maps for the sandboxrunner service.
