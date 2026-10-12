@@ -99,8 +99,14 @@ test('Photo set upload starts the Photo Effect Template and Run Again keeps the 
 
   const dialog = page.getByRole('dialog', { name: 'Run workflow' });
   await dialog.getByLabel('Creative Brief').fill('a clay stop-motion look');
-  // The Media Brief node declares no label, so the field is named by its input key.
-  await dialog.getByLabel('photos').setInputFiles(
+  // The Media Brief step declares no label, so the field is named by the step's name.
+  const photoSetField = dialog.getByRole('group', { name: 'Photo Set' });
+  await expect(photoSetField).toContainText('Add at least 1 photo.');
+  const chooser = page.waitForEvent('filechooser');
+  await photoSetField.getByRole('button', { name: 'Add photos' }).click();
+  await (
+    await chooser
+  ).setFiles(
     [1, 2, 3].map((n) => ({
       name: `photo-${n}.png`,
       mimeType: 'image/png',
@@ -110,7 +116,8 @@ test('Photo set upload starts the Photo Effect Template and Run Again keeps the 
 
   const thumbnails = dialog.getByRole('img', { name: /^Image \d$/ });
   await expect(thumbnails).toHaveCount(3, { timeout: 10_000 });
-  await expect(dialog.getByText('3 selected · at least 1 · at most 12')).toBeVisible();
+  await expect(dialog.getByText('3 photos added. Add up to 12.')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Remove photo-2.png' })).toBeVisible();
   // Each thumbnail's title is the Backend-assigned assetId of that upload.
   const titlesOf = (images: typeof thumbnails) =>
     images.evaluateAll((imgs) => imgs.map((img) => img.getAttribute('title') ?? ''));

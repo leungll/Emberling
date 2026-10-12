@@ -772,6 +772,7 @@ export function EditPage() {
           open={runDialogOpen}
           onClose={() => setRunDialogOpen(false)}
           workflowId={workflowId}
+          workflowName={definition.name}
           definitionVersion={definition.version}
           runInputSchema={definition.runInputSchema}
           inputLabels={runInputLabels(definition.nodes)}

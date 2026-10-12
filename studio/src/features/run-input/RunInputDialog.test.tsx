@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RunInputDialog } from './RunInputDialog';
+import { photoSetStatus } from './photoSetCopy';
 import { runInputLabels } from './runInputLabels';
 import { ApiRequestError, uploadAsset } from '@/api/client';
 import type * as ClientModule from '@/api/client';
@@ -73,9 +74,22 @@ function pngFile(name = 'reference.png') {
 }
 
 describe('RunInputDialog', () => {
-  it('renders the bound definition version', () => {
-    renderDialog();
-    expect(screen.getByText('wf_123 · v4')).toBeInTheDocument();
+  it('names the bound workflow and version, never its raw ID', () => {
+    render(
+      <RunInputDialog
+        open
+        onClose={vi.fn()}
+        workflowId="wf_123"
+        workflowName="Photo Effect Template"
+        definitionVersion={4}
+        runInputSchema={runInputSchema}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Photo Effect Template')).toBeInTheDocument();
+    expect(screen.getByText('Version 4')).toBeInTheDocument();
+    expect(screen.queryByText(/wf_123/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/revalidates|frozen schema/)).not.toBeInTheDocument();
   });
 
   it('renders a required string field from the frozen schema', () => {
@@ -220,7 +234,27 @@ describe('RunInputDialog — Input node labels and typography', () => {
     expect(runInputLabels(undefined)).toEqual({});
   });
 
-  it('labels the field with the Input node label and describes it with key, requiredness and kind', async () => {
+  it('falls back to the step name when the node declaring the input has no label', () => {
+    const nodes: Node[] = [
+      {
+        id: 'photos',
+        type: 'media_brief',
+        name: 'Photo Set',
+        position: { x: 0, y: 0 },
+        config: { inputKey: 'photos' },
+      },
+      {
+        id: 'ref',
+        type: 'image_input',
+        name: 'Reference',
+        position: { x: 0, y: 0 },
+        config: { inputKey: 'reference', label: '  ' },
+      },
+    ];
+    expect(runInputLabels(nodes)).toEqual({ photos: 'Photo Set', reference: 'Reference' });
+  });
+
+  it('labels the field with the Input node label and shows no key or type line', async () => {
     const onSubmit = vi.fn();
     render(
       <RunInputDialog
@@ -235,9 +269,7 @@ describe('RunInputDialog — Input node labels and typography', () => {
     );
 
     const field = screen.getByRole('textbox', { name: /Creative Brief/ });
-    expect(field).toHaveAccessibleDescription('brief · required · text');
-    const helper = screen.getByText('brief · required · text');
-    expect(helper).toHaveClass('text-[12px]');
+    expect(screen.queryByText(/required ·|· text/)).not.toBeInTheDocument();
     expect(screen.getByText('Creative Brief')).toHaveClass('text-[14px]');
 
     // The label is display only: the submitted field name is still the input key.
@@ -308,13 +340,34 @@ describe('RunInputDialog — image collection input', () => {
 
   it('renders an array of AssetRefs as a multi-image picker, not a text box', () => {
     renderPhotoDialog();
-    const picker = screen.getByLabelText(/photos/);
+    const picker = screen.getByLabelText(/photos/, { selector: 'input' });
     expect(picker).toHaveAttribute('type', 'file');
     expect(picker).toHaveAttribute('multiple');
     expect(picker).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp');
-    expect(screen.getByText('photos · required · images')).toBeInTheDocument();
-    // Limits shown are the schema's own minItems and maxItems.
-    expect(screen.getByText('0 selected · at least 1 · at most 3')).toBeInTheDocument();
+    // The native input is hidden; the visible control is a focusable button.
+    expect(picker).toHaveClass('sr-only');
+    expect(picker).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('button', { name: 'Add photos' })).toBeEnabled();
+    expect(screen.getByRole('group', { name: /photos/ })).toHaveTextContent('or drop them here');
+    // The limit sentence uses the schema's own minItems.
+    expect(screen.getByText('Add at least 1 photo.')).toBeInTheDocument();
+  });
+
+  it('opens the file picker from the Add photos button', async () => {
+    renderPhotoDialog();
+    const picker = screen.getByLabelText(/photos/, { selector: 'input' });
+    const click = vi.spyOn(picker, 'click');
+    await userEvent.click(screen.getByRole('button', { name: 'Add photos' }));
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('describes the count in a plain sentence against the schema limits', () => {
+    expect(photoSetStatus(0, 1, 12)).toBe('Add at least 1 photo.');
+    expect(photoSetStatus(3, 1, 12)).toBe('3 photos added. Add up to 12.');
+    expect(photoSetStatus(1, 1, 12)).toBe('1 photo added. Add up to 12.');
+    expect(photoSetStatus(12, 1, 12)).toBe("12 photos added. That's the limit.");
+    expect(photoSetStatus(1, 2, undefined)).toBe('1 photo added. Add at least 2.');
+    expect(photoSetStatus(0, undefined, undefined)).toBe('No photos added.');
   });
 
   it('uploads each selected image and submits the AssetRefs in selection order', async () => {
@@ -327,7 +380,7 @@ describe('RunInputDialog — image collection input', () => {
     const user = userEvent.setup();
 
     await user.type(screen.getByRole('textbox', { name: /brief/ }), 'clay look');
-    await user.upload(screen.getByLabelText(/photos/), [
+    await user.upload(screen.getByLabelText(/photos/, { selector: 'input' }), [
       pngFile('a.png'),
       pngFile('b.png'),
       pngFile('c.png'),
@@ -335,9 +388,12 @@ describe('RunInputDialog — image collection input', () => {
 
     expect(await screen.findAllByRole('img', { name: /^Image \d$/ })).toHaveLength(3);
     expect(uploadAssetMock).toHaveBeenCalledTimes(3);
-    expect(screen.getByText('3 selected · at least 1 · at most 3')).toBeInTheDocument();
+    expect(screen.getByText("3 photos added. That's the limit.")).toBeInTheDocument();
     // At the maximum, the picker stops accepting more images.
-    expect(screen.getByLabelText(/photos/)).toBeDisabled();
+    expect(screen.getByLabelText(/photos/, { selector: 'input' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add photos' })).toBeDisabled();
+    // Images uploaded in this dialog are named by their file name.
+    expect(screen.getByRole('button', { name: 'Remove b.png' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Create run' }));
     expect(onSubmit).toHaveBeenCalledWith({
@@ -385,7 +441,7 @@ describe('RunInputDialog — image collection input', () => {
     await user.click(screen.getByRole('button', { name: 'Create run' }));
 
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('Add at least 1 image.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Add at least 1 photo to start the run.');
   });
 
   it('rejects a selection that would exceed the schema maximum without uploading it', async () => {
@@ -393,9 +449,12 @@ describe('RunInputDialog — image collection input', () => {
     renderPhotoDialog(vi.fn(), { brief: 'clay look', photos: [refFor(1), refFor(2)] });
     const user = userEvent.setup();
 
-    await user.upload(screen.getByLabelText(/photos/), [pngFile('c.png'), pngFile('d.png')]);
+    await user.upload(screen.getByLabelText(/photos/, { selector: 'input' }), [
+      pngFile('c.png'),
+      pngFile('d.png'),
+    ]);
 
-    expect(screen.getByRole('alert')).toHaveTextContent('At most 3 images.');
+    expect(screen.getByRole('alert')).toHaveTextContent('You can add up to 3 photos.');
     expect(uploadAssetMock).not.toHaveBeenCalled();
     expect(screen.getAllByRole('img', { name: /^Image \d$/ })).toHaveLength(2);
   });
@@ -406,11 +465,11 @@ describe('RunInputDialog — image collection input', () => {
     const user = userEvent.setup({ applyAccept: false });
 
     await user.upload(
-      screen.getByLabelText(/photos/),
+      screen.getByLabelText(/photos/, { selector: 'input' }),
       new File(['gif'], 'a.gif', { type: 'image/gif' }),
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Unsupported media type "image/gif"');
+    expect(screen.getByRole('alert')).toHaveTextContent('a.gif is not a supported image type.');
     expect(uploadAssetMock).not.toHaveBeenCalled();
   });
 
@@ -424,7 +483,10 @@ describe('RunInputDialog — image collection input', () => {
     renderPhotoDialog();
     const user = userEvent.setup();
 
-    await user.upload(screen.getByLabelText(/photos/), [pngFile('a.png'), pngFile('b.png')]);
+    await user.upload(screen.getByLabelText(/photos/, { selector: 'input' }), [
+      pngFile('a.png'),
+      pngFile('b.png'),
+    ]);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('unsupported asset media type');
     expect(screen.getAllByRole('img', { name: /^Image \d$/ })).toHaveLength(1);

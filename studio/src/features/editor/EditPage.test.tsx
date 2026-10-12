@@ -89,7 +89,8 @@ describe('EditPage — Run via query param', () => {
     renderEditPage('/studio/wf_123?run=1');
 
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('wf_123 · v4');
+    expect(dialog).toHaveTextContent('AIGC Media Generation');
+    expect(dialog).toHaveTextContent('Version 4');
 
     // The param is a one-shot trigger and must not linger in the address bar. The probe div
     // is present from the very first render, so `findByTestId` alone would resolve on that

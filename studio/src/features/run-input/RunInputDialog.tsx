@@ -8,11 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 import { AssetArrayField } from './AssetArrayField';
+import { photoSetShortfall } from './photoSetCopy';
 
 interface RunInputDialogProps {
   open: boolean;
   onClose: () => void;
   workflowId: string;
+  /** The bound Definition's name, shown instead of its ID when known. */
+  workflowName?: string;
   definitionVersion: number;
   /** Frozen contract of the bound Definition version. Studio never edits or invents it. */
   runInputSchema: RunInputSchema | undefined;
@@ -34,22 +37,9 @@ interface RunInputField {
   kind: RunInputFieldKind;
 }
 
-const FIELD_KIND_LABEL: Record<RunInputFieldKind, string> = {
-  text: 'text',
-  asset: 'image',
-  assetArray: 'images',
-};
-
 /** An Image Input generates an AssetRef object property rather than a scalar. */
 function isAssetRefSchema(schema: JsonSchema): boolean {
   return schema.type === 'object' && schema.properties?.assetId !== undefined;
-}
-
-/** The submit-time check against the schema's own minItems; null when the count is enough. */
-function assetArrayShortfall(schema: JsonSchema, count: number): string | null {
-  const { minItems } = schema;
-  if (minItems === undefined || count >= minItems) return null;
-  return `Add at least ${minItems} ${minItems === 1 ? 'image' : 'images'}.`;
 }
 
 function fieldKind(schema: JsonSchema): RunInputFieldKind {
@@ -79,7 +69,7 @@ function isAssetRefValue(value: unknown): value is AssetRef {
 export function RunInputDialog({
   open,
   onClose,
-  workflowId,
+  workflowName,
   definitionVersion,
   runInputSchema,
   inputLabels,
@@ -181,7 +171,7 @@ export function RunInputDialog({
     for (const field of fields) {
       if (field.kind === 'assetArray') {
         const refs = assetLists[field.key] ?? [];
-        const shortfall = assetArrayShortfall(field.schema, refs.length);
+        const shortfall = photoSetShortfall(refs.length, field.schema.minItems);
         if (shortfall) {
           missingRequiredImage = true;
           setAssetErrors((prev) => ({ ...prev, [field.key]: shortfall }));
@@ -218,7 +208,12 @@ export function RunInputDialog({
       open={open}
       onClose={onClose}
       title="Run workflow"
-      description={`${workflowId} · v${definitionVersion}`}
+      description={
+        <span className="flex flex-wrap gap-x-3">
+          {workflowName ? <span className="text-[var(--foreground)]">{workflowName}</span> : null}
+          <span>Version {definitionVersion}</span>
+        </span>
+      }
       footer={
         <>
           <Button variant="outline" onClick={onClose} disabled={submitting}>
@@ -233,13 +228,13 @@ export function RunInputDialog({
       <div className="space-y-4">
         {fields.length === 0 ? (
           <p className="text-[14px] text-[var(--muted-foreground)]">
-            This Definition declares no run input.
+            This workflow has no run inputs.
           </p>
         ) : null}
 
         {fields.map((field) => {
           const id = `run-input-${field.key}`;
-          const helperId = `${id}-helper`;
+          const labelId = `${id}-label`;
           const acceptedMediaTypes = field.schema.properties?.mediaType?.enum as
             string[] | undefined;
           const ref = assets[field.key];
@@ -248,7 +243,11 @@ export function RunInputDialog({
 
           return (
             <div key={field.key} className="space-y-1.5">
-              <Label htmlFor={id} className="text-[14px] font-semibold text-[var(--foreground)]">
+              <Label
+                id={labelId}
+                htmlFor={id}
+                className="text-[14px] font-semibold text-[var(--foreground)]"
+              >
                 {inputLabels?.[field.key] ?? field.schema.title ?? field.key}
                 {field.required ? (
                   <span aria-hidden="true" className="ml-0.5 text-red-500">
@@ -256,16 +255,11 @@ export function RunInputDialog({
                   </span>
                 ) : null}
               </Label>
-              {/* The submitted field name, whether it is required and its value kind. */}
-              <p id={helperId} className="text-[12px] text-[var(--muted-foreground)]">
-                {field.key} · {field.required ? 'required' : 'optional'} ·{' '}
-                {FIELD_KIND_LABEL[field.kind]}
-              </p>
 
               {field.kind === 'assetArray' ? (
                 <AssetArrayField
                   id={id}
-                  helperId={helperId}
+                  labelId={labelId}
                   schema={field.schema}
                   refs={assetLists[field.key] ?? []}
                   onChange={(update) =>
@@ -288,7 +282,6 @@ export function RunInputDialog({
                   <Input
                     id={id}
                     type="file"
-                    aria-describedby={helperId}
                     accept={acceptedMediaTypes?.join(',')}
                     disabled={uploading}
                     onChange={(e) => handleFileChange(field, e.target.files?.[0])}
@@ -319,7 +312,6 @@ export function RunInputDialog({
                 <Input
                   id={id}
                   type="text"
-                  aria-describedby={helperId}
                   required={field.required}
                   minLength={field.schema.minLength}
                   maxLength={field.schema.maxLength}
@@ -336,11 +328,6 @@ export function RunInputDialog({
             {errorMessage}
           </p>
         ) : null}
-
-        <p className="text-[12px] text-[var(--muted-foreground)]">
-          The Backend revalidates this input against the frozen schema of v{definitionVersion}{' '}
-          before it creates a Run.
-        </p>
       </div>
     </Dialog>
   );

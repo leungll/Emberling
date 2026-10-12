@@ -243,15 +243,13 @@ describe('ObservePage — Run Again', () => {
 
     // The dialog opens bound to the old version and prefilled with the old input.
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('wf_123 · v3')).toBeInTheDocument();
+    expect(within(dialog).getByText('Version 3')).toBeInTheDocument();
     const promptField = await within(dialog).findByLabelText<HTMLInputElement>('Prompt', {
       exact: false,
     });
     expect(promptField.value).toBe('old prompt value');
-    // The field is named by the bound version's Input node label, and its helper gives the
-    // input key the value is submitted under.
+    // The field is named by the bound version's Input node label.
     expect(within(dialog).getByRole('textbox', { name: /Campaign Prompt/ })).toBe(promptField);
-    expect(promptField).toHaveAccessibleDescription('prompt · required · text');
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create run' }));
 

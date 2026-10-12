@@ -302,6 +302,7 @@ export function ObservePage() {
         open={runAgainOpen}
         onClose={() => setRunAgainOpen(false)}
         workflowId={snapshot.run.workflowId}
+        workflowName={runAgainDefinition?.name}
         definitionVersion={snapshot.run.definitionVersion}
         runInputSchema={runAgainDefinition?.runInputSchema}
         // The bound version's Input node labels name the fields; the keys are unchanged.
