@@ -331,7 +331,7 @@ func TestModelMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 }
 
 func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
-	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false}`
+	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false}`
 
 	fixture := ToolMetadata{
 		Name:          "lookup",
@@ -450,7 +450,7 @@ func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
 		Poll:          &PollPolicy{IntervalMs: 2000, MaxPolls: 10},
 		Requires:      []FactRequirement{},
 	}
-	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false}`
+	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false}`
 	encoded, err := json.Marshal(tool)
 	if err != nil {
 		t.Fatalf("Marshal() error: %v", err)

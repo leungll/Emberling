@@ -141,6 +141,7 @@ func Registration(baseURL string, client *http.Client, artifacts ArtifactContent
 			},
 			Requires:                    []domain.FactRequirement{},
 			CountsTowardGenerationLimit: true,
+			UsesImageModel:              true,
 		},
 		Executor: New(baseURL, client, artifacts),
 	}
