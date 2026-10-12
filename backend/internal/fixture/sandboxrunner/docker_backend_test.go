@@ -26,7 +26,7 @@ type fakeDocker struct {
 func (f *fakeDocker) Docker(ctx context.Context, args []string, stdin io.Reader, output io.Writer) (int, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, slices.Clone(args))
-	if stdin != nil && args[0] == "run" {
+	if stdin != nil && args[0] == "start" {
 		f.stdin, _ = io.ReadAll(stdin)
 	}
 	respond := f.respond
@@ -61,7 +61,10 @@ not json
 `
 
 func TestDockerBackend_Run_UsesOnlyTheFixedArguments(t *testing.T) {
-	docker := &fakeDocker{respond: func(_ context.Context, _ []string, output io.Writer) (int, error) {
+	docker := &fakeDocker{respond: func(_ context.Context, args []string, output io.Writer) (int, error) {
+		if args[0] != "start" {
+			return 0, nil
+		}
 		_, _ = io.WriteString(output, goTestJSON)
 		return 1, nil
 	}}
@@ -71,25 +74,25 @@ func TestDockerBackend_Run_UsesOnlyTheFixedArguments(t *testing.T) {
 		t.Fatalf("outcome = %+v, want a failing verdict with 3 tests and 1 failure", outcome)
 	}
 	calls := docker.commands()
-	if len(calls) != 1 {
-		t.Fatalf("docker calls = %v, want exactly the run", calls)
+	if len(calls) != 2 || calls[1] != "start -a -i emberling-sandbox-test_1" {
+		t.Fatalf("docker calls = %v, want exactly the create then the start", calls)
 	}
-	run := calls[0]
+	create := calls[0]
 	for _, required := range []string{
-		"run -i --rm --network none --user 65534:65534 --read-only",
+		"create -i --rm --network none --user 65534:65534 --read-only",
 		"--tmpfs /work:exec,uid=65534,gid=65534 --tmpfs /tmp",
 		"--memory 512m --cpus 1 --pids-limit 256",
 		"--name emberling-sandbox-test_1",
 		"-e GOPROXY=off", "-e GOCACHE=/tmp/gocache", "-e GOPATH=/tmp/gopath",
 		" img@sha256:abc sh -c ",
 	} {
-		if !strings.Contains(run, required) {
-			t.Fatalf("docker run %q lacks %q", run, required)
+		if !strings.Contains(create, required) {
+			t.Fatalf("docker create %q lacks %q", create, required)
 		}
 	}
 	for _, forbidden := range []string{"-v ", "--volume", "--mount", "--privileged", "docker.sock"} {
-		if strings.Contains(run, forbidden) {
-			t.Fatalf("docker run %q contains %q", run, forbidden)
+		if strings.Contains(create, forbidden) {
+			t.Fatalf("docker create %q contains %q", create, forbidden)
 		}
 	}
 
@@ -119,7 +122,12 @@ func TestDockerBackend_Run_MapsExitCodes(t *testing.T) {
 		125:              {FailureCode: codeSandboxError},
 	}
 	for exitCode, want := range cases {
-		docker := &fakeDocker{respond: func(context.Context, []string, io.Writer) (int, error) { return exitCode, nil }}
+		docker := &fakeDocker{respond: func(_ context.Context, args []string, _ io.Writer) (int, error) {
+			if args[0] != "start" {
+				return 0, nil
+			}
+			return exitCode, nil
+		}}
 		got := NewDockerBackend("img@sha256:abc", time.Minute, docker).Run(context.Background(), fixtureJob())
 		if got.Verdict != want.Verdict || got.Passed != want.Passed || got.FailureCode != want.FailureCode {
 			t.Fatalf("exit %d: outcome = %+v, want %+v", exitCode, got, want)
@@ -155,7 +163,7 @@ func TestDockerBackend_UnknownBaseCommit_RunsNothing(t *testing.T) {
 
 func TestDockerBackend_Timeout_RemovesContainerAndReportsTimeout(t *testing.T) {
 	docker := &fakeDocker{respond: func(ctx context.Context, args []string, _ io.Writer) (int, error) {
-		if args[0] != "run" {
+		if args[0] != "start" {
 			return 0, nil
 		}
 		<-ctx.Done()
@@ -166,16 +174,16 @@ func TestDockerBackend_Timeout_RemovesContainerAndReportsTimeout(t *testing.T) {
 		t.Fatalf("outcome = %+v, want %s", outcome, codeTimeout)
 	}
 	calls := docker.commands()
-	want := []string{"kill emberling-sandbox-test_1", "rm -f emberling-sandbox-test_1"}
-	if len(calls) != 3 || !slices.Equal(calls[1:], want) {
-		t.Fatalf("docker calls = %v, want the run then %v", calls, want)
+	want := []string{"start -a -i emberling-sandbox-test_1", "kill emberling-sandbox-test_1", "rm -f emberling-sandbox-test_1", "ps -a --filter name=^emberling-sandbox-test_1$ --format {{.Names}}"}
+	if len(calls) != 5 || !strings.HasPrefix(calls[0], "create ") || !slices.Equal(calls[1:], want) {
+		t.Fatalf("docker calls = %v, want the create then %v", calls, want)
 	}
 }
 
 func TestDockerBackend_ParentCancelled_RemovesContainerWithoutTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	docker := &fakeDocker{respond: func(runCtx context.Context, args []string, _ io.Writer) (int, error) {
-		if args[0] != "run" {
+		if args[0] != "start" {
 			return 0, nil
 		}
 		cancel()
@@ -186,8 +194,108 @@ func TestDockerBackend_ParentCancelled_RemovesContainerWithoutTimeout(t *testing
 	if outcome.FailureCode == codeTimeout {
 		t.Fatal("a shutdown was reported as a test timeout")
 	}
-	if calls := docker.commands(); len(calls) != 3 || calls[2] != "rm -f emberling-sandbox-test_1" {
+	if calls := docker.commands(); len(calls) != 5 || calls[3] != "rm -f emberling-sandbox-test_1" {
 		t.Fatalf("docker calls = %v, want the container removed", calls)
+	}
+}
+
+func TestDockerBackend_CreateOutlastingTheTestTimeout_StillRemovesTheContainer(t *testing.T) {
+	// The daemon is slow to create the container: creation takes longer than the whole
+	// per-test timeout. Creation must not be cut short by that timeout, so the container
+	// exists before the start can time out and the cleanup that follows can find it.
+	const testTimeout = 20 * time.Millisecond
+	var createDeadline time.Time
+	var createDeadlineSet bool
+	docker := &fakeDocker{respond: func(ctx context.Context, args []string, _ io.Writer) (int, error) {
+		switch args[0] {
+		case "create":
+			createDeadline, createDeadlineSet = ctx.Deadline()
+			select {
+			case <-time.After(5 * testTimeout):
+				return 0, nil
+			case <-ctx.Done():
+				return -1, ctx.Err()
+			}
+		case "start":
+			<-ctx.Done()
+			return -1, ctx.Err()
+		}
+		return 0, nil
+	}}
+	outcome := NewDockerBackend("img@sha256:abc", testTimeout, docker).Run(context.Background(), fixtureJob())
+
+	if outcome.Verdict || outcome.FailureCode != codeTimeout {
+		t.Fatalf("outcome = %+v, want %s", outcome, codeTimeout)
+	}
+	if !createDeadlineSet || time.Until(createDeadline) < time.Second {
+		t.Fatalf("create deadline = %v (set %v), want a bound independent of the %v test timeout", createDeadline, createDeadlineSet, testTimeout)
+	}
+	calls := docker.commands()
+	want := []string{"start -a -i emberling-sandbox-test_1", "kill emberling-sandbox-test_1", "rm -f emberling-sandbox-test_1", "ps -a --filter name=^emberling-sandbox-test_1$ --format {{.Names}}"}
+	if len(calls) != 5 || !strings.HasPrefix(calls[0], "create ") || !slices.Equal(calls[1:], want) {
+		t.Fatalf("docker calls = %v, want the completed create then %v", calls, want)
+	}
+}
+
+func TestDockerBackend_CreateFails_ReportsSandboxErrorWithoutStarting(t *testing.T) {
+	for name, respond := range map[string]func(context.Context, []string, io.Writer) (int, error){
+		"non-zero exit": func(_ context.Context, args []string, _ io.Writer) (int, error) {
+			if args[0] == "create" {
+				return 125, nil
+			}
+			return 0, nil
+		},
+		"client error": func(_ context.Context, args []string, _ io.Writer) (int, error) {
+			if args[0] == "create" {
+				return -1, errors.New("docker not found")
+			}
+			return 0, nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			docker := &fakeDocker{respond: respond}
+			outcome := NewDockerBackend("img@sha256:abc", time.Minute, docker).Run(context.Background(), fixtureJob())
+			if outcome.Verdict || outcome.FailureCode != codeSandboxError {
+				t.Fatalf("outcome = %+v, want %s", outcome, codeSandboxError)
+			}
+			calls := docker.commands()
+			want := []string{"kill emberling-sandbox-test_1", "rm -f emberling-sandbox-test_1", "ps -a --filter name=^emberling-sandbox-test_1$ --format {{.Names}}"}
+			if len(calls) != 4 || !strings.HasPrefix(calls[0], "create ") || !slices.Equal(calls[1:], want) {
+				t.Fatalf("docker calls = %v, want the create then only the defensive cleanup %v", calls, want)
+			}
+		})
+	}
+}
+
+func TestDockerBackend_RemovalAlreadyInProgress_WaitsUntilTheContainerIsGone(t *testing.T) {
+	// The container stopped and the daemon's own --rm removal is under way: rm -f returns
+	// at once while the container is still listed for two more checks.
+	stillListed := 2
+	docker := &fakeDocker{respond: func(ctx context.Context, args []string, output io.Writer) (int, error) {
+		switch args[0] {
+		case "start":
+			<-ctx.Done()
+			return -1, ctx.Err()
+		case "rm":
+			_, _ = io.WriteString(output, "removal of container emberling-sandbox-test_1 is already in progress")
+			return 1, nil
+		case "ps":
+			if stillListed > 0 {
+				stillListed--
+				_, _ = io.WriteString(output, "emberling-sandbox-test_1\n")
+			}
+		}
+		return 0, nil
+	}}
+	outcome := NewDockerBackend("img@sha256:abc", time.Millisecond, docker).Run(context.Background(), fixtureJob())
+
+	if outcome.FailureCode != codeTimeout {
+		t.Fatalf("outcome = %+v, want %s", outcome, codeTimeout)
+	}
+	listing := "ps -a --filter name=^emberling-sandbox-test_1$ --format {{.Names}}"
+	calls := docker.commands()
+	if len(calls) != 7 || !slices.Equal(calls[4:], []string{listing, listing, listing}) {
+		t.Fatalf("docker calls = %v, want the cleanup to list the container until it is gone", calls)
 	}
 }
 

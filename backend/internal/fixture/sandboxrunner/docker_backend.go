@@ -53,6 +53,17 @@ const maxTestOutputBytes = 1 << 20
 // happen even though the run's own context has ended.
 const cleanupTimeout = 30 * time.Second
 
+// createTimeout bounds creating one container. Creation deliberately runs outside the
+// per-test timeout: if that timeout killed the docker client while the daemon was still
+// creating the container, the cleanup would find nothing and the daemon would then finish
+// creating a container nobody removes. Once create has returned, the name is reserved in
+// the daemon, so every later cleanup can find the container.
+const createTimeout = 60 * time.Second
+
+// removalPollInterval spaces the checks for a container whose removal is already under
+// way. The checks are bounded by cleanupTimeout.
+const removalPollInterval = 100 * time.Millisecond
+
 // containerScript unpacks the already-patched workspace streamed on stdin and runs the
 // tests. The patch is applied by the runner before the container starts, so the image
 // needs no patch tool. The workspace, Go build cache and module path all live on tmpfs
@@ -107,12 +118,17 @@ func (d *DockerBackend) Run(ctx context.Context, job Job) Outcome {
 	}
 
 	name := containerPrefix + job.TestID
+	if !d.createContainer(ctx, name) {
+		return Outcome{FailureCode: codeSandboxError, FailureMessage: "sandbox container could not be created"}
+	}
+
+	// Only the test itself runs under the per-test timeout.
 	runCtx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 	output := &boundedBuffer{limit: maxTestOutputBytes}
-	exitCode, runErr := d.runner.Docker(runCtx, d.runArgs(name), bytes.NewReader(archive), output)
+	exitCode, runErr := d.runner.Docker(runCtx, startArgs(name), bytes.NewReader(archive), output)
 	if runErr != nil {
-		// The docker client was stopped or never ran; the container may still exist.
+		// The docker client was stopped or never ran; the created container still exists.
 		d.removeContainer(ctx, name)
 		if errors.Is(runCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 			return Outcome{FailureCode: codeTimeout, FailureMessage: "test run exceeded " + d.timeout.String()}
@@ -130,10 +146,25 @@ func (d *DockerBackend) Run(ctx context.Context, job Job) Outcome {
 	}
 }
 
-// runArgs is the complete, fixed `docker run` argument list for one test.
-func (d *DockerBackend) runArgs(name string) []string {
+// createContainer creates the named sandbox container and reports whether it now exists.
+// It runs under its own bounded timeout derived from ctx rather than the per-test timeout.
+// A failed or interrupted create removes the name defensively; with --rm the daemon also
+// removes the container on its own once a started container exits.
+func (d *DockerBackend) createContainer(ctx context.Context, name string) bool {
+	createCtx, cancel := context.WithTimeout(ctx, createTimeout)
+	defer cancel()
+	exitCode, err := d.runner.Docker(createCtx, d.createArgs(name), nil, &boundedBuffer{})
+	if err != nil || exitCode != 0 {
+		d.removeContainer(ctx, name)
+		return false
+	}
+	return true
+}
+
+// createArgs is the complete, fixed `docker create` argument list for one test.
+func (d *DockerBackend) createArgs(name string) []string {
 	return []string{
-		"run", "-i", "--rm",
+		"create", "-i", "--rm",
 		"--network", "none",
 		"--user", "65534:65534",
 		"--read-only",
@@ -157,15 +188,43 @@ func (d *DockerBackend) runArgs(name string) []string {
 	}
 }
 
+// startArgs is the complete, fixed `docker start` argument list for one test: it attaches
+// to the created container and streams the workspace archive to its stdin.
+func startArgs(name string) []string {
+	return []string{"start", "-a", "-i", name}
+}
+
 // removeContainer force-removes one sandbox container, ignoring a container that is
-// already gone. It runs even after ctx has ended, which is exactly when a timed-out or
-// interrupted container is left behind, so it keeps ctx's values but not its cancellation.
+// already gone, and returns once the container is gone or cleanupTimeout has passed. It
+// runs even after ctx has ended, which is exactly when a timed-out or interrupted
+// container is left behind, so it keeps ctx's values but not its cancellation.
 func (d *DockerBackend) removeContainer(parent context.Context, name string) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), cleanupTimeout)
 	defer cancel()
 	discard := &boundedBuffer{}
 	_, _ = d.runner.Docker(ctx, []string{"kill", name}, nil, discard)
 	_, _ = d.runner.Docker(ctx, []string{"rm", "-f", name}, nil, discard)
+	// Once the container stops, the daemon's own --rm removal may already be under way;
+	// rm -f then returns at once while the container is still listed. Wait for that
+	// removal so no container outlives the run.
+	for d.containerListed(ctx, name) {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(removalPollInterval):
+		}
+	}
+}
+
+// containerListed reports whether the daemon still lists the named container. A listing
+// that fails reports false, so a broken daemon never holds the cleanup until its timeout.
+func (d *DockerBackend) containerListed(ctx context.Context, name string) bool {
+	listing := &boundedBuffer{limit: 4096}
+	exitCode, err := d.runner.Docker(ctx, []string{"ps", "-a", "--filter", "name=^" + name + "$", "--format", "{{.Names}}"}, nil, listing)
+	if err != nil || exitCode != 0 {
+		return false
+	}
+	return slices.Contains(strings.Fields(string(listing.data)), name)
 }
 
 // RemoveOrphans removes every sandbox container a previous runner process left behind and
