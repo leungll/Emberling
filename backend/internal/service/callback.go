@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -483,19 +484,7 @@ func (s *ExecutionService) HandleCallback(ctx context.Context, req HandleCallbac
 		return CallbackOutcome{}, err
 	}
 
-	var binding domain.CallbackBinding
-	var bound bool
-	err = s.deps.UoW.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		found, err := tx.CallbackBindings().GetByExternalTaskID(ctx, req.ExternalTaskID)
-		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				return nil
-			}
-			return err
-		}
-		binding, bound = found, true
-		return nil
-	})
+	binding, bound, err := s.findCallbackBinding(ctx, req.ExternalTaskID)
 	if err != nil {
 		return CallbackOutcome{}, err
 	}
@@ -520,6 +509,23 @@ func (s *ExecutionService) HandleCallback(ctx context.Context, req HandleCallbac
 		}); err != nil {
 			return CallbackOutcome{}, err
 		}
+
+		// The dispatcher commits the Binding and only then looks for a stored early
+		// delivery; this intake commits the stored delivery and only then looks for the
+		// Binding again. Whichever of the two commits second observes the other's row, so
+		// a Binding that committed between the lookup above and the row just stored --
+		// after the dispatcher's own look found nothing -- is caught here instead of
+		// leaving the delivery to the next Reconciler pass. Should both sides observe the
+		// row, the conditional consume inside the resume transaction picks one winner.
+		// The delivery is already durable either way, so a failed replay is left to the
+		// same Reconciler rediscovery and never reported to the Provider.
+		if latest, nowBound, err := s.findCallbackBinding(ctx, req.ExternalTaskID); err != nil {
+			s.deps.Logger.Warn("re-read callback binding after storing an early callback",
+				slog.String("external_task_id", req.ExternalTaskID),
+				slog.String("error", err.Error()))
+		} else if nowBound {
+			s.consumeEarlyCallback(ctx, req.ExternalTaskID, latest.TargetID, now)
+		}
 		return CallbackOutcome{Pending: true, Duplicate: duplicate}, nil
 	}
 
@@ -543,6 +549,25 @@ func (s *ExecutionService) HandleCallback(ctx context.Context, req HandleCallbac
 		RunID:     outcome.RunID,
 		NodeRunID: outcome.NodeRunID,
 	}, nil
+}
+
+// findCallbackBinding reads the Callback Binding of one external task, reporting false
+// when none has committed yet.
+func (s *ExecutionService) findCallbackBinding(ctx context.Context, externalTaskID string) (domain.CallbackBinding, bool, error) {
+	var binding domain.CallbackBinding
+	var bound bool
+	err := s.deps.UoW.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		found, err := tx.CallbackBindings().GetByExternalTaskID(ctx, externalTaskID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+		binding, bound = found, true
+		return nil
+	})
+	return binding, bound, err
 }
 
 // -----------------------------------------------------------------------------------
