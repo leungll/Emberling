@@ -214,10 +214,13 @@ const (
 
 // ModelMetadata is the registered description of one stable Model ID. ConfigSchema is the
 // only contract for model parameters; defaults are resolved once before a Definition
-// version is frozen and are never re-injected at Run or recovery time.
+// version is frozen and are never re-injected at Run or recovery time. Description is an
+// optional one-line note Studio shows with the model, bounded by ValidateModelDescription;
+// empty means none and is omitted on the wire.
 type ModelMetadata struct {
 	ID           string          `json:"id"`
 	DisplayName  string          `json:"displayName"`
+	Description  string          `json:"description,omitempty"`
 	Capabilities []string        `json:"capabilities"`
 	ConfigSchema json.RawMessage `json:"configSchema"`
 }

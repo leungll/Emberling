@@ -259,6 +259,11 @@ interface ControlProps {
  * Lists only Model Registry entries. A saved Model ID the Registry no longer
  * serves stays selected and is labelled as such: dropping it would silently change the
  * Definition, and the Backend decides whether it is still valid.
+ *
+ * A native option cannot hold a second line, so each described option carries its
+ * description as a tooltip and the selected model's description is shown under the
+ * select as secondary text the select is described by. The text comes from the Registry;
+ * Studio never writes one of its own.
  */
 function ModelSelector({
   control,
@@ -283,6 +288,10 @@ function ModelSelector({
       )
     : models;
   const registered = models.some((model) => model.id === value);
+  const selectedDescription = models.find((model) => model.id === value)?.description;
+  const modelDescriptionId = selectedDescription ? `${control.id}-model-description` : undefined;
+  const describedBy =
+    [control['aria-describedby'], modelDescriptionId].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="space-y-1">
@@ -296,6 +305,7 @@ function ModelSelector({
       />
       <Select
         {...control}
+        aria-describedby={describedBy}
         value={value}
         onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
       >
@@ -304,11 +314,16 @@ function ModelSelector({
           <option value={value}>{value} (not registered)</option>
         ) : null}
         {visible.map((model) => (
-          <option key={model.id} value={model.id}>
+          <option key={model.id} value={model.id} title={model.description}>
             {model.displayName} ({model.id})
           </option>
         ))}
       </Select>
+      {modelDescriptionId ? (
+        <p id={modelDescriptionId} className="text-xs text-[var(--muted-foreground)]">
+          {selectedDescription}
+        </p>
+      ) : null}
     </div>
   );
 }

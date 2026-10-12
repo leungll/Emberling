@@ -241,6 +241,8 @@ export interface NodeMetadata {
 export interface ModelMetadata {
   id: string;
   displayName: string;
+  /** Optional one-line English note shown with the model; omitted when the model has none. */
+  description?: string;
   capabilities: string[];
   configSchema: JsonSchema;
 }

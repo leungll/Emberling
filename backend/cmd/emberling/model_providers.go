@@ -28,6 +28,7 @@ func registerModelProviders(ctx context.Context, models *registry.ModelRegistry,
 		provider, err := openaimodel.New(openaimodel.Config{
 			ModelID:        entry.ID,
 			DisplayName:    entry.DisplayName,
+			Description:    entry.Description,
 			BaseURL:        cfg.BaseURL,
 			APIKey:         cfg.APIKey.Reveal(),
 			Model:          entry.Model,

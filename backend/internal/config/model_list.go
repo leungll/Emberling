@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/leungll/Emberling/backend/internal/domain"
 )
 
 // maxModelIDLength bounds a configured Model ID.
@@ -61,6 +63,7 @@ type modelListEntry struct {
 	ID          string `json:"id"`
 	Model       string `json:"model"`
 	DisplayName string `json:"displayName"`
+	Description string `json:"description"`
 }
 
 // modelList parses the model list. Problems name the zero-based entry index and the field,
@@ -73,7 +76,7 @@ func (l *loader) modelList() []OpenAIModelEntry {
 	}
 	var items []json.RawMessage
 	if err := json.Unmarshal([]byte(value), &items); err != nil {
-		l.fail(KeyModels, "must be a JSON array of objects with id, model and displayName")
+		l.fail(KeyModels, "must be a JSON array of objects with id, model, displayName and an optional description")
 		return nil
 	}
 	entries := make([]OpenAIModelEntry, 0, len(items))
@@ -83,13 +86,14 @@ func (l *loader) modelList() []OpenAIModelEntry {
 		decoder.DisallowUnknownFields()
 		var parsed modelListEntry
 		if err := decoder.Decode(&parsed); err != nil || bytes.TrimSpace(item)[0] != '{' {
-			problems = append(problems, fmt.Sprintf("entry %d: must be an object with only the string fields id, model and displayName", i))
+			problems = append(problems, fmt.Sprintf("entry %d: must be an object with only the string fields id, model, displayName and description", i))
 			continue
 		}
 		entries = append(entries, OpenAIModelEntry{
 			ID:          strings.TrimSpace(parsed.ID),
 			Model:       strings.TrimSpace(parsed.Model),
 			DisplayName: strings.TrimSpace(parsed.DisplayName),
+			Description: strings.TrimSpace(parsed.Description),
 		})
 	}
 	if len(problems) == 0 {
@@ -103,7 +107,8 @@ func (l *loader) modelList() []OpenAIModelEntry {
 }
 
 // validateModelList returns every problem in models: an empty list, a missing field, an
-// ID outside the Model ID format or an ID that repeats an earlier entry.
+// ID outside the Model ID format, an ID that repeats an earlier entry or a description
+// outside its bounds.
 func validateModelList(models []OpenAIModelEntry) []string {
 	if len(models) == 0 {
 		return []string{"must list at least one model"}
@@ -130,6 +135,9 @@ func validateModelList(models []OpenAIModelEntry) []string {
 		}
 		if model.DisplayName == "" {
 			problems = append(problems, fmt.Sprintf("entry %d: displayName is required", i))
+		}
+		if err := domain.ValidateModelDescription(model.Description); err != nil {
+			problems = append(problems, fmt.Sprintf("entry %d: description %v", i, err))
 		}
 	}
 	return problems

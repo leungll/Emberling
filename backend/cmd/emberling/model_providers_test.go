@@ -124,6 +124,32 @@ func TestRegisterModelProviders_ThreeModels_EachResolvesToOwnUpstreamName(t *tes
 	}
 }
 
+// TestRegisterModelProviders_Description_ComesFromEachEntry pins that a configured model's
+// description reaches the catalogue from its own list entry, and an entry without one
+// registers with none.
+func TestRegisterModelProviders_Description_ComesFromEachEntry(t *testing.T) {
+	models := registry.NewModelRegistry()
+	err := registerModelProviders(context.Background(), models, config.OpenAIModel{
+		BaseURL: "https://llm.example/v1", APIKey: config.NewSecret("sk-description"),
+		Models: []config.OpenAIModelEntry{
+			{ID: "opus-5.5", Model: "a", DisplayName: "A", Description: "Careful multi-step reasoning."},
+			{ID: "gemini-3.1", Model: "b", DisplayName: "B"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("registerModelProviders() error = %v", err)
+	}
+	for id, want := range map[string]string{"opus-5.5": "Careful multi-step reasoning.", "gemini-3.1": ""} {
+		registration, _, ok := models.Get(id)
+		if !ok {
+			t.Fatalf("model %q not registered", id)
+		}
+		if registration.Description != want {
+			t.Errorf("model %q Description = %q, want %q", id, registration.Description, want)
+		}
+	}
+}
+
 func TestRegisterModelProviders_DuplicateID_Fails(t *testing.T) {
 	models := registry.NewModelRegistry()
 	err := registerModelProviders(context.Background(), models, config.OpenAIModel{

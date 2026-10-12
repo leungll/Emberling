@@ -132,11 +132,13 @@ type OpenAIModel struct {
 
 // OpenAIModelEntry is one registered model. ID is the stable Model ID a Definition
 // stores; Model is the Provider-side model name, which never enters a Definition;
-// DisplayName is what Studio shows.
+// DisplayName is what Studio shows. Description is the optional one-line note Studio shows
+// with the model; empty means none.
 type OpenAIModelEntry struct {
 	ID          string
 	Model       string
 	DisplayName string
+	Description string
 }
 
 // Enabled reports whether the OpenAI-compatible Model Adapter is configured.

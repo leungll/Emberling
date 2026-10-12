@@ -75,6 +75,24 @@ func TestProvider_Models_RegistersImageModelV1WithImageGenerationCapability(t *t
 	}
 }
 
+// TestProvider_Models_DescribeThemselvesAsDeterministicFixtures pins that each mock model
+// carries a fixed English description the Registry accepts and that says it is a
+// deterministic test fixture, so Studio never presents it as a real model.
+func TestProvider_Models_DescribeThemselvesAsDeterministicFixtures(t *testing.T) {
+	models, err := NewProvider().Models(context.Background())
+	if err != nil {
+		t.Fatalf("Models() error = %v, want nil", err)
+	}
+	for _, model := range models {
+		if !strings.Contains(strings.ToLower(model.Description), "deterministic") {
+			t.Errorf("model %q Description = %q, want it to say the model is deterministic", model.ID, model.Description)
+		}
+		if err := domain.ValidateModelDescription(model.Description); err != nil {
+			t.Errorf("model %q Description: %v", model.ID, err)
+		}
+	}
+}
+
 func TestProvider_Models_ConfigSchemaRejectsUnknownFieldAndOutOfRangeTemperature(t *testing.T) {
 	p := NewProvider()
 	models, err := p.Models(context.Background())
