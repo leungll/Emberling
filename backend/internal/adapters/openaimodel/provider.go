@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 
@@ -160,11 +161,19 @@ type Error struct {
 	StatusCode int
 	message    string
 	cause      error
+	// detail is the raw text of a local or transport failure the stable message leaves
+	// out: a transport error carries the request URL, whose host and query string must
+	// not reach a persisted error.
+	detail string
 }
 
 func (e *Error) Error() string { return "openaimodel: " + e.message }
 
 func (e *Error) Unwrap() error { return e.cause }
+
+// Detail is the raw failure text behind the stable message, or "" when there is none.
+// Developer-only detail; never persisted, the logger redacts it.
+func (e *Error) Detail() string { return e.detail }
 
 type chatResponse struct {
 	ID      string `json:"id"`
@@ -193,15 +202,15 @@ type providerError struct {
 func (p *Provider) Generate(ctx context.Context, request registry.ModelRequest) (registry.ModelResponse, error) {
 	chat, err := p.buildChatRequest(request)
 	if err != nil {
-		return registry.ModelResponse{}, p.fail(0, "build request: "+err.Error(), nil)
+		return registry.ModelResponse{}, p.failWithDetail("build request: model request could not be converted", nil, err)
 	}
 	body, err := json.Marshal(chat)
 	if err != nil {
-		return registry.ModelResponse{}, p.fail(0, "encode request: "+err.Error(), nil)
+		return registry.ModelResponse{}, p.failWithDetail("encode request: request body could not be encoded", nil, err)
 	}
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return registry.ModelResponse{}, p.fail(0, "build HTTP request: "+err.Error(), nil)
+		return registry.ModelResponse{}, p.failWithDetail("build HTTP request: request could not be created", nil, err)
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "application/json")
@@ -227,13 +236,18 @@ func (p *Provider) Generate(ctx context.Context, request registry.ModelRequest) 
 }
 
 // sendFailure distinguishes the caller's context ending the call, which is wrapped so the
-// caller recognises its own deadline or cancellation, from a transport failure or this
-// client's own timeout, which is reported without wrapping a context error.
+// caller recognises its own deadline or cancellation, from this client's own timeout or
+// another transport failure, which is reported without wrapping a context error. The
+// transport error's text is kept out of the message and only in Detail.
 func (p *Provider) sendFailure(ctx context.Context, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return p.fail(0, "call ended by the caller's context", ctxErr)
+		return p.failWithDetail("call ended by the caller's context", ctxErr, err)
 	}
-	return p.fail(0, "send request: "+err.Error(), nil)
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return p.failWithDetail("send request timed out", nil, err)
+	}
+	return p.failWithDetail("send request failed: transport error", nil, err)
 }
 
 func (p *Provider) normalise(status int, raw []byte) (registry.ModelResponse, error) {
@@ -341,4 +355,14 @@ func (p *Provider) fail(status int, message string, cause error) error {
 		message = strings.ReplaceAll(message, p.apiKey, redacted)
 	}
 	return &Error{StatusCode: status, message: message, cause: cause}
+}
+
+// failWithDetail reports a failure that got no HTTP response under the stable message,
+// keeping raw's text only as developer detail, with the API key redacted there as well.
+func (p *Provider) failWithDetail(message string, cause, raw error) error {
+	failure := &Error{message: message, cause: cause, detail: raw.Error()}
+	if p.apiKey != "" {
+		failure.detail = strings.ReplaceAll(failure.detail, p.apiKey, redacted)
+	}
+	return failure
 }

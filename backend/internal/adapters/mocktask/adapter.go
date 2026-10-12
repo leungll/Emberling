@@ -13,7 +13,8 @@
 // The one-time plaintext callback token travels in the dispatch body and nowhere else. This
 // package logs nothing at all, and its errors carry only the stable Provider identifier,
 // the external task id (when the Provider already named one), a short operation label and
-// an HTTP status code - never the token, the callback URL, the prompt or a response body.
+// an HTTP status code - never the token, the callback URL, the Provider's own URL, raw
+// transport error text, the prompt or a response body.
 package mocktask
 
 import (
@@ -100,24 +101,30 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 		return registry.ExternalTask{}, &DispatchError{
 			ProviderID: ProviderID,
 			Op:         "build request",
-			err:        errors.New("callback URL and token are both required for an asynchronous dispatch"),
+			reason:     "callback URL and token are both required for an asynchronous dispatch",
 		}
 	}
 
 	body, err := json.Marshal(a.buildRequest(prompt, reference, options, callback, idempotencyKey))
 	if err != nil {
-		return registry.ExternalTask{}, &DispatchError{ProviderID: ProviderID, Op: "build request", err: errors.New("request body could not be encoded")}
+		return registry.ExternalTask{}, &DispatchError{ProviderID: ProviderID, Op: "build request", reason: "request body could not be encoded"}
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+tasksPath, bytes.NewReader(body))
 	if err != nil {
-		return registry.ExternalTask{}, &DispatchError{ProviderID: ProviderID, Op: "build request", err: err}
+		return registry.ExternalTask{}, &DispatchError{ProviderID: ProviderID, Op: "build request", reason: "request could not be created", err: err}
 	}
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := a.httpClient.Do(request)
 	if err != nil {
-		return registry.ExternalTask{}, &DispatchError{ProviderID: ProviderID, Op: "send request", uncertain: sendFailureIsUncertain(err), err: err}
+		return registry.ExternalTask{}, &DispatchError{
+			ProviderID: ProviderID,
+			Op:         "send request",
+			uncertain:  sendFailureIsUncertain(err),
+			reason:     sendFailureReason(ctx, err),
+			err:        err,
+		}
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
@@ -132,7 +139,7 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 			Op:         "provider rejected the dispatch",
 			StatusCode: response.StatusCode,
 			uncertain:  statusIsUncertain(response.StatusCode),
-			err:        errors.New("provider returned a non-2xx status"),
+			reason:     "provider returned a non-2xx status",
 		}
 	}
 
@@ -144,7 +151,7 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 			Op:         "decode response",
 			StatusCode: response.StatusCode,
 			uncertain:  true,
-			err:        errors.New("accepted response body is not a task response"),
+			reason:     "accepted response body is not a task response",
 		}
 	}
 	if accepted.ExternalTaskID == "" {
@@ -153,7 +160,7 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 			Op:         "decode response",
 			StatusCode: response.StatusCode,
 			uncertain:  true,
-			err:        errors.New("accepted response carries no externalTaskId"),
+			reason:     "accepted response carries no externalTaskId",
 		}
 	}
 
@@ -290,7 +297,11 @@ type DispatchError struct {
 	Op string
 
 	uncertain bool
-	err       error
+	// reason is the stable text Error reports. err is the raw cause, reachable through
+	// Unwrap for classification but never printed by Error: a transport error's text
+	// carries the request URL, whose host and query string must not be persisted.
+	reason string
+	err    error
 }
 
 func (e *DispatchError) Error() string {
@@ -302,13 +313,22 @@ func (e *DispatchError) Error() string {
 	if e.ExternalTaskID != "" {
 		fmt.Fprintf(&b, " (externalTaskId %s)", e.ExternalTaskID)
 	}
-	if e.err != nil {
-		fmt.Fprintf(&b, ": %v", e.err)
+	if e.reason != "" {
+		fmt.Fprintf(&b, ": %s", e.reason)
 	}
 	return b.String()
 }
 
 func (e *DispatchError) Unwrap() error { return e.err }
+
+// Detail is the raw cause's text, or "" when there is none.
+// Developer-only detail; never persisted, the logger redacts it.
+func (e *DispatchError) Detail() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
 
 // Uncertain reports whether the Provider may have accepted the task despite this failure.
 func (e *DispatchError) Uncertain() bool { return e.uncertain }
@@ -323,6 +343,23 @@ func sendFailureIsUncertain(err error) bool {
 		return false
 	}
 	return true
+}
+
+// sendFailureReason is the stable text of a transport failure. It distinguishes the
+// caller's context ending the request from this client's own timeout and from any other
+// transport failure, and leaves the transport error's own text out.
+func sendFailureReason(ctx context.Context, err error) string {
+	switch ctxErr := ctx.Err(); {
+	case errors.Is(ctxErr, context.DeadlineExceeded):
+		return "provider request timed out before the deadline"
+	case ctxErr != nil:
+		return "provider request cancelled"
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "provider request timed out"
+	}
+	return "provider request failed: transport error"
 }
 
 // statusIsUncertain classifies a non-2xx response. A 5xx may be reported after the
