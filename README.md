@@ -152,7 +152,7 @@ This is waiting recovery with explicit side-effect boundaries—not a claim of g
 
 ## Evolution roadmap
 
-Isolated execution extends what AI applications can do while keeping their Decisions, Actions and results in Emberling's execution ledger. The AX integration remains a roadmap experiment, not a shipped MVP capability.
+Isolated execution extends what AI applications can do while keeping their Decisions, Actions and results in Emberling's execution ledger. The AX integration remains a roadmap experiment, not a shipped MVP capability. In an experimental backend for the patch-and-test demo, the tests ran in a gVisor sandbox on AX (`ac23328`, Agent Substrate `944abe3`, checked 2026-10-11): test code could not read the callback or cluster credentials, and outbound network requests were refused. It suits small inputs only, is not part of the first release, and does not support real code repositories. The sandbox protects the host, credentials and network; it cannot stop a patch from making its own tests pass, so it does not vouch for a test result.
 
 Later capabilities continue to build on the same Execution Runtime. The system may use completed Runs to produce candidate Definitions, but a Run remains bound to the version selected when it was created.
 
