@@ -8,6 +8,8 @@ interface StudioHeaderProps {
   version: number | null;
   hasUnsavedChanges: boolean;
   busy?: boolean;
+  /** False while there is neither a loaded Definition nor a new draft to save. */
+  canSave?: boolean;
   onValidate: () => void;
   onSave: () => void;
   onRun: () => void;
@@ -23,6 +25,7 @@ export function StudioHeader({
   version,
   hasUnsavedChanges,
   busy = false,
+  canSave = true,
   onValidate,
   onSave,
   onRun,
@@ -64,7 +67,7 @@ export function StudioHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="outline" className={ACTION} onClick={onSave} disabled={busy}>
+        <Button variant="outline" className={ACTION} onClick={onSave} disabled={busy || !canSave}>
           Save
         </Button>
         <Button variant="outline" className={ACTION} onClick={onValidate} disabled={busy}>

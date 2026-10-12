@@ -301,3 +301,80 @@ describe('ObservePage — Run view layout', () => {
     expect(row).toHaveClass('min-h-[400px]');
   });
 });
+
+describe('ObservePage — load failures', () => {
+  it('says the Run was not found, names its ID and links back, without a retry', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(404, { error: { code: 'RUN_NOT_FOUND', message: 'run not found' } }),
+        ),
+      ),
+    );
+
+    renderObservePage();
+
+    expect(await screen.findByRole('heading', { name: 'Run not found' })).toBeInTheDocument();
+    expect(screen.getByText('run_old')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to Definitions' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.queryByText(/RUN_NOT_FOUND/)).toBeNull();
+  });
+
+  it('offers Retry for a failure that is not a missing Run and loads the Run on retry', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    let backendUp = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (!backendUp) {
+          return Promise.resolve(
+            jsonResponse(503, {
+              error: { code: 'DEPENDENCY_UNAVAILABLE', message: 'database unavailable' },
+            }),
+          );
+        }
+        if (url === '/api/runs/run_old') {
+          return Promise.resolve(jsonResponse(200, { run: OLD_RUN, nodeRuns: [], lastSeq: 0 }));
+        }
+        if (url === '/api/definitions/wf_123/versions/3') {
+          return Promise.resolve(jsonResponse(200, OLD_DEFINITION_VERSION));
+        }
+        return Promise.resolve(jsonResponse(200, { items: [] }));
+      }),
+    );
+
+    renderObservePage();
+
+    expect(
+      await screen.findByRole('heading', { name: "Couldn't load this run" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Run not found' })).toBeNull();
+    expect(screen.getByText('DEPENDENCY_UNAVAILABLE')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to Definitions' })).toHaveAttribute('href', '/');
+
+    backendUp = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByRole('button', { name: 'Run Again' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "Couldn't load this run" })).toBeNull();
+  });
+
+  it('treats a network failure as retryable rather than a missing Run', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))),
+    );
+
+    renderObservePage();
+
+    expect(
+      await screen.findByRole('heading', { name: "Couldn't load this run" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+});

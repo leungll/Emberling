@@ -13,6 +13,8 @@ import { useBoundDefinition } from './boundDefinition';
 import { observeRun, type ObservedRun } from './runObserver';
 import { ApiRequestError, createRun, getDefinitionVersion } from '@/api/client';
 import type { Definition, JsonObject, RunEvent } from '@/api/types';
+import { PageState } from '@/components/PageState';
+import { Button } from '@/components/ui/button';
 import { runInputLabels } from '@/features/run-input/runInputLabels';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { useStudioStore } from '@/stores/studio-store';
@@ -62,13 +64,9 @@ export function ObservePage() {
     events: [],
     loadError: null,
   });
-  const { snapshot, events } = observed;
-  const error =
-    observed.loadError === null
-      ? null
-      : observed.loadError instanceof ApiRequestError
-        ? `${observed.loadError.code}: ${observed.loadError.message}`
-        : 'Could not load run';
+  const { snapshot, events, loadError } = observed;
+  // Bumped by Retry so the observer effect below starts over for the same Run.
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Run Again reopens the Run Input Dialog bound to THIS Run's own workflowId and
   // definitionVersion (never the latest), prefilled with this Run's own input. The
@@ -94,7 +92,12 @@ export function ObservePage() {
   useEffect(() => {
     const observer = observeRun(runId, setObserved);
     return () => observer.close();
-  }, [runId]);
+  }, [runId, loadAttempt]);
+
+  const onRetryLoad = useCallback(() => {
+    setObserved({ snapshot: null, events: [], loadError: null });
+    setLoadAttempt((attempt) => attempt + 1);
+  }, []);
 
   const onSelectEvent = useCallback(
     (event: RunEvent) => {
@@ -139,13 +142,19 @@ export function ObservePage() {
     [snapshot, navigate],
   );
 
-  if (error) {
+  // Only a 404 means the Run does not exist. A network failure or a server error says
+  // nothing about the Run, so it offers Retry instead of declaring the Run missing.
+  if (loadError !== null) {
+    if (loadError instanceof ApiRequestError && loadError.status === 404) {
+      return <PageState title="Run not found" body="No run exists with this ID." detail={runId} />;
+    }
     return (
-      <main className="dark flex h-screen items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
-        <p role="alert" className="text-sm text-red-500">
-          {error}
-        </p>
-      </main>
+      <PageState
+        title="Couldn't load this run"
+        body="Check that the Emberling server is running, then try again."
+        detail={loadError instanceof ApiRequestError ? loadError.code : undefined}
+        action={<Button onClick={onRetryLoad}>Retry</Button>}
+      />
     );
   }
 

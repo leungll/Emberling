@@ -474,13 +474,15 @@ describe('EditPage — load errors', () => {
   it('shows a failed definition load on the shared FAILED palette as body text', async () => {
     stubRoutes({
       'GET /api/definitions/wf_123': () =>
-        jsonResponse(404, { error: { code: 'NOT_FOUND', message: 'definition wf_123 not found' } }),
+        jsonResponse(503, {
+          error: { code: 'DEPENDENCY_UNAVAILABLE', message: 'database unavailable' },
+        }),
     });
 
     renderStudio('/studio/wf_123');
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('NOT_FOUND: definition wf_123 not found');
+    expect(alert).toHaveTextContent('DEPENDENCY_UNAVAILABLE: database unavailable');
     // Shared status palette, the same tokens and sizes as the Validation errors row: the FAILED red
     // is shared across the surfaces, the message is body text (≥14px) in the foreground
     // colour, with no off-palette Tailwind red.
@@ -488,6 +490,75 @@ describe('EditPage — load errors', () => {
     expect(alert.className).toContain('border-[var(--status-failed-dot)]/40');
     expect(alert).toHaveClass('text-sm', 'text-[var(--foreground)]');
     expect(alert.className).not.toMatch(/text-red-|text-xs/);
+  });
+
+  it('makes Save impossible when the definition failed to load', async () => {
+    const fetchMock = stubRoutes({
+      'GET /api/definitions/wf_123': () =>
+        jsonResponse(503, {
+          error: { code: 'DEPENDENCY_UNAVAILABLE', message: 'database unavailable' },
+        }),
+    });
+
+    renderStudio('/studio/wf_123');
+
+    await screen.findByRole('alert');
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    expect(callsTo(fetchMock, 'PUT', '/api/definitions/wf_123')).toEqual([]);
+    expect(callsTo(fetchMock, 'POST', '/api/definitions')).toEqual([]);
+  });
+
+  it('keeps Save disabled while the definition is still loading', async () => {
+    let release: (response: Response) => void = () => undefined;
+    stubRoutes({
+      'GET /api/definitions/wf_123': () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    });
+
+    renderStudio('/studio/wf_123');
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    release(jsonResponse(200, DEFINITION));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+  });
+
+  it('shows a not-found state instead of an editor for an unknown definition', async () => {
+    const fetchMock = stubRoutes({
+      'GET /api/definitions/wf_missing': () =>
+        jsonResponse(404, {
+          error: { code: 'DEFINITION_NOT_FOUND', message: 'definition not found' },
+        }),
+    });
+
+    renderStudio('/studio/wf_missing');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Definition not found' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('wf_missing')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to Definitions' })).toHaveAttribute('href', '/');
+    // No editor: nothing to edit, save, validate or run.
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Validate' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
+    expect(screen.queryByTestId('canvas-region')).toBeNull();
+    expect(screen.queryByText(/Unsaved draft/)).toBeNull();
+    expect(callsTo(fetchMock, 'PUT', '/api/definitions/wf_missing')).toEqual([]);
+  });
+
+  it('still opens the editor for a new definition', async () => {
+    stubRoutes({});
+
+    renderStudio({ pathname: '/studio/new', state: { name: 'Fresh workflow' } });
+
+    expect(await screen.findByText('Fresh workflow')).toBeInTheDocument();
+    expect(screen.getByTestId('canvas-region')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.queryByRole('heading', { name: 'Definition not found' })).toBeNull();
   });
 });
 

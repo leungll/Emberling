@@ -43,6 +43,7 @@ import type {
   ValidationError,
 } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
+import { PageState } from '@/components/PageState';
 import { Button } from '@/components/ui/button';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { runInputLabels } from '@/features/run-input/runInputLabels';
@@ -180,6 +181,12 @@ export function EditPage() {
   // Bumped on every Undo/Redo so the Properties form remounts from the restored config
   // (a field such as the JSON editor keeps its own text state while mounted).
   const [historyRevision, setHistoryRevision] = useState(0);
+  // The workflowId the Backend answered 404 for. Keyed by ID rather than a flag so opening
+  // another Definition from here never inherits a stale not-found answer.
+  const [missingWorkflowId, setMissingWorkflowId] = useState<string | null>(null);
+  // Save needs a version to save over, or a new draft to create; while an existing
+  // Definition is loading or failed to load there is neither.
+  const canSave = isNewDraft || definition !== null;
 
   const applyDefinition = useCallback(
     (loaded: Definition) => {
@@ -231,6 +238,10 @@ export function EditPage() {
         .then(applyDefinition)
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
+          if (error instanceof ApiRequestError && error.status === 404) {
+            setMissingWorkflowId(workflowId);
+            return;
+          }
           setLoadError(describeError(error, 'Could not load definition'));
         });
 
@@ -516,6 +527,7 @@ export function EditPage() {
   }, [currentDraft]);
 
   const handleSave = useCallback(async () => {
+    if (!canSave) return;
     setBusy(true);
     setNotice(null);
     try {
@@ -560,6 +572,7 @@ export function EditPage() {
       setBusy(false);
     }
   }, [
+    canSave,
     isNewDraft,
     definition,
     workflowId,
@@ -618,6 +631,18 @@ export function EditPage() {
     return byField;
   }, [validationErrors, selectedNodeId]);
 
+  // An unknown workflowId has nothing to edit: rendering the editor would invite edits
+  // that no Save could ever persist.
+  if (!isNewDraft && missingWorkflowId === workflowId) {
+    return (
+      <PageState
+        title="Definition not found"
+        body="No definition exists with this ID."
+        detail={workflowId}
+      />
+    );
+  }
+
   return (
     <div className="dark flex h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
       <StudioHeader
@@ -625,6 +650,7 @@ export function EditPage() {
         workflowId={workflowId}
         version={definition?.version ?? null}
         hasUnsavedChanges={hasUnsavedChanges}
+        canSave={canSave}
         busy={busy}
         onValidate={() => void handleValidate()}
         onSave={() => void handleSave()}
