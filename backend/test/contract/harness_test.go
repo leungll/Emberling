@@ -64,8 +64,9 @@ import (
 const defaultTestPollInterval = 20 * time.Millisecond
 
 // testEnv is one fully wired Backend (minus the actual net listener, which
-// httptest.Server provides): the same registries, services, work Pool and Reconciler
-// cmd/emberling/main.go assembles, against a fresh per-test database.
+// httptest.Server provides): the same registries, services and work Pool
+// cmd/emberling/main.go assembles, against a fresh per-test database. No Reconciler runs:
+// a Run advances only through in-process wakeups unless a test drives a pass itself.
 type testEnv struct {
 	server *httptest.Server
 	probe  *readiness.Probe
@@ -244,8 +245,10 @@ func newTestEnv(t *testing.T) *testEnv {
 // newTestEnvWithOptions wires a full Backend against a fresh database, mirroring
 // cmd/emberling/main.go's own assembly: real registries, the real four Node Types bound
 // to the deterministic Mock Model Provider (CLAUDE.md: "Mock external systems through the
-// deterministic Mock Provider"), a running work.Pool, and a running Reconciler. The
-// readiness Probe is driven through the same seven-step gate a real process would run.
+// deterministic Mock Provider") and a running work.Pool. Unlike main.go it starts no
+// Reconciler, so work stranded outside the in-process wakeups stalls the Run instead of
+// being rediscovered later. The readiness Probe is driven through the same seven-step
+// gate a real process would run.
 func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	t.Helper()
 
