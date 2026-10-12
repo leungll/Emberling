@@ -15,7 +15,7 @@ import (
 // outcomes and use channels as barriers instead of sleeping (CLAUDE.md testing standard).
 type execScriptedExecutor struct {
 	advance func(callNo int) (service.AdvanceOutcome, error)
-	execute func(callNo int) error
+	execute func(ctx context.Context, callNo int) error
 
 	advanceCalls int32
 	executeCalls int32
@@ -39,9 +39,9 @@ func (e *execScriptedExecutor) Advance(_ context.Context, _ string) (service.Adv
 	return e.advance(n)
 }
 
-func (e *execScriptedExecutor) Execute(_ context.Context, _ service.AdvanceOutcome) error {
+func (e *execScriptedExecutor) Execute(ctx context.Context, _ service.AdvanceOutcome) error {
 	n := int(atomic.AddInt32(&e.executeCalls, 1))
-	return e.execute(n)
+	return e.execute(ctx, n)
 }
 
 // TestPool_ProcessesQueuedItem_DrainsUntilUnclaimed proves processItem's drain loop: it
@@ -64,7 +64,7 @@ func TestPool_ProcessesQueuedItem_DrainsUntilUnclaimed(t *testing.T) {
 			}
 			return service.AdvanceOutcome{Claimed: false}, nil
 		},
-		execute: func(int) error { return nil },
+		execute: func(context.Context, int) error { return nil },
 	}
 	hooks := Hooks{AfterExecute: func(string) { close(done) }}
 
@@ -101,13 +101,17 @@ func TestPool_ProcessesQueuedItem_DrainsUntilUnclaimed(t *testing.T) {
 }
 
 // TestPool_Stop_WaitsForInFlightExecuteToFinish proves Stop's explicit-goroutine-ownership
-// contract: it must not return while a worker is still inside Execute. The test never
-// sleeps to manufacture this ordering; it uses two real channels as barriers -- entered
-// proves the worker has reached Execute before Stop is called, and proceed is what
-// actually unblocks the worker's in-flight Execute call, released concurrently with Stop
-// from a background goroutine so Stop's own WaitGroup.Wait is what is under test.
+// contract: it must not return while a worker is still inside Execute. The ordering is
+// fixed by channel barriers, never by sleeps or by racing two concurrent events:
+// entered proves the worker is inside Execute before Stop is called; the in-flight
+// Execute then waits for the worker context that Stop cancels, which proves Stop has
+// started and makes the drain loop's exit path deterministic (after Execute returns, the
+// loop sees the cancelled context and never reaches a second Advance call); proceed,
+// released by the test, is the only thing that lets Execute return, so Stop can only
+// return after it.
 func TestPool_Stop_WaitsForInFlightExecuteToFinish(t *testing.T) {
 	entered := make(chan struct{})
+	cancelled := make(chan struct{})
 	proceed := make(chan struct{})
 
 	exec := &execScriptedExecutor{
@@ -117,7 +121,9 @@ func TestPool_Stop_WaitsForInFlightExecuteToFinish(t *testing.T) {
 			}
 			return service.AdvanceOutcome{Claimed: false}, nil
 		},
-		execute: func(int) error {
+		execute: func(ctx context.Context, _ int) error {
+			<-ctx.Done()
+			close(cancelled)
 			<-proceed
 			return nil
 		},
@@ -141,21 +147,37 @@ func TestPool_Stop_WaitsForInFlightExecuteToFinish(t *testing.T) {
 		t.Fatal("BeforeExecute hook: want fired within 5s, got timeout")
 	}
 
-	// Release the blocked Execute call from a background goroutine so that Stop, called
-	// synchronously right below, is genuinely exercising WaitGroup.Wait rather than
-	// racing a call that already finished.
-	go func() { close(proceed) }()
+	stopped := make(chan struct{})
+	go func() {
+		pool.Stop()
+		close(stopped)
+	}()
 
-	pool.Stop()
+	select {
+	case <-cancelled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stop: want the worker context cancelled within 5s, got timeout")
+	}
+	// Execute is still blocked on proceed, so a Stop that had already returned here did
+	// not wait for the in-flight call.
+	select {
+	case <-stopped:
+		t.Fatal("Stop returned while Execute was still in flight")
+	default:
+	}
+
+	close(proceed)
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stop: want returned within 5s of Execute finishing, got timeout")
+	}
 
 	if got := atomic.LoadInt32(&exec.executeCalls); got != 1 {
 		t.Fatalf("Execute calls by the time Stop returned: want exactly 1, got %d", got)
 	}
-	// processItem checks ctx.Err() before every Advance call, and Stop cancels ctx before
-	// waiting; since that cancellation races concurrently with proceed unblocking Execute,
-	// the loop is expected to exit via the cancelled context rather than reach a second
-	// Advance call. The one guarantee under test is that Stop did not return early: it
-	// only returned after the in-flight Execute (call 1) actually completed.
+	// Execute observed the cancellation before returning, so the drain loop's context
+	// check after it must have ended the loop before any second Advance call.
 	if got := atomic.LoadInt32(&exec.advanceCalls); got != 1 {
 		t.Fatalf("Advance calls by the time Stop returned: want 1, got %d", got)
 	}
@@ -179,7 +201,7 @@ func TestPool_AgentTurnItem_DispatchesToAdvanceAgentTurn(t *testing.T) {
 			t.Error("Advance called for an AGENT_TURN item")
 			return service.AdvanceOutcome{}, nil
 		},
-		execute:   func(int) error { return nil },
+		execute:   func(context.Context, int) error { return nil },
 		turnCalls: make(chan agentTurnCall, 1),
 	}
 	hooks := Hooks{
