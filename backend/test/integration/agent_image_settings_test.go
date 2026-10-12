@@ -19,7 +19,8 @@ import (
 
 // TestAgentAction_SettingsViolateSchema_InvalidActionNoRequest drives a generate_image
 // Decision whose settings break the shared schema - a member outside it, such as the
-// retired settings-level mock control, a resolution other than 1K, a missing prompt. Each
+// retired settings-level mock control, a resolution other than 1K, a missing prompt, a
+// seed above the 32-bit signed range. Each
 // is rejected at claim: the Action fails with INVALID_ACTION and no Tool Attempt, the
 // Executor is never called, the Mock Provider sees no generation request, and the Agent
 // terminates as INVALID_ACTION.
@@ -28,6 +29,7 @@ func TestAgentAction_SettingsViolateSchema_InvalidActionNoRequest(t *testing.T) 
 		"member outside the schema": `{"prompt":"Warm film look","mock":"fail"}`,
 		"resolution other than 1K":  `{"prompt":"Warm film look","resolution":"2K"}`,
 		"missing prompt":            `{"aspectRatio":"1:1"}`,
+		"seed too large":            `{"prompt":"Warm film look","seed":2147483648}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			p := newGenerationProvider(t)

@@ -54,7 +54,7 @@ const inputSchema = `{
         "prompt": {"type": "string", "minLength": 1, "maxLength": 4000},
         "aspectRatio": {"enum": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"]},
         "resolution": {"enum": ["1K"]},
-        "seed": {"type": "integer", "minimum": 0}
+        "seed": {"type": "integer", "minimum": 0, "maximum": 2147483647}
       },
       "required": ["prompt"],
       "additionalProperties": false

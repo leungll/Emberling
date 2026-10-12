@@ -90,8 +90,8 @@ func TestRegistration_SyncExternalProducerCountingTowardLimit_RegistersCleanly(t
 
 // TestInputSchema_SharedStrictSettings_AcceptsOnlyTheContract pins the settings every
 // image model shares: a prompt of 1 to 4000 characters, an optional aspect ratio from a
-// fixed set, an optional resolution that is only "1K", an optional non-negative integer
-// seed, and nothing else.
+// fixed set, an optional resolution that is only "1K", an optional integer seed from 0
+// to 2147483647, and nothing else.
 func TestInputSchema_SharedStrictSettings_AcceptsOnlyTheContract(t *testing.T) {
 	schema, err := registry.CompileSchema(json.RawMessage(inputSchema))
 	if err != nil {
@@ -109,7 +109,7 @@ func TestInputSchema_SharedStrictSettings_AcceptsOnlyTheContract(t *testing.T) {
 		`{"prompt":"Soft film look"}`,
 		`{"prompt":"` + longest + `"}`,
 		`{"prompt":"Soft film look","aspectRatio":"3:4","resolution":"1K","seed":0}`,
-		`{"prompt":"Soft film look","seed":4294967296}`,
+		`{"prompt":"Soft film look","seed":2147483647}`,
 	} {
 		if err := validate(valid); err != nil {
 			t.Errorf("settings %.80s rejected: %v", valid, err)
@@ -126,6 +126,7 @@ func TestInputSchema_SharedStrictSettings_AcceptsOnlyTheContract(t *testing.T) {
 		"unknown aspect":      `{"prompt":"p","aspectRatio":"5:4"}`,
 		"negative seed":       `{"prompt":"p","seed":-1}`,
 		"fractional seed":     `{"prompt":"p","seed":1.5}`,
+		"seed too large":      `{"prompt":"p","seed":2147483648}`,
 		"settings not object": `["p"]`,
 	} {
 		if err := validate(invalid); err == nil {
