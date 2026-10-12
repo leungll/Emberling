@@ -50,11 +50,11 @@ type axResult struct {
 	output    string
 }
 
-// queryResult performs one result query, bounded by axResultQueryTimeout and the test
+// queryResult performs one result query, bounded by axRouterQueryTimeout and the test
 // deadline. transient is true for a transport failure, a non-200 answer or a body that
 // could not be read, which the caller retries in the next round.
 func (b *AXBackend) queryResult(ctx context.Context, name string, deadline time.Time) (axResult, bool) {
-	limit := min(axResultQueryTimeout, max(deadline.Sub(b.cfg.Clock.Now()), 0))
+	limit := min(axRouterQueryTimeout, max(deadline.Sub(b.cfg.Clock.Now()), 0))
 	queryCtx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	status, body, err := b.cfg.Results.ReadResult(queryCtx, b.cfg.Atespace, name)

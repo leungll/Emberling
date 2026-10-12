@@ -13,10 +13,9 @@ import (
 )
 
 // The real AX control below drives the ax CLI with the smallest set of assumptions about
-// its interface. Its flags, its output formats and its answer for a missing resource were
-// read from the AX source and documentation but are still to be confirmed against a
-// running AX: every behaviour test of the ax Backend runs against the deterministic
-// stand-in instead.
+// its interface: its flags, its exit status, the Task's YAML status block, its tables and
+// its answer for a missing resource. Every behaviour test of the ax Backend runs against
+// the deterministic stand-in; the tests here pin the CLI's output formats.
 
 // maxAXOutputBytes bounds what the runner keeps of one ax CLI call's output.
 const maxAXOutputBytes = 1 << 20
@@ -91,6 +90,17 @@ func (c *AXCLI) Apply(ctx context.Context, atespace string, documents []byte) er
 		return fmt.Errorf("ax apply exited with status %d", code)
 	}
 	return nil
+}
+
+// Resume implements AXTaskControl with `ax resume task <name>`. AX answers a resumed Task
+// with exit status 0 and refuses with a non-zero status; a command that did not exit on
+// its own leaves the outcome unknown.
+func (c *AXCLI) Resume(ctx context.Context, atespace, name string) (bool, error) {
+	code, _, err := c.run(ctx, []string{"resume", "task", name, "-a", atespace}, nil)
+	if err != nil {
+		return false, err
+	}
+	return code == 0, nil
 }
 
 // TaskState implements AXTaskControl with `ax get task <name>`, which prints the Task as
@@ -212,7 +222,10 @@ func parseAXTaskState(output []byte) string {
 	}
 }
 
-// AXRouterReader reads the supervisor result through the AX router's HTTP address.
+// maxReadyBodyBytes bounds what is drained of a readiness answer before it is discarded.
+const maxReadyBodyBytes = 4096
+
+// AXRouterReader queries the supervisor through the AX router's HTTP address.
 type AXRouterReader struct {
 	baseURL string
 	client  *http.Client
@@ -224,17 +237,33 @@ func NewAXRouterReader(baseURL string, client *http.Client) *AXRouterReader {
 	return &AXRouterReader{baseURL: strings.TrimSuffix(baseURL, "/"), client: client}
 }
 
+// ReadReady implements AXResultReader with one GET /readyz routed to the Task's actor.
+func (r *AXRouterReader) ReadReady(ctx context.Context, atespace, taskName string) (int, error) {
+	resp, err := r.get(ctx, atespace, taskName, "/readyz")
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxReadyBodyBytes))
+	return resp.StatusCode, nil
+}
+
 // ReadResult implements AXResultReader with one GET /v1/result routed to the Task's
 // actor.
 func (r *AXRouterReader) ReadResult(ctx context.Context, atespace, taskName string) (int, io.ReadCloser, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.baseURL+"/v1/result", nil)
-	if err != nil {
-		return 0, nil, err
-	}
-	req.Header.Set(atenetTargetHeader, atespace+"/"+taskName)
-	resp, err := r.client.Do(req)
+	resp, err := r.get(ctx, atespace, taskName, "/v1/result")
 	if err != nil {
 		return 0, nil, err
 	}
 	return resp.StatusCode, resp.Body, nil
+}
+
+// get sends one GET for path to the actor of the Task.
+func (r *AXRouterReader) get(ctx context.Context, atespace, taskName, path string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.baseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set(atenetTargetHeader, atespace+"/"+taskName)
+	return r.client.Do(req)
 }

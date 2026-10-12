@@ -142,6 +142,44 @@ func (h *axHarness) resultQueries(t *testing.T) int {
 	return len(h.recordLines(t, mockcontrol.EventArrived, mockax.KindResult))
 }
 
+func (h *axHarness) arrivals(t *testing.T, kind string) int {
+	return len(h.recordLines(t, mockcontrol.EventArrived, kind))
+}
+
+// arrivalKinds returns the kind of every call that reached the stand-in, in order.
+func (h *axHarness) arrivalKinds(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile(h.recordPath)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	var kinds []string
+	scanner := bufio.NewScanner(bytes.NewReader(raw))
+	for scanner.Scan() {
+		var line struct {
+			Event string `json:"event"`
+			Kind  string `json:"kind"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &line); err != nil {
+			t.Fatalf("decode record line %q: %v", scanner.Text(), err)
+		}
+		if line.Event == mockcontrol.EventArrived {
+			kinds = append(kinds, line.Kind)
+		}
+	}
+	return kinds
+}
+
+// controlStandIn sends one barrier control request to the stand-in.
+func (h *axHarness) controlStandIn(t *testing.T, action, body string) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	h.fake.ControlHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/control/"+action, strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s status = %d, body %s", action, rec.Code, rec.Body)
+	}
+}
+
 // assertCleanedUp checks the run deleted its derived Task and left nothing behind.
 func (h *axHarness) assertCleanedUp(t *testing.T) {
 	t.Helper()
@@ -242,6 +280,164 @@ func TestAXBackend_StartupFailure_DeletesResourcesAndReportsSandboxError(t *test
 	}
 }
 
+func TestAXBackend_ResumeFails_DeletesResourcesAndReportsSandboxError(t *testing.T) {
+	cases := map[string]mockax.Scenario{
+		"resume refused":             {ResumeRefused: true},
+		"task failed after a resume": {Startup: mockax.StartupFailed},
+	}
+	for name, scenario := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := newAXHarness(t, axHarnessOptions{fake: mockax.Config{Default: &scenario}})
+			assertFailure(t, h.backend.Run(context.Background(), axJob(touchPatch)), codeSandboxError)
+			h.assertCleanedUp(t)
+			if resumed := h.fake.Resumed(); !slices.Equal(resumed, []string{axTestTask}) {
+				t.Fatalf("resumes = %v, want exactly one for %s", resumed, axTestTask)
+			}
+			if ready, results := h.arrivals(t, mockax.KindReady), h.resultQueries(t); ready != 0 || results != 0 {
+				t.Fatalf("readiness queries %d, result queries %d, want none for a Task that did not start", ready, results)
+			}
+		})
+	}
+}
+
+func TestAXBackend_ResumeOutcomeUnknown_DeletesDerivedNameWithoutSecondResume(t *testing.T) {
+	check := func(t *testing.T, h *axHarness, outcome Outcome) {
+		t.Helper()
+		assertFailure(t, outcome, codeSandboxError)
+		if applied, resumed := h.fake.Applied(), h.fake.Resumed(); len(applied) != 1 || len(resumed) > 1 {
+			t.Fatalf("applied %d, resumed %v, want one create and at most the one resume", len(applied), resumed)
+		}
+		if n := h.arrivals(t, mockax.KindResume); n != 1 {
+			t.Fatalf("resume calls = %d, want one and no retry", n)
+		}
+		if state, ready := h.arrivals(t, mockax.KindState), h.arrivals(t, mockax.KindReady); state != 0 || ready != 0 {
+			t.Fatalf("state reads %d, readiness queries %d, want none after an unconfirmed resume", state, ready)
+		}
+		h.assertCleanedUp(t)
+	}
+
+	t.Run("resume took effect but was not confirmed", func(t *testing.T) {
+		h := newAXHarness(t, axHarnessOptions{fake: mockax.Config{ResumeUncertain: true}})
+		check(t, h, h.backend.Run(context.Background(), axJob(touchPatch)))
+	})
+
+	t.Run("resume command never exited", func(t *testing.T) {
+		held := make(chan string, 1)
+		h := newAXHarness(t, axHarnessOptions{fake: mockax.Config{HeldNotify: held}})
+		h.controlStandIn(t, "pause", `{"kinds":["resume"]}`)
+		done := make(chan Outcome, 1)
+		go func() { done <- h.backend.Run(context.Background(), axJob(touchPatch)) }()
+		if kind := <-held; kind != mockax.KindResume {
+			t.Fatalf("held %q, want the resume", kind)
+		}
+		// Dropping the held call ends it without an answer, as a command that never exits
+		// on its own does.
+		h.fake.StopHolding()
+		check(t, h, <-done)
+	})
+}
+
+func TestAXBackend_NewTaskSuspendedBeforeResume_IsNotAFailure(t *testing.T) {
+	held := make(chan string, 1)
+	h := newAXHarness(t, axHarnessOptions{fake: mockax.Config{HeldNotify: held}})
+	h.controlStandIn(t, "pause", `{"kinds":["resume"]}`)
+	done := make(chan Outcome, 1)
+	go func() { done <- h.backend.Run(context.Background(), axJob(touchPatch)) }()
+	if kind := <-held; kind != mockax.KindResume {
+		t.Fatalf("held %q, want the resume", kind)
+	}
+	if kinds := h.arrivalKinds(t); !slices.Equal(kinds, []string{mockax.KindApply, mockax.KindResume}) {
+		t.Fatalf("calls before the resume completed = %v, want only the create and the resume", kinds)
+	}
+	if state, err := h.fake.TaskState(context.Background(), axTestAtespace, axTestTask); err != nil || state != mockax.TaskSuspended {
+		t.Fatalf("new task state = %q, %v, want suspended until resumed", state, err)
+	}
+	h.controlStandIn(t, "release", "")
+	if got := <-done; !got.Verdict || !got.Passed {
+		t.Fatalf("outcome = %+v, want the passing verdict", got)
+	}
+	h.assertCleanedUp(t)
+}
+
+func TestAXBackend_ReadyAfterResume_SkipsReadyzPolling(t *testing.T) {
+	h := newAXHarness(t, axHarnessOptions{})
+	if got := h.backend.Run(context.Background(), axJob(touchPatch)); !got.Verdict || !got.Passed {
+		t.Fatalf("outcome = %+v, want the passing verdict", got)
+	}
+	want := []string{mockax.KindApply, mockax.KindResume, mockax.KindState, mockax.KindState, mockax.KindResult, mockax.KindDelete}
+	if kinds := h.arrivalKinds(t); !slices.Equal(kinds, want) {
+		t.Fatalf("calls = %v, want %v: one state read decides readiness, no readiness query", kinds, want)
+	}
+	h.assertCleanedUp(t)
+}
+
+func TestAXBackend_NotReadyAfterResume_PollsReadyzUntil200(t *testing.T) {
+	t.Run("not ready, unreachable and reset answers until 200", func(t *testing.T) {
+		scenario := mockax.Scenario{
+			Startup: mockax.StartupReadyLater, ReadyAnswers: []int{http.StatusServiceUnavailable, http.StatusNotFound, 0, http.StatusServiceUnavailable},
+			Output: mockax.GoTestOutput(4, 0),
+		}
+		h := newAXHarness(t, axHarnessOptions{fake: mockax.Config{Default: &scenario}})
+		if got := h.backend.Run(context.Background(), axJob(touchPatch)); got != (Outcome{Verdict: true, Passed: true, Total: 4}) {
+			t.Fatalf("outcome = %+v, want the passing verdict of 4 tests", got)
+		}
+		if n := h.arrivals(t, mockax.KindReady); n != 5 {
+			t.Fatalf("readiness queries = %d, want 5: four unready answers, then 200", n)
+		}
+		if elapsed := h.clock.elapsed(); elapsed != 4*time.Second {
+			t.Fatalf("finished after %s, want one readiness query per second from 0s to 4s", elapsed)
+		}
+		h.assertCleanedUp(t)
+	})
+
+	t.Run("three failed readiness queries in a row", func(t *testing.T) {
+		scenario := mockax.Scenario{Startup: mockax.StartupReadyLater, ReadyAnswers: []int{http.StatusNotFound, 0, http.StatusBadGateway}}
+		h := newAXHarness(t, axHarnessOptions{fake: mockax.Config{Default: &scenario}})
+		assertFailure(t, h.backend.Run(context.Background(), axJob(touchPatch)), codeSandboxError)
+		if ready, results := h.arrivals(t, mockax.KindReady), h.resultQueries(t); ready != 3 || results != 0 {
+			t.Fatalf("readiness queries %d, result queries %d, want 3 and none", ready, results)
+		}
+		h.assertCleanedUp(t)
+	})
+
+	t.Run("suspended while waiting for readiness", func(t *testing.T) {
+		h := newAXHarness(t, axHarnessOptions{fake: mockax.Config{Default: &mockax.Scenario{Startup: mockax.StartupNeverReady}}})
+		control := &suspendingControl{AXTaskControl: h.fake, suspendFrom: 2}
+		backend, err := NewAXBackend(AXBackendConfig{
+			Atespace: axTestAtespace, Image: axTestImage, TestTimeout: time.Minute, ReadyTimeout: time.Minute,
+			Control: control, Results: h.fake, Clock: h.clock,
+		})
+		if err != nil {
+			t.Fatalf("new backend: %v", err)
+		}
+		assertFailure(t, backend.Run(context.Background(), axJob(touchPatch)), codeSandboxError)
+		if n := h.arrivals(t, mockax.KindReady); n != 1 {
+			t.Fatalf("readiness queries = %d, want only the one before the Task was seen suspended", n)
+		}
+		h.assertCleanedUp(t)
+	})
+}
+
+// suspendingControl reports the Task suspended from its suspendFrom-th state read on.
+type suspendingControl struct {
+	AXTaskControl
+	mu          sync.Mutex
+	reads       int
+	suspendFrom int
+}
+
+func (c *suspendingControl) TaskState(ctx context.Context, atespace, name string) (string, error) {
+	c.mu.Lock()
+	c.reads++
+	reads := c.reads
+	c.mu.Unlock()
+	state, err := c.AXTaskControl.TaskState(ctx, atespace, name)
+	if err == nil && reads >= c.suspendFrom {
+		return AXTaskSuspended, nil
+	}
+	return state, err
+}
+
 func TestAXBackend_NeverReady_DeletesAfterReadyTimeout(t *testing.T) {
 	h := newAXHarness(t, axHarnessOptions{
 		fake:         mockax.Config{Default: &mockax.Scenario{Startup: mockax.StartupNeverReady}},
@@ -252,8 +448,8 @@ func TestAXBackend_NeverReady_DeletesAfterReadyTimeout(t *testing.T) {
 	if elapsed := h.clock.elapsed(); elapsed != 5*time.Second {
 		t.Fatalf("gave up after %s, want the 5s ready timeout", elapsed)
 	}
-	if reads := len(h.recordLines(t, mockcontrol.EventArrived, mockax.KindState)); reads != 6 {
-		t.Fatalf("state reads = %d, want one per second from 0s to 5s", reads)
+	if reads, ready := h.arrivals(t, mockax.KindState), h.arrivals(t, mockax.KindReady); reads != 5 || ready != 5 {
+		t.Fatalf("state reads %d, readiness queries %d, want one of each per second from 0s to 4s", reads, ready)
 	}
 	if n := h.resultQueries(t); n != 0 {
 		t.Fatalf("result queries = %d, want none before the Task is ready", n)
@@ -287,8 +483,8 @@ func TestAXBackend_CreateOutcomeUnknown_DeletesDerivedNameWithoutSecondCreate(t 
 		t.Fatalf("applied = %d times, want one create and no retry", len(applied))
 	}
 	h.assertCleanedUp(t)
-	if reads := len(h.recordLines(t, mockcontrol.EventArrived, mockax.KindState)); reads != 0 {
-		t.Fatalf("state reads = %d, want none after an uncertain create", reads)
+	if resumes, reads := h.arrivals(t, mockax.KindResume), h.arrivals(t, mockax.KindState); resumes != 0 || reads != 0 {
+		t.Fatalf("resumes %d, state reads %d, want none after an uncertain create", resumes, reads)
 	}
 }
 
@@ -420,6 +616,10 @@ type flakyReader struct {
 	query     int
 	failOn    map[int]bool
 	runningOn map[int]bool
+}
+
+func (r *flakyReader) ReadReady(ctx context.Context, atespace, task string) (int, error) {
+	return r.inner.ReadReady(ctx, atespace, task)
 }
 
 func (r *flakyReader) ReadResult(ctx context.Context, atespace, task string) (int, io.ReadCloser, error) {

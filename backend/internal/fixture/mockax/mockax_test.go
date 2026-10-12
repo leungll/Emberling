@@ -57,12 +57,24 @@ func readResult(t *testing.T, fake *Fake, name string) (int, string, error) {
 	return status, string(raw), nil
 }
 
+// resume resumes name and fails the test unless the fake confirms it.
+func resume(t *testing.T, fake *Fake, name string) {
+	t.Helper()
+	if resumed, err := fake.Resume(context.Background(), testAtespace, name); err != nil || !resumed {
+		t.Fatalf("resume %s = %v, %v, want confirmed", name, resumed, err)
+	}
+}
+
 func TestFake_DefaultScenario_ReadyThenDoneWithTwelvePassingTests(t *testing.T) {
 	fake := New(Config{Digest: sizeDigest})
 	files := map[string]string{"a.go": "package a\n"}
 	if err := fake.Apply(context.Background(), testAtespace, documents("emberling-sbx-1", files)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
+	if state, err := fake.TaskState(context.Background(), testAtespace, "emberling-sbx-1"); err != nil || state != TaskSuspended {
+		t.Fatalf("state before resume = %q, %v, want suspended", state, err)
+	}
+	resume(t, fake, "emberling-sbx-1")
 	if state, err := fake.TaskState(context.Background(), testAtespace, "emberling-sbx-1"); err != nil || state != TaskReady {
 		t.Fatalf("state = %q, %v, want ready", state, err)
 	}
@@ -93,10 +105,68 @@ func TestFake_ScenarioByDigest_OverridesDefault(t *testing.T) {
 	if err := fake.Apply(context.Background(), testAtespace, documents("emberling-sbx-2", files)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
+	resume(t, fake, "emberling-sbx-2")
 	for range 3 {
 		if state, _ := fake.TaskState(context.Background(), testAtespace, "emberling-sbx-2"); state != TaskPending {
 			t.Fatalf("state = %q, want pending forever", state)
 		}
+		if status, err := fake.ReadReady(context.Background(), testAtespace, "emberling-sbx-2"); err != nil || status != http.StatusServiceUnavailable {
+			t.Fatalf("readiness = %d, %v, want 503 forever", status, err)
+		}
+	}
+}
+
+func TestFake_Resume_RefusedOrUncertain(t *testing.T) {
+	refused := New(Config{Digest: sizeDigest, Default: &Scenario{ResumeRefused: true}})
+	if err := refused.Apply(context.Background(), testAtespace, documents("emberling-sbx-6", map[string]string{"a": "b"})); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if resumed, err := refused.Resume(context.Background(), testAtespace, "emberling-sbx-6"); err != nil || resumed {
+		t.Fatalf("resume = %v, %v, want a refusal", resumed, err)
+	}
+	if state, _ := refused.TaskState(context.Background(), testAtespace, "emberling-sbx-6"); state != TaskFailed {
+		t.Fatalf("state after a refused resume = %q, want failed", state)
+	}
+	if resumed, err := refused.Resume(context.Background(), testAtespace, "emberling-sbx-missing"); err != nil || resumed {
+		t.Fatalf("resume of a missing task = %v, %v, want a refusal", resumed, err)
+	}
+
+	uncertain := New(Config{Digest: sizeDigest, ResumeUncertain: true})
+	if err := uncertain.Apply(context.Background(), testAtespace, documents("emberling-sbx-7", map[string]string{"a": "b"})); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if _, err := uncertain.Resume(context.Background(), testAtespace, "emberling-sbx-7"); err == nil {
+		t.Fatal("resume succeeded, want an unknown outcome")
+	}
+	if state, _ := uncertain.TaskState(context.Background(), testAtespace, "emberling-sbx-7"); state != TaskReady {
+		t.Fatalf("state after an unconfirmed resume = %q, want the Task started anyway", state)
+	}
+	if names := uncertain.Resumed(); len(names) != 1 || names[0] != "emberling-sbx-7" {
+		t.Fatalf("resumed = %v, want the one call", names)
+	}
+}
+
+func TestFake_ReadyLater_AnswersReadinessSequenceThen200(t *testing.T) {
+	scenario := Scenario{Startup: StartupReadyLater, ReadyAnswers: []int{http.StatusServiceUnavailable, 0, http.StatusNotFound}}
+	fake := New(Config{Digest: sizeDigest, Default: &scenario})
+	if err := fake.Apply(context.Background(), testAtespace, documents("emberling-sbx-8", map[string]string{"a": "b"})); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if status, _ := fake.ReadReady(context.Background(), testAtespace, "emberling-sbx-8"); status != http.StatusNotFound {
+		t.Fatalf("readiness before resume = %d, want 404", status)
+	}
+	resume(t, fake, "emberling-sbx-8")
+	if state, _ := fake.TaskState(context.Background(), testAtespace, "emberling-sbx-8"); state != TaskPending {
+		t.Fatalf("state after resume = %q, want not ready", state)
+	}
+	for i, want := range []int{http.StatusServiceUnavailable, 0, http.StatusNotFound, http.StatusOK, http.StatusOK} {
+		status, err := fake.ReadReady(context.Background(), testAtespace, "emberling-sbx-8")
+		if (want == 0) != (err != nil) || status != want {
+			t.Fatalf("readiness query %d = %d, %v, want %d", i+1, status, err, want)
+		}
+	}
+	if status, _ := fake.ReadReady(context.Background(), testAtespace, "emberling-sbx-missing"); status != http.StatusNotFound {
+		t.Fatalf("readiness of a missing task = %d, want 404", status)
 	}
 }
 

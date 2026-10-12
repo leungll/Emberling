@@ -32,13 +32,14 @@ const axAPIVersion = "ax.io/v1alpha1"
 // leaves room for the encoding around them.
 const maxWorkspaceContentBytes = 64 << 10
 
-// Polling bounds. The interval paces both the ready wait and the result polling; a result
-// query that fails maxResultQueryFailures rounds in a row is treated as a broken tunnel or
-// router rather than a transient interruption.
+// Polling bounds. The interval paces both the readiness and the result polling, and both
+// reach the supervisor through the same router channel under the same rules: one query
+// is bounded by axRouterQueryTimeout, and queries that fail maxRouterQueryFailures rounds
+// in a row are treated as a broken tunnel or router rather than a transient interruption.
 const (
 	axPollInterval         = time.Second
-	axResultQueryTimeout   = 5 * time.Second
-	maxResultQueryFailures = 3
+	axRouterQueryTimeout   = 5 * time.Second
+	maxRouterQueryFailures = 3
 )
 
 // eventCleanupFailed is the record line written when the AX resources of a finished test
@@ -103,7 +104,7 @@ type AXBackendConfig struct {
 	// TestTimeout bounds one test from the start of resource creation, ready wait and
 	// result polling included.
 	TestTimeout time.Duration
-	// ReadyTimeout bounds the wait for the Task to become ready.
+	// ReadyTimeout bounds the wait for the Task to become ready, counted from the resume.
 	ReadyTimeout time.Duration
 	Control      AXTaskControl
 	Results      AXResultReader
@@ -155,7 +156,7 @@ func (*AXBackend) ValidateMock(mock string) error {
 // Run tests job in one AX Task. An unknown base commit, a patch that does not apply, a
 // test id that cannot name a Task and a tree AX cannot carry all fail before any AX
 // resource exists. Once creation was attempted, the Task and Workspace are deleted on
-// every path before the outcome is returned; creation is never retried.
+// every path before the outcome is returned; neither creation nor resume is ever retried.
 func (b *AXBackend) Run(ctx context.Context, job Job) Outcome {
 	if job.BaseCommit != FixtureBaseCommit {
 		return Outcome{FailureCode: codeUnknownBaseCommit, FailureMessage: "only base commit " + FixtureBaseCommit + " is available"}
@@ -226,9 +227,7 @@ type axWorkspaceBinding struct {
 }
 
 // axTaskSpec is the complete Task spec. Every member is fixed except the names; env is an
-// always-empty list, so no test data and no credential ever reaches the Task. The member
-// names follow the AX API as read from its source and are to be confirmed against a
-// running AX before the first real run.
+// always-empty list, so no test data and no credential ever reaches the Task.
 type axTaskSpec struct {
 	Image      string               `json:"image"`
 	Workspaces []axWorkspaceBinding `json:"workspaces"`
@@ -237,7 +236,9 @@ type axTaskSpec struct {
 	Resources  axResources          `json:"resources"`
 }
 
-// axResources mirrors the docker Backend's CPU and memory limits.
+// axResources mirrors the docker Backend's CPU and memory limits. AX accepts the field but
+// does not pass it on to the sandbox it starts, so the limits have no effect today; they
+// are written only so they apply once AX honours them, and no guarantee rests on them.
 type axResources struct {
 	Limits struct {
 		CPU    string `json:"cpu"`
@@ -283,8 +284,8 @@ func (b *AXBackend) documents(name string, files map[string][]byte) ([]byte, err
 	return append(stream, '\n'), nil
 }
 
-// execute creates the resources, waits for the Task to be ready and polls its result.
-// The caller deletes the resources afterwards whatever the outcome.
+// execute creates the resources, starts the Task, waits for it to be ready and polls its
+// result. The caller deletes the resources afterwards whatever the outcome.
 func (b *AXBackend) execute(ctx context.Context, name string, documents []byte, digest string) Outcome {
 	deadline := b.cfg.Clock.Now().Add(b.cfg.TestTimeout)
 	applyCtx, cancel := b.untilDeadline(ctx, deadline)
@@ -295,52 +296,16 @@ func (b *AXBackend) execute(ctx context.Context, name string, documents []byte, 
 		// create is never sent again.
 		return b.callFailed(ctx, deadline, "AX task creation was not confirmed")
 	}
-	if outcome, ready := b.waitReady(ctx, name, deadline); !ready {
+	if outcome, ready := b.startTask(ctx, name, deadline); !ready {
 		return outcome
 	}
 	return b.pollResult(ctx, name, deadline, digest)
 }
 
-// waitReady reads the Task state once per interval until it is ready. It returns false
-// with the outcome to report when the Task failed, vanished, or a deadline passed.
-func (b *AXBackend) waitReady(ctx context.Context, name string, deadline time.Time) (Outcome, bool) {
-	readyDeadline := b.cfg.Clock.Now().Add(b.cfg.ReadyTimeout)
-	for {
-		state, outcome, ok := b.readState(ctx, name, deadline)
-		if !ok {
-			return outcome, false
-		}
-		switch state {
-		case AXTaskReady:
-			return Outcome{}, true
-		case AXTaskFailed:
-			return sandboxError("AX task failed to start"), false
-		case AXTaskSuspended, AXTaskMissing:
-			return sandboxError("AX task was suspended or disappeared before it was ready"), false
-		case AXTaskPending:
-		default:
-			return sandboxError("AX reported an unknown task state"), false
-		}
-		now := b.cfg.Clock.Now()
-		readyFirst := readyDeadline.Before(deadline)
-		switch {
-		case !now.Before(readyDeadline) && readyFirst:
-			return sandboxError("AX task was not ready within " + b.cfg.ReadyTimeout.String()), false
-		case !now.Before(deadline):
-			return b.timeout(), false
-		case !now.Before(readyDeadline):
-			return sandboxError("AX task was not ready within " + b.cfg.ReadyTimeout.String()), false
-		}
-		if b.cfg.Clock.Sleep(ctx, axPollInterval) != nil {
-			return interrupted(), false
-		}
-	}
-}
-
 // pollResult queries the supervisor once per interval until it reports a result. Each
 // round first reads the Task state: a query through the router would resume a suspended
 // actor, so a suspended or vanished Task is never queried. Transport failures and non-200
-// answers are transient until maxResultQueryFailures happen in a row.
+// answers are transient until maxRouterQueryFailures happen in a row.
 func (b *AXBackend) pollResult(ctx context.Context, name string, deadline time.Time, digest string) Outcome {
 	failures := 0
 	for {
@@ -368,7 +333,7 @@ func (b *AXBackend) pollResult(ctx context.Context, name string, deadline time.T
 		switch {
 		case transient:
 			failures++
-			if failures >= maxResultQueryFailures {
+			if failures >= maxRouterQueryFailures {
 				return sandboxError("sandbox result could not be read through the AX router")
 			}
 		case result.state == resultRunning:

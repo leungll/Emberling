@@ -8,14 +8,15 @@ import (
 // Task states an AXTaskControl reports. They are plain strings, not a named type, so a
 // stand-in for AX can satisfy the interface without importing this package.
 const (
-	// AXTaskPending is a Task that exists but is not ready yet.
+	// AXTaskPending is a Task that exists but does not report ready.
 	AXTaskPending = "pending"
 	// AXTaskReady is a Task whose sandbox reports ready: its files are written and the
 	// test command has started.
 	AXTaskReady = "ready"
 	// AXTaskFailed is a Task that AX reports as failed to start or run.
 	AXTaskFailed = "failed"
-	// AXTaskSuspended is a Task that AX suspended.
+	// AXTaskSuspended is a Task that AX suspended. AX creates every Task suspended, so the
+	// state means something only after the Task was resumed.
 	AXTaskSuspended = "suspended"
 	// AXTaskMissing is a Task that does not exist.
 	AXTaskMissing = "missing"
@@ -29,6 +30,9 @@ type AXTaskControl interface {
 	// by YAML document separators. An error means the outcome is unknown: the resources may
 	// or may not exist.
 	Apply(ctx context.Context, atespace string, documents []byte) error
+	// Resume starts the named Task, which AX creates suspended. resumed is false when AX
+	// refused; an error means the outcome is unknown: the Task may or may not have started.
+	Resume(ctx context.Context, atespace, name string) (resumed bool, err error)
 	// TaskState reports one of the AXTask* states for the named Task.
 	TaskState(ctx context.Context, atespace, name string) (string, error)
 	// Delete removes the Task and the Workspace of that name. A resource that is already
@@ -38,9 +42,12 @@ type AXTaskControl interface {
 	List(ctx context.Context, atespace, prefix string) ([]string, error)
 }
 
-// AXResultReader reads the sandbox supervisor's result for one Task through the AX
-// router. It reports the HTTP status and the unread body; the caller bounds the read and
-// closes the body. An error is a transport failure.
+// AXResultReader queries the sandbox supervisor of one Task through the AX router. An
+// error is a transport failure.
 type AXResultReader interface {
+	// ReadReady reports the HTTP status of the supervisor's readiness endpoint.
+	ReadReady(ctx context.Context, atespace, taskName string) (int, error)
+	// ReadResult reports the HTTP status and the unread body of the supervisor's result
+	// endpoint; the caller bounds the read and closes the body.
 	ReadResult(ctx context.Context, atespace, taskName string) (int, io.ReadCloser, error)
 }

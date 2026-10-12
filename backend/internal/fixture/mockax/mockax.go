@@ -5,9 +5,10 @@
 // signature alone, and the file tree digest it reports is computed by a function its
 // caller injects.
 //
-// What a Task does is chosen by the digest of the Workspace files it was applied with,
-// looked up in a table of Scenarios; a tree with no entry gets the default Scenario, a
-// passing run of twelve tests. Every call can be recorded and held at a mockcontrol
+// Like AX, the fake creates every Task suspended; only a resume starts it. What a Task does
+// then is chosen by the digest of the Workspace files it was applied with, looked up in a
+// table of Scenarios; a tree with no entry gets the default Scenario, a passing run of
+// twelve tests that is ready as soon as it is resumed. Every call can be recorded and held at a mockcontrol
 // barrier, like the other fixtures' requests.
 package mockax
 
@@ -37,7 +38,9 @@ const (
 // Request kinds the record and the barrier distinguish, one per interface method.
 const (
 	KindApply  = "apply"
+	KindResume = "resume"
 	KindState  = "state"
+	KindReady  = "ready"
 	KindResult = "result"
 	KindDelete = "delete"
 	KindList   = "list"
@@ -46,16 +49,21 @@ const (
 // apiVersion is the only document version the fake accepts.
 const apiVersion = "ax.io/v1alpha1"
 
-// Startup is how a Task's start goes.
+// Startup is how a Task's start goes once it was resumed.
 type Startup int
 
 const (
-	// StartupReady makes the Task ready at its first state read.
+	// StartupReady makes the Task report ready at its first state read after the resume.
 	StartupReady Startup = iota
 	// StartupFailed makes AX report the Task as failed to start.
 	StartupFailed
-	// StartupNeverReady keeps the Task pending forever.
+	// StartupNeverReady keeps the Task from reporting ready and its readiness endpoint
+	// answering 503 forever.
 	StartupNeverReady
+	// StartupReadyLater keeps the Task from reporting ready, as AX does when its sandbox
+	// was not ready while it resumed it; the readiness endpoint answers ReadyAnswers in
+	// turn and 200 after them.
+	StartupReadyLater
 )
 
 // Fate is what happens to a Task after it was reported ready.
@@ -75,8 +83,13 @@ const Forever = -1
 
 // Scenario is what the fake does with one applied Workspace.
 type Scenario struct {
-	Startup    Startup
-	AfterReady Fate
+	// ResumeRefused makes AX refuse the resume and report the Task as failed.
+	ResumeRefused bool
+	Startup       Startup
+	// ReadyAnswers are the HTTP statuses of the readiness queries under
+	// StartupReadyLater, in order; zero makes that query a transport error instead.
+	ReadyAnswers []int
+	AfterReady   Fate
 	// QueryFailures fails this many result queries, counted from the first one, before
 	// any of them is answered.
 	QueryFailures int
@@ -130,6 +143,9 @@ type Config struct {
 	// ApplyUncertain makes every Apply create its resources and then fail, as a create
 	// whose response was lost does.
 	ApplyUncertain bool
+	// ResumeUncertain makes every Resume start its Task and then fail, as a resume whose
+	// command did not exit on its own may have done.
+	ResumeUncertain bool
 	// DeleteFails makes every Delete fail and keep the resources.
 	DeleteFails bool
 	// Record, when set, records every call and enables the barrier.
@@ -144,7 +160,9 @@ type resource struct {
 	files         map[string][]byte
 	digest        string
 	scenario      Scenario
+	resumed       bool
 	readyReported bool
+	readyQueries  int
 	queries       int
 }
 
@@ -156,6 +174,7 @@ type Fake struct {
 	mu        sync.Mutex
 	resources map[string]*resource // keyed by atespace + "/" + name
 	applied   [][]byte
+	resumed   []string
 	deleted   []string
 }
 
@@ -166,7 +185,7 @@ func New(cfg Config) *Fake {
 	}
 	return &Fake{
 		cfg:       cfg,
-		barrier:   mockcontrol.NewBarrier(KindApply, KindState, KindResult, KindDelete, KindList),
+		barrier:   mockcontrol.NewBarrier(KindApply, KindResume, KindState, KindReady, KindResult, KindDelete, KindList),
 		resources: make(map[string]*resource),
 	}
 }
@@ -218,6 +237,13 @@ func (f *Fake) Applied() [][]byte {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return slices.Clone(f.applied)
+}
+
+// Resumed returns the name of every Resume call, in order, whether or not it succeeded.
+func (f *Fake) Resumed() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.resumed)
 }
 
 // Deleted returns the name of every Delete call, in order, whether or not it succeeded.
@@ -344,7 +370,31 @@ func parseDocuments(atespace string, documents []byte) (document, document, erro
 	return *workspace, *task, nil
 }
 
-// TaskState reports the named Task's state under its Scenario.
+// Resume starts the named Task under its Scenario. A Task that does not exist or whose
+// Scenario refuses the resume is refused; a refused Task reports failed from then on.
+func (f *Fake) Resume(ctx context.Context, atespace, name string) (bool, error) {
+	if err := f.admit(ctx, KindResume, callRef{Atespace: atespace, Name: name}); err != nil {
+		return false, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.resumed = append(f.resumed, name)
+	res, ok := f.resources[atespace+"/"+name]
+	if !ok {
+		return false, nil
+	}
+	res.resumed = true
+	if res.scenario.ResumeRefused {
+		return false, nil
+	}
+	if f.cfg.ResumeUncertain {
+		return false, errors.New("mockax: resume outcome unknown")
+	}
+	return true, nil
+}
+
+// TaskState reports the named Task's state under its Scenario: suspended until it was
+// resumed, as AX creates it.
 func (f *Fake) TaskState(ctx context.Context, atespace, name string) (string, error) {
 	if err := f.admit(ctx, KindState, callRef{Atespace: atespace, Name: name}); err != nil {
 		return "", err
@@ -353,8 +403,13 @@ func (f *Fake) TaskState(ctx context.Context, atespace, name string) (string, er
 	defer f.mu.Unlock()
 	key := atespace + "/" + name
 	res, ok := f.resources[key]
-	if !ok {
+	switch {
+	case !ok:
 		return TaskMissing, nil
+	case !res.resumed:
+		return TaskSuspended, nil
+	case res.scenario.ResumeRefused:
+		return TaskFailed, nil
 	}
 	if res.readyReported {
 		switch res.scenario.AfterReady {
@@ -369,7 +424,7 @@ func (f *Fake) TaskState(ctx context.Context, atespace, name string) (string, er
 	switch res.scenario.Startup {
 	case StartupFailed:
 		return TaskFailed, nil
-	case StartupNeverReady:
+	case StartupNeverReady, StartupReadyLater:
 		return TaskPending, nil
 	case StartupReady:
 	}
