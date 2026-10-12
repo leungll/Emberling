@@ -7,6 +7,8 @@ import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+import { AssetArrayField } from './AssetArrayField';
+
 interface RunInputDialogProps {
   open: boolean;
   onClose: () => void;
@@ -22,16 +24,40 @@ interface RunInputDialogProps {
   onSubmit: (input: JsonObject) => void;
 }
 
+/** `asset` is one AssetRef; `assetArray` is an array of them, such as a photo set. */
+type RunInputFieldKind = 'text' | 'asset' | 'assetArray';
+
 interface RunInputField {
   key: string;
   schema: JsonSchema;
   required: boolean;
-  isAssetRef: boolean;
+  kind: RunInputFieldKind;
 }
+
+const FIELD_KIND_LABEL: Record<RunInputFieldKind, string> = {
+  text: 'text',
+  asset: 'image',
+  assetArray: 'images',
+};
 
 /** An Image Input generates an AssetRef object property rather than a scalar. */
 function isAssetRefSchema(schema: JsonSchema): boolean {
   return schema.type === 'object' && schema.properties?.assetId !== undefined;
+}
+
+/** The submit-time check against the schema's own minItems; null when the count is enough. */
+function assetArrayShortfall(schema: JsonSchema, count: number): string | null {
+  const { minItems } = schema;
+  if (minItems === undefined || count >= minItems) return null;
+  return `Add at least ${minItems} ${minItems === 1 ? 'image' : 'images'}.`;
+}
+
+function fieldKind(schema: JsonSchema): RunInputFieldKind {
+  if (isAssetRefSchema(schema)) return 'asset';
+  if (schema.type === 'array' && schema.items && isAssetRefSchema(schema.items)) {
+    return 'assetArray';
+  }
+  return 'text';
 }
 
 /**
@@ -69,7 +95,7 @@ export function RunInputDialog({
       key,
       schema,
       required: required.has(key),
-      isAssetRef: isAssetRefSchema(schema),
+      kind: fieldKind(schema),
     }));
   }, [runInputSchema]);
 
@@ -89,6 +115,17 @@ export function RunInputDialog({
     const seed: Record<string, AssetRef> = {};
     for (const [key, value] of Object.entries(initialInput ?? {})) {
       if (isAssetRefValue(value)) seed[key] = value;
+    }
+    return seed;
+  });
+  // Completed uploads for array-of-AssetRef inputs, in selection order. Run Again seeds
+  // them from `initialInput` the same way, so a prior photo set is resubmitted unchanged.
+  const [assetLists, setAssetLists] = useState<Record<string, AssetRef[]>>(() => {
+    const seed: Record<string, AssetRef[]> = {};
+    for (const [key, value] of Object.entries(initialInput ?? {})) {
+      if (Array.isArray(value) && value.every((item) => isAssetRefValue(item))) {
+        seed[key] = value;
+      }
     }
     return seed;
   });
@@ -142,7 +179,19 @@ export function RunInputDialog({
     const input: JsonObject = {};
     let missingRequiredImage = false;
     for (const field of fields) {
-      if (field.isAssetRef) {
+      if (field.kind === 'assetArray') {
+        const refs = assetLists[field.key] ?? [];
+        const shortfall = assetArrayShortfall(field.schema, refs.length);
+        if (shortfall) {
+          missingRequiredImage = true;
+          setAssetErrors((prev) => ({ ...prev, [field.key]: shortfall }));
+        } else if (refs.length > 0 || field.required) {
+          // Each AssetRef's fields are JSON-safe scalars; the array satisfies JsonValue.
+          input[field.key] = refs as unknown as JsonObject[];
+        }
+        continue;
+      }
+      if (field.kind === 'asset') {
         const ref = assets[field.key];
         if (ref) {
           // AssetRef's fields are all JSON-safe scalars; it satisfies JsonObject shape.
@@ -210,10 +259,31 @@ export function RunInputDialog({
               {/* The submitted field name, whether it is required and its value kind. */}
               <p id={helperId} className="text-[12px] text-[var(--muted-foreground)]">
                 {field.key} · {field.required ? 'required' : 'optional'} ·{' '}
-                {field.isAssetRef ? 'image' : 'text'}
+                {FIELD_KIND_LABEL[field.kind]}
               </p>
 
-              {field.isAssetRef ? (
+              {field.kind === 'assetArray' ? (
+                <AssetArrayField
+                  id={id}
+                  helperId={helperId}
+                  schema={field.schema}
+                  refs={assetLists[field.key] ?? []}
+                  onChange={(update) =>
+                    setAssetLists((prev) => ({
+                      ...prev,
+                      [field.key]: update(prev[field.key] ?? []),
+                    }))
+                  }
+                  uploading={uploading}
+                  onUploadingChange={(next) =>
+                    setAssetUploading((prev) => ({ ...prev, [field.key]: next }))
+                  }
+                  error={assetError}
+                  onErrorChange={(next) =>
+                    setAssetErrors((prev) => ({ ...prev, [field.key]: next }))
+                  }
+                />
+              ) : field.kind === 'asset' ? (
                 <>
                   <Input
                     id={id}

@@ -256,3 +256,177 @@ describe('RunInputDialog — Input node labels and typography', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('text-sm');
   });
 });
+
+describe('RunInputDialog — image collection input', () => {
+  const assetRefItem = {
+    type: 'object' as const,
+    additionalProperties: false,
+    properties: {
+      assetId: { type: 'string' as const, minLength: 1 },
+      mediaType: {
+        type: 'string' as const,
+        minLength: 1,
+        enum: ['image/jpeg', 'image/png', 'image/webp'],
+      },
+      sizeBytes: { type: 'integer' as const, minimum: 0 },
+      sha256: { type: 'string' as const, minLength: 1 },
+    },
+    required: ['assetId', 'mediaType', 'sizeBytes', 'sha256'],
+  };
+  /** Shaped like the Backend output for a Text Input plus a photo set of 1 to 3 images. */
+  const photoSetSchema: RunInputSchema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      brief: { type: 'string' },
+      photos: { type: 'array', items: assetRefItem, minItems: 1, maxItems: 3 },
+    },
+    required: ['brief', 'photos'],
+  };
+
+  const refFor = (n: number) => ({
+    assetId: `asset_photo_${n}`,
+    mediaType: 'image/png',
+    sizeBytes: 3,
+    sha256: `sha_${n}`,
+  });
+
+  function renderPhotoDialog(onSubmit = vi.fn(), initialInput?: Record<string, unknown>) {
+    render(
+      <RunInputDialog
+        open
+        onClose={vi.fn()}
+        workflowId="wf_photo"
+        definitionVersion={1}
+        runInputSchema={photoSetSchema}
+        initialInput={initialInput as never}
+        onSubmit={onSubmit}
+      />,
+    );
+    return onSubmit;
+  }
+
+  it('renders an array of AssetRefs as a multi-image picker, not a text box', () => {
+    renderPhotoDialog();
+    const picker = screen.getByLabelText(/photos/);
+    expect(picker).toHaveAttribute('type', 'file');
+    expect(picker).toHaveAttribute('multiple');
+    expect(picker).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp');
+    expect(screen.getByText('photos · required · images')).toBeInTheDocument();
+    // Limits shown are the schema's own minItems and maxItems.
+    expect(screen.getByText('0 selected · at least 1 · at most 3')).toBeInTheDocument();
+  });
+
+  it('uploads each selected image and submits the AssetRefs in selection order', async () => {
+    uploadAssetMock.mockReset();
+    uploadAssetMock
+      .mockResolvedValueOnce(refFor(1))
+      .mockResolvedValueOnce(refFor(2))
+      .mockResolvedValueOnce(refFor(3));
+    const onSubmit = renderPhotoDialog();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByRole('textbox', { name: /brief/ }), 'clay look');
+    await user.upload(screen.getByLabelText(/photos/), [
+      pngFile('a.png'),
+      pngFile('b.png'),
+      pngFile('c.png'),
+    ]);
+
+    expect(await screen.findAllByRole('img', { name: /^Image \d$/ })).toHaveLength(3);
+    expect(uploadAssetMock).toHaveBeenCalledTimes(3);
+    expect(screen.getByText('3 selected · at least 1 · at most 3')).toBeInTheDocument();
+    // At the maximum, the picker stops accepting more images.
+    expect(screen.getByLabelText(/photos/)).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Create run' }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      brief: 'clay look',
+      photos: [refFor(1), refFor(2), refFor(3)],
+    });
+  });
+
+  it('removes one image and keeps the others in order', async () => {
+    const onSubmit = renderPhotoDialog(vi.fn(), {
+      brief: 'clay look',
+      photos: [refFor(1), refFor(2), refFor(3)],
+    });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Remove image 2' }));
+    expect(screen.getAllByRole('img', { name: /^Image \d$/ })).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: 'Create run' }));
+    expect(onSubmit).toHaveBeenCalledWith({ brief: 'clay look', photos: [refFor(1), refFor(3)] });
+  });
+
+  it('prefills the photo set on Run Again and resubmits it without uploading', async () => {
+    uploadAssetMock.mockReset();
+    const onSubmit = renderPhotoDialog(vi.fn(), {
+      brief: 'clay look',
+      photos: [refFor(1), refFor(2)],
+    });
+    const user = userEvent.setup();
+
+    const thumbnails = screen.getAllByRole('img', { name: /^Image \d$/ });
+    expect(thumbnails).toHaveLength(2);
+    expect(thumbnails[0]).toHaveAttribute('src', '/api/assets/asset_photo_1/content');
+
+    await user.click(screen.getByRole('button', { name: 'Create run' }));
+    expect(onSubmit).toHaveBeenCalledWith({ brief: 'clay look', photos: [refFor(1), refFor(2)] });
+    expect(uploadAssetMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks Run below the schema minimum', async () => {
+    const onSubmit = renderPhotoDialog();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByRole('textbox', { name: /brief/ }), 'clay look');
+    await user.click(screen.getByRole('button', { name: 'Create run' }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Add at least 1 image.');
+  });
+
+  it('rejects a selection that would exceed the schema maximum without uploading it', async () => {
+    uploadAssetMock.mockReset();
+    renderPhotoDialog(vi.fn(), { brief: 'clay look', photos: [refFor(1), refFor(2)] });
+    const user = userEvent.setup();
+
+    await user.upload(screen.getByLabelText(/photos/), [pngFile('c.png'), pngFile('d.png')]);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('At most 3 images.');
+    expect(uploadAssetMock).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('img', { name: /^Image \d$/ })).toHaveLength(2);
+  });
+
+  it('rejects a media type outside the schema enum without uploading it', async () => {
+    uploadAssetMock.mockReset();
+    renderPhotoDialog();
+    const user = userEvent.setup({ applyAccept: false });
+
+    await user.upload(
+      screen.getByLabelText(/photos/),
+      new File(['gif'], 'a.gif', { type: 'image/gif' }),
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Unsupported media type "image/gif"');
+    expect(uploadAssetMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps successful uploads and reports a failed one', async () => {
+    uploadAssetMock.mockReset();
+    uploadAssetMock.mockResolvedValueOnce(refFor(1)).mockRejectedValueOnce(
+      new ApiRequestError(400, {
+        error: { code: 'VALIDATION_FAILED', message: 'unsupported asset media type' },
+      }),
+    );
+    renderPhotoDialog();
+    const user = userEvent.setup();
+
+    await user.upload(screen.getByLabelText(/photos/), [pngFile('a.png'), pngFile('b.png')]);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('unsupported asset media type');
+    expect(screen.getAllByRole('img', { name: /^Image \d$/ })).toHaveLength(1);
+  });
+});

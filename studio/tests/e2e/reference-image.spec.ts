@@ -77,3 +77,64 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   const naturalWidth = await preview.evaluate((img) => (img as HTMLImageElement).naturalWidth);
   expect(naturalWidth).toBeGreaterThan(0);
 });
+
+/**
+ * A photo set is an array of image AssetRefs. The dialog uploads every selected image
+ * through `POST /api/assets` and writes only the returned AssetRefs, in selection order,
+ * into the `photos` input; the Media Brief NodeRun then reads that set from Run input.
+ * Run Again on that Run offers the same photo set again without re-uploading it.
+ */
+test('Photo set upload starts the Photo Effect Template and Run Again keeps the photos', async ({
+  page,
+}) => {
+  const generated = JSON.parse(
+    await readFile(GENERATED_DEFINITIONS_PATH, 'utf-8'),
+  ) as GeneratedDefinitions;
+  const { workflowId } = generated.photoSet;
+
+  await page.goto(`/studio/${workflowId}`);
+  const runButton = page.getByRole('button', { name: 'Run', exact: true });
+  await expect(runButton).toBeEnabled();
+  await runButton.click();
+
+  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  await dialog.getByLabel('Creative Brief').fill('a clay stop-motion look');
+  // The Media Brief node declares no label, so the field is named by its input key.
+  await dialog.getByLabel('photos').setInputFiles(
+    [1, 2, 3].map((n) => ({
+      name: `photo-${n}.png`,
+      mimeType: 'image/png',
+      buffer: ONE_PIXEL_PNG,
+    })),
+  );
+
+  const thumbnails = dialog.getByRole('img', { name: /^Image \d$/ });
+  await expect(thumbnails).toHaveCount(3, { timeout: 10_000 });
+  await expect(dialog.getByText('3 selected · at least 1 · at most 12')).toBeVisible();
+  // Each thumbnail's title is the Backend-assigned assetId of that upload.
+  const titlesOf = (images: typeof thumbnails) =>
+    images.evaluateAll((imgs) => imgs.map((img) => img.getAttribute('title') ?? ''));
+  const assetIds = await titlesOf(thumbnails);
+  expect(new Set(assetIds).size).toBe(3);
+
+  const createRun = page.waitForRequest(
+    (request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs',
+  );
+  await dialog.getByRole('button', { name: 'Create run' }).click();
+  const body = (await createRun).postDataJSON() as {
+    input: { brief: string; photos: { assetId: string; mediaType: string }[] };
+  };
+  expect(body.input.photos.map((photo) => photo.assetId)).toEqual(assetIds);
+  expect(body.input.photos.every((photo) => photo.mediaType === 'image/png')).toBe(true);
+  await page.waitForURL(/\/runs\//);
+
+  // The Backend accepted the photo set against the frozen schema and Media Brief read it.
+  const photoNode = page.locator('.react-flow__node[data-id="node_photos"]');
+  await expect(photoNode).toContainText('Succeeded', { timeout: 30_000 });
+
+  await page.getByRole('button', { name: 'Run Again' }).click();
+  const again = page.getByRole('dialog', { name: 'Run workflow' });
+  const prefilled = again.getByRole('img', { name: /^Image \d$/ });
+  await expect(prefilled).toHaveCount(3);
+  expect(await titlesOf(prefilled)).toEqual(assetIds);
+});
