@@ -186,6 +186,16 @@ services:
       # Optional OpenRouter switch, off when empty: "true" asks OpenRouter to route only to
       # upstreams that honour strict structured output. Valid only with the model list.
       EMBERLING_MODEL_OPENROUTER_REQUIRE_PARAMETERS: ${EMBERLING_MODEL_OPENROUTER_REQUIRE_PARAMETERS:-}
+      # Optional real image models for generate_image behind one Images API endpoint. All
+      # four are empty by default, so only the mock image model is registered and
+      # `make demo` stays deterministic; set the base URL, key and model list together, or
+      # the backend refuses to start. EMBERLING_IMAGE_MODELS has the same entry shape as
+      # EMBERLING_MODELS and its ids may not repeat a decision model id. The timeout bounds
+      # one image call (default 5m); a timed-out call is never resent.
+      EMBERLING_IMAGE_MODELS: ${EMBERLING_IMAGE_MODELS:-}
+      EMBERLING_IMAGE_BASE_URL: ${EMBERLING_IMAGE_BASE_URL:-}
+      EMBERLING_IMAGE_API_KEY: ${EMBERLING_IMAGE_API_KEY:-}
+      EMBERLING_IMAGE_TIMEOUT: ${EMBERLING_IMAGE_TIMEOUT:-}
       # Reachable from the mockprovider container as the compose service name, not
       # "localhost": a callback is delivered container-to-container, never through the
       # host loopback.
