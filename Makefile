@@ -264,7 +264,8 @@ demo:
 	@bash scripts/demo/demo.sh run
 
 ## demo-studio: `make demo` with EMBERLING_DEMO_STUDIO=1, to watch it in Studio. Also builds
-## and starts Studio on http://localhost:5173, prints a Studio link to every Run and pauses
+## and starts Studio on http://localhost:5173, prints a Studio link to every Run, opens it in
+## the browser (EMBERLING_DEMO_OPEN=0 only prints it) and pauses
 ## for Enter before each fault, hold release and next variant; each pause names any
 ## deadline a longer look would exceed. Without a terminal it prints the pause and goes on;
 ## EMBERLING_DEMO_PAUSE=0 skips the pauses. EMBERLING_DEMO_VARIANT selects one variant as

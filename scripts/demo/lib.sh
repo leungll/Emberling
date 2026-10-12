@@ -139,10 +139,25 @@ studio_ready() {
   curl -fsS -o /dev/null "$STUDIO_URL/" 2>/dev/null
 }
 
-# studio_run_link RUN_ID prints the Studio page of a Run in Studio demo mode.
+# studio_open URL opens URL in the viewer's browser in Studio demo mode. It does nothing
+# without a terminal on stdin (CI or a pipe), when EMBERLING_DEMO_OPEN=0, or when neither
+# `open` (macOS) nor `xdg-open` (Linux) is available; the printed link still works.
+studio_open() {
+  studio_mode || return 0
+  [[ "${EMBERLING_DEMO_OPEN:-1}" == 1 && -t 0 ]] || return 0
+  if command -v open >/dev/null 2>&1; then
+    open "$1" >/dev/null 2>&1 || true
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$1" >/dev/null 2>&1 || true
+  fi
+}
+
+# studio_run_link RUN_ID prints the Studio page of a Run in Studio demo mode and opens it
+# in the browser.
 studio_run_link() {
   studio_mode || return 0
   printf '==> Studio run: %s/runs/%s\n' "$STUDIO_URL" "$1" >&2
+  studio_open "$STUDIO_URL/runs/$1"
 }
 
 # demo_pause MESSAGE says what is about to happen and what to look at in Studio, then
