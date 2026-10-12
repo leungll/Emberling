@@ -132,6 +132,7 @@ func saveTraceFactsDefinition(t *testing.T, env *testEnv, limit *int) (string, i
 			t.Fatalf("decode node_agent config: %v", err)
 		}
 		config["allowedTools"] = []string{generateimage.ToolName, reviewasset.ToolName}
+		config["imageModelId"] = mockmodel.ImageModelID
 		config["maxTurns"] = 6
 		if limit != nil {
 			config["maxGenerationCalls"] = *limit
@@ -310,6 +311,7 @@ func saveRejectionDefinition(t *testing.T, env *testEnv, limit int) (string, int
 			t.Fatalf("decode node_agent config: %v", err)
 		}
 		config["allowedTools"] = []string{generateimage.ToolName, reviewasset.ToolName, generatevideo.ToolName}
+		config["imageModelId"] = mockmodel.ImageModelID
 		config["maxTurns"] = 4
 		config["maxGenerationCalls"] = limit
 		encoded, err := json.Marshal(config)

@@ -16,7 +16,8 @@ const nodeType = "agent"
 
 // configSchema is the fixed `agent` Node config shape:
 // modelId, maxTurns and timeoutMs are mandatory; instructions, modelConfig, allowedTools,
-// the three frozen Schemas and the generation limit maxGenerationCalls are optional. It
+// the three frozen Schemas, the generation limit maxGenerationCalls and the image model
+// imageModelId are optional. It
 // matches runtime.AgentNodeConfig field for field so the ConfigSchema stage and the
 // Semantics stage (runtime.ParseAgentNodeConfig) never disagree about which top-level
 // fields exist.
@@ -32,7 +33,8 @@ const configSchema = `{
     "outputSchema": {"type": "object"},
     "maxTurns": {"type": "integer", "minimum": 1},
     "timeoutMs": {"type": "integer", "minimum": 1},
-    "maxGenerationCalls": {"type": "integer", "minimum": 1}
+    "maxGenerationCalls": {"type": "integer", "minimum": 1},
+    "imageModelId": {"type": "string", "minLength": 1}
   },
   "required": ["modelId", "maxTurns", "timeoutMs"],
   "additionalProperties": false
@@ -53,6 +55,7 @@ func Registration() registry.NodeRegistration {
 			ConfigSchema:  json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "modelId", Order: 10, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityStructuredDecision},
+				{Path: "imageModelId", Order: 15, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityReferenceImageGeneration},
 				{Path: "instructions", Order: 20, Group: domain.UIGroupBasic, Widget: domain.UIWidgetTextArea},
 				{Path: "allowedTools", Order: 30, Group: domain.UIGroupBasic, Widget: domain.UIWidgetToolSelector},
 				{Path: "maxTurns", Order: 40, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},

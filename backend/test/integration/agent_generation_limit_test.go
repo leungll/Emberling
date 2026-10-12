@@ -116,8 +116,9 @@ func newGenerationHarnessWith(t *testing.T, p *generationProvider, opts agentHar
 	return newAgentHarness(t, opts), executor
 }
 
-// generationDefinition is the fixture graph whose Agent may call generate_image and
-// lookup. A nil limit leaves maxGenerationCalls out of the configuration.
+// generationDefinition is the fixture graph whose Agent may call generate_image, with the
+// mock image model selected, and lookup. A nil limit leaves maxGenerationCalls out of the
+// configuration.
 func generationDefinition(workflowID string, limit *int) domain.Definition {
 	def := agentLoopDefinitionMaxTurns(workflowID, generationMaxTurns)
 	encoded, _ := json.Marshal([]string{generateimage.ToolName, lookup.ToolName})
@@ -125,7 +126,8 @@ func generationDefinition(workflowID string, limit *int) domain.Definition {
 		if node.ID != "node_agent" {
 			continue
 		}
-		config := strings.Replace(string(node.Config), `["`+lookup.ToolName+`"]`, string(encoded), 1)
+		config := strings.Replace(string(node.Config), `["`+lookup.ToolName+`"]`,
+			string(encoded)+`, "imageModelId": "`+mockmodel.ImageModelID+`"`, 1)
 		if limit != nil {
 			config = strings.Replace(config, `"maxTurns":`, `"maxGenerationCalls": `+strconv.Itoa(*limit)+`, "maxTurns":`, 1)
 		}

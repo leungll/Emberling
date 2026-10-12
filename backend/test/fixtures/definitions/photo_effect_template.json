@@ -27,6 +27,7 @@
         "modelId": "text-model-v1",
         "modelConfig": {"script": "photo-set"},
         "allowedTools": ["generate_image", "review_asset", "generate_video"],
+        "imageModelId": "image-model-v1",
         "maxTurns": 16,
         "maxGenerationCalls": 12,
         "timeoutMs": 120000
