@@ -2,13 +2,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { AgentFactsLedger } from './AgentFactsLedger';
 import { ImagePreview } from './ImagePreview';
-import { collectImageRefs } from './imageRefs';
+import { PreviewRunContext, collectImageRefs, factArtifactImage } from './imageRefs';
 import { SectionLabel } from './Panel';
 import { StatusDot } from './StatusGlyph';
 import { ApiRequestError, getAgentTrace, getNodeRunDetail } from '@/api/client';
 import type {
   AgentTrace,
   AgentTurnTrace,
+  ExecutionFactTrace,
   NodeRun,
   NodeRunDetail,
   NodeRunStatus,
@@ -49,8 +50,19 @@ interface DetailPanelProps {
   allowedTools?: readonly string[];
 }
 
-/** NodeRun and Event detail. Every value is a server fact rendered as received. */
-export function DetailPanel({
+/**
+ * NodeRun and Event detail. Every value is a server fact rendered as received. Image
+ * previews below it belong to the observed Run, the only Run whose artifacts they may read.
+ */
+export function DetailPanel(props: DetailPanelProps) {
+  return (
+    <PreviewRunContext.Provider value={props.snapshot.run.id}>
+      <DetailPanelContent {...props} />
+    </PreviewRunContext.Provider>
+  );
+}
+
+function DetailPanelContent({
   snapshot,
   selectedNodeRun,
   selectedEvent,
@@ -98,7 +110,12 @@ export function DetailPanel({
             {trace.value ? (
               <ol className="space-y-4">
                 {trace.value.turns.map((turn) => (
-                  <AgentTurnCard key={turn.id} turn={turn} allowedTools={allowedTools} />
+                  <AgentTurnCard
+                    key={turn.id}
+                    turn={turn}
+                    allowedTools={allowedTools}
+                    facts={trace.value?.facts.items ?? []}
+                  />
                 ))}
               </ol>
             ) : null}
@@ -521,9 +538,11 @@ function AgentRunSummary({ trace }: { trace: AgentTrace | null }) {
 function AgentTurnCard({
   turn,
   allowedTools,
+  facts,
 }: {
   turn: AgentTurnTrace;
   allowedTools?: readonly string[];
+  facts: readonly ExecutionFactTrace[];
 }) {
   const tone = agentTurnStatusTone(turn.status);
   return (
@@ -604,6 +623,7 @@ function AgentTurnCard({
           {attempt.error ? (
             <JsonBlock label="Tool attempt error" value={attempt.error as unknown} />
           ) : null}
+          <ToolResultImages attemptId={attempt.id} facts={facts} />
         </div>
       ))}
     </li>
@@ -611,6 +631,32 @@ function AgentTurnCard({
 }
 
 /** Label/value row. The value is the label's next sibling, which tests rely on. */
+/**
+ * Images a Tool Attempt's result saved. The Agent Trace carries no Tool result body, so the
+ * image comes from the execution fact that result recorded, matched by its Tool Attempt.
+ */
+function ToolResultImages({
+  attemptId,
+  facts,
+}: {
+  attemptId: string;
+  facts: readonly ExecutionFactTrace[];
+}) {
+  const images = facts
+    .filter((fact) => fact.toolAttemptId === attemptId)
+    .map(factArtifactImage)
+    .filter((image) => image !== null);
+  if (images.length === 0) return null;
+  return (
+    <div data-testid="tool-result-images" className="space-y-1.5">
+      <span className="text-[13px] text-[var(--muted-foreground)]">Result image</span>
+      {images.map((image) => (
+        <ImagePreview key={image.artifact?.artifactId} image={image} />
+      ))}
+    </div>
+  );
+}
+
 function Field({
   label,
   value,

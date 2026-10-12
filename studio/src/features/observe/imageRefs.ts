@@ -1,5 +1,7 @@
+import { createContext } from 'react';
+
 import { API_BASE } from '@/api/client';
-import type { ImageRef, ImageSource } from '@/api/types';
+import type { ExecutionFactTrace, ImageRef, ImageSource } from '@/api/types';
 
 const IMAGE_SOURCES: readonly ImageSource[] = ['ASSET', 'ARTIFACT', 'EXTERNAL'];
 
@@ -51,4 +53,60 @@ export function assetPreviewUri(image: ImageRef): string | null {
   const assetId = image.asset?.assetId;
   if (typeof assetId !== 'string' || assetId === '') return null;
   return `${API_BASE}/assets/${encodeURIComponent(assetId)}/content`;
+}
+
+/** An Execution Artifact id: "artifact_" plus the first 32 hex digits of its sha256. */
+const ARTIFACT_ID = /^artifact_[0-9a-f]{32}$/;
+
+/** The image media types the Backend saves and serves an Execution Artifact as. */
+const ARTIFACT_IMAGE_MEDIA_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
+
+/**
+ * The Run that ImagePreviews below it belong to. An ARTIFACT is served only through the
+ * route of the Run that produced it, so without a Run there is no preview.
+ */
+export const PreviewRunContext = createContext<string | null>(null);
+
+/**
+ * The Run-scoped route that serves an ARTIFACT's verified content, or null. Only a
+ * well-formed artifact id with an image media type is previewed; anything else is shown
+ * as reference text, never resolved through a guessed URL.
+ */
+export function artifactPreviewUri(image: ImageRef, runId: string | null): string | null {
+  const artifact = image.artifact;
+  if (!runId || !artifact) return null;
+  if (typeof artifact.artifactId !== 'string' || !ARTIFACT_ID.test(artifact.artifactId)) {
+    return null;
+  }
+  if (!ARTIFACT_IMAGE_MEDIA_TYPES.includes(artifact.mediaType)) return null;
+  return `${API_BASE}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifact.artifactId)}/content`;
+}
+
+/**
+ * The ARTIFACT image a Tool result saved, read from the execution fact that result
+ * recorded: its `artifact` binding is the canonical JSON of the ArtifactRef. The binding is
+ * used only when it decodes to a complete reference that names the fact's own subject, so
+ * a fact about one asset never previews another.
+ */
+export function factArtifactImage(fact: ExecutionFactTrace): ImageRef | null {
+  const raw = fact.bindings.artifact;
+  if (typeof raw !== 'string') return null;
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) return null;
+  const { artifactId, mediaType, sizeBytes, sha256 } = decoded as Record<string, unknown>;
+  if (
+    typeof artifactId !== 'string' ||
+    typeof mediaType !== 'string' ||
+    typeof sizeBytes !== 'number' ||
+    typeof sha256 !== 'string' ||
+    artifactId !== fact.subject
+  ) {
+    return null;
+  }
+  return { source: 'ARTIFACT', artifact: { artifactId, mediaType, sizeBytes, sha256 } };
 }

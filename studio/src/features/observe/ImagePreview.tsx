@@ -1,19 +1,30 @@
-import { assetPreviewUri, externalPreviewUri } from './imageRefs';
+import { useContext } from 'react';
+
+import {
+  PreviewRunContext,
+  artifactPreviewUri,
+  assetPreviewUri,
+  externalPreviewUri,
+} from './imageRefs';
 import type { ImageRef } from '@/api/types';
 
 /**
  * `<img>` preview plus the raw reference text: an image shows both a preview and its raw
  * reference. EXTERNAL renders the given http(s) URI directly, never through a proxy; ASSET
- * reuses the existing `/assets/{id}/content` route. ARTIFACT has no documented content
- * endpoint, so it shows only the raw reference — never a guessed or invented proxy URL.
+ * reuses the existing `/assets/{id}/content` route; ARTIFACT uses the content route of the
+ * Run being observed, the only Run allowed to read it. A reference no route serves shows
+ * only its raw text — never a guessed or invented URL.
  */
 export function ImagePreview({ image }: { image: ImageRef }) {
+  const runId = useContext(PreviewRunContext);
   const src =
     image.source === 'EXTERNAL'
       ? externalPreviewUri(image.uri)
       : image.source === 'ASSET'
         ? assetPreviewUri(image)
-        : null;
+        : image.source === 'ARTIFACT'
+          ? artifactPreviewUri(image, runId)
+          : null;
   const reference =
     image.source === 'EXTERNAL'
       ? image.uri
