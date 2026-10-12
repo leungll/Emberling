@@ -115,9 +115,12 @@ func run(logger *slog.Logger) error {
 		Clock:    clock,
 		IDs:      store.NewUUIDGenerator(),
 		Assets:   assetStore,
-		Queue:    queue,
-		Notifier: notifier,
-		Logger:   logger,
+		// The Run-scoped content read verifies and serves generated images from the same
+		// store generate_image writes them to.
+		ArtifactContent: artifactStore,
+		Queue:           queue,
+		Notifier:        notifier,
+		Logger:          logger,
 		Callback: service.CallbackConfig{
 			BaseURL:       cfg.Callback.BaseURL,
 			SigningSecret: []byte(cfg.Callback.SigningSecret.Reveal()),
@@ -130,6 +133,7 @@ func run(logger *slog.Logger) error {
 	queryService := service.NewQueryService(serviceDeps)
 	executionService := service.NewExecutionService(serviceDeps)
 	assetService := service.NewAssetService(serviceDeps)
+	artifactService := service.NewArtifactService(serviceDeps)
 
 	workPool := work.NewPool(queue, executionService, defaultWorkerCount, work.Hooks{}, logger)
 
@@ -260,6 +264,7 @@ func run(logger *slog.Logger) error {
 		Query:                   queryService,
 		Execution:               executionService,
 		Assets:                  assetService,
+		Artifacts:               artifactService,
 		Readiness:               probe,
 		Notifier:                notifier,
 		Clock:                   clock,

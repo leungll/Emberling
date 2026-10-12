@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -321,5 +322,60 @@ func TestArtifactStore_SharesRootWithAssets_WithoutCollision(t *testing.T) {
 	objects, err := artifacts.Objects(context.Background())
 	if err != nil || len(objects) != 1 {
 		t.Fatalf("Objects = %v, %v; want only the artifact", objects, err)
+	}
+}
+
+func TestArtifactStore_Open_WrittenObject_ReadsItsContentAndSeeks(t *testing.T) {
+	store, _ := newArtifactStore(t, 1<<20)
+	content := pngContent("open me")
+	ref, err := store.Write(context.Background(), bytes.NewReader(content))
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	key, err := asset.ArtifactStorageKey(ref.SHA256)
+	if err != nil {
+		t.Fatalf("ArtifactStorageKey: %v", err)
+	}
+
+	reader, err := store.Open(context.Background(), key)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer reader.Close()
+	for pass := 1; pass <= 2; pass++ {
+		got, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("read pass %d: %v", pass, err)
+		}
+		if !bytes.Equal(got, content) {
+			t.Fatalf("read pass %d differs from the written content", pass)
+		}
+		if _, err := reader.Seek(0, io.SeekStart); err != nil {
+			t.Fatalf("seek: %v", err)
+		}
+	}
+}
+
+func TestArtifactStore_Open_MissingObject_NotFoundWithoutPath(t *testing.T) {
+	store, root := newArtifactStore(t, 1<<20)
+	key, err := asset.ArtifactStorageKey(strings.Repeat("d4", 32))
+	if err != nil {
+		t.Fatalf("ArtifactStorageKey: %v", err)
+	}
+	_, err = store.Open(context.Background(), key)
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("Open = %v, want ErrNotFound", err)
+	}
+	if strings.Contains(err.Error(), root) || strings.Contains(err.Error(), key) {
+		t.Fatalf("error leaks a path or storage key: %v", err)
+	}
+}
+
+func TestArtifactStore_Open_MalformedKey_IsRejected(t *testing.T) {
+	store, _ := newArtifactStore(t, 1<<20)
+	for _, key := range []string{"", "artifacts/../../etc/passwd", "assets/ab/" + strings.Repeat("ab", 32)} {
+		if _, err := store.Open(context.Background(), key); err == nil || errors.Is(err, domain.ErrNotFound) {
+			t.Errorf("Open(%q) = %v, want a malformed-key error", key, err)
+		}
 	}
 }

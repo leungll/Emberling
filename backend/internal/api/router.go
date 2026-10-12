@@ -7,8 +7,8 @@ import (
 )
 
 // NewRouter builds the Emberling HTTP API: every core REST route, plus /health, /ready,
-// the async Node callback contract (POST /api/callbacks), the Asset routes and the Agent
-// Trace query.
+// the async Node callback contract (POST /api/callbacks), the Asset routes, the Agent
+// Trace query and the Run-scoped Artifact content read.
 func NewRouter(deps Deps) http.Handler {
 	deps = deps.withDefaults()
 
@@ -54,6 +54,9 @@ func NewRouter(deps Deps) http.Handler {
 			r.Get("/{runId}/events", deps.handleEvents)
 			r.Get("/{runId}/nodes/{nodeRunId}", deps.getNodeRunDetail)
 			r.Get("/{runId}/nodes/{nodeRunId}/agent", deps.getAgentTrace)
+			// Artifact content is read through the Run that declared it, never by its
+			// content-addressed id alone, so one Run cannot read another Run's images.
+			r.Get("/{runId}/artifacts/{artifactId}/content", deps.getArtifactContent)
 		})
 	})
 

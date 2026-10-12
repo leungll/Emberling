@@ -33,6 +33,7 @@ type Deps struct {
 	Query       *service.QueryService
 	Execution   *service.ExecutionService
 	Assets      *service.AssetService
+	Artifacts   *service.ArtifactService
 
 	// Readiness answers /health and /ready. It is read-only from this package's
 	// perspective; cmd/emberling owns running the startup gate against it.

@@ -364,9 +364,12 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		Clock:    clock,
 		IDs:      store.NewUUIDGenerator(),
 		Assets:   assetStore,
-		Queue:    queue,
-		Notifier: serviceNotifier,
-		Logger:   opts.Logger,
+		// The Run-scoped content read serves generated images from the store
+		// generate_image writes them to, as in cmd/emberling.
+		ArtifactContent: artifactStore,
+		Queue:           queue,
+		Notifier:        serviceNotifier,
+		Logger:          opts.Logger,
 		Callback: service.CallbackConfig{
 			BaseURL:       callbackBaseURL,
 			SigningSecret: []byte(testCallbackSigningSecret),
@@ -379,6 +382,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	queryService := service.NewQueryService(deps)
 	executionService := service.NewExecutionService(deps)
 	assetService := service.NewAssetService(deps)
+	artifactService := service.NewArtifactService(deps)
 
 	workPool := work.NewPool(queue, executionService, 4, opts.WorkHooks, opts.Logger)
 
@@ -419,6 +423,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		Query:                   queryService,
 		Execution:               executionService,
 		Assets:                  assetService,
+		Artifacts:               artifactService,
 		Readiness:               probe,
 		Notifier:                notifier,
 		Clock:                   clock,
