@@ -101,6 +101,12 @@ func TestServer_ImagesAPI_AnswersOneDeterministicGradientPNG(t *testing.T) {
 	if len(third.Data) != 1 || third.Data[0].B64JSON == answer.Data[0].B64JSON {
 		t.Error("another model answered the same image, want images to differ by model")
 	}
+	_, otherPrompt := postImages(t, p.srv.URL, strings.Replace(imagesRequestBody("vendor/image-model"), "Soft film", "Clay", 1))
+	var fourth imagesAnswer
+	_ = json.Unmarshal(otherPrompt, &fourth)
+	if len(fourth.Data) != 1 || fourth.Data[0].B64JSON == answer.Data[0].B64JSON {
+		t.Error("another prompt answered the same image, want images to differ by request")
+	}
 
 	sum := sha256.Sum256(image)
 	var generated []recordEntry
@@ -109,8 +115,8 @@ func TestServer_ImagesAPI_AnswersOneDeterministicGradientPNG(t *testing.T) {
 			generated = append(generated, entry)
 		}
 	}
-	if len(generated) != 3 || generated[0].Kind != kindImage || generated[0].SHA256 != hex.EncodeToString(sum[:]) {
-		t.Fatalf("generated lines = %+v, want three image lines, the first with the answered image's digest", generated)
+	if len(generated) != 4 || generated[0].Kind != kindImage || generated[0].SHA256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("generated lines = %+v, want four image lines, the first with the answered image's digest", generated)
 	}
 }
 

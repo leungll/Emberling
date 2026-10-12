@@ -41,10 +41,20 @@ const imagesAPIFailureDetail = "mock provider: upstream image failure detail"
 const imagesAPICost = 0.004
 
 // imagesAPIRequest is the part of an Images API request this Provider reads. The prompt,
-// the reference image and the Authorization header are neither validated nor recorded.
+// the reference images and the Authorization header are neither validated nor recorded;
+// the prompt and the reference images only seed the generated image, so a different
+// photo or prompt yields a different image while the same request always yields the
+// same one.
 type imagesAPIRequest struct {
-	Model string `json:"model"`
-	N     *int   `json:"n"`
+	Model           string          `json:"model"`
+	N               *int            `json:"n"`
+	Prompt          string          `json:"prompt"`
+	InputReferences json.RawMessage `json:"input_references"`
+}
+
+// seed is what the generated image is derived from.
+func (r imagesAPIRequest) seed() string {
+	return r.Model + "\x00" + r.Prompt + "\x00" + string(r.InputReferences)
 }
 
 type imagesAPIAnswer struct {
@@ -105,7 +115,7 @@ func (s *Server) handleImagesAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, status, imagesAPIError{Error: imagesAPIErrorDetail{Code: status, Message: imagesAPIFailureDetail}})
 		return
 	}
-	encoded, err := gradientPNG(req.Model)
+	encoded, err := gradientPNG(req.seed())
 	if err != nil {
 		s.recordResponse(kindImage, "", http.StatusInternalServerError, false)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "image could not be encoded"})
@@ -137,15 +147,16 @@ func imagesAPIStatus(model string) (int, error) {
 	return status, nil
 }
 
-// gradientPNG renders a square gradient whose blue channel is derived from seed, so
-// different models answer visibly different images and the same model always the same.
+// gradientPNG renders a square gradient whose start colour derives from seed, so
+// different requests answer visibly different images and the same request always the
+// same one.
 func gradientPNG(seed string) ([]byte, error) {
 	sum := sha256.Sum256([]byte(seed))
 	canvas := image.NewRGBA(image.Rect(0, 0, generatedImageSide, generatedImageSide))
 	step := uint8(256 / generatedImageSide)
 	for y := 0; y < generatedImageSide; y++ {
 		for x := 0; x < generatedImageSide; x++ {
-			canvas.SetRGBA(x, y, color.RGBA{R: uint8(x) * step, G: uint8(y) * step, B: sum[0], A: 0xff})
+			canvas.SetRGBA(x, y, color.RGBA{R: sum[0] + uint8(x)*step, G: sum[1] + uint8(y)*step, B: sum[2], A: 0xff})
 		}
 	}
 	var buf bytes.Buffer
