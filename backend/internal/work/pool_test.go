@@ -46,15 +46,21 @@ func (e *execScriptedExecutor) Execute(_ context.Context, _ service.AdvanceOutco
 
 // TestPool_ProcessesQueuedItem_DrainsUntilUnclaimed proves processItem's drain loop: it
 // keeps calling Advance/Execute for one queued Run until Advance makes no further claim,
-// then stops without any further Execute call. AfterExecute is the completion barrier, not
-// a sleep.
+// then stops without any further Execute call. AfterExecute only proves the first
+// iteration finished; the test also waits for the second, no-claim Advance call before
+// Stop, because Stop cancels the worker context and would otherwise end the drain loop
+// before it reaches that call. Both are channel barriers, not sleeps.
 func TestPool_ProcessesQueuedItem_DrainsUntilUnclaimed(t *testing.T) {
 	done := make(chan struct{})
+	unclaimed := make(chan struct{})
 
 	exec := &execScriptedExecutor{
 		advance: func(callNo int) (service.AdvanceOutcome, error) {
 			if callNo == 1 {
 				return service.AdvanceOutcome{Claimed: true, RunID: "run_x"}, nil
+			}
+			if callNo == 2 {
+				close(unclaimed)
 			}
 			return service.AdvanceOutcome{Claimed: false}, nil
 		},
@@ -78,6 +84,11 @@ func TestPool_ProcessesQueuedItem_DrainsUntilUnclaimed(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("AfterExecute hook: want fired within 5s, got timeout")
+	}
+	select {
+	case <-unclaimed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("second Advance call: want made within 5s, got timeout")
 	}
 	pool.Stop()
 
