@@ -57,8 +57,11 @@ TERMINAL_DEADLINE_S=180
 BASE_COMMIT=fixture-v1
 SERVICE=checkout
 ENVIRONMENT=staging
-# A patch to the runner's fixture module; the mock runner backend only digests it.
-PATCH=$'--- a/greet.go\n+++ b/greet.go\n@@ -3,5 +3,5 @@ package greet\n import "fmt"\n \n func Greeting(name string) string {\n-\treturn fmt.Sprintf("Hello, %s", name)\n+\treturn fmt.Sprintf("Hello, %s!", name)\n }\n'
+# A patch to the runner's fixture module at fixture-v1. The mock runner backend only
+# digests it; the docker backend applies it under the runner's strict patch applier before
+# the test runs, so every hunk must match the fixture exactly. Editing the doc comment on
+# Greeting keeps the fixture's test passing.
+PATCH=$'--- a/greet.go\n+++ b/greet.go\n@@ -5 +5 @@\n-// Greeting returns the greeting for name.\n+// Greeting returns the friendly greeting for name.\n'
 
 failures=0
 pass() { printf 'PASS %s\n' "$*"; }
