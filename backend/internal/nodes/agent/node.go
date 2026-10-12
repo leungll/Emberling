@@ -25,7 +25,7 @@ const configSchema = `{
   "type": "object",
   "properties": {
     "instructions": {"type": "string"},
-    "modelId": {"type": "string", "minLength": 1},
+    "modelId": {"type": "string", "minLength": 1, "title": "Decision model"},
     "modelConfig": {"type": "object"},
     "allowedTools": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "contextSchema": {"type": "object"},
@@ -34,7 +34,7 @@ const configSchema = `{
     "maxTurns": {"type": "integer", "minimum": 1},
     "timeoutMs": {"type": "integer", "minimum": 1},
     "maxGenerationCalls": {"type": "integer", "minimum": 1},
-    "imageModelId": {"type": "string", "minLength": 1}
+    "imageModelId": {"type": "string", "minLength": 1, "title": "Image model"}
   },
   "required": ["modelId", "maxTurns", "timeoutMs"],
   "additionalProperties": false
