@@ -30,6 +30,7 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
 	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
+	"github.com/leungll/Emberling/backend/internal/adapters/openrouterimage"
 	"github.com/leungll/Emberling/backend/internal/api"
 	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/config/readiness"
@@ -198,6 +199,12 @@ type testEnvOptions struct {
 	ExtraNodeRegistrations []registry.NodeRegistration
 	ExtraToolRegistrations []registry.ToolRegistration
 
+	// ImageModels are real image models served through the OpenRouter Images API
+	// Adapter. Each is registered in the Model Registry, and generate_image calls it for
+	// its Model ID through the same bridge the Backend process uses, reading the source
+	// photo from this Backend's Asset storage.
+	ImageModels []*openrouterimage.Provider
+
 	// Clock, when set, replaces the system clock every service of this Backend reads, so
 	// a restart test can start a second Backend whose time is already past a deadline the
 	// first one froze, instead of waiting for real time to pass.
@@ -279,6 +286,15 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	if err := modelRegistry.Register(context.Background(), provider); err != nil {
 		t.Fatalf("register mock model provider: %v", err)
 	}
+	imageGenerators := map[string]generateimage.ImageGenerator{
+		mockmodel.ImageModelID: generateimage.NewMockGenerator(mockTaskBaseURL, opts.TaskClient),
+	}
+	for _, model := range opts.ImageModels {
+		if err := modelRegistry.Register(context.Background(), model); err != nil {
+			t.Fatalf("register image model: %v", err)
+		}
+		imageGenerators[imageModelIDOf(t, model)] = realImageGenerator{provider: model}
+	}
 	for _, extra := range opts.ExtraModelProviders {
 		if err := modelRegistry.Register(context.Background(), extra); err != nil {
 			t.Fatalf("register extra model provider: %v", err)
@@ -319,6 +335,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	// deployment, so a restart test that reuses the root also keeps them.
 	artifactStore := asset.NewArtifactStore(assetRoot, defaultTestArtifactMaxBytes)
 
+	photos := &assetPhotos{}
 	if !opts.SkipLookupTool {
 		if err := toolRegistry.Register(lookup.Registration()); err != nil {
 			t.Fatalf("register tool %s: %v", lookup.ToolName, err)
@@ -328,11 +345,9 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		t.Fatalf("register tool %s: %v", remotelookup.ToolName, err)
 	}
 	for _, reg := range []registry.ToolRegistration{
-		// Only the mock image model has a generator, and it addresses a photo by its id,
-		// so no photo port is wired.
-		generateimage.Registration(map[string]generateimage.ImageGenerator{
-			mockmodel.ImageModelID: generateimage.NewMockGenerator(mockTaskBaseURL, opts.TaskClient),
-		}, nil, artifactStore),
+		// The mock image model addresses a photo by its id; a real one reads the photo's
+		// bytes through the photo port, which the Asset service backs once it exists.
+		generateimage.Registration(imageGenerators, photos, artifactStore),
 		reviewasset.Registration(),
 		generatevideo.Registration(mockTaskBaseURL, opts.TaskClient),
 	} {
@@ -385,6 +400,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	queryService := service.NewQueryService(deps)
 	executionService := service.NewExecutionService(deps)
 	assetService := service.NewAssetService(deps)
+	photos.assets = assetService
 	artifactService := service.NewArtifactService(deps)
 
 	workPool := work.NewPool(queue, executionService, 4, opts.WorkHooks, opts.Logger)
