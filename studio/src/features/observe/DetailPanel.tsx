@@ -1,14 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { AgentFactsLedger } from './AgentFactsLedger';
+import { ImagePreview } from './ImagePreview';
+import { collectImageRefs } from './imageRefs';
 import { SectionLabel } from './Panel';
 import { StatusDot } from './StatusGlyph';
-import { API_BASE, ApiRequestError, getAgentTrace, getNodeRunDetail } from '@/api/client';
+import { ApiRequestError, getAgentTrace, getNodeRunDetail } from '@/api/client';
 import type {
   AgentTrace,
   AgentTurnTrace,
-  ImageRef,
-  ImageSource,
   NodeRun,
   NodeRunDetail,
   NodeRunStatus,
@@ -662,105 +662,6 @@ function Stat({ label, value }: { label: string; value: string }) {
         {label}
       </span>
       <span className="mt-1 block text-[15px] font-semibold break-all">{value}</span>
-    </div>
-  );
-}
-
-const IMAGE_SOURCES: readonly ImageSource[] = ['ASSET', 'ARTIFACT', 'EXTERNAL'];
-
-/** Mirrors `backend/internal/domain/imageref.go`'s `Source` discriminant. */
-function isImageRefValue(value: unknown): value is ImageRef {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    IMAGE_SOURCES.includes((value as { source?: unknown }).source as ImageSource)
-  );
-}
-
-/**
- * Finds ImageRef-shaped values at the top level or one property deep. NodeRun input/output
- * is a raw `NodeOutput.Ports` map keyed by port name (e.g. `{ image: <ImageRef> }`), so one
- * level of nesting is enough; this does not walk arbitrary JSON depth looking for a match.
- */
-function collectImageRefs(value: unknown): ImageRef[] {
-  if (isImageRefValue(value)) return [value];
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    return Object.values(value).filter(isImageRefValue);
-  }
-  return [];
-}
-
-/**
- * The URI an EXTERNAL reference may be previewed from: only an absolute http or https URL,
- * the only form the Backend accepts for that branch. Anything else (a relative path, a
- * `data:` or `javascript:` URI, an unparseable string) gets no `<img>` and is shown as text
- * only, so the panel never loads or inlines content the reference was not allowed to name.
- */
-function externalPreviewUri(uri: string | undefined): string | null {
-  if (typeof uri !== 'string' || uri === '') return null;
-  let parsed: URL;
-  try {
-    parsed = new URL(uri);
-  } catch {
-    return null;
-  }
-  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || parsed.host === '') {
-    return null;
-  }
-  return uri;
-}
-
-/** The Backend route that serves an uploaded Asset's immutable content, or null. */
-function assetPreviewUri(image: ImageRef): string | null {
-  const assetId = image.asset?.assetId;
-  if (typeof assetId !== 'string' || assetId === '') return null;
-  return `${API_BASE}/assets/${encodeURIComponent(assetId)}/content`;
-}
-
-/**
- * `<img>` preview plus the raw reference text: an image shows both a preview and its raw
- * reference. EXTERNAL renders the given http(s) URI directly, never through a proxy; ASSET
- * reuses the existing `/assets/{id}/content` route. ARTIFACT has no documented content
- * endpoint, so it shows only the raw reference — never a guessed or invented proxy URL.
- */
-function ImagePreview({ image }: { image: ImageRef }) {
-  const src =
-    image.source === 'EXTERNAL'
-      ? externalPreviewUri(image.uri)
-      : image.source === 'ASSET'
-        ? assetPreviewUri(image)
-        : null;
-  const reference =
-    image.source === 'EXTERNAL'
-      ? image.uri
-      : image.source === 'ASSET'
-        ? image.asset?.assetId
-        : image.artifact?.artifactId;
-
-  return (
-    <div className="space-y-1">
-      {src ? (
-        // Non-empty alt text: an ImageRef preview is content, not decoration, and keeps
-        // the "img" role for assistive tech and tests alike.
-        // A fixed preview box: a tiny image (a 16x16 mock output) is scaled up to stay
-        // visible, a large one is scaled down, and both keep their aspect ratio on a
-        // checkerboard so transparent pixels read as such.
-        <div
-          data-testid="image-preview-box"
-          className="flex h-40 w-40 items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--muted)] bg-[repeating-conic-gradient(var(--accent)_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]"
-        >
-          <img
-            src={src}
-            alt={`${image.source} image preview`}
-            referrerPolicy="no-referrer"
-            className="h-full w-full object-contain"
-          />
-        </div>
-      ) : null}
-      <p className="text-[13px] text-[var(--muted-foreground)] [overflow-wrap:anywhere]">
-        {image.source} · {reference ?? '—'}
-      </p>
     </div>
   );
 }
