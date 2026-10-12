@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
@@ -43,4 +44,24 @@ func TestRegistration_AllowedTools_UsesToolSelector(t *testing.T) {
 		}
 	}
 	t.Fatal("allowedTools has no uiSchema field")
+}
+
+// TestRegistration_ModelSelectors_HaveDistinctTitles pins that the decision Model Selector
+// and the image Model Selector each carry their own JSON Schema title. Studio labels an
+// untitled Model Selector generically, so without titles both dropdowns read the same.
+func TestRegistration_ModelSelectors_HaveDistinctTitles(t *testing.T) {
+	var schema struct {
+		Properties map[string]struct {
+			Title string `json:"title"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(Registration().Metadata.ConfigSchema, &schema); err != nil {
+		t.Fatalf("decode ConfigSchema: %v", err)
+	}
+	want := map[string]string{"modelId": "Decision model", "imageModelId": "Image model"}
+	for path, title := range want {
+		if got := schema.Properties[path].Title; got != title {
+			t.Errorf("%s title = %q, want %q", path, got, title)
+		}
+	}
 }
