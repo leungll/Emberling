@@ -86,8 +86,14 @@ func playTrajectory(t *testing.T, script string, turns []scriptedTurn) registry.
 	return response
 }
 
-func generateArgs(photo, strength string) string {
-	return `{"photoAssetId":"` + photo + `","settings":{"strength":` + strength + `,"style":"film"}}`
+// The photo-set trajectories use one prompt per round of generations.
+const (
+	firstRoundPrompt  = "Warm film look with strong grain"
+	secondRoundPrompt = "Warm film look with soft grain"
+)
+
+func generateArgs(photo, prompt string) string {
+	return `{"photoAssetId":"` + photo + `","settings":{"prompt":"` + prompt + `"}}`
 }
 
 func reviewArgs(assetRef, verdict, photo string) string {
@@ -97,17 +103,17 @@ func reviewArgs(assetRef, verdict, photo string) string {
 func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExamples(t *testing.T) {
 	const first, second = "sha256:first", "sha256:second"
 	turns := []scriptedTurn{
-		{"generate_image", generateArgs("asset_photo_1", "0.6"), imageResult("img_a1", first)},
+		{"generate_image", generateArgs("asset_photo_1", firstRoundPrompt), imageResult("img_a1", first)},
 		{"review_asset", reviewArgs("img_a1", "pass", "asset_photo_1"), reviewResult(true)},
-		{"generate_image", generateArgs("asset_photo_2", "0.6"), imageResult("img_a2", first)},
+		{"generate_image", generateArgs("asset_photo_2", firstRoundPrompt), imageResult("img_a2", first)},
 		{"review_asset", reviewArgs("img_a2", "fail", "asset_photo_2"), reviewResult(false)},
-		{"generate_image", generateArgs("asset_photo_3", "0.6"), imageResult("img_a3", first)},
+		{"generate_image", generateArgs("asset_photo_3", firstRoundPrompt), imageResult("img_a3", first)},
 		{"review_asset", reviewArgs("img_a3", "fail", "asset_photo_3"), reviewResult(false)},
-		{"generate_image", generateArgs("asset_photo_1", "0.4"), imageResult("img_b1", second)},
+		{"generate_image", generateArgs("asset_photo_1", secondRoundPrompt), imageResult("img_b1", second)},
 		{"review_asset", reviewArgs("img_b1", "pass", "asset_photo_1"), reviewResult(true)},
-		{"generate_image", generateArgs("asset_photo_2", "0.4"), imageResult("img_b2", second)},
+		{"generate_image", generateArgs("asset_photo_2", secondRoundPrompt), imageResult("img_b2", second)},
 		{"review_asset", reviewArgs("img_b2", "pass", "asset_photo_2"), reviewResult(true)},
-		{"generate_image", generateArgs("asset_photo_3", "0.4"), imageResult("img_b3", second)},
+		{"generate_image", generateArgs("asset_photo_3", secondRoundPrompt), imageResult("img_b3", second)},
 		{"review_asset", reviewArgs("img_b3", "pass", "asset_photo_3"), reviewResult(true)},
 		{"generate_video", `{"assetRef":"img_b1","photoAssetId":"asset_photo_1","settings":{"durationSeconds":4}}`, `{"videoUrl":"http://mock/v1/videos/vid_b1.mp4"}`},
 	}
@@ -149,9 +155,9 @@ func TestProvider_Generate_PhotoSetSkipReviewTrajectory_DispatchesVideoForUnrevi
 func TestProvider_Generate_PhotoSetLimitTrajectory_RequestsAThirdGeneration(t *testing.T) {
 	const digest = "sha256:first"
 	turns := []scriptedTurn{
-		{"generate_image", generateArgs("asset_photo_1", "0.6"), imageResult("img_a1", digest)},
+		{"generate_image", generateArgs("asset_photo_1", firstRoundPrompt), imageResult("img_a1", digest)},
 		{"review_asset", reviewArgs("img_a1", "pass", "asset_photo_1"), reviewResult(true)},
-		{"generate_image", generateArgs("asset_photo_2", "0.6"), imageResult("img_a2", digest)},
+		{"generate_image", generateArgs("asset_photo_2", firstRoundPrompt), imageResult("img_a2", digest)},
 		{"review_asset", reviewArgs("img_a2", "pass", "asset_photo_2"), reviewResult(true)},
 	}
 
@@ -159,7 +165,7 @@ func TestProvider_Generate_PhotoSetLimitTrajectory_RequestsAThirdGeneration(t *t
 
 	// With a generation limit of two, the Runtime rejects this call at claim; the script
 	// only has to ask for it.
-	assertToolCall(t, third, "generate_image", generateArgs("asset_photo_3", "0.6"))
+	assertToolCall(t, third, "generate_image", generateArgs("asset_photo_3", firstRoundPrompt))
 }
 
 func TestProvider_Generate_ScriptedTrajectory_ReplayedTurnReturnsSameDecision(t *testing.T) {

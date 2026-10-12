@@ -38,7 +38,6 @@ import (
 	"github.com/leungll/Emberling/backend/internal/service"
 	"github.com/leungll/Emberling/backend/internal/store"
 	"github.com/leungll/Emberling/backend/internal/store/postgres"
-	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
 	"github.com/leungll/Emberling/backend/internal/tools/generatevideo"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"
 	"github.com/leungll/Emberling/backend/internal/tools/remotelookup"
@@ -200,8 +199,10 @@ func run(logger *slog.Logger) error {
 			if err := toolRegistry.Register(remotelookup.Registration(cfg.ModelProvider.BaseURL, taskClient)); err != nil {
 				return fmt.Errorf("register tool: %w", err)
 			}
+			if err := registerImageTool(toolRegistry, cfg.ModelProvider.BaseURL, taskClient, assetPhotoReader{assets: assetService}, artifactStore); err != nil {
+				return err
+			}
 			for _, reg := range []registry.ToolRegistration{
-				generateimage.Registration(cfg.ModelProvider.BaseURL, taskClient, artifactStore),
 				reviewasset.Registration(),
 				generatevideo.Registration(cfg.ModelProvider.BaseURL, taskClient),
 			} {

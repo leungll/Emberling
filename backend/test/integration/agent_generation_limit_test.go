@@ -103,17 +103,30 @@ func newGenerationHarnessWith(t *testing.T, p *generationProvider, opts agentHar
 	artifactRoot := t.TempDir()
 	artifacts := asset.NewArtifactStore(artifactRoot, 1<<20)
 	executor := &generationExecutor{
-		delegate:     generateimage.New(p.url, &http.Client{Timeout: 5 * time.Second}, artifacts),
+		delegate:     mockImageExecutor(p.url, artifacts),
 		artifacts:    artifacts,
 		artifactRoot: artifactRoot,
 	}
-	registration := generateimage.Registration(p.url, nil, artifacts)
+	registration := generateimage.Registration(nil, nil, artifacts)
 	if !registration.Metadata.CountsTowardGenerationLimit {
 		t.Fatalf("generate_image must count toward the generation limit")
 	}
 	registration.Executor = executor
 	opts.Tools = []registry.ToolRegistration{registration}
 	return newAgentHarness(t, opts), executor
+}
+
+// mockImageExecutor is the real generate_image Executor with the mock generator wired
+// for the mock image model and for every extra image Model ID, against the Mock Provider
+// at url. An extra ID stands for another configured image model; these tests only need
+// its calls to complete.
+func mockImageExecutor(url string, artifacts generateimage.ArtifactContentStore, extraImageModelIDs ...string) *generateimage.Executor {
+	generator := generateimage.NewMockGenerator(url, &http.Client{Timeout: 5 * time.Second})
+	generators := map[string]generateimage.ImageGenerator{mockmodel.ImageModelID: generator}
+	for _, id := range extraImageModelIDs {
+		generators[id] = generator
+	}
+	return generateimage.New(generators, nil, artifacts)
 }
 
 // generationDefinition is the fixture graph whose Agent may call generate_image, with the
@@ -139,7 +152,7 @@ func generationDefinition(workflowID string, limit *int) domain.Definition {
 // generationCall asks for one image generated from photoID.
 func generationCall(photoID string) mockmodel.Scenario {
 	return mockmodel.Scenario{ToolName: generateimage.ToolName, ToolArguments: json.RawMessage(
-		`{"photoAssetId":"` + photoID + `","settings":{"style":"natural"}}`)}
+		`{"photoAssetId":"` + photoID + `","settings":{"prompt":"Natural light"}}`)}
 }
 
 func generationLookupCall() mockmodel.Scenario {
@@ -255,7 +268,7 @@ func seedGenerationTurn(t *testing.T, h *agentHarness, agentRunID string, turnNo
 	now := h.clock.Now()
 	turnID, decisionID, actionID := prefix+"-turn", prefix+"-decision", prefix+"-action"
 	toolName := generateimage.ToolName
-	arguments := json.RawMessage(`{"photoAssetId":"photo-seeded","settings":{"style":"natural"}}`)
+	arguments := json.RawMessage(`{"photoAssetId":"photo-seeded","settings":{"prompt":"Natural light"}}`)
 	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
 		if err := tx.AgentTurns().Create(ctx, newAgentTurn(turnID, agentRunID, turnNo)); err != nil {
 			return err

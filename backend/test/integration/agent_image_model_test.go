@@ -163,6 +163,7 @@ func TestAgentRun_TwoNodesDifferentImageModels_EachCallUsesFrozenID(t *testing.T
 	h, executor := newGenerationHarnessWith(t, p, agentHarnessOptions{
 		ModelProviders: []registry.ModelProvider{imageModel(otherImageID)},
 	})
+	executor.delegate = mockImageExecutor(p.url, executor.artifacts, otherImageID)
 	calls := &imageModelCalls{}
 	executor.during = calls.record
 	scriptOneGenerationPerAgent(h)

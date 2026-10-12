@@ -5,7 +5,7 @@
         "toolName": "generate_image",
         "arguments": {
           "photoAssetId": "{{task:/photos/0/photoAssetId}}",
-          "settings": {"style": "film", "strength": 0.6}
+          "settings": {"prompt": "Warm film look with strong grain"}
         }
       }
     },

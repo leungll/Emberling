@@ -114,7 +114,7 @@ func traceFactsGeneration(photoID string) *mockmodel.Scenario {
 	return &mockmodel.Scenario{
 		Kind:          mockmodel.ScenarioToolCall,
 		ToolName:      generateimage.ToolName,
-		ToolArguments: json.RawMessage(`{"photoAssetId":"` + photoID + `","settings":{"style":"natural"}}`),
+		ToolArguments: json.RawMessage(`{"photoAssetId":"` + photoID + `","settings":{"prompt":"Natural light"}}`),
 	}
 }
 
@@ -273,8 +273,9 @@ func TestAgentTraceFacts_Ledger_CarriesNoSecretsOrPayloads(t *testing.T) {
 }
 
 // Rejection secrecy: a claim-time rejection keeps the rejected Action's arguments out of
-// every operator-facing surface. The signed URL below rides in a free-form settings
-// object the Tool schemas accept, so the rejected Decision carries it verbatim.
+// every operator-facing surface. The signed URL below rides in settings the Tool schemas
+// accept - a free-form video settings object and an image prompt - so the rejected
+// Decision carries it verbatim.
 const (
 	rejectionSignature = "deadbeefsecret"
 	rejectionToken     = "s3cr3t"
@@ -340,6 +341,7 @@ func saveRejectionDefinition(t *testing.T, env *testEnv, limit int) (string, int
 // the URL signature, its token, or the configured callback signing secret.
 func TestAgentTraceFacts_RejectedActions_TraceAndLogsCarryNoSecrets(t *testing.T) {
 	signedSettings := `{"style":"natural","sourceUrl":"` + rejectionSignedURL + `"}`
+	signedImageSettings := `{"prompt":"Natural light like ` + rejectionSignedURL + `"}`
 	cases := []struct {
 		name     string
 		script   []*mockmodel.Scenario
@@ -363,7 +365,7 @@ func TestAgentTraceFacts_RejectedActions_TraceAndLogsCarryNoSecrets(t *testing.T
 					Kind:     mockmodel.ScenarioToolCall,
 					ToolName: generateimage.ToolName,
 					ToolArguments: json.RawMessage(`{"photoAssetId":"` + traceFactsPhotoB +
-						`","settings":` + signedSettings + `}`),
+						`","settings":` + signedImageSettings + `}`),
 				},
 			},
 			wantCode: runtime.CodeGenerationLimitReached,
