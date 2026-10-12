@@ -28,8 +28,8 @@ const (
 	recordVideoDispatched = "video_dispatched"
 )
 
-// kindImage marks a synchronous image generation request. It has no barrier kind filter
-// of its own, so only a pause of every kind holds it.
+// kindImage marks a synchronous image generation request, through POST /v1/assets or the
+// Images API. A pause naming it, or a pause of every kind, holds both.
 const kindImage = "image"
 
 // mediaVideo is the POST /v1/tasks `media` value that makes a task a video generation.
