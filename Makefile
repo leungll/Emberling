@@ -242,7 +242,7 @@ check:
 check-fast:
 	@MAKE='$(MAKE)' sh scripts/run-phases.sh $(CHECK_FAST_PHASES)
 
-.PHONY: demo demo-down
+.PHONY: demo demo-studio demo-down
 
 ## demo: fault-injection, photo-set and software-delivery demo on the Compose stack. Builds
 ## and starts postgres, the Mock Provider, the mock production service, the sandbox runner
@@ -258,10 +258,21 @@ check-fast:
 ## with the invariant report and the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=
 ## held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery,
 ## delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery runs one.
+## EMBERLING_DEMO_STUDIO=1 turns on the Studio demo mode described under demo-studio.
 ## Needs Docker, curl and jq; deliberately not part of `check`.
 demo:
 	@bash scripts/demo/demo.sh run
 
-## demo-down: stop the demo stack and remove the request-record volumes of the three mock services.
+## demo-studio: `make demo` with EMBERLING_DEMO_STUDIO=1, to watch it in Studio. Also builds
+## and starts Studio on http://localhost:5173, prints a Studio link to every Run and pauses
+## for Enter before each fault, hold release and next variant; each pause names any
+## deadline a longer look would exceed. Without a terminal it prints the pause and goes on;
+## EMBERLING_DEMO_PAUSE=0 skips the pauses. EMBERLING_DEMO_VARIANT selects one variant as
+## for demo. The stack and Studio keep running afterwards; stop them with `make demo-down`.
+demo-studio:
+	@EMBERLING_DEMO_STUDIO=1 bash scripts/demo/demo.sh run
+
+## demo-down: stop the demo stack, Studio included, and remove the request-record volumes of
+## the three mock services.
 demo-down:
 	@bash scripts/demo/demo.sh down

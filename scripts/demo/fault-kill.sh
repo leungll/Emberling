@@ -76,6 +76,7 @@ run_request=$(jq -n --arg wf "$workflow_id" --argjson v "$version" \
 run_id=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data-binary "$run_request" "$BACKEND_URL/api/runs" | jq -r '.id')
 log "run $run_id created"
+studio_run_link "$run_id"
 
 task_held() {
   curl -fsS "$MOCK_URL/control/barrier" | jq -e '[.held[] | select(.kind == "task")] | length >= 1' >/dev/null
@@ -89,8 +90,16 @@ image_node_run=$(jq -r '.nodeRuns[] | select(.nodeId == "node_image") | .id' <<<
 detail=$(curl -fsS "$BACKEND_URL/api/runs/$run_id/nodes/$image_node_run")
 log "before the kill: node_image $(jq -c '{status: .nodeRun.status, attempts: [.attempts[] | {attemptNo, status, bound: (.callbackBinding.externalTaskId // null)}]}' <<<"$detail")"
 
+# The Run starts with its dispatch already held, so the look at the new Run and the look
+# before the kill are one pause. The live Backend enforces the Attempt deadline and its
+# 30s dispatch request timeout while the dispatch is held, so a longer look would let it
+# retry before the kill instead of recovering after it.
+held_limit_s=$((IMAGE_TIMEOUT_MS / 1000 < 30 ? IMAGE_TIMEOUT_MS / 1000 : 30))
+demo_pause "run $run_id: node_image's Attempt is STARTED and its dispatch held at the Mock Provider; next: SIGKILL the backend. Continue within ~${held_limit_s}s of the Run's start (the Attempt deadline; raise EMBERLING_DEMO_IMAGE_TIMEOUT_MS up to 30000 for longer)"
+
 log "SIGKILL backend"
 compose kill -s SIGKILL backend >/dev/null
+demo_pause "backend killed while the dispatch is held; Studio loses its live updates. Next: release the held dispatch, start the backend and watch node_image recover from PostgreSQL"
 
 log "releasing the barrier"
 released=$(curl -fsS -X POST "$MOCK_URL/control/release" | jq -r '.released // 0')

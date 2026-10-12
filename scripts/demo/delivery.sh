@@ -123,6 +123,26 @@ run_request=$(jq -n --arg wf "$workflow_id" --argjson v "$version" --arg task "$
 run_id=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data-binary "$run_request" "$BACKEND_URL/api/runs" | jq -r '.id')
 log "run $run_id created"
+studio_run_link "$run_id"
+
+# A pause only delays this script. While a callback or a deployment is held, the live
+# Backend keeps enforcing the Agent deadline, which runs from the Agent's start, and the
+# deploy Tool's 30s request timeout; a look that outlasts either ends the Agent before the
+# step the story is about.
+if ((timeout_ms > 0)); then
+  agent_deadline_s=$((timeout_ms / 1000))
+else
+  agent_deadline_s=$(jq '.nodes[] | select(.id == "node_agent") | .config.timeoutMs / 1000 | floor' "$FIXTURE")
+fi
+case "$story" in
+deploy-lost)
+  hold_note="Next: the sandbox test passes and the deployment is held at production. Keep every look until the kill under ~$((agent_deadline_s < 30 ? agent_deadline_s : 30))s in total (the ${agent_deadline_s}s Agent deadline; raise EMBERLING_DEMO_DELIVERY_TIMEOUT_MS up to 30000 for longer)"
+  ;;
+*)
+  hold_note="Next: sandbox_test is DISPATCHED and its callback held at the runner. Keep every look until its release well under ${agent_deadline_s}s in total (the Agent deadline)"
+  ;;
+esac
+demo_pause "run $run_id ($story story) started; watch the Delivery Agent in Studio. $hold_note"
 
 agent_node_run() {
   curl -fsS "$BACKEND_URL/api/runs/$run_id" | jq -r '.nodeRuns[] | select(.nodeId == "node_agent") | .id // empty'
@@ -161,7 +181,11 @@ main | redelivery | restart)
   wait_until "the runner callback for test $bound_test to be held" "$HELD_DEADLINE_S" callback_held
   log "sandbox_test Attempt $test_attempt_before DISPATCHED for test $bound_test, its callback held at the runner"
   if [[ "$story" == restart ]]; then
+    demo_pause "test callback for $bound_test held at the runner while the Agent waits in WAITING_CALLBACK; next: SIGKILL the backend and start it again (hold under the ${agent_deadline_s}s Agent deadline)"
     kill_and_restart_backend
+    demo_pause "backend back; sandbox_test Attempt $test_attempt_before is still DISPATCHED in Studio. Next: release the held callback, which the runner delivers twice (hold under the ${agent_deadline_s}s Agent deadline)"
+  else
+    demo_pause "sandbox_test Attempt $test_attempt_before DISPATCHED, its callback held at the runner; next: release the callback and watch the Agent deploy (hold under the ${agent_deadline_s}s Agent deadline)"
   fi
   log "releasing the runner's callback"
   curl -fsS -X POST "$RUNNER_URL/control/release" >/dev/null
@@ -172,7 +196,11 @@ deploy-lost)
   }
   wait_until "the deployment request to be held by production" "$HELD_DEADLINE_S" deploy_held
   log "held at production: $(curl -fsS "$PRODUCTION_URL/control/barrier" | jq -c '[.held[] | {kind, operationId, arrivalSeq}]')"
+  demo_pause "deployment held at production while the deploy Attempt runs; next: SIGKILL the backend and start it again, so the answer is lost (continue within the ${agent_deadline_s}s Agent deadline)"
   kill_and_restart_backend
+  # The caller of the held deployment died with the old process, and the Agent deadline
+  # has a single outcome from here, so this look cannot change the story.
+  demo_pause "backend back with the deployment still held and its caller gone; next: wait for the Reconciler to end the Agent with TIMEOUT, then release the abandoned deployment"
   ;;
 esac
 
@@ -182,11 +210,15 @@ run_terminal() {
   [[ "$status" == COMPLETED || "$status" == FAILED ]]
 }
 wait_until "run $run_id to become COMPLETED or FAILED" "$TERMINAL_DEADLINE_S" run_terminal
+if [[ "$story" == deploy-lost ]]; then
+  demo_pause "run $run_id reached a terminal status; check the Agent's TIMEOUT and the FAILED deploy Attempt in Studio. Next: release the abandoned deployment held at production"
+fi
 release_barriers
 paused_urls=()
 
 events_before=$(run_events "$run_id")
 if [[ "$story" == redelivery ]]; then
+  demo_pause "run $run_id finished; note its last Event in Studio. Next: restart the sandbox runner, which delivers the finished test again; the ledger must gain no Event"
   runner_restart_after=$(record_last_seq "$RUNNER_URL")
   log "restarting the sandbox runner (record seq=$runner_restart_after); it delivers its stored results again"
   compose restart sandboxrunner >/dev/null

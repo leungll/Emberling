@@ -92,6 +92,7 @@ run_request=$(jq -n --arg wf "$workflow_id" --argjson v "$version" \
 run_id=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data-binary "$run_request" "$BACKEND_URL/api/runs" | jq -r '.id')
 log "run $run_id created"
+studio_run_link "$run_id"
 
 task_record() {
   record_after "$record_after_seq" | jq -s '[.[] | select(.kind == "task" or .kind == "poll")]'
@@ -123,6 +124,9 @@ log "before the kill: node_image $(jq -c '{status: .nodeRun.status, attempts: [.
 callback_lines() {
   task_record | jq --arg id "$task_id" '[.[] | select(.event == "callback" and .externalTaskId == $id)]'
 }
+# Nothing is held here: the Provider's callback is only scheduled, so the look at the new
+# Run and the look before the kill are one pause, and it must end before that callback.
+demo_pause "run $run_id: node_image's Attempt is DISPATCHED to task $task_id, whose single callback comes ${CALLBACK_DELAY_MS}ms after acceptance; next: SIGKILL the backend so it misses it. Continue within ~$((CALLBACK_DELAY_MS / 1000 - 3))s of the Run's start (raise EMBERLING_DEMO_CALLBACK_DELAY_MS for longer)"
 if [[ $(callback_lines | jq 'length') -ne 0 ]]; then
   die "the callback for $task_id was delivered before the kill; raise EMBERLING_DEMO_CALLBACK_DELAY_MS"
 fi
@@ -142,6 +146,9 @@ log "callback delivery while the Backend was down: $delivery"
 if jq -e '(.status // 0) >= 200 and (.status // 0) < 300' <<<"$delivery" >/dev/null; then
   die "the callback for $task_id was accepted although the Backend was killed"
 fi
+# The Attempt deadline runs from its claim and the restarted Backend enforces it: a look
+# past it ends the Attempt with a timeout before a poll can complete it.
+demo_pause "backend down and the Provider's callback for $task_id lost; next: start the backend and watch Provider polling complete the same Attempt. Continue within ~$((IMAGE_TIMEOUT_MS / 1000 - CALLBACK_DELAY_MS / 1000 - 20))s (the ${IMAGE_TIMEOUT_MS}ms Attempt deadline; raise EMBERLING_DEMO_AFTER_ACCEPT_TIMEOUT_MS for longer)"
 
 log "starting backend again"
 compose start backend >/dev/null

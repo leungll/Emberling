@@ -124,3 +124,42 @@ run_events() {
   done
   printf '%s\n' "$all"
 }
+
+# Studio demo mode. With EMBERLING_DEMO_STUDIO=1 the demo also starts Studio, prints a link
+# to every Run it creates and stops at the moments worth watching. EMBERLING_DEMO_PAUSE=0
+# keeps Studio and the links but never stops. Without EMBERLING_DEMO_STUDIO=1 the helpers
+# below print nothing and never wait, so the default demo output is unchanged.
+STUDIO_URL=${EMBERLING_DEMO_STUDIO_URL:-http://localhost:5173}
+
+studio_mode() {
+  [[ "${EMBERLING_DEMO_STUDIO:-0}" == 1 ]]
+}
+
+studio_ready() {
+  curl -fsS -o /dev/null "$STUDIO_URL/" 2>/dev/null
+}
+
+# studio_run_link RUN_ID prints the Studio page of a Run in Studio demo mode.
+studio_run_link() {
+  studio_mode || return 0
+  printf '==> Studio run: %s/runs/%s\n' "$STUDIO_URL" "$1" >&2
+}
+
+# demo_pause MESSAGE says what is about to happen and what to look at in Studio, then
+# waits for Enter on the terminal. It never blocks without a terminal on stdin (CI, a pipe
+# or < /dev/null): it prints the message and continues. A pause only delays this script;
+# the Runtime keeps running meanwhile, so a message names any deadline a long look would
+# exceed and change the variant's outcome.
+demo_pause() {
+  studio_mode || return 0
+  if [[ "${EMBERLING_DEMO_PAUSE:-1}" == 0 ]]; then
+    printf '>>> (pauses off) %s\n' "$*" >&2
+    return 0
+  fi
+  if [[ -t 0 ]] && { : </dev/tty; } 2>/dev/null; then
+    printf '\n>>> PAUSE: %s\n>>> press Enter to continue ' "$*" >&2
+    read -r _ </dev/tty || true
+  else
+    printf '>>> (no tty, continuing) %s\n' "$*" >&2
+  fi
+}

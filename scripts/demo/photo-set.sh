@@ -87,6 +87,10 @@ run_request=$(jq -n --arg wf "$workflow_id" --argjson v "$version" --argjson pho
 run_id=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data-binary "$run_request" "$BACKEND_URL/api/runs" | jq -r '.id')
 log "run $run_id created"
+studio_run_link "$run_id"
+# Nothing is held in these stories: the Run proceeds during the pause and the script only
+# reads its outcome afterwards, so the pause cannot change it.
+demo_pause "run $run_id ($story story) is running and needs no help from this script; watch the Agent's turns, facts and generation budget in Studio. Next: wait for its terminal status and check it"
 
 run_terminal() {
   local status
