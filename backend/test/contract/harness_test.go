@@ -760,7 +760,7 @@ func (e *testEnv) waitForTerminal(t *testing.T, runID string, timeout time.Durat
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("run %s did not reach a terminal status within %s", runID, timeout)
+	t.Fatalf("run %s did not reach a terminal status within %s\n%s", runID, timeout, runStateDump(t, e, runID))
 	return nil
 }
 
