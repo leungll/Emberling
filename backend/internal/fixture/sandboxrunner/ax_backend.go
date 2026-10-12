@@ -27,11 +27,6 @@ const axWorkPath = "/work"
 // axAPIVersion is the AX resource version the documents are written in.
 const axAPIVersion = "ax.io/v1alpha1"
 
-// maxWorkspaceContentBytes bounds the patched tree's total content. The files reach the
-// sandbox inside one environment variable, which Linux caps at 128 KiB, so half of that
-// leaves room for the encoding around them.
-const maxWorkspaceContentBytes = 64 << 10
-
 // Polling bounds. The interval paces both the readiness and the result polling, and both
 // reach the supervisor through the same router channel under the same rules: one query
 // is bounded by axRouterQueryTimeout, and queries that fail maxRouterQueryFailures rounds
@@ -175,6 +170,9 @@ func (b *AXBackend) Run(ctx context.Context, job Job) Outcome {
 	if message := checkWorkspaceFiles(files); message != "" {
 		return sandboxError(message)
 	}
+	if estimatedWorkspaceEncoding(name, b.cfg.Atespace, files) > maxEncodedWorkspaceChars {
+		return sandboxError("patched workspace is too large to reach the sandbox")
+	}
 	documents, err := b.documents(name, files)
 	if err != nil {
 		return sandboxError("AX documents could not be built")
@@ -196,7 +194,7 @@ func checkWorkspaceFiles(files map[string][]byte) string {
 		total += len(content)
 	}
 	if total > maxWorkspaceContentBytes {
-		return "patched workspace exceeds 64 KiB"
+		return "patched workspace exceeds 16 KiB"
 	}
 	return ""
 }

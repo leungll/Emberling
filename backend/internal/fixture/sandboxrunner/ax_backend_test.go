@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -636,15 +637,34 @@ func (r *flakyReader) ReadResult(ctx context.Context, atespace, task string) (in
 	return r.inner.ReadResult(ctx, atespace, task)
 }
 
+// newFilePatch is a patch that adds path holding lines, each followed by a line feed.
+func newFilePatch(path string, lines ...string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n", path, len(lines))
+	for _, line := range lines {
+		b.WriteString("+" + line + "\n")
+	}
+	return b.String()
+}
+
 func TestAXBackend_OversizedOrNonUTF8Workspace_ReportsSandboxErrorWithoutCreatingResources(t *testing.T) {
-	big := strings.Repeat("x", 64<<10)
-	oversized := "--- /dev/null\n+++ b/big.txt\n@@ -0,0 +1 @@\n+" + big + "\n"
-	nonUTF8Content := "--- /dev/null\n+++ b/bad.txt\n@@ -0,0 +1 @@\n+\xff\xfe\n"
-	nonUTF8Path := "--- /dev/null\n+++ b/bad\xff.txt\n@@ -0,0 +1 @@\n+ok\n"
-	for name, patch := range map[string]string{"over 64 KiB": oversized, "non-UTF-8 content": nonUTF8Content, "non-UTF-8 path": nonUTF8Path} {
+	// Many short lines stay under the raw content limit but encode, line by line
+	// indented, to far more than the encoded limit.
+	shortLines := slices.Repeat([]string{"a"}, 6000)
+	cases := map[string]string{
+		"over 16 KiB":               newFilePatch("big.txt", strings.Repeat("x", 16<<10)),
+		"encoded estimate too long": newFilePatch("lines.txt", shortLines...),
+		"non-UTF-8 content":         "--- /dev/null\n+++ b/bad.txt\n@@ -0,0 +1 @@\n+\xff\xfe\n",
+		"non-UTF-8 path":            "--- /dev/null\n+++ b/bad\xff.txt\n@@ -0,0 +1 @@\n+ok\n",
+	}
+	for name, patch := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := patchedFixture(t, patch); err != nil {
+			files, err := patchedFixture(t, patch)
+			if err != nil {
 				t.Fatalf("precondition: patch does not apply: %v", err)
+			}
+			if name == "encoded estimate too long" && contentBytes(files) > maxWorkspaceContentBytes {
+				t.Fatalf("precondition: raw content %d bytes exceeds the raw limit", contentBytes(files))
 			}
 			h := newAXHarness(t, axHarnessOptions{})
 			assertFailure(t, h.backend.Run(context.Background(), axJob(patch)), codeSandboxError)
@@ -653,20 +673,104 @@ func TestAXBackend_OversizedOrNonUTF8Workspace_ReportsSandboxErrorWithoutCreatin
 			}
 		})
 	}
-	// Exactly at the limit is still accepted.
+
+	// Exactly at the raw limit is still accepted.
 	files, err := fixtureFiles()
 	if err != nil {
 		t.Fatalf("fixture files: %v", err)
 	}
-	used := 0
-	for _, content := range files {
-		used += len(content)
-	}
-	fill := strings.Repeat("y", maxWorkspaceContentBytes-used-1)
-	atLimit := "--- /dev/null\n+++ b/fill.txt\n@@ -0,0 +1 @@\n+" + fill + "\n"
+	atRawLimit := newFilePatch("fill.txt", strings.Repeat("y", maxWorkspaceContentBytes-contentBytes(files)-1))
 	h := newAXHarness(t, axHarnessOptions{})
-	if got := h.backend.Run(context.Background(), axJob(atLimit)); !got.Verdict {
-		t.Fatalf("outcome = %+v, want a workspace of exactly 64 KiB to run", got)
+	if got := h.backend.Run(context.Background(), axJob(atRawLimit)); !got.Verdict {
+		t.Fatalf("outcome = %+v, want a workspace of exactly 16 KiB to run", got)
+	}
+
+	// Exactly at the encoded limit is accepted, one character over it is not. The last
+	// line's length moves the estimate one character at a time.
+	encodedPatch := func(last int) string {
+		return newFilePatch("fill.txt", append(slices.Repeat([]string{"y"}, 800), strings.Repeat("z", last))...)
+	}
+	patched, err := patchedFixture(t, encodedPatch(0))
+	if err != nil {
+		t.Fatalf("precondition: patch does not apply: %v", err)
+	}
+	last := maxEncodedWorkspaceChars - estimatedWorkspaceEncoding(axTestTask, axTestAtespace, patched)
+	for _, tc := range []struct {
+		last    int
+		applied int
+	}{{last, 1}, {last + 1, 0}} {
+		patched, err := patchedFixture(t, encodedPatch(tc.last))
+		if err != nil || contentBytes(patched) > maxWorkspaceContentBytes {
+			t.Fatalf("precondition: patch %v, raw content %d bytes, want it applying under the raw limit", err, contentBytes(patched))
+		}
+		h := newAXHarness(t, axHarnessOptions{})
+		h.backend.Run(context.Background(), axJob(encodedPatch(tc.last)))
+		if applied := len(h.fake.Applied()); applied != tc.applied {
+			t.Fatalf("estimate %d: applied %d, want %d", estimatedWorkspaceEncoding(axTestTask, axTestAtespace, patched), applied, tc.applied)
+		}
+	}
+}
+
+func contentBytes(files map[string][]byte) int {
+	total := 0
+	for _, content := range files {
+		total += len(content)
+	}
+	return total
+}
+
+// TestAXBackend_EncodedWorkspaceEstimate_BoundsCheckpointSamples pins the estimate to
+// Workspaces whose encoded value was measured against a running AX: for every sample
+// the estimate may not undercut the measured length, and may not exceed it by more than
+// half.
+func TestAXBackend_EncodedWorkspaceEstimate_BoundsCheckpointSamples(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "ax_workspace_encoding_samples.json"))
+	if err != nil {
+		t.Fatalf("read samples: %v", err)
+	}
+	var samples []struct {
+		Description  string `json:"description"`
+		Name         string `json:"name"`
+		Atespace     string `json:"atespace"`
+		RawBytes     int    `json:"rawBytes"`
+		EncodedChars int    `json:"encodedChars"`
+		Files        []struct {
+			Path    string `json:"path"`
+			Content string `json:"content"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(raw, &samples); err != nil {
+		t.Fatalf("decode samples: %v", err)
+	}
+	pinned := [][2]int{{507, 1037}, {1237, 2278}, {4853, 6970}, {13527, 16545}, {65508, 66417}}
+	if len(samples) != len(pinned) {
+		t.Fatalf("samples = %d, want the %d measured ones", len(samples), len(pinned))
+	}
+	for i, sample := range samples {
+		files := make(map[string][]byte, len(sample.Files))
+		for _, file := range sample.Files {
+			files[file.Path] = []byte(file.Content)
+		}
+		if got := contentBytes(files); got != sample.RawBytes || [2]int{got, sample.EncodedChars} != pinned[i] {
+			t.Fatalf("sample %q holds %d bytes measured at %d characters, want the pinned %v", sample.Description, got, sample.EncodedChars, pinned[i])
+		}
+		estimate := estimatedWorkspaceEncoding(sample.Name, sample.Atespace, files)
+		if estimate < sample.EncodedChars || 2*estimate > 3*sample.EncodedChars {
+			t.Fatalf("sample %q: estimate = %d, want between the measured %d and one and a half times it", sample.Description, estimate, sample.EncodedChars)
+		}
+		// Only the samples within both limits may be created.
+		accepted := contentBytes(files) <= maxWorkspaceContentBytes && estimate <= maxEncodedWorkspaceChars
+		if want := sample.EncodedChars <= 16545; accepted != want {
+			t.Fatalf("sample %q: accepted = %v, want %v", sample.Description, accepted, want)
+		}
+	}
+
+	fixture, err := fixtureFiles()
+	if err != nil {
+		t.Fatalf("fixture files: %v", err)
+	}
+	if estimate := estimatedWorkspaceEncoding(axTestTask, axTestAtespace, fixture); estimate > maxEncodedWorkspaceChars/8 {
+		t.Fatalf("fixture estimate = %d, want the fixture far below the limit", estimate)
 	}
 }
 
