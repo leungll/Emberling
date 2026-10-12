@@ -177,6 +177,15 @@ func run(logger *slog.Logger) error {
 			if err := registerModelProviders(ctx, modelRegistry, cfg.OpenAIModel); err != nil {
 				return err
 			}
+			// Real image models get their own client: an image can take minutes, so the
+			// short dispatch client below is kept for the mock fixtures only.
+			imageModels, err := newImageModels(cfg.ImageModel, int64(cfg.AssetStorage.ArtifactMaxBytes), newImageHTTPClient(cfg.ImageModel.Timeout))
+			if err != nil {
+				return err
+			}
+			if err := registerImageModels(ctx, modelRegistry, imageModels); err != nil {
+				return err
+			}
 			taskClient := &http.Client{Timeout: defaultTaskDispatchTimeout}
 			// TODO: Move built-in node registration into a dedicated package or helper so adding
 			// new node types does not require editing the process entry point.
@@ -203,7 +212,14 @@ func run(logger *slog.Logger) error {
 			if err := toolRegistry.Register(remotelookup.Registration(cfg.ModelProvider.BaseURL, taskClient)); err != nil {
 				return fmt.Errorf("register tool: %w", err)
 			}
-			if err := registerImageTool(toolRegistry, cfg.ModelProvider.BaseURL, taskClient, assetPhotoReader{assets: assetService}, artifactStore); err != nil {
+			if err := registerImageTool(toolRegistry, imageToolWiring{
+				MockBaseURL:    cfg.ModelProvider.BaseURL,
+				DispatchClient: taskClient,
+				ImageModels:    imageModels,
+				Photos:         assetPhotoReader{assets: assetService},
+				Artifacts:      artifactStore,
+				MaxPhotoBytes:  int64(cfg.AssetStorage.MaxUploadBytes),
+			}); err != nil {
 				return err
 			}
 			for _, reg := range []registry.ToolRegistration{

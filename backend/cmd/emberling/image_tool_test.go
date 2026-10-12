@@ -19,13 +19,18 @@ import (
 	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
 )
 
-// countingTransport counts every request sent through the client it belongs to.
+// countingTransport counts every request sent through the client it belongs to and
+// passes it on to next, or to http.DefaultTransport when next is nil.
 type countingTransport struct {
 	requests atomic.Int32
+	next     http.RoundTripper
 }
 
 func (c *countingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	c.requests.Add(1)
+	if c.next != nil {
+		return c.next.RoundTrip(r)
+	}
 	return http.DefaultTransport.RoundTrip(r)
 }
 
@@ -41,7 +46,9 @@ func TestRegisterTools_MockImageUsesDispatchClientOnly(t *testing.T) {
 	dispatchClient := &http.Client{Transport: transport, Timeout: defaultTaskDispatchTimeout}
 
 	tools := registry.NewToolRegistry()
-	if err := registerImageTool(tools, provider.URL, dispatchClient, nil, asset.NewArtifactStore(t.TempDir(), 1<<20)); err != nil {
+	if err := registerImageTool(tools, imageToolWiring{
+		MockBaseURL: provider.URL, DispatchClient: dispatchClient, Artifacts: asset.NewArtifactStore(t.TempDir(), 1<<20),
+	}); err != nil {
 		t.Fatalf("registerImageTool() error = %v", err)
 	}
 	reg, ok := tools.Get(generateimage.ToolName)
