@@ -335,3 +335,51 @@ func TestImageGenerator_ClientTimeout_IsToolFailureNotDeadline(t *testing.T) {
 		t.Errorf("error repeats the key or the prompt: %q", err.Error())
 	}
 }
+
+// TestImageGenerator_ReportedModelAndCost_ReachToolResult pins the bridge between the
+// Images API Adapter and generate_image: the upstream model name and usage.cost the
+// Provider reported travel through to the Tool result as model and usage.cost.
+func TestImageGenerator_ReportedModelAndCost_ReachToolResult(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString(gradientPNG(t, 70))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"model":"vendor/seedream-reported","usage":{"cost":0.042},"data":[{"b64_json":"`+encoded+`"}]}`)
+	}))
+	t.Cleanup(server.Close)
+
+	imageModels, err := newImageModels(imageModelConfig(server.URL, config.ImageModelEntry{
+		ID: "seedream-5.0-pro", Model: "vendor/seedream-upstream", DisplayName: "Seedream 5.0 Pro",
+	}), 1<<20, newImageHTTPClient(config.DefaultImageTimeout))
+	if err != nil {
+		t.Fatalf("newImageModels() error = %v", err)
+	}
+	tools := registry.NewToolRegistry()
+	if err := registerImageTool(tools, imageToolWiring{
+		MockBaseURL: "http://mock.invalid", DispatchClient: &http.Client{},
+		ImageModels: imageModels, Photos: photoReaderFor(t), Artifacts: asset.NewArtifactStore(t.TempDir(), 1<<20), MaxPhotoBytes: 1 << 20,
+	}); err != nil {
+		t.Fatalf("registerImageTool() error = %v", err)
+	}
+	reg, _ := tools.Get(generateimage.ToolName)
+
+	result, err := reg.Executor.Execute(context.Background(), imageAction("seedream-5.0-pro"))
+	if err != nil || result.Kind != registry.ToolResultCompleted {
+		t.Fatalf("real image generation: result %+v err %v, want COMPLETED", result, err)
+	}
+	var output struct {
+		Model string `json:"model"`
+		Usage *struct {
+			Cost *float64 `json:"cost"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(result.Result.Output, &output); err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if output.Model != "vendor/seedream-reported" {
+		t.Errorf("output model = %q, want the reported upstream model", output.Model)
+	}
+	if output.Usage == nil || output.Usage.Cost == nil || *output.Usage.Cost != 0.042 {
+		t.Errorf("output usage = %+v, want cost 0.042", output.Usage)
+	}
+}
