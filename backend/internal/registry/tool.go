@@ -18,6 +18,9 @@ type ToolRegistration struct {
 // single call: it creates no Decision, advances no Turn, changes no Agent State and never
 // completes the Agent NodeRun.
 type ToolAction struct {
+	// RunID is the Run the Agent Run belongs to. A Tool uses it only to name the
+	// Run-scoped address of what it produced, never to read or change Run state.
+	RunID      string
 	AgentRunID string
 	TurnID     string
 	ActionID   string

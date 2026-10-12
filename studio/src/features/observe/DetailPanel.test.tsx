@@ -415,6 +415,10 @@ function renderNodeRun(nodeRun: NodeRun) {
   );
 }
 
+// A content-derived artifact id: "artifact_" plus the first 32 hex digits of its digest.
+const ARTIFACT_SHA = '3f'.repeat(32);
+const ARTIFACT_ID = `artifact_${ARTIFACT_SHA.slice(0, 32)}`;
+
 describe('DetailPanel — generated image preview', () => {
   it('previews the cover example a Mock Provider public URL points at', async () => {
     const uri = 'http://localhost:9101/v1/assets/img_0123456789abcdef.png';
@@ -444,6 +448,27 @@ describe('DetailPanel — generated image preview', () => {
     expect(screen.getByText('ASSET · asset_photo 1')).toBeInTheDocument();
   });
 
+  it('previews a generated ARTIFACT through the content route of the observed Run', async () => {
+    renderNodeRun(
+      mediaResultNodeRun({
+        source: 'ARTIFACT',
+        artifact: {
+          artifactId: ARTIFACT_ID,
+          mediaType: 'image/png',
+          sizeBytes: 321,
+          sha256: ARTIFACT_SHA,
+        },
+      }),
+    );
+
+    await screen.findByText('Output');
+    const img = await screen.findByRole<HTMLImageElement>('img', {
+      name: 'ARTIFACT image preview',
+    });
+    expect(img.getAttribute('src')).toBe(`/api/runs/run_1/artifacts/${ARTIFACT_ID}/content`);
+    expect(screen.getByText(`ARTIFACT · ${ARTIFACT_ID}`)).toBeInTheDocument();
+  });
+
   it.each([
     [
       'a javascript: URI',
@@ -460,10 +485,34 @@ describe('DetailPanel — generated image preview', () => {
     ['a missing uri', { source: 'EXTERNAL', mediaType: 'image/png' }],
     ['an ASSET without an id', { source: 'ASSET', asset: {} }],
     [
-      'an ARTIFACT with no content route',
+      'an ARTIFACT whose id is not a content-derived artifact id',
       {
         source: 'ARTIFACT',
         artifact: { artifactId: 'artifact_1', mediaType: 'image/png', sizeBytes: 1, sha256: 'a' },
+      },
+    ],
+    [
+      'an ARTIFACT id carrying a path',
+      {
+        source: 'ARTIFACT',
+        artifact: {
+          artifactId: `../${ARTIFACT_ID}`,
+          mediaType: 'image/png',
+          sizeBytes: 1,
+          sha256: ARTIFACT_SHA,
+        },
+      },
+    ],
+    [
+      'an ARTIFACT that is not an image',
+      {
+        source: 'ARTIFACT',
+        artifact: {
+          artifactId: ARTIFACT_ID,
+          mediaType: 'image/svg+xml',
+          sizeBytes: 1,
+          sha256: ARTIFACT_SHA,
+        },
       },
     ],
   ])('shows %s as reference text without an image element', async (_name, image) => {
@@ -904,5 +953,73 @@ describe('DetailPanel — Agent Turn timeline', () => {
     expect(fieldValue('Provider')).toBe('tool-provider-v1');
     expect(fieldValue('External Task ID')).toBe('provider_task_789');
     expect(fieldValue('Tool Attempt')).toBe('lookup · attempt 1');
+  });
+});
+
+describe('DetailPanel — Tool result image', () => {
+  const ARTIFACT_BINDING = JSON.stringify({
+    artifactId: ARTIFACT_ID,
+    mediaType: 'image/png',
+    sha256: ARTIFACT_SHA,
+    sizeBytes: 321,
+  });
+
+  function generationFact(bindings: Record<string, unknown>, subject = ARTIFACT_ID) {
+    return {
+      id: 'fact_gen_1',
+      factType: 'image_generated',
+      subject,
+      bindings: { photoAssetId: 'asset_photo_1', settingsDigest: 'digest_1', ...bindings },
+      verdict: null,
+      basisFactId: null,
+      toolAttemptId: 'tool_attempt_1',
+      createdAt: '2026-08-03T12:00:05Z',
+    };
+  }
+
+  function renderTraceWithFacts(facts: unknown[]) {
+    const trace = { ...AGENT_TRACE_BODY, facts: { items: facts, truncated: false } };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve(
+            url.endsWith('/agent')
+              ? jsonResponse(200, trace)
+              : jsonResponse(200, { nodeRun: AGENT_NODE_RUN, attempts: [] }),
+          ),
+        ),
+    );
+    renderAgentPanel();
+  }
+
+  it('previews the artifact a Tool Attempt saved through the observed Run content route', async () => {
+    renderTraceWithFacts([generationFact({ artifact: ARTIFACT_BINDING })]);
+
+    const images = await screen.findByTestId('tool-result-images');
+    const img = within(images).getByRole<HTMLImageElement>('img', {
+      name: 'ARTIFACT image preview',
+    });
+    expect(img.getAttribute('src')).toBe(`/api/runs/run_1/artifacts/${ARTIFACT_ID}/content`);
+    expect(within(images).getByText(`ARTIFACT · ${ARTIFACT_ID}`)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a fact without an artifact binding', generationFact({})],
+    ['an artifact binding that is not JSON', generationFact({ artifact: 'not json' })],
+    [
+      'an artifact of another subject',
+      generationFact({ artifact: ARTIFACT_BINDING }, `artifact_${'0'.repeat(32)}`),
+    ],
+    [
+      'a fact of another Tool Attempt',
+      { ...generationFact({ artifact: ARTIFACT_BINDING }), toolAttemptId: 'tool_attempt_9' },
+    ],
+  ])('shows no Tool result image for %s', async (_name, fact) => {
+    renderTraceWithFacts([fact]);
+
+    await screen.findByText('lookup #1');
+    expect(screen.queryByTestId('tool-result-images')).not.toBeInTheDocument();
   });
 });

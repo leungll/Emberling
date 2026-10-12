@@ -217,7 +217,7 @@ func TestRunLock_ConcurrentAppend_SeqStrictlyIncreasingAndUnique(t *testing.T) {
 
 	events := listEvents(ctx, t, uow, f.runID)
 	if len(events) != 4 {
-		t.Fatalf("committed events: want 4, got %d", len(events))
+		t.Fatalf("committed events: want 5, got %d", len(events))
 	}
 	for i, ev := range events {
 		if ev.Seq != int64(i+1) {
@@ -227,7 +227,7 @@ func TestRunLock_ConcurrentAppend_SeqStrictlyIncreasingAndUnique(t *testing.T) {
 
 	run := getRun(ctx, t, uow, f.runID)
 	if run.LastSeq != 4 {
-		t.Fatalf("runs.last_seq: want 4, got %d", run.LastSeq)
+		t.Fatalf("runs.last_seq: want 5, got %d", run.LastSeq)
 	}
 }
 
@@ -433,8 +433,8 @@ func TestMigrations_ApplyTwice_Idempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM goose_db_version WHERE version_id > 0`).Scan(&applied); err != nil {
 		t.Fatalf("read goose version table: %v", err)
 	}
-	if applied != 4 {
-		t.Fatalf("applied migrations after two runs: want 4, got %d", applied)
+	if applied != 5 {
+		t.Fatalf("applied migrations after two runs: want 5, got %d", applied)
 	}
 }
 

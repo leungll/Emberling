@@ -70,3 +70,42 @@ func (r *artifactRepository) Get(ctx context.Context, artifactID string) (store.
 	}
 	return record, nil
 }
+
+// LinkToToolAttempt inserts one tool_attempt_artifacts row. It has no ON CONFLICT clause:
+// the result transaction writes each declared link exactly once, so a duplicate is a
+// defect that must fail the transaction.
+func (r *artifactRepository) LinkToToolAttempt(ctx context.Context, link store.ToolAttemptArtifact) error {
+	const insert = `
+		INSERT INTO tool_attempt_artifacts (tool_attempt_id, artifact_id, run_id, created_at)
+		VALUES ($1, $2, $3, $4)`
+	if _, err := r.conn.Exec(ctx, insert, link.ToolAttemptID, link.ArtifactID, link.RunID, link.CreatedAt); err != nil {
+		return mapError("artifacts.LinkToToolAttempt", err, link.ToolAttemptID, link.ArtifactID)
+	}
+	return nil
+}
+
+// GetForRun reads an artifact through a link of runID whose Tool Attempt succeeded. A
+// missing Run, link or metadata row all leave the join empty and map to the same
+// domain.ErrNotFound.
+func (r *artifactRepository) GetForRun(ctx context.Context, runID, artifactID string) (store.ArtifactRecord, error) {
+	const query = `
+		SELECT a.artifact_id, a.media_type, a.size_bytes, a.sha256, a.storage_key, a.created_at
+		FROM tool_attempt_artifacts l
+		JOIN tool_attempts t ON t.id = l.tool_attempt_id
+		JOIN execution_artifacts a ON a.artifact_id = l.artifact_id
+		WHERE l.run_id = $1 AND l.artifact_id = $2 AND t.status = 'SUCCEEDED'
+		LIMIT 1`
+
+	var record store.ArtifactRecord
+	if err := r.conn.QueryRow(ctx, query, runID, artifactID).Scan(
+		&record.Artifact.ArtifactID,
+		&record.Artifact.MediaType,
+		&record.Artifact.SizeBytes,
+		&record.Artifact.SHA256,
+		&record.StorageKey,
+		&record.Artifact.CreatedAt,
+	); err != nil {
+		return store.ArtifactRecord{}, mapError("artifacts.GetForRun", err, runID, artifactID)
+	}
+	return record, nil
+}

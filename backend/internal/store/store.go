@@ -120,6 +120,28 @@ type ArtifactRepository interface {
 	// Get returns the Metadata and storage key of one Execution Artifact, or
 	// domain.ErrNotFound.
 	Get(ctx context.Context, artifactID string) (ArtifactRecord, error)
+
+	// LinkToToolAttempt records that a Tool Attempt of a Run declared an Execution
+	// Artifact with its result. It belongs to that result transaction: the artifact's row
+	// must already exist in it, and a second link of the same Attempt and artifact yields
+	// domain.ErrConflict rather than being ignored.
+	LinkToToolAttempt(ctx context.Context, link ToolAttemptArtifact) error
+
+	// GetForRun returns the Metadata and storage key of an Execution Artifact that a
+	// SUCCEEDED Tool Attempt of runID declared, or domain.ErrNotFound when the Run does
+	// not exist, no such link exists, or the artifact has no row. The three cases are
+	// deliberately indistinguishable, so a Run reveals nothing about another Run's
+	// artifacts.
+	GetForRun(ctx context.Context, runID, artifactID string) (ArtifactRecord, error)
+}
+
+// ToolAttemptArtifact is one tool_attempt_artifacts row: which Tool Attempt of which Run
+// declared which Execution Artifact.
+type ToolAttemptArtifact struct {
+	ToolAttemptID string
+	ArtifactID    string
+	RunID         string
+	CreatedAt     time.Time
 }
 
 // RunRepository persists Runs and serialises concurrent advancement of one Run.

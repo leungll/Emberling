@@ -102,7 +102,17 @@ func (s *Server) handleGenerateImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	assetID := generatedAssetID(req.PhotoAssetID, req.SettingsDigest)
-	s.recordMedia(recordEntry{Event: recordGenerated, Kind: kindImage, recordDetail: recordDetail{AssetID: assetID}})
+	encoded, err := generatedPNG(assetID)
+	if err != nil {
+		s.recordResponse(kindImage, "", http.StatusInternalServerError, false)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "image could not be encoded"})
+		return
+	}
+	contentSum := sha256.Sum256(encoded)
+	s.recordMedia(recordEntry{Event: recordGenerated, Kind: kindImage, recordDetail: recordDetail{
+		AssetID: assetID,
+		SHA256:  hex.EncodeToString(contentSum[:]),
+	}})
 	s.recordResponse(kindImage, "", http.StatusOK, false)
 	writeJSON(w, http.StatusOK, imageResponse{
 		AssetID:  assetID,

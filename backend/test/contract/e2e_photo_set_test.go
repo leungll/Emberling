@@ -12,6 +12,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -22,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
 	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
@@ -66,11 +69,13 @@ func newPhotoSetEnv(t *testing.T) *photoSetEnv {
 type photoSetRecordLine struct {
 	Event          string `json:"event"`
 	Kind           string `json:"kind"`
-	AssetID        string `json:"assetId"`
+	SHA256         string `json:"sha256"`
 	ExternalTaskID string `json:"externalTaskId"`
 }
 
-// providerRecord reads the whole dispatch record of this test's Mock Provider.
+// providerRecord reads the whole dispatch record of this test's Mock Provider. A generation
+// is reported as the Execution Artifact id its image's bytes are saved under, so it compares
+// directly with the ledger's generation subjects.
 func (e *photoSetEnv) providerRecord(t *testing.T) (generated []string, videoTasks []string) {
 	t.Helper()
 	resp, err := (&http.Client{Timeout: e2eHTTPTimeout}).Get(e.providerURL + "/control/record?after=0")
@@ -90,7 +95,11 @@ func (e *photoSetEnv) providerRecord(t *testing.T) (generated []string, videoTas
 		}
 		switch line.Event {
 		case "generated":
-			generated = append(generated, line.AssetID)
+			id, err := domain.ArtifactIDForSHA256(line.SHA256)
+			if err != nil {
+				t.Fatalf("record line %q names no image digest: %v", scanner.Text(), err)
+			}
+			generated = append(generated, id)
 		case "video_dispatched":
 			videoTasks = append(videoTasks, line.ExternalTaskID)
 		}
@@ -298,6 +307,43 @@ func TestE2E_PhotoSet_MainStory_DeliversOneReviewedExamplePerPhotoMatchingThePro
 	if len(videoTasks) != 1 || !slices.Equal(videoTasks, boundTasks) {
 		t.Errorf("provider video tasks %v, Trace callback bindings %v, want the same single task", videoTasks, boundTasks)
 	}
+
+	// The delivered cover is the ARTIFACT a generation fact of this Run names, and the
+	// Run-scoped content route serves exactly the bytes that reference describes.
+	cover := photoSetCoverArtifact(t, snapshot)
+	if !slices.Contains(generatedSubjects, cover.ArtifactID) {
+		t.Fatalf("cover artifact %s is not a generation subject of this Run %v", cover.ArtifactID, generatedSubjects)
+	}
+	runID, _ := snapshot["run"].(map[string]any)["id"].(string)
+	resp, err := (&http.Client{Timeout: e2eHTTPTimeout}).Get(env.server.URL + generateimage.ArtifactContentPath(runID, cover.ArtifactID))
+	if err != nil {
+		t.Fatalf("GET cover content: %v", err)
+	}
+	content, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	sum := sha256.Sum256(content)
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != cover.MediaType ||
+		hex.EncodeToString(sum[:]) != cover.SHA256 || int64(len(content)) != cover.SizeBytes {
+		t.Errorf("cover content status=%d type=%q size=%d, want 200 %s bytes matching %+v",
+			resp.StatusCode, resp.Header.Get("Content-Type"), len(content), cover.MediaType, cover)
+	}
+}
+
+// photoSetCoverArtifact reads the ARTIFACT reference the media result's image port carries.
+func photoSetCoverArtifact(t *testing.T, snapshot map[string]any) domain.ArtifactRef {
+	t.Helper()
+	raw, err := json.Marshal(nodeRunOutputOf(t, snapshot, "node_result")["image"])
+	if err != nil {
+		t.Fatalf("encode media_result image: %v", err)
+	}
+	var image domain.ImageRef
+	if err := json.Unmarshal(raw, &image); err != nil {
+		t.Fatalf("media_result image %s is not an ImageRef: %v", raw, err)
+	}
+	if image.Source != domain.ImageSourceArtifact || image.Artifact == nil {
+		t.Fatalf("media_result image = %s, want an ARTIFACT reference", raw)
+	}
+	return *image.Artifact
 }
 
 // TestE2E_PhotoSet_GateStory_VideoForUnreviewedAssetRejectedBeforeDispatch proves that a

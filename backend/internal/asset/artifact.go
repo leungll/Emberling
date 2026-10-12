@@ -140,6 +140,26 @@ func (s *ArtifactStore) Write(ctx context.Context, r io.Reader) (domain.Artifact
 	return ref, nil
 }
 
+// Open returns the object stored under storageKey for a read that verifies it before
+// serving it, which is why the reader can seek back to the start. The caller closes it. An
+// absent object yields domain.ErrNotFound; errors never carry a path or storage key.
+func (s *ArtifactStore) Open(ctx context.Context, storageKey string) (io.ReadSeekCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := validateArtifactStorageKey(storageKey); err != nil {
+		return nil, err
+	}
+	file, err := os.Open(s.path(storageKey))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("asset: open artifact: %w", domain.ErrNotFound)
+		}
+		return nil, fmt.Errorf("asset: open artifact: %w", redactPath(err))
+	}
+	return file, nil
+}
+
 // RemoveIfOlder deletes the object under storageKey when its modification time is before
 // cutoff, and reports whether it did. It is the sweeper's path for an object no metadata
 // references. The age is read again here, at removal time, because saving identical bytes

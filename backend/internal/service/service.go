@@ -59,10 +59,13 @@ type Deps struct {
 	Clock    domain.Clock
 	IDs      domain.IDGenerator
 	Assets   AssetContentStore
-	Queue    WorkEnqueuer
-	Notifier EventNotifier
-	Logger   *slog.Logger
-	Callback CallbackConfig
+	// ArtifactContent reads Execution Artifact content for the Run-scoped content read.
+	// Only ArtifactService uses it; it is nil where no content is ever read back.
+	ArtifactContent ArtifactContentReader
+	Queue           WorkEnqueuer
+	Notifier        EventNotifier
+	Logger          *slog.Logger
+	Callback        CallbackConfig
 	// PollHooks lets a test stop or synchronize PollAttempt between its claim commit and
 	// the Provider query. The zero value installs no hook.
 	PollHooks PollHooks

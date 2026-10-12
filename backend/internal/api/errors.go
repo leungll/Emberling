@@ -16,6 +16,7 @@ const (
 	codeValidationFailed          = "VALIDATION_FAILED"
 	codeDefinitionNotFound        = "DEFINITION_NOT_FOUND"
 	codeAssetNotFound             = "ASSET_NOT_FOUND"
+	codeArtifactNotFound          = "ARTIFACT_NOT_FOUND"
 	codeRunNotFound               = "RUN_NOT_FOUND"
 	codeNodeRunNotFound           = "NODE_RUN_NOT_FOUND"
 	codeVersionConflict           = "VERSION_CONFLICT"

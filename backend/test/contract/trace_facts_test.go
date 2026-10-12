@@ -37,7 +37,7 @@ const (
 )
 
 // traceFactsAssetRef finds the generated asset reference in a Tool result message.
-var traceFactsAssetRef = regexp.MustCompile(`"assetRef"\s*:\s*"(img_[0-9a-f]+)"`)
+var traceFactsAssetRef = regexp.MustCompile(`"assetRef"\s*:\s*"(artifact_[0-9a-f]{32})"`)
 
 type traceFactsResponse struct {
 	Turns []struct {
@@ -210,7 +210,7 @@ func TestAgentTraceFacts_GenerateReviewGenerate_ProjectsLedgerInOrder(t *testing
 	}
 
 	generatedA, reviewed, generatedB := facts[0], facts[1], facts[2]
-	if !strings.HasPrefix(generatedA.Subject, "img_") || generatedA.Bindings["photoAssetId"] != traceFactsPhotoA ||
+	if !strings.HasPrefix(generatedA.Subject, "artifact_") || generatedA.Bindings["artifact"] == "" || generatedA.Bindings["photoAssetId"] != traceFactsPhotoA ||
 		generatedA.Bindings["settingsDigest"] == "" {
 		t.Errorf("first generation fact = %+v, want an asset of %s with its settings digest", generatedA, traceFactsPhotoA)
 	}

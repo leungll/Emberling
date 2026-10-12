@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -99,16 +100,20 @@ const outputSchema = `{
 // carries an `artifact` reference and declares it in ToolResult.Artifacts for the Runtime
 // to commit with the result.
 //
-// Generation creates a Provider asset, so the call has an EXTERNAL side effect. Its
+// The result has the same shape whichever image model generated it: assetRef is the
+// artifact id, and imageUrl is the site-relative path of the Run-scoped artifact content
+// route. The path names no origin, so it stays valid wherever the Backend is deployed and
+// can be bound into an immutable fact.
+//
+// Generation runs on an external image model, so the call has an EXTERNAL side effect. Its
 // idempotency is UNKNOWN: the Runtime hands an Agent Tool no idempotency key, so nothing
 // here may claim KEYED. Each call counts toward the Agent's generation limit.
 //
 // A successful result establishes an `image_generated` fact about the returned assetRef,
 // bound to the source photo and to the digest of the settings that produced it, so a later
 // review or video call can prove which photo and settings the asset came from. The fact
-// also binds the Provider's imageUrl, a credential-free address of the generated asset, so
-// a delivery node can present the generated image from the fact rather than from a URL the
-// model reports.
+// also binds imageUrl and the full artifact reference, so a delivery node can present the
+// generated image from the fact rather than from a URL the model reports.
 func Registration(generators map[string]ImageGenerator, photos PhotoReader, artifacts ArtifactContentStore) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
@@ -122,6 +127,7 @@ func Registration(generators map[string]ImageGenerator, photos PhotoReader, arti
 				FactType:       FactType,
 				SubjectPointer: domain.FactPointer{Source: domain.FactPointerResult, Pointer: "/assetRef"},
 				BindArguments: map[string]domain.FactPointer{
+					"artifact":       {Source: domain.FactPointerResult, Pointer: "/artifact"},
 					"imageUrl":       {Source: domain.FactPointerResult, Pointer: "/imageUrl"},
 					"photoAssetId":   {Source: domain.FactPointerArguments, Pointer: "/photoAssetId"},
 					"settingsDigest": {Source: domain.FactPointerResult, Pointer: "/settingsDigest"},
@@ -167,6 +173,9 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 	if e.artifacts == nil {
 		return registry.ToolExecutionResult{}, toolError("save image", "artifact storage is not configured")
 	}
+	if action.RunID == "" {
+		return registry.ToolExecutionResult{}, toolError("build request", "the call carries no Run id")
+	}
 	generator := e.generators[action.ImageModelID]
 	if generator == nil {
 		return registry.ToolExecutionResult{}, fmt.Errorf("%s: select generator: image model %q has no generator in this process", ToolName, action.ImageModelID)
@@ -198,9 +207,6 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 		return registry.ToolExecutionResult{}, toolError("save image", "generator returned no image content")
 	}
 	defer func() { _ = generated.Content.Close() }()
-	if generated.AssetID == "" || generated.ImageURL == "" {
-		return registry.ToolExecutionResult{}, toolError("save image", "generator returned no asset reference")
-	}
 
 	artifact, err := e.artifacts.Write(ctx, generated.Content)
 	if err != nil {
@@ -214,7 +220,12 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 		return registry.ToolExecutionResult{}, toolError("save image", reason)
 	}
 
-	output, err := json.Marshal(result{AssetRef: generated.AssetID, ImageURL: generated.ImageURL, SettingsDigest: digest, Artifact: artifact})
+	output, err := json.Marshal(result{
+		AssetRef:       artifact.ArtifactID,
+		ImageURL:       ArtifactContentPath(action.RunID, artifact.ArtifactID),
+		SettingsDigest: digest,
+		Artifact:       artifact,
+	})
 	if err != nil {
 		return registry.ToolExecutionResult{}, toolError("encode result", "result could not be encoded")
 	}
@@ -222,6 +233,13 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 		Kind:   registry.ToolResultCompleted,
 		Result: &registry.ToolResult{Output: output, Artifacts: []domain.ArtifactRef{artifact}},
 	}, nil
+}
+
+// ArtifactContentPath is the site-relative path of the Run-scoped route that serves an
+// artifact a committed result of runID declared. It carries no origin, so it neither
+// depends on nor reveals where the Backend is deployed.
+func ArtifactContentPath(runID, artifactID string) string {
+	return "/api/runs/" + url.PathEscape(runID) + "/artifacts/" + url.PathEscape(artifactID) + "/content"
 }
 
 // openPhoto reads one source photo through the photo port on a generator's request.

@@ -107,12 +107,18 @@ func (s *ExecutionService) consumeReplayedPendingLocked(ctx context.Context, tx 
 	return err
 }
 
-// recordToolArtifacts commits the metadata of each declared Execution Artifact. Content
-// addressing makes the row identical however often the same bytes are produced, so a row
-// that already exists with the same content is kept as it is; one that disagrees fails
-// the transaction. The storage key is derived from the digest here rather than taken from
-// the Tool, which never sees a storage location.
-func recordToolArtifacts(ctx context.Context, tx store.Tx, artifacts []domain.ArtifactRef, now time.Time) error {
+// recordToolArtifacts commits the metadata of each declared Execution Artifact and links
+// it to the Tool Attempt and Run that declared it. Content addressing makes the row
+// identical however often the same bytes are produced, so a row that already exists with
+// the same content is kept as it is; one that disagrees fails the transaction. The storage
+// key is derived from the digest here rather than taken from the Tool, which never sees a
+// storage location.
+//
+// The link is what lets the Run read the artifact back, so it is written here, inside the
+// result transaction and before the Attempt's conditional update: a result that loses that
+// update rolls the link back with everything else, and a stale Attempt never gains one.
+// It comes from the Tool's declaration, never from parsing the result.
+func recordToolArtifacts(ctx context.Context, tx store.Tx, call agentToolCall, artifacts []domain.ArtifactRef, now time.Time) error {
 	for _, ref := range artifacts {
 		key, err := asset.ArtifactStorageKey(ref.SHA256)
 		if err != nil {
@@ -129,6 +135,14 @@ func recordToolArtifacts(ctx context.Context, tx store.Tx, artifacts []domain.Ar
 			StorageKey: key,
 		}
 		if err := tx.Artifacts().CreateIfAbsent(ctx, record); err != nil {
+			return err
+		}
+		if err := tx.Artifacts().LinkToToolAttempt(ctx, store.ToolAttemptArtifact{
+			ToolAttemptID: call.attemptID,
+			ArtifactID:    ref.ArtifactID,
+			RunID:         call.runID,
+			CreatedAt:     now,
+		}); err != nil {
 			return err
 		}
 	}
@@ -184,7 +198,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
 			return err
 		}
-		if err := recordToolArtifacts(ctx, tx, artifacts, now); err != nil {
+		if err := recordToolArtifacts(ctx, tx, call, artifacts, now); err != nil {
 			return err
 		}
 		// The conditional Attempt update is what decides that this caller, and not a stale

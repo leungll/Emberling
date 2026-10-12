@@ -200,12 +200,19 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 }
 
 // validateDeclaredArtifacts rejects a declared Execution Artifact whose reference is not
-// internally consistent, before any of its metadata can become a row.
+// internally consistent, before any of its metadata can become a row. An artifact declared
+// twice is rejected too: the result transaction links each declaration to the Attempt
+// once, so a repeated one would fail that transaction instead of failing the Tool call.
 func validateDeclaredArtifacts(artifacts []domain.ArtifactRef, toolName string) error {
+	declared := make(map[string]bool, len(artifacts))
 	for _, ref := range artifacts {
 		if err := ref.Validate(); err != nil {
 			return fmt.Errorf("tool %q declared an invalid artifact: %w", toolName, err)
 		}
+		if declared[ref.ArtifactID] {
+			return fmt.Errorf("tool %q declared artifact %s more than once", toolName, ref.ArtifactID)
+		}
+		declared[ref.ArtifactID] = true
 	}
 	return nil
 }
@@ -595,6 +602,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			executor:     reg.Executor,
 			outputSchema: reg.Metadata.OutputSchema,
 			action: registry.ToolAction{
+				RunID:        nodeRun.RunID,
 				AgentRunID:   agentRun.ID,
 				TurnID:       turn.ID,
 				ActionID:     action.ID,

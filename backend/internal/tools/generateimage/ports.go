@@ -38,14 +38,11 @@ type Settings struct {
 }
 
 // GeneratedImage is one generated image. The Tool reads Content exactly once into
-// Execution Artifact storage and closes it.
+// Execution Artifact storage and closes it. The bytes are all a generator returns: the
+// result names the image by the artifact saved from them, never by a Provider's own
+// identifier or address, so every image model produces the same result shape.
 type GeneratedImage struct {
 	Content io.ReadCloser
-	// AssetID and ImageURL are the Provider's own credential-free reference to the
-	// generated image. The Tool's result names the image by them, so a generator that
-	// returns none cannot complete a call.
-	AssetID  string
-	ImageURL string
 }
 
 // PhotoReader is the port through which the Tool reads a source photo by its Asset id.
