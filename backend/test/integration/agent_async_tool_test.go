@@ -137,6 +137,7 @@ func newAgentAsyncHarnessMaxTurns(t *testing.T, workflowID string, tool *agentAs
 		Clock:    newExecClock(time.Now().UTC().Truncate(time.Millisecond)),
 		Notifier: opts.Notifier,
 		Queue:    opts.Queue,
+		WrapUoW:  opts.WrapUoW,
 	})
 	agentScriptToolCallThenFinal(h, mockmodel.Scenario{
 		ToolName: remotelookup.ToolName, ToolArguments: json.RawMessage(agentToolArguments),

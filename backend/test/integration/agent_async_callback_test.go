@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -540,6 +541,125 @@ func TestAgentAsyncToolCallback_EarlyPendingCallback_ConsumedOnceAfterDispatch(t
 	if tool.callbackCount() != 1 {
 		t.Errorf("OnCallback calls = %d, want 1", tool.callbackCount())
 	}
+}
+
+// TestAgentAsyncToolCallback_EarlyCallbackStoredAfterDispatchReplay_StillResumes covers the
+// interleaving the dispatcher's own replay cannot see: the intake reads no Callback
+// Binding, the dispatch transaction commits the Binding, the dispatcher's post-commit
+// replay finds no Pending Callback yet, and only then does the intake commit the row. With
+// no Reconciler running, the delivery must still resume the waiting Action before the
+// intake returns: whichever of the two writers commits second must observe the other's
+// committed row.
+func TestAgentAsyncToolCallback_EarlyCallbackStoredAfterDispatchReplay_StillResumes(t *testing.T) {
+	gate := &pendingRecordGate{entered: make(chan struct{}), release: make(chan struct{})}
+	tool := &agentAsyncTool{result: agentAsyncDispatched(agentAsyncExternalTaskID)}
+	var h *agentHarness
+	var early service.CallbackOutcome
+	var earlyErr error
+	intakeDone := make(chan struct{})
+	tool.during = func(ctx context.Context, action registry.ToolAction) {
+		token := action.Callback.Token
+		// The Tool call's context ends when Execute returns, while the intake must
+		// outlive it, as a Provider's delivery does.
+		intakeCtx := context.WithoutCancel(ctx)
+		go func() {
+			defer close(intakeDone)
+			early, earlyErr = h.svc.HandleCallback(intakeCtx, service.HandleCallback{
+				Token:          token,
+				ExternalTaskID: agentAsyncExternalTaskID,
+				Payload:        json.RawMessage(agentCallbackSucceeded),
+			})
+		}()
+		// The intake has found no Binding and is about to store the delivery; the Tool
+		// returns now, so the dispatch transaction and its replay run before that row exists.
+		<-gate.entered
+	}
+	h, _, outcome := newAgentAsyncHarnessWithOptions(t, "wf-agent-cb-early-late-row", tool, agentHarnessOptions{
+		WrapUoW: func(inner store.UnitOfWork) store.UnitOfWork {
+			return pendingRecordGateUoW{UnitOfWork: inner, gate: gate}
+		},
+	})
+
+	h.execute(outcome)
+
+	action, _ := agentActionOfTurn(h.ctx, t, h.uow, outcome.AgentTurnID)
+	if action.Status != domain.AgentActionWaitingCallback {
+		t.Fatalf("precondition: action status after the dispatcher's replay = %s, want WAITING_CALLBACK", action.Status)
+	}
+	if status := asyncPendingStatus(h.ctx, t, h.uow, agentAsyncExternalTaskID); status != "absent" {
+		t.Fatalf("precondition: pending callback row = %s before the intake stored it, want absent", status)
+	}
+
+	close(gate.release)
+	<-intakeDone
+
+	if earlyErr != nil || !early.Pending {
+		t.Fatalf("early callback = %+v, %v, want stored as pending", early, earlyErr)
+	}
+	if status := asyncPendingStatus(h.ctx, t, h.uow, agentAsyncExternalTaskID); status != "consumed" {
+		t.Errorf("pending callback row = %s, want consumed by the intake's own replay", status)
+	}
+	action, _ = agentActionOfTurn(h.ctx, t, h.uow, outcome.AgentTurnID)
+	if action.Status != domain.AgentActionSucceeded {
+		t.Errorf("action status = %s, want SUCCEEDED without waiting for a Reconciler pass", action.Status)
+	}
+	agentRun, _ := agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
+	if !agentTurnNoExists(h.ctx, t, h.uow, agentRun.ID, 2) {
+		t.Errorf("the stored callback did not continue the Agent Loop to turn 2")
+	}
+	if tool.callbackCount() != 1 {
+		t.Errorf("OnCallback calls = %d, want 1", tool.callbackCount())
+	}
+}
+
+// pendingRecordGate holds the first Pending Callback write at a barrier: entered closes
+// when the intake reaches it, and the write proceeds once release is closed.
+type pendingRecordGate struct {
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (g *pendingRecordGate) hold() {
+	first := false
+	g.once.Do(func() { first = true })
+	if first {
+		close(g.entered)
+		<-g.release
+	}
+}
+
+// pendingRecordGateUoW, pendingRecordGateTx and pendingRecordGateRepo route every service
+// transaction through the real Unit of Work and differ only in holding
+// PendingCallbacks().Record at the gate before it writes.
+type pendingRecordGateUoW struct {
+	store.UnitOfWork
+	gate *pendingRecordGate
+}
+
+func (u pendingRecordGateUoW) WithinTx(ctx context.Context, fn func(ctx context.Context, tx store.Tx) error) error {
+	return u.UnitOfWork.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return fn(ctx, pendingRecordGateTx{Tx: tx, gate: u.gate})
+	})
+}
+
+type pendingRecordGateTx struct {
+	store.Tx
+	gate *pendingRecordGate
+}
+
+func (tx pendingRecordGateTx) PendingCallbacks() store.PendingCallbackRepository {
+	return pendingRecordGateRepo{PendingCallbackRepository: tx.Tx.PendingCallbacks(), gate: tx.gate}
+}
+
+type pendingRecordGateRepo struct {
+	store.PendingCallbackRepository
+	gate *pendingRecordGate
+}
+
+func (r pendingRecordGateRepo) Record(ctx context.Context, pending domain.PendingCallback) (bool, error) {
+	r.gate.hold()
+	return r.PendingCallbackRepository.Record(ctx, pending)
 }
 
 // TestAgentAsyncToolCallback_UninterpretablePayload_LeavesActionWaiting covers an

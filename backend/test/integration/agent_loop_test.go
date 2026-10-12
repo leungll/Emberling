@@ -81,6 +81,10 @@ type agentHarnessOptions struct {
 	// ModelProviders registers additional Model Providers beside the mock one. Leaving one
 	// out of a restarted harness reproduces a Model ID removed from configuration.
 	ModelProviders []registry.ModelProvider
+	// WrapUoW, when set, wraps the Unit of Work the service runs its transactions through,
+	// so a test can hold one repository call at a barrier between two committed
+	// transactions. The harness's own read helpers keep the unwrapped one.
+	WrapUoW func(store.UnitOfWork) store.UnitOfWork
 }
 
 // agentInlineTurns is the harness's default WorkEnqueuer. A synchronous Tool round no
@@ -194,8 +198,12 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		turns = &agentInlineTurns{}
 		queue = turns
 	}
+	serviceUoW := store.UnitOfWork(uow)
+	if opts.WrapUoW != nil {
+		serviceUoW = opts.WrapUoW(serviceUoW)
+	}
 	svc := service.NewExecutionService(service.Deps{
-		UoW:      uow,
+		UoW:      serviceUoW,
 		Nodes:    nodeRegistry,
 		Models:   modelRegistry,
 		Tools:    toolRegistry,
