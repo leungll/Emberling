@@ -100,9 +100,10 @@ func frozenValue(raw json.RawMessage) json.RawMessage {
 // an Attempt would be a second, empty record of the same execution and would give the
 // retry and timeout machinery a handle on a NodeRun whose rounds it does not own.
 //
-// Before anything is created, every stable Tool Name in the frozen allowlist and the
-// frozen Model ID must resolve in the current Registry: silently dropping a missing
-// entry and starting a shortened Agent is forbidden. A failure to
+// Before anything is created, every stable Tool Name in the frozen allowlist, the frozen
+// Model ID and the optional image Model ID must resolve in the current Registry with the
+// capability each needs: silently dropping a missing entry and starting a shortened Agent
+// is forbidden. A failure to
 // resolve fails the Agent NodeRun in this same transaction and creates no Agent Run.
 func (s *ExecutionService) startAgentRun(
 	ctx context.Context,
@@ -126,11 +127,26 @@ func (s *ExecutionService) startAgentRun(
 			domain.ExecutionError{Code: "AGENT_CONFIG_INVALID", Message: err.Error()}, now)
 	}
 
-	if _, _, ok := s.deps.Models.Get(cfg.ModelID); !ok {
+	modelReg, _, ok := s.deps.Models.Get(cfg.ModelID)
+	if !ok {
 		return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil, domain.ExecutionError{
-			Code:    "MODEL_NOT_REGISTERED",
+			Code:    codeModelNotRegistered,
 			Message: fmt.Sprintf("model %q is not registered", cfg.ModelID),
 		}, now)
+	}
+	if !modelReg.HasCapability(domain.ModelCapabilityStructuredDecision) {
+		return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil, *unusableModel(s.deps.Models,
+			"decision model", cfg.ModelID, domain.ModelCapabilityStructuredDecision), now)
+	}
+	// The image model is frozen only when the node selected one; whether the allowlist
+	// needs it was decided at Save and Run creation. A selection that no longer resolves
+	// fails the NodeRun here exactly like the decision model, before any Agent Run exists.
+	var imageModelID *string
+	if cfg.ImageModelID != "" {
+		if unusable := unusableModel(s.deps.Models, "image model", cfg.ImageModelID, domain.ModelCapabilityReferenceImageGeneration); unusable != nil {
+			return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil, *unusable, now)
+		}
+		imageModelID = &cfg.ImageModelID
 	}
 	for _, toolName := range cfg.AllowedTools {
 		if _, ok := s.deps.Tools.Get(toolName); !ok {
@@ -172,6 +188,7 @@ func (s *ExecutionService) startAgentRun(
 		// The generation limit is frozen with the rest of the config: claims read it from
 		// the Agent Run, never from the Definition. Nil keeps the Agent Run unlimited.
 		MaxGenerationCalls: cfg.MaxGenerationCalls,
+		ImageModelID:       imageModelID,
 		// The Agent Run starts pointing at the facts this same transaction creates: Turn
 		// 1, Context Version 0 and State Version 0.
 		CurrentTurnNo:         1,

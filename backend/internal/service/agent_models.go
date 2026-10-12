@@ -15,7 +15,12 @@ import (
 // generation. The rules come from registered Model capabilities and Tool Metadata only,
 // never from a Model ID, a Provider type or a Tool Name.
 //
-// Saving a Definition and creating a Run report violations as validation errors.
+// Saving a Definition and creating a Run report violations as validation errors. Agent
+// initialisation and the claim of an image-model Tool re-resolve the frozen IDs against the
+// current Registry, because configuration can change across a restart; a frozen ID that
+// no longer resolves fails explicitly and is never replaced by another model.
+
+const codeModelNotRegistered = "MODEL_NOT_REGISTERED"
 
 // agentModelSelectionErrors reports the capability violations of one Agent node's model
 // selections. An unregistered modelId and unregistered Tools are reported by the caller's
@@ -76,4 +81,38 @@ func agentModelSelectionErrors(models *registry.ModelRegistry, tools *registry.T
 		}
 	}
 	return errs
+}
+
+// unusableModel re-resolves one frozen Model ID against the current Model Registry and
+// reports why it can no longer serve the named capability, or nil when it can. role names
+// the selection ("decision model" or "image model") in the error message.
+func unusableModel(models *registry.ModelRegistry, role, modelID, capability string) *domain.ExecutionError {
+	if modelID == "" {
+		return &domain.ExecutionError{
+			Code:    codeModelNotRegistered,
+			Message: fmt.Sprintf("the Agent Run froze no %s", role),
+		}
+	}
+	reg, _, ok := models.Get(modelID)
+	if !ok {
+		return &domain.ExecutionError{
+			Code:    codeModelNotRegistered,
+			Message: fmt.Sprintf("%s %q is not registered", role, modelID),
+		}
+	}
+	if !reg.HasCapability(capability) {
+		return &domain.ExecutionError{
+			Code:    codeModelNotRegistered,
+			Message: fmt.Sprintf("%s %q no longer declares %s", role, modelID, capability),
+		}
+	}
+	return nil
+}
+
+// frozenImageModel returns the image Model ID an Agent Run froze, or "" when it froze none.
+func frozenImageModel(agentRun domain.AgentRun) string {
+	if agentRun.ImageModelID == nil {
+		return ""
+	}
+	return *agentRun.ImageModelID
 }

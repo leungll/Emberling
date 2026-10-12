@@ -510,6 +510,23 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			return nil
 		}
 
+		// A Tool that runs with the node's image model receives the Agent Run's frozen image
+		// Model ID, re-resolved here because configuration can change across a restart. An
+		// ID that no longer resolves fails the Tool call itself, before any Attempt exists,
+		// so nothing external is called and no other model is substituted.
+		imageModelID := ""
+		if reg.Metadata.UsesImageModel {
+			imageModelID = frozenImageModel(agentRun)
+			if unusable := unusableModel(s.deps.Models, "image model", imageModelID, domain.ModelCapabilityReferenceImageGeneration); unusable != nil {
+				if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
+					domain.FailureSyncExecution, domain.TerminationToolError, *unusable, now); err != nil {
+					return err
+				}
+				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
+				return nil
+			}
+		}
+
 		// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
 		// exists so a Tool call carries the same audit and callback target model as a Node
 		// Attempt. A synchronous call saves no callback token.
@@ -578,13 +595,14 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			executor:     reg.Executor,
 			outputSchema: reg.Metadata.OutputSchema,
 			action: registry.ToolAction{
-				AgentRunID: agentRun.ID,
-				TurnID:     turn.ID,
-				ActionID:   action.ID,
-				ToolName:   toolName,
-				AttemptNo:  1,
-				Arguments:  decision.Arguments,
-				Callback:   callbackCtx,
+				AgentRunID:   agentRun.ID,
+				TurnID:       turn.ID,
+				ActionID:     action.ID,
+				ToolName:     toolName,
+				AttemptNo:    1,
+				Arguments:    decision.Arguments,
+				ImageModelID: imageModelID,
+				Callback:     callbackCtx,
 			},
 			async:    async,
 			deadline: agentRun.Deadline,
