@@ -38,11 +38,18 @@ type Settings struct {
 }
 
 // GeneratedImage is one generated image. The Tool reads Content exactly once into
-// Execution Artifact storage and closes it. The bytes are all a generator returns: the
-// result names the image by the artifact saved from them, never by a Provider's own
-// identifier or address, so every image model produces the same result shape.
+// Execution Artifact storage and closes it. The result names the image by the artifact
+// saved from those bytes, never by a Provider's own identifier or address, so every image
+// model produces the same result shape.
+//
+// Model and Cost are optional traceability values a generator may report: the upstream
+// model name and the call's charge as the Provider stated them. They appear in the result
+// as model and usage.cost only when within the result's bounds, take no part in any
+// execution decision, and a generator that cannot report them leaves them empty.
 type GeneratedImage struct {
 	Content io.ReadCloser
+	Model   string
+	Cost    *float64
 }
 
 // PhotoReader is the port through which the Tool reads a source photo by its Asset id.

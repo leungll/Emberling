@@ -8,9 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // sniffBytes is how much of the decoded image is inspected before the image is handed
@@ -34,9 +38,16 @@ type ImageRequest struct {
 // size over the cap that only shows while streaming surfaces as a read error from
 // Content, never as a short successful read, so the caller must discard everything it
 // read when Content fails.
+//
+// Model and Cost are what the Provider reported about the call, kept only for
+// traceability: Model is the upstream model name and Cost the call's charge. Each is
+// left empty when the answer omits it or reports it outside its bounds, and neither ever
+// fails an image the Provider already generated.
 type Image struct {
 	MediaType string
 	Content   io.Reader
+	Model     string
+	Cost      *float64
 }
 
 type imagesRequest struct {
@@ -58,10 +69,14 @@ type imageURL struct {
 	URL string `json:"url"`
 }
 
+// imagesResponse keeps model and usage raw, so that a member of an unexpected type or
+// range is dropped by reportedModel and reportedCost instead of failing the decode.
 type imagesResponse struct {
 	Data []struct {
 		B64JSON *string `json:"b64_json"`
 	} `json:"data"`
+	Model json.RawMessage `json:"model"`
+	Usage json.RawMessage `json:"usage"`
 }
 
 // GenerateImage performs exactly one Images API call for request, asking for one image.
@@ -162,7 +177,58 @@ func (p *Provider) decodeImage(status int, raw []byte) (Image, error) {
 	return Image{
 		MediaType: mediaType,
 		Content:   &cappedImage{source: io.MultiReader(bytes.NewReader(head), decoder), remaining: p.maxImageBytes},
+		Model:     reportedModel(answer.Model),
+		Cost:      reportedCost(answer.Usage),
 	}, nil
+}
+
+// maxModelRunes bounds the reported model name carried for traceability.
+const maxModelRunes = 128
+
+// reportedModel returns the upstream model name when the answer reports it as a
+// non-blank string of at most maxModelRunes characters without control characters, and
+// "" otherwise.
+func reportedModel(raw json.RawMessage) string {
+	var model string
+	if len(raw) == 0 || json.Unmarshal(raw, &model) != nil {
+		return ""
+	}
+	if strings.TrimSpace(model) == "" || utf8.RuneCountInString(model) > maxModelRunes {
+		return ""
+	}
+	if strings.ContainsFunc(model, unicode.IsControl) {
+		return ""
+	}
+	return model
+}
+
+// reportedCost returns usage.cost when the answer reports it as a finite, non-negative
+// JSON number, and nil otherwise.
+func reportedCost(raw json.RawMessage) *float64 {
+	var usage struct {
+		Cost json.RawMessage `json:"cost"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &usage) != nil || len(usage.Cost) == 0 {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(usage.Cost))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil {
+		return nil
+	}
+	number, ok := value.(json.Number)
+	if !ok {
+		return nil
+	}
+	cost, err := strconv.ParseFloat(number.String(), 64)
+	if err != nil || math.IsInf(cost, 0) || math.IsNaN(cost) || cost < 0 {
+		return nil
+	}
+	if cost == 0 {
+		cost = 0 // a reported -0 is carried as 0
+	}
+	return &cost
 }
 
 // decodedLen is the decoded size of standard padded base64. It decides the cap before

@@ -22,7 +22,11 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"net/url"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -81,6 +85,12 @@ const outputSchema = `{
       },
       "required": ["artifactId", "mediaType", "sizeBytes", "sha256"],
       "additionalProperties": false
+    },
+    "model": {"type": "string", "minLength": 1, "maxLength": 128},
+    "usage": {
+      "type": "object",
+      "properties": {"cost": {"type": "number", "minimum": 0}},
+      "additionalProperties": false
     }
   },
   "required": ["assetRef", "imageUrl", "settingsDigest", "artifact"],
@@ -103,7 +113,9 @@ const outputSchema = `{
 // The result has the same shape whichever image model generated it: assetRef is the
 // artifact id, and imageUrl is the site-relative path of the Run-scoped artifact content
 // route. The path names no origin, so it stays valid wherever the Backend is deployed and
-// can be bound into an immutable fact.
+// can be bound into an immutable fact. The optional model and usage.cost members carry
+// what the generator reported about the call for traceability only; they are bounded,
+// absent when nothing in bounds was reported, and bound into no fact.
 //
 // Generation runs on an external image model, so the call has an EXTERNAL side effect. Its
 // idempotency is UNKNOWN: the Runtime hands an Agent Tool no idempotency key, so nothing
@@ -165,6 +177,38 @@ type result struct {
 	ImageURL       string             `json:"imageUrl"`
 	SettingsDigest string             `json:"settingsDigest"`
 	Artifact       domain.ArtifactRef `json:"artifact"`
+	Model          string             `json:"model,omitempty"`
+	Usage          *usage             `json:"usage,omitempty"`
+}
+
+// usage is the call's reported charge, present only when a generator reported one.
+type usage struct {
+	Cost *float64 `json:"cost,omitempty"`
+}
+
+// maxModelRunes is the output schema's bound on model.
+const maxModelRunes = 128
+
+// traceModel returns a reported model name that fits the result's bounds, or "" so the
+// member is omitted: a tracing value never fails an image that was already generated.
+func traceModel(model string) string {
+	if strings.TrimSpace(model) == "" || utf8.RuneCountInString(model) > maxModelRunes || strings.ContainsFunc(model, unicode.IsControl) {
+		return ""
+	}
+	return model
+}
+
+// traceUsage returns the usage member for a reported cost that is a finite, non-negative
+// number, or nil so the member is omitted.
+func traceUsage(cost *float64) *usage {
+	if cost == nil || math.IsNaN(*cost) || math.IsInf(*cost, 0) || *cost < 0 {
+		return nil
+	}
+	value := *cost
+	if value == 0 {
+		value = 0 // a reported -0 is carried as 0
+	}
+	return &usage{Cost: &value}
 }
 
 // Execute generates one image with the call's image model, saves it as an Execution
@@ -225,6 +269,8 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 		ImageURL:       ArtifactContentPath(action.RunID, artifact.ArtifactID),
 		SettingsDigest: digest,
 		Artifact:       artifact,
+		Model:          traceModel(generated.Model),
+		Usage:          traceUsage(generated.Cost),
 	})
 	if err != nil {
 		return registry.ToolExecutionResult{}, toolError("encode result", "result could not be encoded")
