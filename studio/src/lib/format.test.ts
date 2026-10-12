@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatClock, formatElapsed, formatRunClock } from './format';
+import { formatBytes, formatClock, formatElapsed, formatRunClock } from './format';
+
+describe('formatBytes', () => {
+  it('prints sizes in KB or MB with at most one decimal, never raw bytes', () => {
+    expect(formatBytes(3)).toBe('0.1 KB');
+    expect(formatBytes(9540)).toBe('9.3 KB');
+    expect(formatBytes(1024 * 1024 - 1)).toBe('1 MB');
+    expect(formatBytes(1258291)).toBe('1.2 MB');
+    expect(formatBytes(5 * 1024 * 1024)).toBe('5 MB');
+  });
+});
 
 describe('formatClock', () => {
   it('prints the UTC time of a server timestamp', () => {

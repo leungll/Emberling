@@ -104,10 +104,10 @@ describe('RunInputDialog', () => {
     const user = userEvent.setup();
 
     await user.type(screen.getByLabelText(/Creative Brief/), 'A small ember creature');
-    const fileInput = screen.getByLabelText(/reference/i);
+    const fileInput = screen.getByLabelText(/reference/i, { selector: 'input' });
     await user.upload(fileInput, pngFile());
 
-    await screen.findByText(/asset_123/);
+    await screen.findByText('reference.png, 0.1 KB');
     await user.click(screen.getByRole('button', { name: 'Create run' }));
 
     expect(onSubmit).toHaveBeenCalledWith({
@@ -130,7 +130,7 @@ describe('RunInputDialog', () => {
     const user = userEvent.setup();
 
     await user.type(screen.getByLabelText(/Creative Brief/), 'A small ember creature');
-    const fileInput = screen.getByLabelText(/reference/i);
+    const fileInput = screen.getByLabelText(/reference/i, { selector: 'input' });
     await user.upload(fileInput, pngFile());
 
     await screen.findByText(/unsupported asset media type/);
@@ -172,7 +172,7 @@ describe('RunInputDialog', () => {
     const user = userEvent.setup();
 
     // The prior Asset preview renders immediately, with no upload interaction at all.
-    expect(screen.getByText(/asset_123/)).toBeInTheDocument();
+    expect(screen.getByText('Image from the previous run, 0.1 KB')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Create run' }));
 
@@ -180,6 +180,62 @@ describe('RunInputDialog', () => {
       brief: 'A small ember creature',
       reference: assetRef,
     });
+    expect(uploadAssetMock).not.toHaveBeenCalled();
+  });
+
+  it('shows an uploaded image by file name and size, never its asset ID, with Replace and Remove', async () => {
+    uploadAssetMock.mockReset();
+    uploadAssetMock.mockResolvedValue(assetRef);
+    const onSubmit = renderDialog();
+    const user = userEvent.setup();
+    const fileInput = screen.getByLabelText(/reference/i, { selector: 'input' });
+
+    // The native input is hidden; a focusable button opens the picker.
+    expect(fileInput).toHaveClass('sr-only');
+    expect(fileInput).toHaveAttribute('tabindex', '-1');
+    const click = vi.spyOn(fileInput, 'click');
+    await user.click(screen.getByRole('button', { name: 'Choose image' }));
+    expect(click).toHaveBeenCalled();
+
+    await user.upload(fileInput, pngFile());
+    await screen.findByText('reference.png, 0.1 KB');
+    expect(screen.getByRole('img', { name: 'reference.png' })).toHaveAttribute(
+      'src',
+      '/api/assets/asset_123/content',
+    );
+    expect(screen.queryByText(/asset_123/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Replace reference.png' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Remove reference.png' }));
+    expect(screen.queryByText('reference.png, 0.1 KB')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose image' })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/Creative Brief/), 'brief');
+    await user.click(screen.getByRole('button', { name: 'Create run' }));
+    expect(onSubmit).toHaveBeenCalledWith({ brief: 'brief' });
+  });
+
+  it('reports a schema size limit in human units', async () => {
+    uploadAssetMock.mockReset();
+    const limited: RunInputSchema = {
+      ...runInputSchema,
+      properties: {
+        ...runInputSchema.properties,
+        reference: {
+          ...runInputSchema.properties!.reference!,
+          properties: {
+            ...runInputSchema.properties!.reference!.properties,
+            sizeBytes: { type: 'integer', minimum: 0, maximum: 2 },
+          },
+        },
+      },
+    };
+    renderDialog(vi.fn(), limited);
+    await userEvent.upload(
+      screen.getByLabelText(/reference/i, { selector: 'input' }),
+      pngFile('big.png'),
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('big.png is larger than 0.1 KB.');
     expect(uploadAssetMock).not.toHaveBeenCalled();
   });
 
@@ -193,13 +249,13 @@ describe('RunInputDialog', () => {
     renderDialog();
     const user = userEvent.setup();
 
-    const fileInput = screen.getByLabelText(/reference/i);
+    const fileInput = screen.getByLabelText(/reference/i, { selector: 'input' });
     await user.upload(fileInput, pngFile());
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Create run' })).toBeDisabled());
 
     resolveUpload(assetRef);
-    await screen.findByText(/asset_123/);
+    await screen.findByText('reference.png, 0.1 KB');
     expect(screen.getByRole('button', { name: 'Create run' })).not.toBeDisabled();
   });
 });

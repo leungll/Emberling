@@ -96,3 +96,14 @@ export function formatRelativeTime(value: string | null | undefined): string {
   const days = Math.floor(diffMs / day);
   return `${days} days ago`;
 }
+
+const KIB = 1024;
+const MIB = 1024 * 1024;
+
+/** A byte count in KB or MB with at most one decimal; never raw bytes. */
+export function formatBytes(bytes: number): string {
+  const oneDecimal = (value: number) => String(Number(value.toFixed(1)));
+  const kb = bytes / KIB;
+  if (Number(kb.toFixed(1)) < KIB) return `${oneDecimal(Math.max(kb, 0.1))} KB`;
+  return `${oneDecimal(bytes / MIB)} MB`;
+}

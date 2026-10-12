@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react';
 
-import { API_BASE, ApiRequestError, uploadAsset } from '@/api/client';
+import { ApiRequestError, uploadAsset } from '@/api/client';
 import type { AssetRef, JsonObject, JsonSchema, RunInputSchema } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatBytes } from '@/lib/format';
 
 import { AssetArrayField } from './AssetArrayField';
+import { AssetField } from './AssetField';
 import { photoSetShortfall } from './photoSetCopy';
 
 interface RunInputDialogProps {
@@ -138,7 +140,7 @@ export function RunInputDialog({
     if (acceptedMediaTypes && !acceptedMediaTypes.includes(file.type)) {
       setAssetErrors((prev) => ({
         ...prev,
-        [field.key]: `Unsupported media type "${file.type}". Accepted: ${acceptedMediaTypes.join(', ')}.`,
+        [field.key]: `${file.name} is not a supported image type. Use ${acceptedMediaTypes.join(', ')}.`,
       }));
       return;
     }
@@ -146,7 +148,7 @@ export function RunInputDialog({
     if (typeof maxSizeBytes === 'number' && file.size > maxSizeBytes) {
       setAssetErrors((prev) => ({
         ...prev,
-        [field.key]: `File exceeds the maximum size of ${maxSizeBytes} bytes.`,
+        [field.key]: `${file.name} is larger than ${formatBytes(maxSizeBytes)}.`,
       }));
       return;
     }
@@ -278,36 +280,15 @@ export function RunInputDialog({
                   }
                 />
               ) : field.kind === 'asset' ? (
-                <>
-                  <Input
-                    id={id}
-                    type="file"
-                    accept={acceptedMediaTypes?.join(',')}
-                    disabled={uploading}
-                    onChange={(e) => handleFileChange(field, e.target.files?.[0])}
-                  />
-                  {uploading ? (
-                    <p className="text-[12px] text-[var(--muted-foreground)]">Uploading…</p>
-                  ) : null}
-                  {ref ? (
-                    <div className="flex items-center gap-2">
-                      {/* Preview only; the value written into run input is the AssetRef below. */}
-                      <img
-                        src={`${API_BASE}/assets/${encodeURIComponent(ref.assetId)}/content`}
-                        alt=""
-                        className="h-10 w-10 rounded object-cover"
-                      />
-                      <p className="text-[12px] text-[var(--muted-foreground)]">
-                        {ref.assetId} · {ref.sizeBytes} bytes
-                      </p>
-                    </div>
-                  ) : null}
-                  {assetError ? (
-                    <p role="alert" className="text-[13px] text-red-500">
-                      {assetError}
-                    </p>
-                  ) : null}
-                </>
+                <AssetField
+                  id={id}
+                  labelId={labelId}
+                  accept={acceptedMediaTypes?.join(',')}
+                  value={ref}
+                  uploading={uploading}
+                  onFile={(file) => handleFileChange(field, file)}
+                  error={assetError}
+                />
               ) : (
                 <Input
                   id={id}

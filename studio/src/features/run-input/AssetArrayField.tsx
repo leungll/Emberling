@@ -6,6 +6,7 @@ import { photoSetStatus } from './photoSetCopy';
 import { API_BASE, ApiRequestError, uploadAsset } from '@/api/client';
 import type { AssetRef, JsonSchema } from '@/api/types';
 import { Button } from '@/components/ui/button';
+import { formatBytes } from '@/lib/format';
 
 interface AssetArrayFieldProps {
   id: string;
@@ -66,8 +67,8 @@ export function AssetArrayField({
     }
     const oversized =
       typeof maxSizeBytes === 'number' ? files.find((file) => file.size > maxSizeBytes) : undefined;
-    if (oversized) {
-      onErrorChange(`${oversized.name} is larger than ${maxSizeBytes} bytes.`);
+    if (oversized && typeof maxSizeBytes === 'number') {
+      onErrorChange(`${oversized.name} is larger than ${formatBytes(maxSizeBytes)}.`);
       return;
     }
 

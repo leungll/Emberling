@@ -37,22 +37,32 @@ test('Reference Image upload creates a Run whose Image Input output previews the
 
   const dialog = page.getByRole('dialog', { name: 'Run workflow' });
   await dialog.getByLabel('Prompt').fill('a small ember creature');
-  // The file input is labelled by the Image Input node's configured `label`; its accept
-  // list is the node's `acceptedMediaTypes`, which the Backend re-validates on upload.
-  await dialog.getByLabel('Reference Image').setInputFiles({
-    name: 'reference.png',
-    mimeType: 'image/png',
-    buffer: ONE_PIXEL_PNG,
-  });
+  // The field is named by the Image Input node's configured `label`; its accept list is
+  // the node's `acceptedMediaTypes`, which the Backend re-validates on upload.
+  const referenceField = dialog.getByRole('group', { name: 'Reference Image' });
+  const chooser = page.waitForEvent('filechooser');
+  await referenceField.getByRole('button', { name: 'Choose image' }).click();
+  await (
+    await chooser
+  ).setFiles({ name: 'reference.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG });
 
-  // The dialog prints "<assetId> · <sizeBytes> bytes" once the upload has completed; the
-  // id is the Backend's, read here so Observe can be checked against the very same Asset.
-  const uploaded = dialog.getByText(new RegExp(`^\\S+ · ${ONE_PIXEL_PNG.length} bytes$`));
-  await expect(uploaded).toBeVisible({ timeout: 10_000 });
-  const assetId = (await uploaded.innerText()).split(' · ')[0];
-  expect(assetId).toBeTruthy();
+  // Once uploaded, the field shows the file name and a human size, never the Asset ID.
+  await expect(referenceField.getByText('reference.png, 0.1 KB')).toBeVisible({ timeout: 10_000 });
+  await expect(referenceField.getByRole('button', { name: 'Replace reference.png' })).toBeVisible();
+  await expect(referenceField).not.toContainText('asset_');
 
+  // The Asset ID is the Backend's, read from the create-run payload so Observe can be
+  // checked against the very same Asset.
+  const createRun = page.waitForRequest(
+    (request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs',
+  );
   await dialog.getByRole('button', { name: 'Create run' }).click();
+  const body = (await createRun).postDataJSON() as {
+    input: { reference: { assetId: string; sizeBytes: number } };
+  };
+  const { assetId } = body.input.reference;
+  expect(assetId).toBeTruthy();
+  expect(body.input.reference.sizeBytes).toBe(ONE_PIXEL_PNG.length);
   await page.waitForURL(/\/runs\//);
 
   const status = page.getByTestId('run-status');
