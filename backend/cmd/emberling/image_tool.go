@@ -106,7 +106,7 @@ func (g referenceImageGenerator) Generate(ctx context.Context, request generatei
 		// caller's context ended the call.
 		return generateimage.GeneratedImage{}, fmt.Errorf("%s: image model %q: %w", generateimage.ToolName, g.modelID, err)
 	}
-	return generateimage.GeneratedImage{Content: io.NopCloser(image.Content)}, nil
+	return generateimage.GeneratedImage{Content: io.NopCloser(image.Content), Model: image.Model, Cost: image.Cost}, nil
 }
 
 // readPhoto reads and closes the source photo, refusing one over maxBytes rather than

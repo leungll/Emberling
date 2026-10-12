@@ -26,10 +26,22 @@ func WithTestControls(record *Record) Option {
 	return func(s *Server) {
 		s.controls = &testControls{
 			record:     record,
-			barrier:    mockcontrol.NewBarrier(kindTask, kindGenerate),
+			barrier:    mockcontrol.NewBarrier(kindTask, kindGenerate, kindImage),
 			tasksByID:  make(map[string]callbackTask),
 			deliveries: make(map[string]int),
 		}
+	}
+}
+
+// WithHeldHook sends the label of every request the barrier holds to hook, right after the
+// request is recorded and registered as held: the request's externalTaskId, or its kind
+// when it has none. It is a barrier for tests outside this package, which can then act
+// while a call is provably in flight instead of waiting for time to pass. It has effect
+// only together with WithTestControls; a send gives up when the held request's caller
+// disconnects.
+func WithHeldHook(hook chan string) Option {
+	return func(s *Server) {
+		s.heldHook = hook
 	}
 }
 

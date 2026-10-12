@@ -320,7 +320,7 @@ func TestBarrier_KindFilter_HoldsOnlyMatchingRequests(t *testing.T) {
 		t.Fatalf("barrier = %+v, want task-only filter and nothing held", state)
 	}
 
-	reject, err := http.Post(p.srv.URL+"/control/pause", "application/json", strings.NewReader(`{"kinds":["image"]}`))
+	reject, err := http.Post(p.srv.URL+"/control/pause", "application/json", strings.NewReader(`{"kinds":["video"]}`))
 	if err != nil {
 		t.Fatalf("POST /control/pause error = %v", err)
 	}

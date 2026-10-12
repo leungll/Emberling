@@ -40,7 +40,8 @@ type photoSetEnv struct {
 
 // newPhotoSetEnv starts a Mock Provider with test controls and a dispatch record, wires a
 // Backend to it, and routes video callbacks back to that Backend without holding them.
-func newPhotoSetEnv(t *testing.T) *photoSetEnv {
+// configure, when given, adjusts the Backend's options once the Provider's URL is known.
+func newPhotoSetEnv(t *testing.T, configure ...func(providerURL string, opts *testEnvOptions)) *photoSetEnv {
 	t.Helper()
 	record, err := mockprovider.OpenRecord(filepath.Join(t.TempDir(), "dispatch.jsonl"))
 	if err != nil {
@@ -60,7 +61,11 @@ func newPhotoSetEnv(t *testing.T) *photoSetEnv {
 		}
 		_ = record.Close()
 	})
-	env := newTestEnvWithOptions(t, testEnvOptions{MockTaskBaseURL: provider.URL})
+	opts := testEnvOptions{MockTaskBaseURL: provider.URL}
+	for _, apply := range configure {
+		apply(provider.URL, &opts)
+	}
+	env := newTestEnvWithOptions(t, opts)
 	callbacks.setTarget(env.server.URL)
 	return &photoSetEnv{testEnv: env, providerURL: provider.URL}
 }
@@ -145,8 +150,9 @@ type photoSetTrace struct {
 }
 
 // savePhotoSetDefinition saves the photo effect-template fixture with the Agent bound to
-// script, overriding its generation limit when limit is positive.
-func savePhotoSetDefinition(t *testing.T, env *testEnv, script string, limit int) (string, int) {
+// script, overriding its generation limit when limit is positive and any other Agent
+// config member agentConfig names.
+func savePhotoSetDefinition(t *testing.T, env *testEnv, script string, limit int, agentConfig ...map[string]any) (string, int) {
 	t.Helper()
 	raw, err := os.ReadFile("../fixtures/definitions/photo_effect_template.json")
 	if err != nil {
@@ -168,6 +174,11 @@ func savePhotoSetDefinition(t *testing.T, env *testEnv, script string, limit int
 		if limit > 0 {
 			config["maxGenerationCalls"] = limit
 		}
+		for _, overrides := range agentConfig {
+			for k, v := range overrides {
+				config[k] = v
+			}
+		}
 		if fx.Nodes[i].Config, err = json.Marshal(config); err != nil {
 			t.Fatalf("encode node_agent config: %v", err)
 		}
@@ -186,9 +197,9 @@ func savePhotoSetDefinition(t *testing.T, env *testEnv, script string, limit int
 
 // runPhotoSet uploads three distinct photos, runs the saved Definition over them and
 // returns the terminal Snapshot, the Agent Trace and the uploaded photo asset ids.
-func runPhotoSet(t *testing.T, env *photoSetEnv, script string, limit int) (map[string]any, photoSetTrace, []string) {
+func runPhotoSet(t *testing.T, env *photoSetEnv, script string, limit int, agentConfig ...map[string]any) (map[string]any, photoSetTrace, []string) {
 	t.Helper()
-	workflowID, version := savePhotoSetDefinition(t, env.testEnv, script, limit)
+	workflowID, version := savePhotoSetDefinition(t, env.testEnv, script, limit, agentConfig...)
 	photos := make([]any, 0, 3)
 	photoIDs := make([]string, 0, 3)
 	for _, content := range []string{"photo-one", "photo-two", "photo-three"} {

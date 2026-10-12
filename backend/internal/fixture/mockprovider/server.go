@@ -74,6 +74,10 @@ type Server struct {
 	// controls and is independent of the redeliver control's task map.
 	statuses *taskStatuses
 
+	// heldHook is the WithHeldHook channel, handed to the test controls once every option
+	// has applied, so the option works in any order relative to WithTestControls.
+	heldHook chan string
+
 	// publicBaseURL, when set, prefixes every generated imageUrl in place of the
 	// request's own scheme and host. It is empty unless WithPublicBaseURL was passed.
 	publicBaseURL string
@@ -93,6 +97,9 @@ func NewServer(dispatcher *Dispatcher, opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(s)
 	}
+	if s.controls != nil && s.heldHook != nil {
+		s.controls.heldHook = s.heldHook
+	}
 	dispatcher.due = s.statuses.markDue
 	r := chi.NewRouter()
 	r.Get("/healthz", s.handleHealthz)
@@ -102,6 +109,7 @@ func NewServer(dispatcher *Dispatcher, opts ...Option) *Server {
 	r.Get("/v1/images/{name}", s.handleImage)
 	r.Post("/v1/assets", s.handleGenerateImage)
 	r.Get("/v1/assets/{name}", s.handleAsset)
+	r.Post(imagesAPIPath, s.handleImagesAPI)
 	if s.controls != nil {
 		dispatcher.observe = s.controls.recordDelivery
 		s.mountControlRoutes(r)
