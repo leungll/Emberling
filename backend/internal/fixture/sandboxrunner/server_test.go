@@ -476,15 +476,36 @@ func TestServer_Record_ListsEveryStepWithoutTheToken(t *testing.T) {
 
 	lines := r.recordLines(t)
 	var events []string
-	for _, line := range lines {
-		events = append(events, line["kind"].(string)+"/"+line["event"].(string))
+	position := make(map[string]int)
+	for i, line := range lines {
+		event := line["kind"].(string) + "/" + line["event"].(string)
+		events = append(events, event)
+		if _, seen := position[event]; !seen {
+			position[event] = i
+		}
 	}
 	want := []string{"test/arrived", "test/responded", "test/started", "test/completed", "callback/arrived", "callback/callback"}
-	if strings.Join(events, ",") != strings.Join(want, ",") {
-		t.Fatalf("record events = %v, want %v", events, want)
+	if len(lines) != len(want) || len(position) != len(want) {
+		t.Fatalf("record events = %v, want each of %v exactly once", events, want)
+	}
+	for _, event := range want {
+		if _, ok := position[event]; !ok {
+			t.Fatalf("record events = %v, want each of %v exactly once", events, want)
+		}
+	}
+	// The run is scheduled before the 202 is written, so responded may land anywhere
+	// after arrived; only the run's own steps are ordered among themselves.
+	if position["test/arrived"] != 0 || position["test/responded"] < position["test/arrived"] {
+		t.Fatalf("record events = %v, want arrived first and responded after it", events)
+	}
+	run := []string{"test/started", "test/completed", "callback/arrived", "callback/callback"}
+	for i := 1; i < len(run); i++ {
+		if position[run[i-1]] >= position[run[i]] {
+			t.Fatalf("record events = %v, want %v in that order", events, run)
+		}
 	}
 	patchDigest := PatchDigest(testPatch)
-	arrived, completed, callback := lines[0], lines[3], lines[5]
+	arrived, completed, callback := lines[position["test/arrived"]], lines[position["test/completed"]], lines[position["callback/callback"]]
 	if arrived["testId"] != testID || arrived["patchDigest"] != patchDigest || arrived["callbackTarget"] != rcv.server.URL+"/api/callbacks" {
 		t.Fatalf("arrived line = %v", arrived)
 	}
