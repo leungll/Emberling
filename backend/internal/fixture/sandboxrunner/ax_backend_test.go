@@ -745,31 +745,37 @@ func contentBytes(files map[string][]byte) int {
 }
 
 // TestAXBackend_EncodedWorkspaceEstimate_BoundsCheckpointSamples pins the estimate to
-// Workspaces whose encoded value was measured against a running AX: for every sample
-// the estimate may not undercut the measured length, and may not exceed it by more than
-// half.
+// Workspaces of known encoded length: for every sample the estimate may not undercut the
+// pinned length, and may not exceed it by more than half. The first sample's length was
+// measured inside a running AX sandbox. The others keep the shape of trees measured the
+// same way, with placeholder text in place of their code, and their lengths come from
+// encoding them offline in AX's document layout with the same YAML encoder, which
+// reproduces the first sample's measured length exactly.
 func TestAXBackend_EncodedWorkspaceEstimate_BoundsCheckpointSamples(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("testdata", "ax_workspace_encoding_samples.json"))
 	if err != nil {
 		t.Fatalf("read samples: %v", err)
 	}
-	var samples []struct {
-		Description  string `json:"description"`
-		Name         string `json:"name"`
-		Atespace     string `json:"atespace"`
-		RawBytes     int    `json:"rawBytes"`
-		EncodedChars int    `json:"encodedChars"`
-		Files        []struct {
-			Path    string `json:"path"`
-			Content string `json:"content"`
-		} `json:"files"`
+	var doc struct {
+		Samples []struct {
+			Description  string `json:"description"`
+			Name         string `json:"name"`
+			Atespace     string `json:"atespace"`
+			RawBytes     int    `json:"rawBytes"`
+			EncodedChars int    `json:"encodedChars"`
+			Files        []struct {
+				Path    string `json:"path"`
+				Content string `json:"content"`
+			} `json:"files"`
+		} `json:"samples"`
 	}
-	if err := json.Unmarshal(raw, &samples); err != nil {
+	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("decode samples: %v", err)
 	}
+	samples := doc.Samples
 	pinned := [][2]int{{507, 1037}, {1237, 2278}, {4853, 6970}, {13527, 16545}, {65508, 66417}}
 	if len(samples) != len(pinned) {
-		t.Fatalf("samples = %d, want the %d measured ones", len(samples), len(pinned))
+		t.Fatalf("samples = %d, want the %d pinned ones", len(samples), len(pinned))
 	}
 	for i, sample := range samples {
 		files := make(map[string][]byte, len(sample.Files))

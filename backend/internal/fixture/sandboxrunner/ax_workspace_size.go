@@ -20,9 +20,10 @@ const (
 
 // Constants of the encoding estimate. AX writes the Workspace with four-space
 // indentation, every file as a "path" and a "content" member of one list item, and a
-// multi-line content as a block literal. They were calibrated on Workspaces measured
-// against a running AX, whose encoded lengths the estimate must not undercut; files of
-// many short lines grow the most, by the indentation of every line.
+// multi-line content as a block literal. They were calibrated on Workspaces whose encoded
+// length is known from a running AX or from the same encoding done offline, and the
+// estimate must not undercut any of them; files of many short lines grow the most, by
+// the indentation of every line.
 const (
 	// encodedWorkspaceAllowance covers apiVersion, kind, the metadata other than the name
 	// and the atespace, and the spec headings, with room for metadata AX may add.
