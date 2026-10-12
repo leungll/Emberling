@@ -171,10 +171,12 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 			return s.TimeoutAgentRun(ctx, call.agentRunID)
 		}
 		// The MVP does not retry an Agent Tool, so the
-		// Tool's own error is the Action's outcome.
-		return s.failAgentToolCall(ctx, *call, domain.ExecutionError{
-			Code: "TOOL_ERROR", Message: execErr.Error(),
-		})
+		// Tool's own error, bounded, is the Action's outcome.
+		const code = "TOOL_ERROR"
+		s.logExecutionFailure(ctx, "agent tool call failed", code, execErr,
+			"run_id", call.runID, "agent_run_id", call.agentRunID, "turn_id", call.turnID,
+			"action_id", call.actionID, "tool_name", call.toolName)
+		return s.failAgentToolCall(ctx, *call, boundedExecutionError(code, execErr))
 	}
 
 	if call.async {

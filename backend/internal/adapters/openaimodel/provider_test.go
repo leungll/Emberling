@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -790,5 +792,97 @@ func TestProvider_Rendering_OpenRouterSwitchOn_RedactsAPIKey(t *testing.T) {
 		if strings.Contains(rendered, testKey) {
 			t.Errorf("rendering leaks the API key: %s", rendered)
 		}
+	}
+}
+
+// secretEndpoint is the request URL a failing transport reports. Its host and query value
+// stand for a deployment-internal address and a credential carried in the query string;
+// neither may reach the error text the Runtime persists as MODEL_ERROR.
+const secretEndpoint = "http://llm.internal:8443/v1/chat/completions?key=s3cr3t"
+
+// failingTransport answers every request with err(req), so a transport failure is
+// produced deterministically without a listener, a sleep or a real network.
+type failingTransport func(*http.Request) error
+
+func (f failingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, f(req)
+}
+
+// timeoutError is a net.Error that reports a timeout without being a context error.
+type timeoutError struct{}
+
+func (timeoutError) Error() string   { return "i/o timeout" }
+func (timeoutError) Timeout() bool   { return true }
+func (timeoutError) Temporary() bool { return true }
+
+// TestProvider_Generate_TransportFailure_ErrorCarriesNoURLOrTransportText pins that a
+// transport failure is reported with stable text only: no host, no URL query (which may
+// carry a credential) and no raw transport text. The raw text is kept in Detail for the
+// developer log, and the caller-context wrapping is unchanged.
+func TestProvider_Generate_TransportFailure_ErrorCarriesNoURLOrTransportText(t *testing.T) {
+	expired, cancelExpired := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	t.Cleanup(cancelExpired)
+
+	for _, tc := range []struct {
+		name      string
+		ctx       context.Context
+		err       func(*http.Request) error
+		wantText  string
+		wantCause error
+	}{
+		{
+			name: "dial failure",
+			ctx:  context.Background(),
+			err: func(*http.Request) error {
+				return &url.Error{Op: "Post", URL: secretEndpoint, Err: &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connect: connection refused")}}
+			},
+			wantText: "openaimodel: send request failed: transport error",
+		},
+		{
+			name:     "transport timeout",
+			ctx:      context.Background(),
+			err:      func(*http.Request) error { return &url.Error{Op: "Post", URL: secretEndpoint, Err: timeoutError{}} },
+			wantText: "openaimodel: send request timed out",
+		},
+		{
+			name: "caller deadline",
+			ctx:  expired,
+			err: func(r *http.Request) error {
+				return &url.Error{Op: "Post", URL: secretEndpoint, Err: r.Context().Err()}
+			},
+			wantText:  "openaimodel: call ended by the caller's context",
+			wantCause: context.DeadlineExceeded,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := newProvider(t, "http://llm.internal:8443", &http.Client{Transport: failingTransport(tc.err)})
+
+			_, err := provider.Generate(tc.ctx, agentRequest())
+
+			var modelErr *openaimodel.Error
+			if !errors.As(err, &modelErr) {
+				t.Fatalf("Generate() error = %v, want *openaimodel.Error", err)
+			}
+			if got := err.Error(); got != tc.wantText {
+				t.Errorf("Generate() error text = %q, want %q", got, tc.wantText)
+			}
+			for _, leak := range []string{"s3cr3t", "llm.internal", "8443", `Post "`, "connection refused", "i/o timeout", testKey} {
+				if strings.Contains(err.Error(), leak) {
+					t.Errorf("Generate() error text %q carries %q", err.Error(), leak)
+				}
+			}
+			if tc.wantCause != nil && !errors.Is(err, tc.wantCause) {
+				t.Errorf("Generate() error does not wrap %v", tc.wantCause)
+			}
+			if tc.wantCause == nil && errors.Is(err, context.DeadlineExceeded) {
+				t.Errorf("Generate() error wraps context.DeadlineExceeded for a failure the caller's context did not cause")
+			}
+			if detail := modelErr.Detail(); !strings.Contains(detail, "llm.internal") {
+				t.Errorf("Detail() = %q, want the raw transport text for the developer log", detail)
+			}
+			if strings.Contains(modelErr.Detail(), testKey) {
+				t.Errorf("Detail() carries the API key: %q", modelErr.Detail())
+			}
+		})
 	}
 }

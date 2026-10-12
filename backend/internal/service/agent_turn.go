@@ -111,11 +111,12 @@ func (s *ExecutionService) AdvanceAgentTurn(ctx context.Context, turnID string, 
 		}
 		// A Provider error is the Agent's MODEL_ERROR termination: the Adapter has already
 		// normalised it, and Emberling does not silently re-ask the model.
-		// The Provider's own message is kept; it carries
-		// no credential, because an Adapter must not put one there.
-		return s.failAgentTurn(ctx, *call, domain.TerminationModelError, domain.ExecutionError{
-			Code: "MODEL_ERROR", Message: genErr.Error(),
-		})
+		// The Adapter's stable message is kept, bounded; it carries no credential, host or
+		// transport text, which reach only the redacted developer log.
+		const code = "MODEL_ERROR"
+		s.logExecutionFailure(ctx, "agent model call failed", code, genErr,
+			"run_id", call.runID, "agent_run_id", call.agentRunID, "turn_id", call.turnID)
+		return s.failAgentTurn(ctx, *call, domain.TerminationModelError, boundedExecutionError(code, genErr))
 	}
 
 	decision, parseErr := runtime.ParseModelDecision(runtime.DecisionEnvelope{

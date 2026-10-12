@@ -7,8 +7,10 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -345,4 +347,113 @@ func isUncertain(err error) bool {
 		return false
 	}
 	return reporter.Uncertain()
+}
+
+// secretTaskURL is the request URL a failing transport reports. Its host and query value
+// stand for a deployment-internal address and a credential a Provider might carry in the
+// query string; neither may reach the error text the Runtime persists.
+const secretTaskURL = "http://mockprovider:9101/v1/tasks?key=s3cr3t"
+
+// failingTransport answers every request with err(req), so a transport failure is
+// produced deterministically without a listener, a sleep or a real network.
+type failingTransport func(*http.Request) error
+
+func (f failingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return nil, f(req)
+}
+
+// transportURLError is the *url.Error shape http.Transport reports, carrying the full
+// request URL in its text.
+func transportURLError(err error) error {
+	return &url.Error{Op: "Post", URL: secretTaskURL, Err: err}
+}
+
+// timeoutError is a net.Error that reports a timeout without being a context error, the
+// shape of a client-side or dial timeout.
+type timeoutError struct{}
+
+func (timeoutError) Error() string   { return "i/o timeout" }
+func (timeoutError) Timeout() bool   { return true }
+func (timeoutError) Temporary() bool { return true }
+
+// TestMockTaskAdapter_Dispatch_TransportFailure_ErrorCarriesNoURLOrTransportText pins the
+// rule that a Provider host, a URL query (which may carry a credential) and raw transport
+// text never appear in the error text the Runtime persists. The raw text is kept only in
+// Detail, for the developer log, and the uncertain/definite classification is unchanged.
+func TestMockTaskAdapter_Dispatch_TransportFailure_ErrorCarriesNoURLOrTransportText(t *testing.T) {
+	dialRefused := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connect: connection refused")}
+	expired, cancelExpired := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	t.Cleanup(cancelExpired)
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	for _, tc := range []struct {
+		name          string
+		ctx           context.Context
+		err           func(*http.Request) error
+		wantText      string
+		wantUncertain bool
+		wantCause     error
+	}{
+		{
+			name:          "dial failure",
+			ctx:           context.Background(),
+			err:           func(*http.Request) error { return transportURLError(dialRefused) },
+			wantText:      `mocktask: dispatch to provider "mock-task-provider-v1": send request: provider request failed: transport error`,
+			wantUncertain: false,
+		},
+		{
+			name:          "caller deadline",
+			ctx:           expired,
+			err:           func(r *http.Request) error { return transportURLError(r.Context().Err()) },
+			wantText:      `mocktask: dispatch to provider "mock-task-provider-v1": send request: provider request timed out before the deadline`,
+			wantUncertain: true,
+			wantCause:     context.DeadlineExceeded,
+		},
+		{
+			name:          "caller cancellation",
+			ctx:           cancelled,
+			err:           func(r *http.Request) error { return transportURLError(r.Context().Err()) },
+			wantText:      `mocktask: dispatch to provider "mock-task-provider-v1": send request: provider request cancelled`,
+			wantUncertain: true,
+			wantCause:     context.Canceled,
+		},
+		{
+			name:          "transport timeout",
+			ctx:           context.Background(),
+			err:           func(*http.Request) error { return transportURLError(timeoutError{}) },
+			wantText:      `mocktask: dispatch to provider "mock-task-provider-v1": send request: provider request timed out`,
+			wantUncertain: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &http.Client{Transport: failingTransport(tc.err)}
+			_, err := New("http://mockprovider:9101", client).Dispatch(tc.ctx, "prompt", nil, nil, testCallback(), "nr_1")
+			if err == nil {
+				t.Fatal("Dispatch() error = nil, want a transport failure")
+			}
+			if got := err.Error(); got != tc.wantText {
+				t.Errorf("Dispatch() error text = %q, want %q", got, tc.wantText)
+			}
+			for _, leak := range []string{"s3cr3t", "mockprovider", "9101", `Post "`, "connection refused", "i/o timeout", "context deadline exceeded"} {
+				if strings.Contains(err.Error(), leak) {
+					t.Errorf("Dispatch() error text %q carries %q", err.Error(), leak)
+				}
+			}
+			if got := isUncertain(err); got != tc.wantUncertain {
+				t.Errorf("Uncertain() = %v, want %v", got, tc.wantUncertain)
+			}
+			if tc.wantCause != nil && !errors.Is(err, tc.wantCause) {
+				t.Errorf("Dispatch() error does not wrap %v; the raw cause must stay reachable through Unwrap", tc.wantCause)
+			}
+
+			var dispatchErr *DispatchError
+			if !errors.As(err, &dispatchErr) {
+				t.Fatalf("Dispatch() error = %T, want *DispatchError", err)
+			}
+			if detail := dispatchErr.Detail(); !strings.Contains(detail, "mockprovider") {
+				t.Errorf("Detail() = %q, want the raw transport text for the developer log", detail)
+			}
+		})
+	}
 }

@@ -61,9 +61,12 @@ func (s *ExecutionService) Execute(ctx context.Context, outcome AdvanceOutcome) 
 
 	result, err := binding.Executor.Execute(execCtx, outcome.Input, outcome.Config)
 	if err != nil {
+		const code = "EXECUTOR_ERROR"
+		s.logExecutionFailure(ctx, "node executor failed", code, err,
+			"run_id", outcome.RunID, "node_run_id", outcome.NodeRunID, "attempt_id", outcome.AttemptID, "node_type", outcome.NodeType)
 		return s.FailNode(ctx, FailNode{
 			AttemptID: outcome.AttemptID,
-			Error:     domain.ExecutionError{Code: "EXECUTOR_ERROR", Message: err.Error()},
+			Error:     boundedExecutionError(code, err),
 			Uncertain: isUncertainFailure(execCtx, err),
 			Source:    domain.FailureSyncExecution,
 		})
