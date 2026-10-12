@@ -325,7 +325,11 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		t.Fatalf("register tool %s: %v", remotelookup.ToolName, err)
 	}
 	for _, reg := range []registry.ToolRegistration{
-		generateimage.Registration(mockTaskBaseURL, opts.TaskClient, artifactStore),
+		// Only the mock image model has a generator, and it addresses a photo by its id,
+		// so no photo port is wired.
+		generateimage.Registration(map[string]generateimage.ImageGenerator{
+			mockmodel.ImageModelID: generateimage.NewMockGenerator(mockTaskBaseURL, opts.TaskClient),
+		}, nil, artifactStore),
 		reviewasset.Registration(),
 		generatevideo.Registration(mockTaskBaseURL, opts.TaskClient),
 	} {

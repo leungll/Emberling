@@ -69,14 +69,14 @@ func pngBytes(t *testing.T) []byte {
 	return body
 }
 
-const generationArguments = `{"photoAssetId":"asset_photo_1","settings":{"style":"film"}}`
+const generationArguments = `{"photoAssetId":"asset_photo_1","settings":{"prompt":"Soft film look"}}`
 
 func TestExecute_ImageFetched_SavesArtifactAndDeclaresIt(t *testing.T) {
 	png := pngBytes(t)
 	provider := newImageProvider(t, http.StatusOK, png)
 	artifacts := newArtifacts(t)
 
-	got, err := New(provider.server.URL, provider.server.Client(), artifacts).Execute(context.Background(), action(generationArguments))
+	got, err := mockExecutor(provider.server.URL, provider.server.Client(), artifacts).Execute(context.Background(), action(generationArguments))
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestExecute_ImageCannotBeSaved_FailsOnceWithoutURL(t *testing.T) {
 			root := t.TempDir()
 			artifacts := asset.NewArtifactStore(root, tc.maxBytes)
 
-			_, err := New(provider.server.URL, provider.server.Client(), artifacts).Execute(context.Background(), action(generationArguments))
+			_, err := mockExecutor(provider.server.URL, provider.server.Client(), artifacts).Execute(context.Background(), action(generationArguments))
 
 			if err == nil {
 				t.Fatal("execute error = nil, want a save failure")
@@ -151,7 +151,7 @@ func TestExecute_ImageCannotBeSaved_FailsOnceWithoutURL(t *testing.T) {
 func TestExecute_NoArtifactStore_FailsBeforeCallingTheProvider(t *testing.T) {
 	provider := newImageProvider(t, http.StatusOK, pngBytes(t))
 
-	if _, err := New(provider.server.URL, provider.server.Client(), nil).Execute(context.Background(), action(generationArguments)); err == nil {
+	if _, err := mockExecutor(provider.server.URL, provider.server.Client(), nil).Execute(context.Background(), action(generationArguments)); err == nil {
 		t.Fatal("execute error = nil, want a configuration failure")
 	}
 	if g := provider.generations.Load(); g != 0 {
@@ -160,7 +160,7 @@ func TestExecute_NoArtifactStore_FailsBeforeCallingTheProvider(t *testing.T) {
 }
 
 func TestFetchURL_ReplacesOnlySchemeAndHost(t *testing.T) {
-	e := New("http://mockprovider:9101/", nil, nil)
+	e := NewMockGenerator("http://mockprovider:9101/", nil)
 	got, err := e.fetchURL("https://localhost:9101/v1/assets/img_1.png?v=2")
 	if err != nil {
 		t.Fatalf("fetchURL: %v", err)

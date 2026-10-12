@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -318,7 +317,7 @@ func TestArtifactSave_CrashAfterSave_RestartDoesNotResend(t *testing.T) {
 	p := newGenerationProvider(t)
 	stop := &agentStopNotifier{}
 	h, executor := newGenerationHarness(t, p, stop)
-	executor.delegate = generateimage.New(p.url, &http.Client{Timeout: 5 * time.Second}, crashAfterSave{delegate: executor.artifacts})
+	executor.delegate = mockImageExecutor(p.url, crashAfterSave{delegate: executor.artifacts})
 	_, _, action := readyGeneration(t, h, stop, "wf-artifact-save-crash")
 
 	func() {
@@ -332,7 +331,7 @@ func TestArtifactSave_CrashAfterSave_RestartDoesNotResend(t *testing.T) {
 
 	// The restarted Backend registers the same counting Executor, so any re-execution
 	// would show in its call count and in the Provider's generations.
-	registration := generateimage.Registration(p.url, nil, executor.artifacts)
+	registration := generateimage.Registration(nil, nil, executor.artifacts)
 	registration.Executor = executor
 	restarted := newAgentHarness(t, agentHarnessOptions{
 		Pool: h.pool, Clock: h.clock, Tools: []registry.ToolRegistration{registration},

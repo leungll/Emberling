@@ -256,8 +256,8 @@ type photoSetFaultTrace struct {
 }
 
 // TestE2E_PhotoSet_ImageProviderFailure_FailsAgentAndRunWithoutReachingTheResult scripts
-// the first generation with the Mock Provider's fail control and a settings value that
-// must never be quoted back. The Provider refuses definitely: the Action ends in a Tool
+// the first generation with the mock image model's mock:fail prompt directive followed by
+// prompt text that must never be quoted back. The Provider refuses definitely: the Action ends in a Tool
 // error, the Agent and the Run fail, the error names neither arguments nor URLs, the model
 // is not asked again, and the downstream media_result Node is never created.
 func TestE2E_PhotoSet_ImageProviderFailure_FailsAgentAndRunWithoutReachingTheResult(t *testing.T) {
@@ -271,7 +271,7 @@ func TestE2E_PhotoSet_ImageProviderFailure_FailsAgentAndRunWithoutReachingTheRes
 		id, _ := photoID.Load().(string)
 		arguments, _ := json.Marshal(map[string]any{
 			"photoAssetId": id,
-			"settings":     map[string]any{"mock": "fail", "style": "film", "note": secretSetting},
+			"settings":     map[string]any{"prompt": "mock:fail warm film look " + secretSetting},
 		})
 		return &mockmodel.Scenario{Kind: mockmodel.ScenarioToolCall, ToolName: generateimage.ToolName, ToolArguments: arguments}
 	}

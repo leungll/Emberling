@@ -1,14 +1,15 @@
 // Package generateimage implements the `generate_image` Tool: one synchronous image
-// generation request to the deterministic Mock Provider's POST /v1/assets, derived from a
-// photo of the Run's photo set and a settings object, followed by saving the generated
-// image as an immutable Execution Artifact.
+// generation with the Agent node's selected image model, from a photo of the Run's photo
+// set and the strict settings object every image model shares, followed by saving the
+// generated image as an immutable Execution Artifact.
 //
 // It performs exactly one registered operation. It owns no retry, timeout, state
 // transition or Event: a rejected or failed generation is reported upward as an error and
 // the Agent Runtime decides what happens next.
 //
-// Its errors carry only the Tool name, the stable Provider identifier, a fixed operation
-// label and an HTTP status code - never the arguments, the settings or a response body.
+// Its errors carry only the Tool name, a stable model or Provider identifier, a fixed
+// operation label and an HTTP status code - never the arguments, the settings or a
+// response body.
 package generateimage
 
 import (
@@ -20,10 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
+	"maps"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -35,19 +33,6 @@ const ToolName = "generate_image"
 // FactType is the execution fact a successful generation establishes about the new asset.
 const FactType = "image_generated"
 
-// ProviderID is the stable identifier of the Provider this Tool calls; it is not a
-// credential.
-const ProviderID = "mock-asset-provider-v1"
-
-const assetsPath = "/v1/assets"
-
-// defaultTimeout bounds one request when no HTTP client is injected. The Agent deadline
-// still arrives through ctx and wins whenever it is shorter.
-const defaultTimeout = 30 * time.Second
-
-// maxResponseBytes bounds the generation response this Tool reads.
-const maxResponseBytes = 64 << 10
-
 // ArtifactContentStore is the port through which the Tool saves the generated image as
 // content-addressed Execution Artifact content. Write streams r into immutable storage and
 // returns the reference derived from the bytes that landed; it never writes metadata, so
@@ -56,20 +41,24 @@ type ArtifactContentStore interface {
 	Write(ctx context.Context, r io.Reader) (domain.ArtifactRef, error)
 }
 
-// mockControlKey names the settings member that selects a Mock Provider scenario. With the
-// value mockControlFail the Provider refuses the generation, which is a definite failure:
-// no asset exists afterwards.
-const (
-	mockControlKey  = "mock"
-	mockControlFail = "fail"
-	outcomeFailed   = "failed"
-)
-
+// inputSchema is shared by every image model. The Runtime validates a Decision's
+// arguments against it when the Action is claimed, so settings outside it fail as an
+// invalid Action before any Tool Attempt or external request exists.
 const inputSchema = `{
   "type": "object",
   "properties": {
     "photoAssetId": {"type": "string", "minLength": 1},
-    "settings": {"type": "object"}
+    "settings": {
+      "type": "object",
+      "properties": {
+        "prompt": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "aspectRatio": {"enum": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"]},
+        "resolution": {"enum": ["1K"]},
+        "seed": {"type": "integer", "minimum": 0}
+      },
+      "required": ["prompt"],
+      "additionalProperties": false
+    }
   },
   "required": ["photoAssetId", "settings"],
   "additionalProperties": false
@@ -97,19 +86,18 @@ const outputSchema = `{
   "additionalProperties": false
 }`
 
-// Registration returns the `generate_image` ToolRegistration calling the Mock Provider at
-// baseURL and saving generated images through artifacts. A nil client means a default
-// client bounded by defaultTimeout.
+// Registration returns the `generate_image` ToolRegistration. generators maps each image
+// Model ID this process can serve to its generator; photos reads source photos for a
+// generator that sends their bytes; artifacts saves generated images.
 //
-// After the Provider answers, the Tool fetches the generated image with the same call
-// context and writes it through artifacts, so the result carries an `artifact` reference
-// and declares it in ToolResult.Artifacts for the Runtime to commit with the result. The
-// image is fetched from baseURL, not from the returned imageUrl's own origin: only the
-// scheme and host of imageUrl are replaced by those of baseURL, and the path is kept. The
-// imageUrl may name a public origin the Backend cannot reach (a browser-facing address in
-// a container deployment), and fetching only from the configured Provider means a
-// Provider response can never point the Backend at an arbitrary host. The result keeps
-// the public imageUrl unchanged.
+// The Tool declares UsesImageModel, so every call carries the Agent Run's frozen image
+// Model ID and the Tool uses exactly that model's generator. An ID with no generator is a
+// wiring defect: the call fails before any request, and no other generator is
+// substituted.
+//
+// The generated image is written through artifacts with the call context, so the result
+// carries an `artifact` reference and declares it in ToolResult.Artifacts for the Runtime
+// to commit with the result.
 //
 // Generation creates a Provider asset, so the call has an EXTERNAL side effect. Its
 // idempotency is UNKNOWN: the Runtime hands an Agent Tool no idempotency key, so nothing
@@ -121,7 +109,7 @@ const outputSchema = `{
 // also binds the Provider's imageUrl, a credential-free address of the generated asset, so
 // a delivery node can present the generated image from the fact rather than from a URL the
 // model reports.
-func Registration(baseURL string, client *http.Client, artifacts ArtifactContentStore) registry.ToolRegistration {
+func Registration(generators map[string]ImageGenerator, photos PhotoReader, artifacts ArtifactContentStore) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
@@ -143,40 +131,26 @@ func Registration(baseURL string, client *http.Client, artifacts ArtifactContent
 			CountsTowardGenerationLimit: true,
 			UsesImageModel:              true,
 		},
-		Executor: New(baseURL, client, artifacts),
+		Executor: New(generators, photos, artifacts),
 	}
 }
 
 // Executor implements registry.ToolExecutor for `generate_image`.
 type Executor struct {
-	baseURL    string
-	httpClient *http.Client
+	generators map[string]ImageGenerator
+	photos     PhotoReader
 	artifacts  ArtifactContentStore
 }
 
-// New returns an Executor calling the Mock Provider at baseURL and saving generated
-// images through artifacts.
-func New(baseURL string, client *http.Client, artifacts ArtifactContentStore) *Executor {
-	if client == nil {
-		client = &http.Client{Timeout: defaultTimeout}
-	}
-	return &Executor{baseURL: strings.TrimRight(baseURL, "/"), httpClient: client, artifacts: artifacts}
+// New returns an Executor that generates with the generator registered for each call's
+// image Model ID and saves generated images through artifacts.
+func New(generators map[string]ImageGenerator, photos PhotoReader, artifacts ArtifactContentStore) *Executor {
+	return &Executor{generators: maps.Clone(generators), photos: photos, artifacts: artifacts}
 }
 
 type arguments struct {
 	PhotoAssetID string          `json:"photoAssetId"`
 	Settings     json.RawMessage `json:"settings"`
-}
-
-type assetRequest struct {
-	PhotoAssetID   string `json:"photoAssetId"`
-	SettingsDigest string `json:"settingsDigest"`
-	Outcome        string `json:"outcome,omitempty"`
-}
-
-type assetResponse struct {
-	AssetID  string `json:"assetId"`
-	ImageURL string `json:"imageUrl"`
 }
 
 // result is the Tool's result; field order is the result's key order.
@@ -187,93 +161,48 @@ type result struct {
 	Artifact       domain.ArtifactRef `json:"artifact"`
 }
 
-// Execute sends one generation request, saves the generated image as an Execution
+// Execute generates one image with the call's image model, saves it as an Execution
 // Artifact and returns the new asset's reference together with the artifact's.
 func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (registry.ToolExecutionResult, error) {
 	if e.artifacts == nil {
-		return registry.ToolExecutionResult{}, generationError("save image", 0, "artifact storage is not configured")
+		return registry.ToolExecutionResult{}, toolError("save image", "artifact storage is not configured")
+	}
+	generator := e.generators[action.ImageModelID]
+	if generator == nil {
+		return registry.ToolExecutionResult{}, fmt.Errorf("%s: select generator: image model %q has no generator in this process", ToolName, action.ImageModelID)
 	}
 	var args arguments
 	if err := json.Unmarshal(action.Arguments, &args); err != nil || args.PhotoAssetID == "" {
-		return registry.ToolExecutionResult{}, generationError("build request", 0, "arguments carry no photoAssetId")
+		return registry.ToolExecutionResult{}, toolError("build request", "arguments carry no photoAssetId")
 	}
-	digest, settings, err := SettingsDigest(args.Settings)
+	digest, _, err := SettingsDigest(args.Settings)
 	if err != nil {
-		return registry.ToolExecutionResult{}, generationError("build request", 0, "settings is not a JSON object")
+		return registry.ToolExecutionResult{}, toolError("build request", "settings is not a JSON object")
 	}
-	request := assetRequest{PhotoAssetID: args.PhotoAssetID, SettingsDigest: digest}
-	if control, ok := settings[mockControlKey].(string); ok && control == mockControlFail {
-		request.Outcome = outcomeFailed
+	settings, err := decodeSettings(args.Settings)
+	if err != nil {
+		return registry.ToolExecutionResult{}, toolError("build request", "settings do not match the shared image settings")
 	}
 
-	body, err := json.Marshal(request)
-	if err != nil {
-		return registry.ToolExecutionResult{}, generationError("build request", 0, "request body could not be encoded")
-	}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+assetsPath, bytes.NewReader(body))
-	if err != nil {
-		return registry.ToolExecutionResult{}, generationError("build request", 0, "request could not be created")
-	}
-	httpRequest.Header.Set("Content-Type", "application/json")
-
-	response, err := e.httpClient.Do(httpRequest)
-	if err != nil {
-		return registry.ToolExecutionResult{}, generationError("send request", 0, "transport failure")
-	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		_ = response.Body.Close()
-	}()
-	if response.StatusCode != http.StatusOK {
-		// The body is not read into the error: a Provider may echo request content there.
-		return registry.ToolExecutionResult{}, generationError("provider rejected the generation", response.StatusCode, "non-200 status")
-	}
-	var generated assetResponse
-	if err := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes)).Decode(&generated); err != nil {
-		return registry.ToolExecutionResult{}, generationError("decode response", response.StatusCode, "response body is not an asset response")
-	}
-	if generated.AssetID == "" || generated.ImageURL == "" {
-		return registry.ToolExecutionResult{}, generationError("decode response", response.StatusCode, "response carries no assetId or imageUrl")
-	}
-
-	artifact, err := e.saveImage(ctx, generated.ImageURL)
+	photoAssetID := args.PhotoAssetID
+	generated, err := generator.Generate(ctx, ImageRequest{
+		PhotoAssetID:   photoAssetID,
+		OpenPhoto:      func(ctx context.Context) (Photo, error) { return e.openPhoto(ctx, photoAssetID) },
+		Settings:       settings,
+		SettingsDigest: digest,
+	})
 	if err != nil {
 		return registry.ToolExecutionResult{}, err
 	}
+	if generated.Content == nil {
+		return registry.ToolExecutionResult{}, toolError("save image", "generator returned no image content")
+	}
+	defer func() { _ = generated.Content.Close() }()
+	if generated.AssetID == "" || generated.ImageURL == "" {
+		return registry.ToolExecutionResult{}, toolError("save image", "generator returned no asset reference")
+	}
 
-	output, err := json.Marshal(result{AssetRef: generated.AssetID, ImageURL: generated.ImageURL, SettingsDigest: digest, Artifact: artifact})
-	if err != nil {
-		return registry.ToolExecutionResult{}, generationError("encode result", 0, "result could not be encoded")
-	}
-	return registry.ToolExecutionResult{
-		Kind:   registry.ToolResultCompleted,
-		Result: &registry.ToolResult{Output: output, Artifacts: []domain.ArtifactRef{artifact}},
-	}, nil
-}
-
-// saveImage fetches the generated image from the configured Provider and writes it
-// through the artifact port. It runs once: a failed fetch or write is reported as an
-// error, never retried, because the generation itself already happened and its side
-// effect is not idempotent. Errors carry fixed labels only - never the image URL, a
-// storage key or a response body.
-func (e *Executor) saveImage(ctx context.Context, imageURL string) (domain.ArtifactRef, error) {
-	fetchURL, err := e.fetchURL(imageURL)
-	if err != nil {
-		return domain.ArtifactRef{}, generationError("fetch image", 0, "imageUrl is not a usable image address")
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
-	if err != nil {
-		return domain.ArtifactRef{}, generationError("fetch image", 0, "request could not be created")
-	}
-	response, err := e.httpClient.Do(request)
-	if err != nil {
-		return domain.ArtifactRef{}, generationError("fetch image", 0, "transport failure")
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return domain.ArtifactRef{}, generationError("fetch image", response.StatusCode, "non-200 status")
-	}
-	ref, err := e.artifacts.Write(ctx, response.Body)
+	artifact, err := e.artifacts.Write(ctx, generated.Content)
 	if err != nil {
 		reason := "image could not be stored"
 		switch {
@@ -282,24 +211,45 @@ func (e *Executor) saveImage(ctx context.Context, imageURL string) (domain.Artif
 		case errors.Is(err, domain.ErrUnsupportedAssetMediaType):
 			reason = "image is not a supported image type"
 		}
-		return domain.ArtifactRef{}, generationError("save image", 0, reason)
+		return registry.ToolExecutionResult{}, toolError("save image", reason)
 	}
-	return ref, nil
+
+	output, err := json.Marshal(result{AssetRef: generated.AssetID, ImageURL: generated.ImageURL, SettingsDigest: digest, Artifact: artifact})
+	if err != nil {
+		return registry.ToolExecutionResult{}, toolError("encode result", "result could not be encoded")
+	}
+	return registry.ToolExecutionResult{
+		Kind:   registry.ToolResultCompleted,
+		Result: &registry.ToolResult{Output: output, Artifacts: []domain.ArtifactRef{artifact}},
+	}, nil
 }
 
-// fetchURL replaces the scheme and host of imageURL with those of the configured Provider
-// base URL, keeping the path and query.
-func (e *Executor) fetchURL(imageURL string) (string, error) {
-	base, err := url.Parse(e.baseURL)
-	if err != nil || base.Host == "" || (base.Scheme != "http" && base.Scheme != "https") {
-		return "", errors.New("provider base URL is not absolute")
+// openPhoto reads one source photo through the photo port on a generator's request.
+func (e *Executor) openPhoto(ctx context.Context, photoAssetID string) (Photo, error) {
+	if e.photos == nil {
+		return Photo{}, toolError("read photo", "photo storage is not configured")
 	}
-	image, err := url.Parse(imageURL)
-	if err != nil || image.Host == "" || (image.Scheme != "http" && image.Scheme != "https") || image.Path == "" {
-		return "", errors.New("imageUrl is not an absolute http(s) URL")
+	photo, err := e.photos.OpenPhoto(ctx, photoAssetID)
+	if err != nil {
+		return Photo{}, toolError("read photo", "photo could not be read")
 	}
-	fetch := url.URL{Scheme: base.Scheme, Host: base.Host, Path: image.Path, RawPath: image.RawPath, RawQuery: image.RawQuery}
-	return fetch.String(), nil
+	return photo, nil
+}
+
+// decodeSettings decodes the shared settings object strictly. The claim already
+// validated it against the InputSchema; a member this type does not know still fails
+// here rather than being dropped silently.
+func decodeSettings(raw json.RawMessage) (Settings, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var settings Settings
+	if err := decoder.Decode(&settings); err != nil {
+		return Settings{}, fmt.Errorf("decode settings: %w", err)
+	}
+	if settings.Prompt == "" {
+		return Settings{}, errors.New("decode settings: prompt is empty")
+	}
+	return settings, nil
 }
 
 // SettingsDigest returns "sha256:" followed by the lowercase hex SHA-256 of the canonical
@@ -332,11 +282,17 @@ func SettingsDigest(raw json.RawMessage) (string, map[string]any, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), object, nil
 }
 
-// generationError builds a generation failure from fixed labels only, so no request or
-// response content can reach Trace or a log through it.
+// generationError builds a Provider interaction failure from fixed labels only, so no
+// request or response content can reach Trace or a log through it.
 func generationError(op string, statusCode int, reason string) error {
 	if statusCode != 0 {
 		return fmt.Errorf("%s: call provider %q: %s (status %d): %w", ToolName, ProviderID, op, statusCode, errors.New(reason))
 	}
 	return fmt.Errorf("%s: call provider %q: %s: %w", ToolName, ProviderID, op, errors.New(reason))
+}
+
+// toolError builds a Tool failure outside any Provider interaction from fixed labels
+// only.
+func toolError(op string, reason string) error {
+	return fmt.Errorf("%s: %s: %w", ToolName, op, errors.New(reason))
 }
