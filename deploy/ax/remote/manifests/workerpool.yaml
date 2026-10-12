@@ -1,0 +1,38 @@
+# Substrate WorkerPool that hosts the actors AX creates for its Tasks. AX's
+# per-Task actor templates set no worker selector, so any ready pool can host
+# them. It is the only pool this deployment creates.
+#
+# Each worker hosts one actor at a time, so the replica count bounds how many
+# sandbox tests run at once. The worker limits are the per-actor ceiling: AX at
+# the pinned commit does not pass a Task's resources into its actor template,
+# so these limits are what bounds a test.
+#
+# ${SUBSTRATE_VERSION} is replaced with the installed Substrate version (the
+# first eight characters of its commit) before the manifest is applied: worker
+# pods schedule only on nodes carrying that version label. The workerImage
+# reference is resolved by ko from the Substrate checkout.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ax-workers
+---
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: ax
+  namespace: ax-workers
+  labels:
+    workload: ax
+spec:
+  replicas: 2
+  workerImage: ko://github.com/agent-substrate/substrate/cmd/ateom-gvisor
+  template:
+    nodeSelector:
+      ate.dev/substrate-version: "${SUBSTRATE_VERSION}"
+    resources:
+      limits:
+        cpu: "2"
+        memory: 2Gi
+      requests:
+        cpu: 250m
+        memory: 2Gi
