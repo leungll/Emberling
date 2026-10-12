@@ -273,8 +273,9 @@ func (s *DefinitionService) compile(ctx context.Context, def domain.Definition) 
 	return ValidateResult{Valid: true, RunInputSchema: compiled.RunInputSchema}, compiled, nil
 }
 
-// resolveAgentRegistrations re-resolves every `agent` node's modelId and allowedTools
-// against the current Model and Tool Registries, and freezes the node's normalised
+// resolveAgentRegistrations re-resolves every `agent` node's modelId, allowedTools and
+// imageModelId against the current Model and Tool Registries, checks the capabilities
+// both model selections need, and freezes the node's normalised
 // modelConfig back into def.Nodes: `{}` when the author configured nothing, or the
 // submitted object with every top-level ConfigSchema default filled in
 // (registry.ApplyTopLevelDefaults) otherwise. Frozen config is validated against the
@@ -337,6 +338,8 @@ func (s *DefinitionService) resolveAgentRegistrations(def domain.Definition) []r
 				})
 			}
 		}
+
+		errs = append(errs, agentModelSelectionErrors(s.deps.Models, s.deps.Tools, node.ID, cfg)...)
 	}
 	return errs
 }

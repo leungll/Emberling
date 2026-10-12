@@ -186,6 +186,7 @@ const tools: ToolMetadata[] = [
     sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
     requires: [],
     countsTowardGenerationLimit: false,
+    usesImageModel: false,
     executionKind: 'SYNC',
   },
   {
@@ -196,6 +197,7 @@ const tools: ToolMetadata[] = [
     sideEffect: { kind: 'EXTERNAL', idempotency: 'UNKNOWN' },
     requires: [],
     countsTowardGenerationLimit: false,
+    usesImageModel: false,
     executionKind: 'ASYNC',
   },
 ];

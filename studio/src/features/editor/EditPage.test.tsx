@@ -187,6 +187,7 @@ const TOOLS = [
     sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
     requires: [],
     countsTowardGenerationLimit: false,
+    usesImageModel: false,
   },
 ];
 

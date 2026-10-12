@@ -155,7 +155,7 @@ func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error)
 		{ModelMetadata: domain.ModelMetadata{
 			ID:           ImageModelID,
 			DisplayName:  "Mock Image Model v1",
-			Capabilities: []string{domain.ModelCapabilityImageGeneration},
+			Capabilities: []string{domain.ModelCapabilityImageGeneration, domain.ModelCapabilityReferenceImageGeneration},
 			ConfigSchema: json.RawMessage(configSchema),
 		}},
 	}, nil

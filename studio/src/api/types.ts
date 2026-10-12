@@ -257,6 +257,11 @@ export interface ToolMetadata {
   produces?: FactProduction | null;
   requires: FactRequirement[];
   countsTowardGenerationLimit: boolean;
+  /**
+   * True when the Tool runs with the image model selected on its Agent node
+   * (`imageModelId`); the Backend then requires that selection on Save.
+   */
+  usesImageModel: boolean;
 }
 
 export interface NodeTypeListResponse {

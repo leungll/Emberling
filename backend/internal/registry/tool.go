@@ -25,6 +25,10 @@ type ToolAction struct {
 	AttemptNo  int
 	// Arguments already passed the Tool InputSchema in the Runtime.
 	Arguments json.RawMessage
+	// ImageModelID is the Agent Run's frozen image Model ID, resolved in the claim
+	// transaction, for a Tool whose Metadata declares UsesImageModel; empty otherwise. The
+	// Tool uses it verbatim and never selects a model of its own.
+	ImageModelID string
 	// Callback is set only for an ASYNC Tool dispatch.
 	Callback *CallbackContext
 }

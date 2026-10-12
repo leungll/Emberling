@@ -200,13 +200,16 @@ func (m NodeMetadata) Validate() error {
 
 // Declared model result capabilities. Studio filters the Model Selector by them and an
 // Agent model must declare ModelCapabilityStructuredDecision, meaning it can return fixed
-// JSON for the DecisionSchema. A capability names the result Emberling needs, not a
+// JSON for the DecisionSchema. ModelCapabilityReferenceImageGeneration means the model
+// synchronously generates one image from one input image and a prompt; an Agent node's
+// imageModelId must declare it. A capability names the result Emberling needs, not a
 // Provider-native API. The list stays open: an Adapter may declare a capability this
 // package does not name.
 const (
-	ModelCapabilityTextGeneration     = "text_generation"
-	ModelCapabilityImageGeneration    = "image_generation"
-	ModelCapabilityStructuredDecision = "structured_decision"
+	ModelCapabilityTextGeneration           = "text_generation"
+	ModelCapabilityImageGeneration          = "image_generation"
+	ModelCapabilityStructuredDecision       = "structured_decision"
+	ModelCapabilityReferenceImageGeneration = "reference_image_generation"
 )
 
 // ModelMetadata is the registered description of one stable Model ID. ConfigSchema is the
@@ -284,6 +287,10 @@ type ToolMetadata struct {
 	// CountsTowardGenerationLimit marks a Tool whose calls count against an Agent's
 	// generation call limit.
 	CountsTowardGenerationLimit bool `json:"countsTowardGenerationLimit"`
+	// UsesImageModel marks a Tool that runs with the image model selected on its Agent
+	// node. Saving a Definition requires that node to select one, and each call receives
+	// the Agent Run's frozen image Model ID; the Runtime never decides this by Tool Name.
+	UsesImageModel bool `json:"usesImageModel"`
 }
 
 // Validate mirrors NodeMetadata.Validate for Tool registrations. Executor presence and

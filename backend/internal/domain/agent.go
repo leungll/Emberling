@@ -30,6 +30,10 @@ type AgentRun struct {
 	// MaxGenerationCalls is the optional generation limit; nil means unlimited. The
 	// calls already made are derived from persisted Tool Attempts, never counted here.
 	MaxGenerationCalls *int `json:"maxGenerationCalls"`
+	// ImageModelID is the image Model ID the Agent node selected for Tools that use an
+	// image model; nil when the node selected none. Claims of such a Tool resolve this
+	// frozen value, never the Definition's current one.
+	ImageModelID *string `json:"imageModelId"`
 
 	// CurrentTurnNo is the highest Turn number created so far; the initialisation
 	// transaction sets it to 1. CurrentContextVersion and CurrentStateVersion point at

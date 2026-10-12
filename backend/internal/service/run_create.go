@@ -11,8 +11,9 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
-// resolveAgentIdentifiers re-resolves every `agent` node's modelId and allowedTools
-// against the *current* Model and Tool Registries, existence-only. Unlike
+// resolveAgentIdentifiers re-resolves every `agent` node's modelId, allowedTools and
+// imageModelId against the *current* Model and Tool Registries, together with the
+// capabilities both model selections need. Unlike
 // service.DefinitionService.resolveAgentRegistrations (called at Validate/Save time), it
 // never applies or re-freezes modelConfig defaults: a Run stays bound to the Definition
 // version's already-frozen config, and defaults are resolved exactly once,
@@ -48,6 +49,7 @@ func (s *ExecutionService) resolveAgentIdentifiers(def domain.Definition) []runt
 				})
 			}
 		}
+		errs = append(errs, agentModelSelectionErrors(s.deps.Models, s.deps.Tools, node.ID, cfg)...)
 	}
 	return errs
 }
@@ -104,8 +106,9 @@ func (s *ExecutionService) CreateRun(ctx context.Context, req CreateRun) (domain
 		}
 
 		// A `agent` node's ManagedAgentBinding has no Executor, so the recompile above
-		// never resolves its modelId or allowedTools (registry.NodeRegistry.ValidateSemantics
-		// is a no-op for MANAGED_AGENT). Re-resolve them here, existence-only: no default is
+		// never resolves its modelId, allowedTools or imageModelId
+		// (registry.NodeRegistry.ValidateSemantics is a no-op for MANAGED_AGENT). Re-resolve
+		// them here, with the model capabilities they need: no default is
 		// re-injected and no modelConfig is re-validated, since those were already frozen
 		// into the Definition at Save time and must not silently change under a running or
 		// about-to-run Workflow (domain.ModelMetadata doc comment: "defaults are resolved

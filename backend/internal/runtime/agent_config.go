@@ -27,6 +27,10 @@ type AgentNodeConfig struct {
 	// MaxGenerationCalls optionally bounds how many calls of Tools that count toward the
 	// generation limit one Agent Run may start. Nil means unlimited.
 	MaxGenerationCalls *int `json:"maxGenerationCalls,omitempty"`
+	// ImageModelID optionally names the image model the node's image-model Tools run
+	// with. Whether it resolves, declares the right capability and is required by the
+	// allowlist is decided in service, which holds the Registries.
+	ImageModelID string `json:"imageModelId,omitempty"`
 }
 
 // AgentConfigError is one `agent` Node config violation found by ParseAgentNodeConfig.
