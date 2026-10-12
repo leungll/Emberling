@@ -2,8 +2,9 @@
 // the OpenRouter Images API, POST <base URL>/images, and returns the single generated
 // image as a stream of decoded bytes.
 //
-// One Provider serves one configured image model. It registers as a model that can
-// generate an image from one reference image and a prompt; it supplies no Decision, so
+// One Provider serves one configured image model. It registers with the reference image
+// generation capability, meaning it can generate an image from one reference image and a
+// prompt; it supplies no Decision, so
 // Generate always refuses. The Adapter never retries, never falls back to another model,
 // never sends OpenRouter routing fields, never writes Runtime state and never emits an
 // Event: any answer it cannot normalise is returned as an *Error and the caller applies
@@ -24,10 +25,6 @@ import (
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
 
-// CapabilityReferenceImageGeneration is the result capability of every model this
-// Adapter registers: one image generated synchronously from one input image and a prompt.
-const CapabilityReferenceImageGeneration = "reference_image_generation"
-
 const imagesPath = "/images"
 
 const redacted = "[REDACTED]"
@@ -36,8 +33,9 @@ const redacted = "[REDACTED]"
 // parameters, its per-call settings arrive with each request.
 const configSchema = `{"type": "object", "additionalProperties": false}`
 
-// Config is everything one Provider needs. ModelID is the stable ID a Definition selects
-// and DisplayName is what Studio shows, while Model is the upstream model name, which
+// Config is everything one Provider needs. ModelID is the stable ID a Definition selects,
+// DisplayName is what Studio shows and Description is the optional one-line note Studio
+// shows with it, while Model is the upstream model name, which
 // stays deployment configuration and is never written into a Definition. MaxImageBytes
 // caps the decoded image and, through it, how much of the response body is read.
 // HTTPClient carries the Adapter's own connection and per-call limits; when nil, calls
@@ -45,6 +43,7 @@ const configSchema = `{"type": "object", "additionalProperties": false}`
 type Config struct {
 	ModelID       string
 	DisplayName   string
+	Description   string
 	BaseURL       string
 	APIKey        string
 	Model         string
@@ -56,6 +55,7 @@ type Config struct {
 type Provider struct {
 	modelID       string
 	displayName   string
+	description   string
 	endpoint      string
 	apiKey        string
 	model         string
@@ -102,6 +102,7 @@ func New(cfg Config) (*Provider, error) {
 	return &Provider{
 		modelID:       cfg.ModelID,
 		displayName:   cfg.DisplayName,
+		description:   cfg.Description,
 		endpoint:      strings.TrimRight(cfg.BaseURL, "/") + imagesPath,
 		apiKey:        cfg.APIKey,
 		model:         cfg.Model,
@@ -132,7 +133,8 @@ func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error)
 	return []registry.ModelRegistration{{ModelMetadata: domain.ModelMetadata{
 		ID:           p.modelID,
 		DisplayName:  p.displayName,
-		Capabilities: []string{CapabilityReferenceImageGeneration},
+		Description:  p.description,
+		Capabilities: []string{domain.ModelCapabilityReferenceImageGeneration},
 		ConfigSchema: json.RawMessage(configSchema),
 	}}}, nil
 }
