@@ -176,8 +176,9 @@ services:
       # Optional real decision models behind one OpenAI-compatible endpoint. All four are
       # empty by default, so only the mock models are registered; set the base URL, key and
       # model list together, or the backend refuses to start. EMBERLING_MODELS is a JSON
-      # array of {"id","model","displayName"} entries; the key is a Secret from the
-      # developer's own environment, never committed.
+      # array of {"id","model","displayName"} entries, each with an optional one-line
+      # "description" of at most 280 characters that Studio shows with the model; the key
+      # is a Secret from the developer's own environment, never committed.
       EMBERLING_MODELS: ${EMBERLING_MODELS:-}
       EMBERLING_MODEL_BASE_URL: ${EMBERLING_MODEL_BASE_URL:-}
       EMBERLING_MODEL_API_KEY: ${EMBERLING_MODEL_API_KEY:-}

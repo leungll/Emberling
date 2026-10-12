@@ -227,8 +227,9 @@ func NewModelRegistry() *ModelRegistry {
 }
 
 // Register calls provider.Models(ctx) once and indexes every returned ModelRegistration by
-// ID. It rejects an empty or duplicate ID and a ConfigSchema that does not compile; a
-// Registry that fails this check must not let the Backend become ready.
+// ID. It rejects an empty or duplicate ID, a ConfigSchema that does not compile and a
+// description outside its bounds; a Registry that fails this check must not let the
+// Backend become ready.
 func (r *ModelRegistry) Register(ctx context.Context, provider ModelProvider) error {
 	if provider == nil {
 		return fmt.Errorf("register model provider: provider is nil")
@@ -254,6 +255,9 @@ func (r *ModelRegistry) Register(ctx context.Context, provider ModelProvider) er
 		}
 		if err := validateSchemaJSON(model.ConfigSchema); err != nil {
 			modelErrs = append(modelErrs, fmt.Errorf("model %q: configSchema: %w", model.ID, err))
+		}
+		if err := domain.ValidateModelDescription(model.Description); err != nil {
+			modelErrs = append(modelErrs, fmt.Errorf("model %q: description: %w", model.ID, err))
 		}
 		if len(modelErrs) > 0 {
 			errs = append(errs, modelErrs...)

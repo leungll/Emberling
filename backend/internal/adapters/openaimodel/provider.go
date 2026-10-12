@@ -48,13 +48,15 @@ const configSchema = `{
 }`
 
 // Config is everything one Provider needs. One Provider serves exactly one model: ModelID
-// is the stable ID a Definition selects and DisplayName is what Studio shows, while Model
-// is the Provider-side model name, which stays deployment configuration and is never
-// written into a Definition. There is no default Model ID. HTTPClient may be nil, in which
-// case calls are bounded only by the caller's context.
+// is the stable ID a Definition selects, DisplayName is what Studio shows and Description
+// is the optional one-line note Studio shows with it, while Model is the Provider-side
+// model name, which stays deployment configuration and is never written into a
+// Definition. There is no default Model ID. HTTPClient may be nil, in which case calls are
+// bounded only by the caller's context.
 type Config struct {
 	ModelID        string
 	DisplayName    string
+	Description    string
 	BaseURL        string
 	APIKey         string
 	Model          string
@@ -70,6 +72,7 @@ type Config struct {
 type Provider struct {
 	modelID     string
 	displayName string
+	description string
 	endpoint    string
 	apiKey      string
 	model       string
@@ -118,6 +121,7 @@ func New(cfg Config) (*Provider, error) {
 	return &Provider{
 		modelID:     cfg.ModelID,
 		displayName: cfg.DisplayName,
+		description: cfg.Description,
 		endpoint:    strings.TrimRight(cfg.BaseURL, "/") + completionsPath,
 		apiKey:      cfg.APIKey,
 		model:       cfg.Model,
@@ -142,6 +146,7 @@ func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error)
 	return []registry.ModelRegistration{{ModelMetadata: domain.ModelMetadata{
 		ID:           p.modelID,
 		DisplayName:  p.displayName,
+		Description:  p.description,
 		Capabilities: []string{domain.ModelCapabilityTextGeneration, domain.ModelCapabilityStructuredDecision},
 		ConfigSchema: json.RawMessage(configSchema),
 	}}}, nil

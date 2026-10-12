@@ -599,6 +599,30 @@ func TestProvider_Models_RegistersConfiguredIDAndDisplayName(t *testing.T) {
 	}
 }
 
+func TestProvider_Models_ServesConfiguredDescription(t *testing.T) {
+	for _, description := range []string{"", "Fast general-purpose model for short tasks."} {
+		provider, err := openaimodel.New(openaimodel.Config{
+			ModelID:        testModelID,
+			DisplayName:    testDisplayName,
+			Description:    description,
+			BaseURL:        "https://llm.example/v1",
+			APIKey:         testKey,
+			Model:          "gpt-test",
+			DecisionSchema: registry.DecisionSchema(),
+		})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		models, err := provider.Models(context.Background())
+		if err != nil {
+			t.Fatalf("Models() error = %v", err)
+		}
+		if len(models) != 1 || models[0].Description != description {
+			t.Errorf("Models() = %+v, want one model with Description %q", models, description)
+		}
+	}
+}
+
 // TestProvider_Generate_EachInstanceSendsOwnUpstreamModel pins one Provider instance per
 // model: two instances behind the same endpoint each send only the upstream model name
 // they were constructed with.

@@ -230,6 +230,112 @@ describe('SchemaForm — schema-driven widgets', () => {
     expect(onChange).toHaveBeenCalledWith({ modelId: 'decision-model-v1' });
   });
 
+  it('shows the selected model description as secondary text tied to the Model Selector', () => {
+    const describedModels: ModelMetadata[] = [
+      {
+        id: 'careful-model-v1',
+        displayName: 'Careful Model',
+        description: 'Careful multi-step reasoning; moderate speed.',
+        capabilities: ['structured_decision'],
+        configSchema: { type: 'object' },
+      },
+      {
+        id: 'plain-model-v1',
+        displayName: 'Plain Model',
+        capabilities: ['structured_decision'],
+        configSchema: { type: 'object' },
+      },
+    ];
+    function renderWith(modelId: string) {
+      return render(
+        <SchemaForm
+          configSchema={agentSchema}
+          uiSchema={agentUiSchema}
+          models={describedModels}
+          tools={tools}
+          value={{ modelId }}
+          onChange={vi.fn()}
+        />,
+      );
+    }
+
+    const { unmount } = renderWith('careful-model-v1');
+    const select = screen.getByLabelText(/^Model\s*\*?$/);
+    expect(screen.getByText('Careful multi-step reasoning; moderate speed.')).toBeInTheDocument();
+    expect(select).toHaveAccessibleDescription(/Careful multi-step reasoning; moderate speed\./);
+    // Every described option also carries its description, so it is readable before choosing.
+    expect(within(select).getByRole('option', { name: /Careful Model/ })).toHaveAttribute(
+      'title',
+      'Careful multi-step reasoning; moderate speed.',
+    );
+    expect(within(select).getByRole('option', { name: /Plain Model/ })).not.toHaveAttribute(
+      'title',
+    );
+    unmount();
+
+    renderWith('plain-model-v1');
+    expect(screen.queryByText('Careful multi-step reasoning; moderate speed.')).toBeNull();
+    expect(screen.getByLabelText(/^Model\s*\*?$/)).not.toHaveAccessibleDescription(/Careful/);
+  });
+
+  it('describes each of two Model Selectors on one node by its own selected model', () => {
+    const twoSelectorSchema: JsonSchema = {
+      type: 'object',
+      properties: {
+        modelId: { type: 'string', title: 'Decision model' },
+        imageModelId: { type: 'string', title: 'Image model' },
+      },
+    };
+    const twoSelectorUiSchema: UiSchema = {
+      fields: [
+        {
+          path: 'modelId',
+          order: 10,
+          group: 'MODEL',
+          widget: 'MODEL_SELECTOR',
+          capability: 'structured_decision',
+        },
+        {
+          path: 'imageModelId',
+          order: 15,
+          group: 'MODEL',
+          widget: 'MODEL_SELECTOR',
+          capability: 'reference_image_generation',
+        },
+      ],
+    };
+    const twoKindsOfModels: ModelMetadata[] = [
+      {
+        id: 'decision-model-v1',
+        displayName: 'Decision Model',
+        description: 'Plans tool calls step by step.',
+        capabilities: ['structured_decision'],
+        configSchema: { type: 'object' },
+      },
+      {
+        id: 'picture-model-v1',
+        displayName: 'Picture Model',
+        description: 'Restyles a reference photo; slow.',
+        capabilities: ['reference_image_generation'],
+        configSchema: { type: 'object' },
+      },
+    ];
+    render(
+      <SchemaForm
+        configSchema={twoSelectorSchema}
+        uiSchema={twoSelectorUiSchema}
+        models={twoKindsOfModels}
+        value={{ modelId: 'decision-model-v1', imageModelId: 'picture-model-v1' }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    const decision = screen.getByLabelText(/^Decision model/);
+    const image = screen.getByLabelText(/^Image model/);
+    expect(decision).toHaveAccessibleDescription('Plans tool calls step by step.');
+    expect(image).toHaveAccessibleDescription('Restyles a reference photo; slow.');
+  });
+
   it('keeps an unregistered saved model visible instead of silently dropping it', () => {
     renderAgentForm({ modelId: 'retired-model' });
 

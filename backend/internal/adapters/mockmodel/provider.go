@@ -143,18 +143,21 @@ func mustTextConfigSchema() json.RawMessage {
 	return encoded
 }
 
-// Models returns the models this Provider serves.
+// Models returns the models this Provider serves. The mock models have no deployment
+// configuration, so their descriptions are fixed here and say they are test fixtures.
 func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error) {
 	return []registry.ModelRegistration{
 		{ModelMetadata: domain.ModelMetadata{
 			ID:           ModelID,
 			DisplayName:  "Mock Text Model v1",
+			Description:  "Deterministic test fixture that replays scripted decisions locally, with no external calls and no cost.",
 			Capabilities: []string{domain.ModelCapabilityTextGeneration, domain.ModelCapabilityStructuredDecision},
 			ConfigSchema: textConfigSchema,
 		}},
 		{ModelMetadata: domain.ModelMetadata{
 			ID:           ImageModelID,
 			DisplayName:  "Mock Image Model v1",
+			Description:  "Deterministic test fixture that returns synthetic placeholder images from the local mock provider, at no cost.",
 			Capabilities: []string{domain.ModelCapabilityImageGeneration, domain.ModelCapabilityReferenceImageGeneration},
 			ConfigSchema: json.RawMessage(configSchema),
 		}},
