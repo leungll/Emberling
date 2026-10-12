@@ -66,17 +66,17 @@ type modelListEntry struct {
 	Description string `json:"description"`
 }
 
-// modelList parses the model list. Problems name the zero-based entry index and the field,
+// modelList parses the model list held by key. Problems name the zero-based entry index and the field,
 // never a configured value; a JSON decoding error is not passed on because its text can
 // quote the input.
-func (l *loader) modelList() []OpenAIModelEntry {
-	value := l.required(KeyModels)
+func (l *loader) modelList(key string) []OpenAIModelEntry {
+	value := l.required(key)
 	if value == "" {
 		return nil
 	}
 	var items []json.RawMessage
 	if err := json.Unmarshal([]byte(value), &items); err != nil {
-		l.fail(KeyModels, "must be a JSON array of objects with id, model, displayName and an optional description")
+		l.fail(key, "must be a JSON array of objects with id, model, displayName and an optional description")
 		return nil
 	}
 	entries := make([]OpenAIModelEntry, 0, len(items))
@@ -100,7 +100,7 @@ func (l *loader) modelList() []OpenAIModelEntry {
 		problems = validateModelList(entries)
 	}
 	if len(problems) > 0 {
-		l.fail(KeyModels, strings.Join(problems, "; "))
+		l.fail(key, strings.Join(problems, "; "))
 		return nil
 	}
 	return entries

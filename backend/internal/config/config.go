@@ -76,6 +76,7 @@ type Config struct {
 	AssetStorage    AssetStorage
 	ModelProvider   ModelProvider
 	OpenAIModel     OpenAIModel
+	ImageModel      ImageModel
 	Production      Production
 	Callback        Callback
 	SandboxRunner   SandboxRunner
@@ -235,6 +236,7 @@ func Load(env func(string) string) (Config, error) {
 			APIKey:  Secret{value: l.required(KeyModelProviderAPIKey)},
 		},
 		OpenAIModel: l.openAIModel(),
+		ImageModel:  l.imageModel(),
 		Production: Production{
 			BaseURL: l.optionalProviderURL(KeyProductionBaseURL),
 		},
@@ -303,6 +305,7 @@ func (c Config) Validate() error {
 			}
 		}
 	}
+	missing = append(missing, c.ImageModel.missingKeys()...)
 	if len(missing) > 0 {
 		return &MissingConfigError{Keys: missing}
 	}
@@ -353,7 +356,7 @@ func (c Config) Validate() error {
 			return &InvalidConfigError{Key: KeyModels, Reason: strings.Join(problems, "; ")}
 		}
 	}
-	return nil
+	return c.ImageModel.validate(c.OpenAIModel)
 }
 
 // loader accumulates every problem in one pass instead of failing on the first key.
@@ -430,7 +433,7 @@ func (l *loader) openAIModel() OpenAIModel {
 	return OpenAIModel{
 		BaseURL:                     l.requiredProviderURL(KeyModelBaseURL),
 		APIKey:                      Secret{value: l.required(KeyModelAPIKey)},
-		Models:                      l.modelList(),
+		Models:                      l.modelList(KeyModels),
 		Timeout:                     timeout,
 		OpenRouterRequireParameters: requireParameters,
 	}
