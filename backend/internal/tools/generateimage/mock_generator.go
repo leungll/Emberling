@@ -68,8 +68,8 @@ type assetResponse struct {
 // scheme and host of imageUrl are replaced by those of baseURL, and the path is kept. The
 // imageUrl may name a public origin the Backend cannot reach (a browser-facing address in
 // a container deployment), and fetching only from the configured Provider means a
-// Provider response can never point the Backend at an arbitrary host. The returned
-// ImageURL keeps the public address unchanged.
+// Provider response can never point the Backend at an arbitrary host. Neither the
+// Provider's asset id nor its address leaves the generator: only the image bytes do.
 //
 // It runs once: a failed fetch is reported as an error, never retried, because the
 // generation itself already happened and its side effect is not idempotent.
@@ -112,7 +112,7 @@ func (g *MockGenerator) Generate(ctx context.Context, request ImageRequest) (Gen
 	if err != nil {
 		return GeneratedImage{}, err
 	}
-	return GeneratedImage{Content: content, AssetID: generated.AssetID, ImageURL: generated.ImageURL}, nil
+	return GeneratedImage{Content: content}, nil
 }
 
 // openImage fetches the generated image from the configured Provider. Errors carry fixed

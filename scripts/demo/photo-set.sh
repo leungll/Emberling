@@ -10,8 +10,14 @@
 #          then one video completed by callback and a FINAL naming one reviewed example
 #          per photo. Expects a COMPLETED Run whose media result is accepted with 3 of 3
 #          passed, six generation and six review facts in the Trace (each review based on
-#          a generation), a generation budget of 6 used, and a dispatch record with
-#          exactly the six generated assets of the ledger and one video task.
+#          a generation), a generation budget of 6 used, a dispatch record with exactly
+#          the six generated images of the ledger and one video task, and a cover image
+#          that is a generated ARTIFACT served by its Run-scoped content route.
+#
+# A generated image is saved as an Execution Artifact named by the digest of its bytes, so
+# the ledger names it "artifact_" followed by the first 32 hex digits of that digest. The
+# dispatch record reports the same digest for each generation, which is how the two are
+# compared.
 #   gate   generates one image, then asks for a video of it without a review. Expects the
 #          video request rejected at claim with PRECONDITION_UNMET, the Agent ended as
 #          INVALID_ACTION, a FAILED Run and no video task in the dispatch record.
@@ -101,7 +107,7 @@ agent_node_run=$(jq -r '.nodeRuns[] | select(.nodeId == "node_agent") | .id' <<<
 trace=$(curl -fsS "$BACKEND_URL/api/runs/$run_id/nodes/$agent_node_run/agent")
 window=$(record_after "$record_after_seq" | jq -s '.')
 
-generated_record=$(jq -c '[.[] | select(.event == "generated") | .assetId] | sort' <<<"$window")
+generated_record=$(jq -c '[.[] | select(.event == "generated") | "artifact_" + .sha256[0:32]] | sort' <<<"$window")
 video_record=$(jq -c '[.[] | select(.event == "video_dispatched") | .externalTaskId] | sort' <<<"$window")
 generated_ledger=$(jq -c '[.facts.items[] | select(.factType == "image_generated") | .subject] | sort' <<<"$trace")
 reviewed_count=$(jq '[.facts.items[] | select(.factType == "asset_reviewed")] | length' <<<"$trace")
@@ -137,6 +143,16 @@ main)
     test "$generated_record" = "$generated_ledger" -a "$generated_count" -eq 6
   check record_video_matches_trace "record=$video_record trace=$bound_tasks" \
     test "$video_record" = "$bound_tasks" -a "$video_count" -eq 1
+  cover=$(jq -c '.nodeRuns[] | select(.nodeId == "node_result") | .output.image // {}' <<<"$snapshot")
+  cover_id=$(jq -r '.artifact.artifactId // ""' <<<"$cover")
+  cover_served() {
+    jq -e --argjson ledger "$generated_ledger" '.source == "ARTIFACT" and (.artifact.artifactId as $id | $ledger | index($id) != null)' \
+      <<<"$cover" >/dev/null || return 1
+    local status
+    status=$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' "$BACKEND_URL/api/runs/$run_id/artifacts/$cover_id/content")
+    [[ "$status" == "200 $(jq -r '.artifact.mediaType' <<<"$cover")" ]]
+  }
+  check cover_artifact_served "cover=$cover_id" cover_served
   summary="accepted=$(jq -r '.accepted' <<<"$caption") passed=$(jq -r '.passedCount' <<<"$caption")/$(jq -r '.photoCount' <<<"$caption") policy=$(jq -r '.policyVersion' <<<"$caption") budget=$used/$max_calls generated=$generated_count reviewed=$reviewed_count video_tasks=$video_count"
   ;;
 gate)

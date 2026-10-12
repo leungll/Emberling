@@ -602,6 +602,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			executor:     reg.Executor,
 			outputSchema: reg.Metadata.OutputSchema,
 			action: registry.ToolAction{
+				RunID:        nodeRun.RunID,
 				AgentRunID:   agentRun.ID,
 				TurnID:       turn.ID,
 				ActionID:     action.ID,

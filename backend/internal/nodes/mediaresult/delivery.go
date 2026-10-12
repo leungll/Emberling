@@ -67,9 +67,12 @@ func (l *reasonList) add(code, photoAssetID, assetRef string) {
 }
 
 // generation and review are the bindings of the newest fact about one generated asset.
-// ImageURL is the Provider's credential-free address of the generated image; facts
-// recorded before the generation Tool bound it leave it empty.
+// Artifact is the canonical JSON of the saved image's ArtifactRef; facts recorded before
+// the generation Tool bound it leave it empty and carry only ImageURL, which such facts
+// recorded as the Provider's absolute, credential-free address of the image. Facts that
+// predate both leave both empty.
 type generation struct {
+	Artifact       string `json:"artifact"`
 	ImageURL       string `json:"imageUrl"`
 	PhotoAssetID   string `json:"photoAssetId"`
 	SettingsDigest string `json:"settingsDigest"`
@@ -85,11 +88,11 @@ type review struct {
 // photo set and the facts; the FINAL only names which generated asset is each photo's
 // example and which settings the template uses.
 //
-// It also returns the cover example's image URL: the imageUrl bound by the newest
-// generation fact of the example declared for the first photo, provided that fact records
-// the generation for that photo. It is empty when no such fact or binding exists. A URL
-// the FINAL reports for itself is never read.
-func checkDelivery(photos []photo, final finalOutput, generated, reviewed registry.FactSet) (summary, string) {
+// It also returns the cover example: the example declared for the first photo with the
+// bindings of its newest generation fact, provided that fact records the generation for
+// that photo. It is empty when no such fact exists. An image the FINAL reports for itself
+// is never read.
+func checkDelivery(photos []photo, final finalOutput, generated, reviewed registry.FactSet) (summary, coverExample) {
 	var reasons reasonList
 	inSet := make(map[string]bool, len(photos))
 	for _, p := range photos {
@@ -191,7 +194,15 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 		out.Reasons = []reason{}
 	}
 	out.Accepted = len(out.Reasons) == 0
-	return out, generations[exampleOf[photos[0].PhotoAssetID]].ImageURL
+	cover := exampleOf[photos[0].PhotoAssetID]
+	return out, coverExample{assetRef: cover, generation: generations[cover]}
+}
+
+// coverExample is the cover photo's declared example and the bindings of the generation
+// fact that proves it. assetRef is empty when the cover photo has no proven example.
+type coverExample struct {
+	assetRef   string
+	generation generation
 }
 
 // decodeBinding reads a fact binding into dst and reports whether it names a photo.

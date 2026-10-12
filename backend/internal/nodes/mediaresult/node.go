@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -39,9 +40,10 @@ const (
 	factAssetReviewed  = "asset_reviewed"
 )
 
-// generatedMediaType is the media type of a generated image: the generation Provider
-// serves every generated asset as PNG, and the generation fact binds no media type.
-const generatedMediaType = "image/png"
+// legacyGeneratedMediaType is the media type of an image a legacy generation fact names by
+// its absolute address: the Provider that produced such facts served every generated
+// asset as PNG, and those facts bind no media type.
+const legacyGeneratedMediaType = "image/png"
 
 // configSchema is empty: every check is fixed, so there is nothing to configure.
 const configSchema = `{
@@ -94,9 +96,9 @@ func (Executor) Execute(_ context.Context, input registry.NodeInput, _ map[strin
 		return registry.NodeResult{}, err
 	}
 
-	summary, coverURL := checkDelivery(photos, final, input.Facts[factImageGenerated], input.Facts[factAssetReviewed])
+	summary, cover := checkDelivery(photos, final, input.Facts[factImageGenerated], input.Facts[factAssetReviewed])
 
-	image, err := coverImage(photos[0], coverURL)
+	image, err := coverImage(photos[0], cover)
 	if err != nil {
 		return registry.NodeResult{}, err
 	}
@@ -117,12 +119,21 @@ func (Executor) Execute(_ context.Context, input registry.NodeInput, _ map[strin
 }
 
 // coverImage is the `image` port value. The cover is the first photo of the set, and its
-// example is shown through the imageUrl its generation fact binds, so the delivered image
-// is one this Run provably generated rather than one the model names. When no fact
-// supplies a usable URL, the port carries the cover photo's own AssetRef instead.
-func coverImage(cover photo, generatedURL string) (domain.ImageRef, error) {
-	if generatedURL != "" {
-		external := domain.ImageRef{Source: domain.ImageSourceExternal, URI: generatedURL, MediaType: generatedMediaType}
+// example is shown through what its generation fact binds, so the delivered image is one
+// this Run provably generated rather than one the model names:
+//
+//   - the ARTIFACT reference the fact binds, when it is a valid image artifact and is the
+//     fact's own subject;
+//   - otherwise, for a legacy fact recorded before facts bound the artifact, the absolute
+//     imageUrl it binds as an EXTERNAL reference. The site-relative imageUrl a current
+//     fact binds is not an EXTERNAL address and never qualifies;
+//   - otherwise the cover photo's own AssetRef.
+func coverImage(cover photo, example coverExample) (domain.ImageRef, error) {
+	if ref, ok := example.artifactRef(); ok {
+		return domain.ImageRef{Source: domain.ImageSourceArtifact, Artifact: &ref}, nil
+	}
+	if example.generation.ImageURL != "" {
+		external := domain.ImageRef{Source: domain.ImageSourceExternal, URI: example.generation.ImageURL, MediaType: legacyGeneratedMediaType}
 		if external.Validate() == nil {
 			return external, nil
 		}
@@ -134,6 +145,29 @@ func coverImage(cover photo, generatedURL string) (domain.ImageRef, error) {
 		return domain.ImageRef{}, fmt.Errorf("media_result: input port %q: cover photo is not a valid image reference: %w", briefPort, err)
 	}
 	return image, nil
+}
+
+// artifactRef decodes the artifact the cover example's generation fact binds. It is usable
+// only when it decodes strictly, is internally consistent, and names the example itself:
+// a fact's artifact describes the asset the fact is about, never another one.
+func (c coverExample) artifactRef() (domain.ArtifactRef, bool) {
+	if c.assetRef == "" || c.generation.Artifact == "" {
+		return domain.ArtifactRef{}, false
+	}
+	decoder := json.NewDecoder(strings.NewReader(c.generation.Artifact))
+	decoder.DisallowUnknownFields()
+	var ref domain.ArtifactRef
+	if err := decoder.Decode(&ref); err != nil || decoder.More() {
+		return domain.ArtifactRef{}, false
+	}
+	if ref.ArtifactID != c.assetRef || ref.Validate() != nil {
+		return domain.ArtifactRef{}, false
+	}
+	image := domain.ImageRef{Source: domain.ImageSourceArtifact, Artifact: &ref}
+	if image.Validate() != nil {
+		return domain.ArtifactRef{}, false
+	}
+	return ref, true
 }
 
 // photo is one entry of the Media Brief photo set.

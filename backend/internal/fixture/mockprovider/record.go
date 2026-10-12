@@ -64,6 +64,10 @@ type recordDetail struct {
 	ExternalTaskID string `json:"externalTaskId,omitempty"`
 	// AssetID is the generated asset a "generated" line reports.
 	AssetID string `json:"assetId,omitempty"`
+	// SHA256 is the lowercase hex digest of the image a "generated" line's asset serves.
+	// A consumer that saves the image's bytes names it by their digest rather than by this
+	// Provider's asset id, so this is what ties a generation to what it saved.
+	SHA256 string `json:"sha256,omitempty"`
 	// CallbackTarget is the callback URL reduced to scheme, host and path. Query string,
 	// fragment and user info are dropped because a receiver could carry a credential there.
 	CallbackTarget string `json:"callbackTarget,omitempty"`

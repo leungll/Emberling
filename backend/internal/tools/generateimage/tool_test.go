@@ -39,9 +39,12 @@ func mockExecutor(baseURL string, client *http.Client, artifacts ArtifactContent
 	return New(map[string]ImageGenerator{testImageModel: NewMockGenerator(baseURL, client)}, nil, artifacts)
 }
 
+// testRunID is the Run every test call belongs to.
+const testRunID = "run_1"
+
 func action(arguments string) registry.ToolAction {
 	return registry.ToolAction{
-		AgentRunID: "ar_1", TurnID: "turn_1", ActionID: "act_1",
+		RunID: testRunID, AgentRunID: "ar_1", TurnID: "turn_1", ActionID: "act_1",
 		ToolName: ToolName, AttemptNo: 1, Arguments: json.RawMessage(arguments), ImageModelID: testImageModel,
 	}
 }
@@ -76,6 +79,7 @@ func TestRegistration_SyncExternalProducerCountingTowardLimit_RegistersCleanly(t
 		t.Fatalf("produces = %+v, want fact type %q", reg.Metadata.Produces, FactType)
 	}
 	wantBindings := map[string]domain.FactPointer{
+		"artifact":       {Source: domain.FactPointerResult, Pointer: "/artifact"},
 		"imageUrl":       {Source: domain.FactPointerResult, Pointer: "/imageUrl"},
 		"photoAssetId":   {Source: domain.FactPointerArguments, Pointer: "/photoAssetId"},
 		"settingsDigest": {Source: domain.FactPointerResult, Pointer: "/settingsDigest"},
@@ -135,7 +139,7 @@ func TestInputSchema_SharedStrictSettings_AcceptsOnlyTheContract(t *testing.T) {
 	}
 }
 
-func TestExecute_ProviderGenerates_ReturnsReachableAssetAndSettingsDigest(t *testing.T) {
+func TestExecute_ProviderGenerates_ReturnsArtifactFormAndSettingsDigest(t *testing.T) {
 	provider := newProvider(t)
 
 	got, err := mockExecutor(provider.URL, provider.Client(), newArtifacts(t)).Execute(context.Background(),
@@ -159,16 +163,13 @@ func TestExecute_ProviderGenerates_ReturnsReachableAssetAndSettingsDigest(t *tes
 	if out.SettingsDigest != wantDigest {
 		t.Errorf("settingsDigest = %q, want the canonical digest %q of the settings", out.SettingsDigest, wantDigest)
 	}
-	if out.ImageURL != provider.URL+"/v1/assets/"+out.AssetRef+".png" {
-		t.Errorf("imageUrl = %q, want the Provider's asset URL for %q", out.ImageURL, out.AssetRef)
+	// The mock image model answers in the same form as every other image model: the
+	// asset is the saved artifact, addressed through the Run-scoped content route.
+	if out.AssetRef != out.Artifact.ArtifactID {
+		t.Errorf("assetRef = %q, want the artifact id %q", out.AssetRef, out.Artifact.ArtifactID)
 	}
-	image, err := provider.Client().Get(out.ImageURL)
-	if err != nil {
-		t.Fatalf("GET imageUrl: %v", err)
-	}
-	_ = image.Body.Close()
-	if image.StatusCode != http.StatusOK {
-		t.Errorf("GET imageUrl status = %d, want 200", image.StatusCode)
+	if want := "/api/runs/" + testRunID + "/artifacts/" + out.Artifact.ArtifactID + "/content"; out.ImageURL != want {
+		t.Errorf("imageUrl = %q, want the Run-scoped content path %q", out.ImageURL, want)
 	}
 
 	again, err := mockExecutor(provider.URL, provider.Client(), newArtifacts(t)).Execute(context.Background(),
@@ -181,7 +182,7 @@ func TestExecute_ProviderGenerates_ReturnsReachableAssetAndSettingsDigest(t *tes
 	}
 }
 
-func TestExecute_ProviderWithPublicBaseURL_BindsBrowserReachableImageURL(t *testing.T) {
+func TestExecute_ProviderWithPublicBaseURL_ResultNamesNoProviderAddress(t *testing.T) {
 	const public = "http://localhost:9101"
 	provider := httptest.NewServer(mockprovider.NewServer(mockprovider.NewDispatcher(nil), mockprovider.WithPublicBaseURL(public)))
 	t.Cleanup(provider.Close)
@@ -199,10 +200,16 @@ func TestExecute_ProviderWithPublicBaseURL_BindsBrowserReachableImageURL(t *test
 	if err := json.Unmarshal(got.Result.Output, &out); err != nil {
 		t.Fatalf("decode output: %v", err)
 	}
-	// The Tool reaches the Provider at its internal address, but the imageUrl it returns,
-	// and which its generation fact binds, names the public origin a browser can open.
-	if want := public + "/v1/assets/" + out.AssetRef + ".png"; out.ImageURL != want {
-		t.Errorf("imageUrl = %q, want %q", out.ImageURL, want)
+	// The Tool fetches the image from the Provider's internal address even though the
+	// Provider names a public one, and the result carries neither: it names the image by
+	// the saved artifact only.
+	for _, leak := range []string{public, provider.URL, "/v1/assets/", "img_"} {
+		if strings.Contains(string(got.Result.Output), leak) {
+			t.Errorf("output %s carries the Provider's own reference %q", got.Result.Output, leak)
+		}
+	}
+	if !strings.HasPrefix(out.ImageURL, "/api/runs/") {
+		t.Errorf("imageUrl = %q, want a site-relative Run-scoped path", out.ImageURL)
 	}
 }
 
@@ -314,7 +321,7 @@ func (g *photoGenerator) Generate(ctx context.Context, request ImageRequest) (Ge
 		return GeneratedImage{}, err
 	}
 	g.media = photo.MediaType
-	return GeneratedImage{Content: io.NopCloser(strings.NewReader(string(g.image))), AssetID: "img_0123456789abcdef", ImageURL: "http://images.test/x.png"}, nil
+	return GeneratedImage{Content: io.NopCloser(strings.NewReader(string(g.image)))}, nil
 }
 
 type fixedPhotos map[string]Photo
@@ -389,5 +396,55 @@ func TestSettingsDigest_CanonicalFormMatchesRuntimeDigest(t *testing.T) {
 		if _, _, err := SettingsDigest(json.RawMessage(invalid)); err == nil {
 			t.Errorf("SettingsDigest(%s) error = nil, want error", invalid)
 		}
+	}
+}
+
+// TestGenerateImage_GeneratorReturnsOnlyBytes_Succeeds covers a real image model, which
+// returns image bytes and nothing else: the call succeeds, and the result names the image
+// by its saved artifact and the Run-scoped content path.
+func TestGenerateImage_GeneratorReturnsOnlyBytes_Succeeds(t *testing.T) {
+	image := pngBytes(t)
+	photos := fixedPhotos{"asset_photo_1": {MediaType: "image/png", Content: io.NopCloser(strings.NewReader("photo"))}}
+	executor := New(map[string]ImageGenerator{testImageModel: &photoGenerator{image: image}}, photos, newArtifacts(t))
+
+	got, err := executor.Execute(context.Background(), action(`{"photoAssetId":"asset_photo_1","settings":{"prompt":"p"}}`))
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	validateOutput(t, got.Result.Output)
+	var out result
+	if err := json.Unmarshal(got.Result.Output, &out); err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if out.AssetRef != out.Artifact.ArtifactID || out.ImageURL != ArtifactContentPath(testRunID, out.Artifact.ArtifactID) {
+		t.Errorf("output = %s, want assetRef and imageUrl derived from the artifact", got.Result.Output)
+	}
+	if len(got.Result.Artifacts) != 1 || got.Result.Artifacts[0] != out.Artifact {
+		t.Errorf("declared artifacts = %+v, want exactly the output's artifact", got.Result.Artifacts)
+	}
+}
+
+// TestGenerateImage_CallWithoutRunID_FailsBeforeRequest covers a call the Runtime built
+// without its Run: the result could not name its Run-scoped address, so the call fails
+// before any Provider request.
+func TestGenerateImage_CallWithoutRunID_FailsBeforeRequest(t *testing.T) {
+	generator := &countingGenerator{}
+	executor := New(map[string]ImageGenerator{testImageModel: generator}, nil, newArtifacts(t))
+	call := action(`{"photoAssetId":"asset_photo_1","settings":{"prompt":"p"}}`)
+	call.RunID = ""
+	if _, err := executor.Execute(context.Background(), call); err == nil {
+		t.Fatal("execute error = nil, want a failure for a call without a Run")
+	}
+	if got := generator.calls.Load(); got != 0 {
+		t.Errorf("generator calls = %d, want 0", got)
+	}
+}
+
+func TestArtifactContentPath_EscapesEachSegment(t *testing.T) {
+	if got, want := ArtifactContentPath("run_1", "artifact_ab"), "/api/runs/run_1/artifacts/artifact_ab/content"; got != want {
+		t.Errorf("ArtifactContentPath = %q, want %q", got, want)
+	}
+	if got, want := ArtifactContentPath("run/1", "a b"), "/api/runs/run%2F1/artifacts/a%20b/content"; got != want {
+		t.Errorf("ArtifactContentPath = %q, want %q", got, want)
 	}
 }

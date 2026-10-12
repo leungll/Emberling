@@ -53,7 +53,7 @@ func TestRegisterTools_MockImageUsesDispatchClientOnly(t *testing.T) {
 	}
 
 	call := registry.ToolAction{
-		AgentRunID: "ar_1", TurnID: "turn_1", ActionID: "act_1", ToolName: generateimage.ToolName, AttemptNo: 1,
+		RunID: "run_1", AgentRunID: "ar_1", TurnID: "turn_1", ActionID: "act_1", ToolName: generateimage.ToolName, AttemptNo: 1,
 		Arguments:    json.RawMessage(`{"photoAssetId":"asset_photo_1","settings":{"prompt":"Soft film look"}}`),
 		ImageModelID: mockmodel.ImageModelID,
 	}

@@ -92,9 +92,10 @@ func TestExecute_ImageFetched_SavesArtifactAndDeclaresIt(t *testing.T) {
 		out.Artifact.MediaType != "image/png" || out.Artifact.ArtifactID != "artifact_"+digest[:32] {
 		t.Fatalf("artifact = %+v, want the reference of the fetched png", out.Artifact)
 	}
-	// The fetch went to the configured Provider, while the result keeps the public URL.
-	if !strings.HasPrefix(out.ImageURL, unreachablePublicOrigin+"/") {
-		t.Errorf("imageUrl = %q, want the public URL the Provider returned", out.ImageURL)
+	// The fetch went to the configured Provider; the result names neither its public nor
+	// its internal address, only the Run-scoped content path of the saved artifact.
+	if out.ImageURL != ArtifactContentPath(testRunID, out.Artifact.ArtifactID) || out.AssetRef != out.Artifact.ArtifactID {
+		t.Errorf("assetRef = %q, imageUrl = %q, want both derived from the artifact", out.AssetRef, out.ImageURL)
 	}
 	if len(got.Result.Artifacts) != 1 || got.Result.Artifacts[0] != out.Artifact {
 		t.Fatalf("declared artifacts = %+v, want exactly the output's artifact", got.Result.Artifacts)
@@ -103,7 +104,7 @@ func TestExecute_ImageFetched_SavesArtifactAndDeclaresIt(t *testing.T) {
 	if err != nil || len(objects) != 1 || objects[0].ArtifactID != out.Artifact.ArtifactID {
 		t.Fatalf("stored objects = %+v (err %v), want the artifact's object", objects, err)
 	}
-	for _, field := range []string{"storageKey", "storage_key", "artifacts/"} {
+	for _, field := range []string{"storageKey", "storage_key", "artifacts/" + digest[:2] + "/"} {
 		if bytes.Contains(got.Result.Output, []byte(field)) {
 			t.Errorf("output %s carries a storage location (%q)", got.Result.Output, field)
 		}

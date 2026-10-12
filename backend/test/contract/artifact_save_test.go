@@ -90,7 +90,9 @@ func TestArtifactSave_GenerateImage_CommitsArtifactRowsWithoutExposingStorageKey
 		for name, body := range map[string]string{
 			"agent trace": string(traceBody), "snapshot": string(snapshotBody), "events": eventPayloads.String(),
 		} {
-			if strings.Contains(body, key) || strings.Contains(body, "artifacts/") {
+			// The imageUrl a result names is a Run-scoped content route, which contains
+			// "/artifacts/" itself; a storage key is the only "artifacts/<shard>/" form.
+			if strings.Contains(body, key) || strings.Contains(body, key[:len("artifacts/")+3]) {
 				t.Errorf("%s exposes an artifact storage key", name)
 			}
 		}

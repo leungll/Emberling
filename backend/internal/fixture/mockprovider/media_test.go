@@ -3,6 +3,7 @@ package mockprovider
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"image/color"
 	"image/png"
@@ -98,6 +99,12 @@ func TestServer_GenerateImage_RecordsGeneratedLineAndServesReachableAsset(t *tes
 	}
 	if len(generatedLines) != 3 || generatedLines[0].AssetID != generated.AssetID || generatedLines[0].Kind != kindImage {
 		t.Fatalf("generated lines = %+v, want three, the first naming %s", generatedLines, generated.AssetID)
+	}
+	// The line also records the digest of the image the asset serves, which is what a
+	// consumer that saves the bytes identifies the image by.
+	contentSum := sha256.Sum256(raw)
+	if want := hex.EncodeToString(contentSum[:]); generatedLines[0].SHA256 != want {
+		t.Fatalf("generated line sha256 = %q, want the served image's digest %q", generatedLines[0].SHA256, want)
 	}
 	if got := kindEvents(entries, kindImage)[:3]; got[0] != recordArrived || got[1] != recordGenerated || got[2] != recordResponded {
 		t.Fatalf("image record events = %v, want arrived, generated, responded", got)
