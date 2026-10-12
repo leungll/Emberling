@@ -184,12 +184,18 @@ func (b *AXBackend) Run(ctx context.Context, job Job) Outcome {
 }
 
 // checkWorkspaceFiles returns why the patched tree cannot travel as an inline Workspace,
-// or "". Paths and contents are protobuf strings and must be valid UTF-8.
+// or "". Paths and contents are protobuf strings and must be valid UTF-8. A content that
+// starts with a space or a tab does not survive AX's YAML encoding: the sandbox cannot
+// read the Workspace back and the Task never becomes ready, so such a file is refused
+// before anything is created.
 func checkWorkspaceFiles(files map[string][]byte) string {
 	total := 0
 	for name, content := range files {
 		if !utf8.ValidString(name) || !utf8.Valid(content) {
 			return "patched workspace is not valid UTF-8"
+		}
+		if len(content) > 0 && (content[0] == ' ' || content[0] == '\t') {
+			return "patched workspace has a file starting with whitespace, which AX cannot carry"
 		}
 		total += len(content)
 	}

@@ -711,6 +711,31 @@ func TestAXBackend_OversizedOrNonUTF8Workspace_ReportsSandboxErrorWithoutCreatin
 	}
 }
 
+func TestAXBackend_WorkspaceFileStartingWithWhitespace_ReportsSandboxErrorWithoutCreatingResources(t *testing.T) {
+	cases := map[string]string{
+		"leading tab":   newFilePatch("pad.txt", "\tindented", "next"),
+		"leading space": newFilePatch("pad.txt", " indented"),
+	}
+	for name, patch := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := patchedFixture(t, patch); err != nil {
+				t.Fatalf("precondition: patch does not apply: %v", err)
+			}
+			h := newAXHarness(t, axHarnessOptions{})
+			assertFailure(t, h.backend.Run(context.Background(), axJob(patch)), codeSandboxError)
+			if len(h.fake.Applied()) != 0 || len(h.fake.Deleted()) != 0 {
+				t.Fatalf("applied %d, deleted %v, want no AX call", len(h.fake.Applied()), h.fake.Deleted())
+			}
+		})
+	}
+
+	// Whitespace after the first character, as in tab-indented code, is carried.
+	h := newAXHarness(t, axHarnessOptions{})
+	if got := h.backend.Run(context.Background(), axJob(newFilePatch("pad.txt", "// header", "\tindented", " spaced"))); !got.Verdict {
+		t.Fatalf("outcome = %+v, want a file with indented later lines to run", got)
+	}
+}
+
 func contentBytes(files map[string][]byte) int {
 	total := 0
 	for _, content := range files {
