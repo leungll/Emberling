@@ -171,6 +171,7 @@ export const runs = {
     loadFailed: 'Couldn’t load this run.',
     notInRun: 'That step isn’t part of this run.',
     copied: (code: string) => `Copied ${code}`,
+    selected: (what: string) => `${what} selected.`,
   },
 
   graph: {
@@ -221,6 +222,7 @@ export const runs = {
     run: 'Run',
     turn: (n: number, what: string) => `Turn ${n}: ${what}`,
     turnFinished: 'finished',
+    turnDeciding: 'deciding',
     turnCalled: (tool: string) => `called ${tool}`,
     turnCalling: (tool: string) => `calling ${tool}`,
     turnToolFailed: (tool: string) => `${tool} failed`,
@@ -314,7 +316,6 @@ export const runs = {
     needs: 'Needs to start',
     nothingNeeded: 'Nothing. Runs start without input.',
     produces: 'Produces',
-    allSucceeded: (n: number) => `All ${plural(n, 'step')} succeeded.`,
     completed: 'The run completed.',
     result: 'Result',
     facts: {
@@ -381,6 +382,29 @@ export const runs = {
     notStartedYet: 'Not started yet.',
     showTurns: 'Show turns',
     toolsItCouldUse: 'Tools it could use',
+    sequence: {
+      calledTimes: (tool: string, n: number) => (n > 1 ? `${tool} ${n} times` : tool),
+      sentence: (
+        called: string,
+        end: {
+          pending: string | null;
+          blocked: string | null;
+          failed: string | null;
+          finished: boolean;
+        },
+      ): string => {
+        let out = called ? `Called ${called}` : '';
+        if (end.pending)
+          out += out ? `, and is now waiting on ${end.pending}` : `Waiting on ${end.pending}`;
+        else if (end.blocked)
+          out += out
+            ? `, then was blocked from calling ${end.blocked}`
+            : `Was blocked from calling ${end.blocked}`;
+        else if (end.failed) out += out ? `, then ${end.failed} failed` : `${end.failed} failed`;
+        else if (end.finished) out += out ? ', then finished' : 'Finished without calling a tool';
+        return out ? `${out}.` : '';
+      },
+    },
     notOnServer: 'Not available on this server.',
     allAttempts: 'All attempts',
     sameError: 'Failed with the same error as',
