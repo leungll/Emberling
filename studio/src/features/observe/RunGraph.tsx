@@ -10,7 +10,7 @@ import {
 } from 'react';
 
 import { ElementTime } from './RunFacts';
-import { nodeIcon } from './node-icons';
+import { stepIcon } from '@/components/step/step-icons';
 import {
   CARD_H,
   CARD_W,
@@ -287,7 +287,7 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
               const sel = selectedId === step.node.id;
               const within = !sel && stepId === step.node.id;
               const meta = metaText(step);
-              const Icon = nodeIcon(step.node.type);
+              const Icon = stepIcon(step.node.type);
               const card = (
                 <div
                   role="treeitem"

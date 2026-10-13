@@ -1,5 +1,5 @@
 import { ChevronRight, CircleAlert } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
 
 import { FailCard, SelectLink, WaitCard } from './Diagnosis';
@@ -20,10 +20,10 @@ import { FactList, TechnicalDetails, type Fact } from '@/components/facts/FactLi
 import { IdChip } from '@/components/id/IdChip';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { Timestamp } from '@/components/time/Time';
+import { WorkflowSummary } from '@/components/workflow/WorkflowSummary';
 import { copy as words, useCopy } from '@/lib/copy';
 import { duration, limitText } from '@/lib/time';
 import { cn } from '@/lib/utils';
-import { runInputLabels } from '@/features/run-input/runInputLabels';
 
 /**
  * The Overview tab of the details pane, one layout per kind of element: what it did, its
@@ -169,41 +169,42 @@ function allowedTools(step: Step): string[] {
 
 /* ---------- Run ------------------------------------------------------------------ */
 
+/**
+ * What the workflow does, from the Definition version this run is bound to (never the latest,
+ * which may have changed since). Read-only; the Editor is where it changes.
+ */
 export function WorkflowAbout({ ctx }: { ctx: DetailContext }) {
   const copy = useCopy();
   const d = copy.runs.details;
   const def = ctx.model.definition;
   const used = ctx.model.snapshot.run.definitionVersion;
   const older = ctx.latestVersion !== null && ctx.latestVersion > used;
-  const labels = runInputLabels(def.nodes);
-  const inputs = Object.keys(def.runInputSchema?.properties ?? {}).map((k) => labels[k] ?? k);
-  const categoryOf = (type: string) => ctx.nodeTypes.find((m) => m.type === type)?.category ?? '';
-  const outputs = def.nodes.filter((n) => categoryOf(n.type) === 'Output').map((n) => n.name);
+  const registry = useMemo(
+    () => ({
+      nodeTypes: new Map(ctx.nodeTypes.map((m) => [m.type, m])),
+      models: new Map(ctx.models.map((m) => [m.id, m])),
+    }),
+    [ctx.nodeTypes, ctx.models],
+  );
   return (
     <Section title={d.about}>
-      {def.description ? <p className="m-0 text-md text-fg-secondary">{def.description}</p> : null}
-      <FactList
-        compact
-        facts={[
-          {
-            label: d.needs,
-            value: inputs.length ? copy.runs.listNames(inputs) : <Muted>{d.nothingNeeded}</Muted>,
-          },
-          { label: d.steps, value: copy.runs.listNames(ctx.model.steps.map((s) => s.node.name)) },
-          outputs.length ? { label: d.produces, value: copy.runs.listNames(outputs) } : null,
-        ]}
+      <WorkflowSummary
+        definition={def}
+        registry={registry}
+        note={
+          older ? (
+            <p className="m-0 text-sm text-fg-secondary">
+              {d.olderNote(used)}{' '}
+              <Link
+                to={editHref(ctx.workflowId, null, null)}
+                className="text-accent-fg underline-offset-3 hover:underline"
+              >
+                {d.openLatest}
+              </Link>
+            </p>
+          ) : undefined
+        }
       />
-      {older ? (
-        <p className="m-0 text-sm text-fg-secondary">
-          {d.olderNote(used)}{' '}
-          <Link
-            to={editHref(ctx.workflowId, null, null)}
-            className="text-accent-fg underline-offset-3 hover:underline"
-          >
-            {d.openLatest}
-          </Link>
-        </p>
-      ) : null}
     </Section>
   );
 }

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 import type { DetailContext } from './detail-context';
-import { nodeIcon } from './node-icons';
+import { stepIcon } from '@/components/step/step-icons';
 import { eventsFor } from './run-events';
 import type { TraceElement } from './run-model';
 import { copy as words } from '@/lib/copy';
@@ -76,7 +76,7 @@ export function kindOf(el: TraceElement): { icon: LucideIcon; word: string } {
     case 'run':
       return { icon: Activity, word: k.run };
     case 'step':
-      return { icon: nodeIcon(el.step?.node.type ?? ''), word: k.step(el.step?.typeLabel ?? '') };
+      return { icon: stepIcon(el.step?.node.type ?? ''), word: k.step(el.step?.typeLabel ?? '') };
     case 'attempt':
       return { icon: RotateCw, word: el.nodeAttempt ? k.attempt : k.toolAttempt };
     case 'turn':

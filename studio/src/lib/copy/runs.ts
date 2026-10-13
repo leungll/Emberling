@@ -312,10 +312,6 @@ export const runs = {
     about: 'About this workflow',
     olderNote: (v: number) => `This run used version ${v}. The workflow has changed since.`,
     openLatest: 'Open the latest version in the Editor',
-    steps: 'Steps',
-    needs: 'Needs to start',
-    nothingNeeded: 'Nothing. Runs start without input.',
-    produces: 'Produces',
     completed: 'The run completed.',
     result: 'Result',
     facts: {
