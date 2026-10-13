@@ -5,13 +5,15 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
-// The Backend owns every execution fact, so the dev server only forwards /api to it.
-// Studio never falls back to a mock or in-browser Runtime when the Backend is absent.
+// The Backend owns every execution fact, so the dev server forwards /api to it, and /ready
+// for the sidebar's connection status. Studio never falls back to a mock or in-browser
+// Runtime when the Backend is absent.
 const BACKEND_ORIGIN = process.env.EMBERLING_BACKEND_ORIGIN ?? 'http://localhost:8080';
 
 // Shared by `server` (local dev) and `preview` (deploy/Dockerfile.studio, Playwright's
 // webServer) so the two modes proxy identically and never drift.
 const API_PROXY = {
+  '/ready': { target: BACKEND_ORIGIN, changeOrigin: true },
   '/api': {
     target: BACKEND_ORIGIN,
     changeOrigin: true,

@@ -4,6 +4,7 @@ import {
   ApiRequestError,
   getAgentTrace,
   getNodeRunDetail,
+  getReadiness,
   listDefinitions,
   saveDefinition,
   uploadAsset,
@@ -236,5 +237,36 @@ describe('api client', () => {
     expect(failure).toBeInstanceOf(ApiRequestError);
     expect(failure.status).toBe(404);
     expect(failure.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('getReadiness', () => {
+  it('reads the probe beside /api, not under it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { status: 'ready' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await getReadiness();
+    expect(fetchMock).toHaveBeenCalledWith('/ready', undefined);
+  });
+
+  it.each([
+    [200, 'ready'],
+    [503, 'starting'],
+    [500, 'unreachable'],
+    [404, 'unreachable'],
+  ] as const)('maps status %i to %s', async (status, expected) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(status, {})));
+    await expect(getReadiness()).resolves.toBe(expected);
+  });
+
+  it('treats a request that fails as unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(getReadiness()).resolves.toBe('unreachable');
+  });
+
+  it('rethrows when the caller aborted, so a stopped poll records nothing', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError')));
+    await expect(getReadiness(controller.signal)).rejects.toThrow('aborted');
   });
 });
