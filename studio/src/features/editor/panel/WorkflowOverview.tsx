@@ -1,14 +1,10 @@
-import { ArrowRight, Pencil, Plus, TriangleAlert } from 'lucide-react';
+import { Pencil, Plus, TriangleAlert } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router';
 
-import { StatusIndicator } from '@/components/status/StatusIndicator';
-import { RelativeTime } from '@/components/time/Time';
 import { Button, IconButton } from '@/components/ui/button';
 import { controlClasses } from '@/components/ui/field';
 import { WorkflowSummary } from '@/components/workflow/WorkflowSummary';
 import { useCopy } from '@/lib/copy';
-import { carryFrom } from '@/lib/nav/list-state';
 import { cn } from '@/lib/utils';
 import { useEditor } from '@/features/editor/editor-context';
 import { useEditorStore } from '@/features/editor/editor-store';
@@ -104,13 +100,11 @@ function Description() {
 
 /**
  * The side panel with nothing selected: the workflow's issues, what it does, its steps,
- * inputs and outputs, and its last run.
+ * inputs and outputs. The last run lives in the strip under the canvas.
  */
 export function WorkflowOverview() {
   const copy = useCopy();
-  const t = copy.editor.panel;
-  const location = useLocation();
-  const { workflowId, registry, issues, lastRun, openSettings, showIssue } = useEditor();
+  const { registry, issues, openSettings, showIssue } = useEditor();
   const nodes = useEditorStore((s) => s.doc.nodes);
   const edges = useEditorStore((s) => s.doc.edges);
   const description = useEditorStore((s) => s.doc.description);
@@ -119,8 +113,6 @@ export function WorkflowOverview() {
     () => ({ nodeTypes: registry.catalog, models: registry.models }),
     [registry.catalog, registry.models],
   );
-  const run = lastRun.summary;
-
   return (
     <div>
       {issues.length ? (
@@ -149,27 +141,6 @@ export function WorkflowOverview() {
           }}
         />
       </section>
-      <Section id="lastrun" title={t.lastRun}>
-        {run && workflowId ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusIndicator status={{ kind: 'run', value: run.status }} />
-            <RelativeTime iso={run.createdAt} className="text-sm text-fg-muted" />
-            <span className="flex-1" />
-            <Link
-              to={carryFrom(
-                `/workflows/${encodeURIComponent(workflowId)}/runs/${encodeURIComponent(run.id)}`,
-                location.search,
-              )}
-              className="inline-flex min-h-control-xs items-center gap-1 rounded-sm text-sm font-medium text-accent-fg hover:underline"
-            >
-              {t.openRun}
-              <ArrowRight aria-hidden="true" className="size-icon-sm" />
-            </Link>
-          </div>
-        ) : (
-          <p className="m-0 text-sm text-fg-muted">{t.notRunYet}</p>
-        )}
-      </Section>
     </div>
   );
 }
