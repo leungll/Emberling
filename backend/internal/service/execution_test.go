@@ -167,6 +167,7 @@ type execFakeTx struct {
 
 func (t *execFakeTx) Definitions() store.DefinitionRepository   { return t.defs }
 func (t *execFakeTx) Runs() store.RunRepository                 { return t.runs }
+func (t *execFakeTx) RunList() store.RunListRepository          { return nil }
 func (t *execFakeTx) NodeRuns() store.NodeRunRepository         { return t.nodeRuns }
 func (t *execFakeTx) NodeAttempts() store.NodeAttemptRepository { return t.attempts }
 func (t *execFakeTx) Events() store.EventRepository             { return t.events }

@@ -133,6 +133,12 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error, notFoundC
 		return
 	}
 
+	var listErr *service.RunListQueryError
+	if errors.As(err, &listErr) {
+		writeErrorEnvelope(w, http.StatusBadRequest, codeValidationFailed, listErr.Message, nil)
+		return
+	}
+
 	var registryErr *service.RegistryResolutionError
 	if errors.As(err, &registryErr) {
 		writeErrorEnvelope(w, http.StatusConflict, codeRuntimeBindingUnavailable,

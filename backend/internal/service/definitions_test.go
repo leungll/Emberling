@@ -117,6 +117,7 @@ func newDefsFakeTx() *defsFakeTx {
 
 func (t *defsFakeTx) Definitions() store.DefinitionRepository   { return t.defs }
 func (t *defsFakeTx) Runs() store.RunRepository                 { return t.runs }
+func (t *defsFakeTx) RunList() store.RunListRepository          { return nil }
 func (t *defsFakeTx) NodeRuns() store.NodeRunRepository         { return t.nodeRuns }
 func (t *defsFakeTx) NodeAttempts() store.NodeAttemptRepository { return t.attempts }
 func (t *defsFakeTx) Events() store.EventRepository             { return t.events }

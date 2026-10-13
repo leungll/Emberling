@@ -62,10 +62,14 @@ type SaveDefinition struct {
 // plus its most recent Run, or a nil LastRun when the Workflow has never run.
 // Description is the latest version's description; it
 // is not a domain.Workflow field because it lives per-version, not per-workflow.
+//
+// LastRunFailedStep is the step the last Run's error summary describes, set only when
+// that Run is FAILED; it is read the same way as the Run list's failed step.
 type DefinitionListItem struct {
-	Workflow    domain.Workflow
-	Description string
-	LastRun     *domain.Run
+	Workflow          domain.Workflow
+	Description       string
+	LastRun           *domain.Run
+	LastRunFailedStep *RunStep
 }
 
 // CompileFailedError reports that a Definition failed the Validate/Save compile chain.
@@ -235,6 +239,22 @@ func (s *DefinitionService) List(ctx context.Context) ([]DefinitionListItem, err
 				return fmt.Errorf("latest run: workflow=%s: %w", wf.Workflow.WorkflowID, err)
 			}
 			items = append(items, DefinitionListItem{Workflow: wf.Workflow, Description: wf.Description, LastRun: lastRun})
+		}
+
+		var failedIDs []string
+		for _, item := range items {
+			if item.LastRun != nil && item.LastRun.Status == domain.RunFailed {
+				failedIDs = append(failedIDs, item.LastRun.ID)
+			}
+		}
+		failed, err := failedStepsOf(ctx, tx.RunList(), failedIDs)
+		if err != nil {
+			return fmt.Errorf("last run failed steps: %w", err)
+		}
+		for i := range items {
+			if items[i].LastRun != nil {
+				items[i].LastRunFailedStep = failed[items[i].LastRun.ID]
+			}
 		}
 		return nil
 	})

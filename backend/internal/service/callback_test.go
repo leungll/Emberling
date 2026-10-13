@@ -104,6 +104,7 @@ type cbTx struct {
 
 func (t *cbTx) Definitions() store.DefinitionRepository           { return &cbDefinitionRepo{tx: t} }
 func (t *cbTx) Runs() store.RunRepository                         { return &cbRunRepo{tx: t} }
+func (t *cbTx) RunList() store.RunListRepository                  { return nil }
 func (t *cbTx) NodeRuns() store.NodeRunRepository                 { return &cbNodeRunRepo{tx: t} }
 func (t *cbTx) NodeAttempts() store.NodeAttemptRepository         { return &cbNodeAttemptRepo{tx: t} }
 func (t *cbTx) CallbackBindings() store.CallbackBindingRepository { return &cbBindingRepo{tx: t} }

@@ -110,6 +110,10 @@ export interface DefinitionLastRun {
   id: string;
   status: RunStatus;
   createdAt: string;
+  /** Only the stable code of the Run error summary; `null` unless the Run is `FAILED`. */
+  error: RunErrorCode | null;
+  /** The step the Run error summary describes; `null` unless the Run is `FAILED`. */
+  failedStep: RunStepRef | null;
 }
 
 export interface DefinitionListItem {
@@ -363,6 +367,77 @@ export interface Run {
   startedAt?: string;
   completedAt?: string | null;
   lastSeq?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Run list
+// ---------------------------------------------------------------------------
+
+/** The code of a Run error summary. Lists never carry the message or details. */
+export interface RunErrorCode {
+  code: string;
+}
+
+/** One node of the Definition version a Run is bound to. */
+export interface RunStepRef {
+  nodeId: string;
+  nodeName: string;
+}
+
+/** A NodeRun of a `PAUSED` Run that is waiting for an external result. */
+export interface RunWaitingStep extends RunStepRef {
+  waitingAt: string | null;
+}
+
+export interface RunListItem {
+  id: string;
+  workflowId: string;
+  /** The Workflow's current name. */
+  workflowName: string;
+  definitionVersion: number;
+  /** The Workflow's latest version; a smaller `definitionVersion` is an older version. */
+  latestVersion: number;
+  status: RunStatus;
+  /** Equal to `startedAt`: a Run starts in the transaction that creates it. */
+  createdAt: string;
+  startedAt: string;
+  completedAt: string | null;
+  error: RunErrorCode | null;
+  failedStep: RunStepRef | null;
+  /** Filled only for a `PAUSED` Run, ordered by `waitingAt`; empty otherwise. */
+  waitingSteps: RunWaitingStep[];
+}
+
+/** Server-side counts for the current workflow, time and code filters, ignoring `status`. */
+export interface RunStatusCounts {
+  all: number;
+  running: number;
+  paused: number;
+  completed: number;
+  failed: number;
+}
+
+export interface RunListResponse {
+  /** Newest first. */
+  items: RunListItem[];
+  /** Continues to older Runs; `null` on the last page. */
+  nextCursor: string | null;
+  /** Continues to newer Runs; `null` on the first page. */
+  prevCursor: string | null;
+  counts: RunStatusCounts;
+}
+
+export interface RunListQuery {
+  workflowId?: string;
+  status?: RunStatus;
+  /** RFC 3339; keeps Runs started at or after this instant. */
+  startedAfter?: string;
+  /** 8 to 64 letters or digits from the start of the Run ID after `run_`. */
+  code?: string;
+  /** A `nextCursor` or `prevCursor` issued for the same filters. */
+  cursor?: string;
+  /** 1 to 100; the Backend defaults to 20. */
+  limit?: number;
 }
 
 export interface NodeRun {

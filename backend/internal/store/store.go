@@ -35,6 +35,7 @@ type Tx interface {
 	Assets() AssetRepository
 	Artifacts() ArtifactRepository
 	Runs() RunRepository
+	RunList() RunListRepository
 	NodeRuns() NodeRunRepository
 	NodeAttempts() NodeAttemptRepository
 	CallbackBindings() CallbackBindingRepository
