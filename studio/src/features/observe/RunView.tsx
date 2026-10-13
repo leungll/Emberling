@@ -111,8 +111,14 @@ export function RunView({
   const view: LogsView = ui.view ?? storedView();
   const [announced, setAnnounced] = useState('');
 
+  // The address is the only record of this view's state. The router otherwise renders an
+  // address change in a transition, which can leave a tab or selection showing the old
+  // value after the address already holds the new one; flushing renders both together.
   const update = (patch: Partial<RunViewState>) => {
-    void navigate({ search: runViewSearch({ ...ui, ...patch }, search) }, { replace: true });
+    void navigate(
+      { search: runViewSearch({ ...ui, ...patch }, search) },
+      { replace: true, flushSync: true },
+    );
   };
 
   const [bars, setBars] = useState(storedBars);
