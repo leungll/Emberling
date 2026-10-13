@@ -30,6 +30,8 @@ interface SelectProps<V extends string> {
   noMatch?: (query: string) => string;
   size?: 'sm' | 'md';
   prefix?: ReactNode;
+  /** Shown in the trigger, muted, while no option is selected. */
+  placeholder?: string;
   side?: 'top' | 'bottom';
   id?: string;
   className?: string;
@@ -66,6 +68,7 @@ export function Select<V extends string>({
   noMatch,
   size = 'md',
   prefix,
+  placeholder,
   side = 'bottom',
   id,
   className,
@@ -135,7 +138,7 @@ export function Select<V extends string>({
           type="button"
           id={id}
           aria-haspopup="listbox"
-          aria-label={labelledBy ? undefined : `${label}: ${current?.label ?? ''}`}
+          aria-label={labelledBy ? undefined : `${label}: ${current?.label ?? placeholder ?? ''}`}
           aria-labelledby={labelledBy ? `${labelledBy} ${id ?? ''}`.trim() : undefined}
           onKeyDown={(e) => {
             if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !open) {
@@ -153,7 +156,14 @@ export function Select<V extends string>({
           )}
         >
           {prefix ? <span className="text-fg-muted [&_svg]:size-icon-sm">{prefix}</span> : null}
-          <span className="min-w-0 flex-1 wrap-anywhere">{current?.label ?? ''}</span>
+          <span
+            className={cn(
+              'min-w-0 flex-1 wrap-anywhere',
+              !current && placeholder && 'text-fg-placeholder',
+            )}
+          >
+            {current?.label ?? placeholder ?? ''}
+          </span>
           <ChevronDown aria-hidden="true" className="size-icon-sm shrink-0 text-fg-muted" />
         </button>
       </PopoverTrigger>

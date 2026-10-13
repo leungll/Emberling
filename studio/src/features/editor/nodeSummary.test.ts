@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nodeSummaryLine, paletteSummaryLine } from './nodeSummary';
+import { nodeSummaryLine } from './nodeSummary';
 import { nodeAccentColor } from './portStyles';
 import type { ModelMetadata, NodeMetadata } from '@/api/types';
 
@@ -103,15 +103,6 @@ describe('nodeSummaryLine', () => {
 
   it('summarises an Output node whose uiSchema fields are null', () => {
     expect(nodeSummaryLine(textOutput)).toBe('Run output');
-  });
-});
-
-describe('paletteSummaryLine', () => {
-  it('describes the type without config placeholders', () => {
-    expect(paletteSummaryLine(textInput)).toBe('text source');
-    expect(paletteSummaryLine(imageGeneration)).toBe('Model call, Async');
-    expect(paletteSummaryLine(agent)).toBe('Model, Tools, managed loop');
-    expect(paletteSummaryLine(textOutput)).toBe('Run output');
   });
 });
 

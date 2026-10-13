@@ -1,998 +1,230 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createMemoryRouter, RouterProvider, useLocation, useSearchParams } from 'react-router';
+import { createMemoryRouter, RouterProvider, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiRequestError } from '@/api/client';
+import type { Definition, Node } from '@/api/types';
+import { link, MODELS, NODE_TYPES, step, TOOLS } from '@/test/registry-fixture';
 import { EditPage } from './EditPage';
-import { useStudioStore } from '@/stores/studio-store';
-import { requestUrl } from '@/test/requestUrl';
+import { useEditorStore } from './editor-store';
 
-/** Surfaces the router's own search string, since MemoryRouter never touches window.location. */
-function LocationProbe() {
-  const [params] = useSearchParams();
-  return <div data-testid="location-search">{params.toString()}</div>;
-}
+const api = vi.hoisted(() => ({
+  getDefinition: vi.fn(),
+  saveDefinition: vi.fn(),
+  createDefinition: vi.fn(),
+  listDefinitions: vi.fn(),
+  listNodeTypes: vi.fn(),
+  listModels: vi.fn(),
+  listTools: vi.fn(),
+}));
+const toast = vi.hoisted(() => vi.fn());
 
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ...api,
+}));
+vi.mock('@/lib/toast', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  showToast: toast,
+}));
 
-const DEFINITION = {
-  workflowId: 'wf_123',
-  version: 4,
-  name: 'AIGC Media Generation',
-  description: '',
-  nodes: [],
-  edges: [],
-  runInputSchema: {
-    type: 'object',
-    properties: { prompt: { type: 'string', title: 'Prompt' } },
-    required: ['prompt'],
-  },
-  validation: { status: 'VALID', validatorVersion: 'v1', validatedAt: '2026-08-03T12:00:00Z' },
-  createdAt: '2026-08-01T00:00:00Z',
-};
+const INPUT = step('in', 'text_input', 0, 0, { inputKey: 'brief', required: true }, 'Brief');
+const OUTPUT = step('out', 'text_output', 320, 0, {}, 'Answer');
 
-function stubFetch() {
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
-    const url = requestUrl(input);
-    if (url === '/api/node-types' || url === '/api/models' || url === '/api/tools') {
-      return Promise.resolve(jsonResponse(200, { items: [] }));
-    }
-    // The Recent Execution bar's list lookup: no matching item means no Run yet,
-    // which is the common case across these fixtures.
-    if (url === '/api/definitions') {
-      return Promise.resolve(jsonResponse(200, { items: [] }));
-    }
-    if (url === '/api/definitions/wf_123') {
-      return Promise.resolve(jsonResponse(200, DEFINITION));
-    }
-    throw new Error(`unexpected fetch: ${url}`);
-  });
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
-}
-
-/** The Editor's leave guard needs a data router, as the app has. */
-function renderEditPage(initialPath: string) {
-  const router = createMemoryRouter(
-    [
-      {
-        path: '/workflows/:workflowId',
-        element: (
-          <>
-            <EditPage />
-            <LocationProbe />
-          </>
-        ),
-      },
-    ],
-    { initialEntries: [initialPath] },
-  );
-  return render(<RouterProvider router={router} />);
-}
-
-beforeEach(() => {
-  useStudioStore.setState({ selectedNodeId: null, hasUnsavedChanges: false });
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-describe('EditPage — Run via query param', () => {
-  it('opens the Run Input Dialog once the definition loads when the URL carries ?run=1', async () => {
-    stubFetch();
-
-    renderEditPage('/workflows/wf_123?run=1');
-
-    const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('AIGC Media Generation');
-    expect(dialog).toHaveTextContent('Workflow version 4');
-
-    // The param is a one-shot trigger and must not linger in the address bar. The probe div
-    // is present from the very first render, so `findByTestId` alone would resolve on that
-    // first render and race the effect that clears the param; `waitFor` retries the content
-    // assertion itself until the clearing commit lands.
-    await waitFor(() => {
-      expect(screen.getByTestId('location-search')).toHaveTextContent('');
-    });
-  });
-
-  it('does not open the Run Input Dialog without the query param', async () => {
-    stubFetch();
-
-    renderEditPage('/workflows/wf_123');
-
-    // Wait for the definition to finish loading before asserting the dialog stayed closed.
-    await screen.findByText('AIGC Media Generation');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Save, create, conflict and validation feedback
-// ---------------------------------------------------------------------------
-
-/** Mirrors backend/internal/nodes/textgeneration/node.go's registration. */
-const TEXT_GENERATION = {
-  type: 'text_generation',
-  displayName: 'Text Generation',
-  category: 'Prompt & Model',
-  executionKind: 'SYNC',
-  inputs: [{ name: 'prompt', dataType: 'text', required: true }],
-  outputs: [{ name: 'text', dataType: 'text', required: true }],
-  configSchema: {
-    type: 'object',
-    properties: {
-      modelId: { type: 'string', minLength: 1 },
-      systemPrompt: { type: 'string' },
-    },
-    required: ['modelId'],
-  },
-  uiSchema: {
-    fields: [
-      {
-        path: 'modelId',
-        order: 10,
-        group: 'MODEL',
-        widget: 'MODEL_SELECTOR',
-        capability: 'text_generation',
-      },
-      { path: 'systemPrompt', order: 30, group: 'BASIC', widget: 'TEXTAREA' },
-    ],
-  },
-  sideEffect: { kind: 'EXTERNAL', idempotency: 'UNKNOWN' },
-  factInputs: [],
-};
-
-const MODELS = [
-  {
-    id: 'text-model-v1',
-    displayName: 'Text Model',
-    capabilities: ['text_generation'],
-    configSchema: { type: 'object' },
-  },
-];
-
-/** The allowlist field of backend/internal/nodes/agent/node.go's registration. */
-const AGENT = {
-  type: 'agent',
-  displayName: 'Agent',
-  category: 'Agent',
-  executionKind: 'MANAGED_AGENT',
-  inputs: [{ name: 'input', dataType: 'json', required: true }],
-  outputs: [{ name: 'output', dataType: 'json', required: true }],
-  configSchema: {
-    type: 'object',
-    properties: {
-      allowedTools: { type: 'array', items: { type: 'string', minLength: 1 } },
-    },
-  },
-  uiSchema: {
-    fields: [{ path: 'allowedTools', order: 30, group: 'BASIC', widget: 'TOOL_SELECTOR' }],
-  },
-  sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
-  factInputs: [],
-};
-
-const TOOLS = [
-  {
-    name: 'lookup',
-    description: 'Read a deterministic record by key.',
-    executionKind: 'SYNC',
-    inputSchema: { type: 'object', properties: { key: { type: 'string' } } },
-    outputSchema: { type: 'object', properties: { key: { type: 'string' } } },
-    sideEffect: { kind: 'NONE', idempotency: 'SAFE' },
-    requires: [],
-    countsTowardGenerationLimit: false,
-    usesImageModel: false,
-  },
-];
-
-function definitionWithNode(version: number, nodeName: string) {
+function definition(nodes: Node[] = [INPUT, OUTPUT], version = 4): Definition {
   return {
-    ...DEFINITION,
+    workflowId: 'wf_123',
     version,
-    nodes: [
-      {
-        id: 'node_gen',
-        type: 'text_generation',
-        name: nodeName,
-        position: { x: 0, y: 0 },
-        config: { modelId: 'text-model-v1' },
-      },
-    ],
-    createdAt: `2026-08-0${version}T00:00:00Z`,
+    name: 'Answer a brief',
+    description: '',
+    nodes,
+    edges: nodes.length === 2 ? [link('e1', 'in', 'text', 'out', 'text')] : [],
+    runInputSchema: {
+      type: 'object',
+      properties: { brief: { type: 'string', title: 'Brief' } },
+      required: ['brief'],
+    },
+    validation: { status: 'VALID', validatorVersion: 'v1', validatedAt: '2026-08-03T12:00:00Z' },
+    createdAt: '2026-08-01T00:00:00Z',
   };
 }
 
-type Handler = (init: RequestInit | undefined) => Response | Promise<Response>;
-
-function stubRoutes(routes: Record<string, Handler>) {
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const key = `${init?.method ?? 'GET'} ${requestUrl(input)}`;
-    if (key === 'GET /api/node-types' && !routes[key]) {
-      return Promise.resolve(jsonResponse(200, { items: [TEXT_GENERATION] }));
-    }
-    if (key === 'GET /api/models') return Promise.resolve(jsonResponse(200, { items: MODELS }));
-    if (key === 'GET /api/tools') return Promise.resolve(jsonResponse(200, { items: TOOLS }));
-    // The Recent Execution bar's list lookup: defaults to no Run unless a test
-    // overrides this key in `routes` to exercise the bar itself.
-    if (key === 'GET /api/definitions' && !routes[key]) {
-      return Promise.resolve(jsonResponse(200, { items: [] }));
-    }
-    const handler = routes[key];
-    if (!handler) throw new Error(`unexpected fetch: ${key}`);
-    return Promise.resolve(handler(init));
-  });
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
+function apiError(status: number, code: string): ApiRequestError {
+  return new ApiRequestError(status, { error: { code, message: code.toLowerCase() } });
 }
 
-function callsTo(fetchMock: ReturnType<typeof stubRoutes>, method: string, url: string) {
-  return fetchMock.mock.calls
-    .filter(([input, init]) => requestUrl(input) === url && (init?.method ?? 'GET') === method)
-    .map(
-      ([, init]) =>
-        JSON.parse((init?.body as string | undefined) ?? 'null') as Record<string, unknown>,
-    );
+/** Shows where the router is, since a memory router never touches window.location. */
+function LocationProbe() {
+  const { pathname, search } = useLocation();
+  return <div data-testid="location">{pathname + search}</div>;
 }
 
-function PathProbe() {
-  const location = useLocation();
-  return <div data-testid="location-path">{location.pathname}</div>;
-}
-
-function renderStudio(entry: string | { pathname: string; state: unknown }) {
-  const element = (
+function renderAt(path: string) {
+  const page = (
     <>
       <EditPage />
-      <PathProbe />
+      <LocationProbe />
     </>
   );
   const router = createMemoryRouter(
     [
-      { path: '/workflows/new', element },
-      { path: '/workflows/:workflowId', element },
-      { path: '/workflows/:workflowId/runs/:runId', element: <PathProbe /> },
-      { path: '/workflows', element: <PathProbe /> },
+      { path: '/workflows', element: <LocationProbe /> },
+      { path: '/workflows/new', element: page },
+      { path: '/workflows/:workflowId', element: page },
     ],
-    { initialEntries: [entry] },
+    { initialEntries: [path] },
   );
-  const view = render(<RouterProvider router={router} />);
-  return { ...view, router };
+  render(<RouterProvider router={router} />);
+  return router;
 }
 
-async function selectCanvasNode(nodeId: string) {
-  fireEvent.click(await screen.findByTestId(`rf__node-${nodeId}`));
+const location = () => screen.getByTestId('location').textContent;
+
+async function editName(value: string) {
+  const user = userEvent.setup();
+  const field = await screen.findByRole('textbox', { name: 'Workflow name' });
+  await user.clear(field);
+  await user.type(field, value);
+  return user;
 }
 
-describe('EditPage — canvas measurement', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('renders measured nodes visibly and does not treat measurement as an edit', async () => {
-    // jsdom has no layout; give every element a size so React Flow emits the same
-    // `dimensions` changes a browser does after mounting a node.
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(180);
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(60);
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-
-    renderStudio('/workflows/wf_123');
-
-    const node = await screen.findByTestId('rf__node-node_gen');
-    await waitFor(() => expect(node).toHaveStyle({ visibility: 'visible' }));
-    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
-  });
+beforeEach(() => {
+  api.listNodeTypes.mockResolvedValue(NODE_TYPES);
+  api.listModels.mockResolvedValue(MODELS);
+  api.listTools.mockResolvedValue(TOOLS);
+  api.listDefinitions.mockResolvedValue([]);
+  api.getDefinition.mockResolvedValue(definition());
+  // The draft store outlives a render; a fresh page loads its workflow again.
+  useEditorStore.setState({ source: null });
+  sessionStorage.clear();
+  localStorage.clear();
 });
 
-describe('EditPage — creating a Definition', () => {
-  it('creates version 1 with POST on the first Save and opens the saved Definition', async () => {
-    const created = {
-      ...DEFINITION,
-      workflowId: 'wf_new',
-      version: 1,
-      name: 'Document Processing',
-    };
-    const fetchMock = stubRoutes({
-      'POST /api/definitions': () => jsonResponse(201, created),
-      'GET /api/definitions/wf_new': () => jsonResponse(200, created),
-    });
-    const user = userEvent.setup();
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
-    renderStudio({
-      pathname: '/workflows/new',
-      state: { name: 'Document Processing', description: 'Summarise a document' },
-    });
+describe('EditPage', () => {
+  it('opens the Run dialog once for ?run=1 and drops the parameter', async () => {
+    renderAt('/workflows/wf_123?run=1');
 
-    expect(await screen.findByText('Document Processing')).toBeInTheDocument();
-    expect(screen.getByTestId('studio-subtitle')).toHaveTextContent('Unsaved draft, Editing');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Answer a brief');
+    await waitFor(() => expect(location()).toBe('/workflows/wf_123'));
+  });
 
+  it('names the tab after the workflow', async () => {
+    renderAt('/workflows/wf_123');
+
+    await waitFor(() => expect(document.title).toBe('Answer a brief – Editor – Emberling'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('checks the loaded workflow at once rather than an empty draft', async () => {
+    renderAt('/workflows/wf_123');
+
+    await screen.findByRole('textbox', { name: 'Workflow name' });
+    await waitFor(() => expect(screen.getAllByText('Answer').length).toBeGreaterThan(0));
+    expect(screen.queryByRole('button', { name: /^\d+ issues?$/ })).toBeNull();
+  });
+
+  it('shows the not-found page for a workflow that does not exist', async () => {
+    api.getDefinition.mockRejectedValue(apiError(404, 'NOT_FOUND'));
+    renderAt('/workflows/wf_123');
+
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Workflow name' })).not.toBeInTheDocument();
+  });
+
+  it('creates the workflow on its first save and moves to its address', async () => {
+    api.createDefinition.mockResolvedValue({ ...definition(), workflowId: 'wf_new', version: 1 });
+    // Stands in for steps added on the canvas: an empty workflow has an issue and can't be saved.
+    const { nodes, edges } = definition();
+    useEditorStore.getState().load({ name: '', description: '', nodes, edges }, 'new');
+    const router = renderAt('/workflows/new');
+
+    const user = await editName('Fresh');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId('location-path')).toHaveTextContent('/workflows/wf_new');
-    });
-    expect(callsTo(fetchMock, 'POST', '/api/definitions')).toEqual([
-      { name: 'Document Processing', description: 'Summarise a document', nodes: [], edges: [] },
-    ]);
-    expect(await screen.findByText('Definition v1, Editing')).toHaveAttribute(
-      'title',
-      'Workflow wf_new',
+    await waitFor(() => expect(location()).toBe('/workflows/wf_new'));
+    expect(api.createDefinition).toHaveBeenCalledWith(expect.objectContaining({ name: 'Fresh' }));
+    expect(router.state.historyAction).toBe('REPLACE');
+  });
+
+  it('keeps the edits and offers the latest version when another save got there first', async () => {
+    api.saveDefinition.mockRejectedValue(apiError(409, 'VERSION_CONFLICT'));
+    renderAt('/workflows/wf_123');
+
+    const user = await editName('Renamed');
+    api.getDefinition.mockResolvedValue(definition(undefined, 5));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    const [text, options] = toast.mock.calls[0] as [string, { action?: { label: string } }];
+    expect(text).toContain('5');
+    expect(options.action?.label).toBe('Load latest');
+    expect(api.saveDefinition).toHaveBeenCalledWith(
+      'wf_123',
+      expect.objectContaining({ baseVersion: 4, name: 'Renamed' }),
     );
+    expect(screen.getByRole('textbox', { name: 'Workflow name' })).toHaveValue('Renamed');
   });
-});
 
-describe('EditPage — version conflict', () => {
-  it('keeps local edits on 409, names the newer server version, and reloads only on request', async () => {
-    let latest = definitionWithNode(4, 'Generate');
-    const fetchMock = stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, latest),
-      'PUT /api/definitions/wf_123': () => {
-        // Another tab saved v5 before this page's Save arrived.
-        latest = definitionWithNode(5, 'Server Generate');
-        return jsonResponse(409, {
-          error: { code: 'VERSION_CONFLICT', message: 'the definition has already been saved' },
-        });
-      },
-    });
-    const user = userEvent.setup();
+  it('does not save while the checks find issues', async () => {
+    // The output step has nothing connected to its required input.
+    api.getDefinition.mockResolvedValue(definition([INPUT, OUTPUT, { ...OUTPUT, id: 'out2' }]));
+    renderAt('/workflows/wf_123');
 
-    renderStudio('/workflows/wf_123');
-    await selectCanvasNode('node_gen');
-    const nameInput = await screen.findByLabelText('Name');
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Local Generate');
-
+    const user = await editName('Renamed');
+    await screen.findByRole('button', { name: /^\d+ issues?$/ }, { timeout: 3000 });
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    const conflict = await screen.findByRole('alert', { name: 'Version conflict' });
-    expect(conflict).toHaveTextContent('v5');
-    expect(conflict).toHaveTextContent('v4');
-    // The banner overlays the canvas instead of taking a row above the palette, so the
-    // palette, canvas and properties keep their full height (no squashed layout).
-    expect(screen.getByTestId('canvas-region')).toContainElement(conflict);
-    expect(conflict).toHaveClass('absolute');
-    expect(conflict).toHaveClass('text-md');
-    expect(screen.getByLabelText('Name')).toHaveValue('Local Generate');
-    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
-
-    // Keep: local edits stay, nothing is written, and the next Save still conflicts.
-    await user.click(within(conflict).getByRole('button', { name: 'Keep my edits' }));
-    expect(screen.queryByRole('alert', { name: 'Version conflict' })).toBeNull();
-    expect(screen.getByLabelText('Name')).toHaveValue('Local Generate');
-
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-    const again = await screen.findByRole('alert', { name: 'Version conflict' });
-    expect(
-      callsTo(fetchMock, 'PUT', '/api/definitions/wf_123').map((body) => body.baseVersion),
-    ).toEqual([4, 4]);
-
-    // Reload: local edits are discarded explicitly and the page is on the server's v5.
-    await user.click(within(again).getByRole('button', { name: 'Reload latest' }));
-    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Server Generate'));
-    expect(screen.getByText('Definition v5, Editing')).toHaveAttribute('title', 'Workflow wf_123');
-    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
-    expect(screen.queryByRole('alert', { name: 'Version conflict' })).toBeNull();
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/^Fix \d+ issues? to save\.$/));
+    expect(api.saveDefinition).not.toHaveBeenCalled();
   });
 });
 
-describe('EditPage — Backend validation errors', () => {
-  it('lists Validate errors against their node and focuses the node and field on click', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-      'POST /api/definitions/validate': () =>
-        jsonResponse(200, {
-          valid: false,
-          errors: [
-            // Path-only: the node is identified by the bracketed node ID.
-            {
-              code: 'MISSING_REQUIRED_INPUT',
-              path: 'nodes[node_gen].inputs.prompt',
-              message: 'required input "prompt" is not connected',
-            },
-            {
-              code: 'VALIDATION_FAILED',
-              path: 'nodes[node_gen].config/modelId',
-              nodeId: 'node_gen',
-              message: 'minLength: got 0, want 1',
-            },
-            { code: 'DAG_HAS_CYCLE', path: '', message: 'the graph has a cycle' },
-          ],
-        }),
-    });
-    const user = userEvent.setup();
-
-    renderStudio('/workflows/wf_123');
-    await screen.findByText('Definition v4, Editing');
-    await user.click(screen.getByRole('button', { name: 'Validate' }));
-
-    const list = await screen.findByRole('list', { name: 'Validation errors' });
-    const items = within(list).getAllByRole('listitem');
-    expect(items).toHaveLength(3);
-    expect(items[2]).toHaveTextContent('the graph has a cycle');
-    // Shared status palette: the row uses the shared FAILED tokens, the message is body text (≥14px)
-    // and the path is a helper label (≥12px); no off-palette Tailwind red.
-    expect(list.className).toContain('bg-st-failed-bg');
-    expect(list.className).not.toMatch(/text-red-|text-xs/);
-    expect(within(items[0]!).getByText('required input "prompt" is not connected')).toHaveClass(
-      'text-md',
-    );
-    expect(within(items[0]!).getByText('nodes[node_gen].inputs.prompt')).toHaveClass('text-xs');
-    expect(within(items[0]!).getByRole('button', { name: /Generate/ })).toHaveClass(
-      'text-st-failed-fg',
-    );
-    // A whole-graph error has no node to focus.
-    expect(within(items[2]!).queryByRole('button')).toBeNull();
-
-    expect(screen.queryByLabelText('Name')).toBeNull();
-    await user.click(within(items[0]!).getByRole('button', { name: /Generate/ }));
-    expect(screen.getByLabelText('Name')).toHaveValue('Generate');
-
-    await user.click(within(items[1]!).getByRole('button', { name: /Generate/ }));
-    expect(screen.getByLabelText(/^Model\s*\*?$/)).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getAllByText('minLength: got 0, want 1')).toHaveLength(2);
-  });
-
-  it('lists the structured errors of a rejected Save and creates no version', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-      'PUT /api/definitions/wf_123': () =>
-        jsonResponse(422, {
-          error: {
-            code: 'INCOMPATIBLE_EDGE',
-            message: 'definition failed validation',
-            details: {
-              errors: [
-                {
-                  code: 'INCOMPATIBLE_EDGE',
-                  path: 'edges[edge_1]',
-                  nodeId: 'node_gen',
-                  message: 'edge "edge_1" carries image into a text port',
-                },
-              ],
-            },
-          },
-        }),
-    });
-    const user = userEvent.setup();
-
-    renderStudio('/workflows/wf_123');
-    await screen.findByText('Definition v4, Editing');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-
-    const list = await screen.findByRole('list', { name: 'Validation errors' });
-    expect(list).toHaveTextContent('edge "edge_1" carries image into a text port');
-    expect(screen.getByText('Definition v4, Editing')).toHaveAttribute('title', 'Workflow wf_123');
-  });
-});
-
-describe('EditPage — load errors', () => {
-  it('shows a failed definition load on the shared FAILED palette as body text', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () =>
-        jsonResponse(503, {
-          error: { code: 'DEPENDENCY_UNAVAILABLE', message: 'database unavailable' },
-        }),
-    });
-
-    renderStudio('/workflows/wf_123');
-
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('DEPENDENCY_UNAVAILABLE: database unavailable');
-    // Shared status palette, the same tokens and sizes as the Validation errors row: the FAILED red
-    // is shared across the surfaces, the message is body text (≥14px) in the foreground
-    // colour, with no off-palette Tailwind red.
-    expect(alert.className).toContain('bg-st-failed-bg');
-    expect(alert.className).toContain('border-st-failed-dot/40');
-    expect(alert).toHaveClass('text-md', 'text-fg');
-    expect(alert.className).not.toMatch(/text-red-|text-xs/);
-  });
-
-  it('makes Save impossible when the definition failed to load', async () => {
-    const fetchMock = stubRoutes({
-      'GET /api/definitions/wf_123': () =>
-        jsonResponse(503, {
-          error: { code: 'DEPENDENCY_UNAVAILABLE', message: 'database unavailable' },
-        }),
-    });
-
-    renderStudio('/workflows/wf_123');
-
-    await screen.findByRole('alert');
-    const save = screen.getByRole('button', { name: 'Save' });
-    expect(save).toBeDisabled();
-    fireEvent.click(save);
-    expect(callsTo(fetchMock, 'PUT', '/api/definitions/wf_123')).toEqual([]);
-    expect(callsTo(fetchMock, 'POST', '/api/definitions')).toEqual([]);
-  });
-
-  it('keeps Save disabled while the definition is still loading', async () => {
-    let release: (response: Response) => void = () => undefined;
-    stubRoutes({
-      'GET /api/definitions/wf_123': () =>
-        new Promise<Response>((resolve) => {
-          release = resolve;
-        }),
-    });
-
-    renderStudio('/workflows/wf_123');
-
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-    release(jsonResponse(200, DEFINITION));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
-  });
-
-  it('shows a not-found state instead of an editor for an unknown definition', async () => {
-    const fetchMock = stubRoutes({
-      'GET /api/definitions/wf_missing': () =>
-        jsonResponse(404, {
-          error: { code: 'DEFINITION_NOT_FOUND', message: 'definition not found' },
-        }),
-    });
-
-    renderStudio('/workflows/wf_missing');
-
-    expect(await screen.findByText(/^Workflow .+ doesn’t exist\.$/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Go to Workflows' })).toHaveAttribute(
-      'href',
-      '/workflows',
-    );
-    // No editor: nothing to edit, save, validate or run.
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Validate' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
-    expect(screen.queryByTestId('canvas-region')).toBeNull();
-    expect(screen.queryByText(/Unsaved draft/)).toBeNull();
-    expect(callsTo(fetchMock, 'PUT', '/api/definitions/wf_missing')).toEqual([]);
-  });
-
-  it('still opens the editor for a new definition', async () => {
-    stubRoutes({});
-
-    renderStudio({ pathname: '/workflows/new', state: { name: 'Fresh workflow' } });
-
-    expect(await screen.findByText('Fresh workflow')).toBeInTheDocument();
-    expect(screen.getByTestId('canvas-region')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
-    expect(screen.queryByRole('heading', { name: 'Definition not found' })).toBeNull();
-  });
-});
-
-describe('EditPage — adding nodes', () => {
-  it('gives two nodes added back-to-back distinct ids even within the same millisecond', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    // Pin the clock: a node id derived from the wall clock would collide here.
-    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
-    const user = userEvent.setup();
-
-    try {
-      renderStudio('/workflows/wf_123');
-      await screen.findByTestId('rf__node-node_gen');
-
-      const addTextGeneration = () =>
-        user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
-      await addTextGeneration();
-      await addTextGeneration();
-
-      await waitFor(() => expect(document.querySelectorAll('.react-flow__node')).toHaveLength(3));
-      const ids = [...document.querySelectorAll('.react-flow__node')].map((node) =>
-        node.getAttribute('data-id'),
-      );
-      expect(new Set(ids).size).toBe(3);
-      expect(ids.filter((id) => id?.startsWith('node_text_generation_'))).toHaveLength(2);
-    } finally {
-      nowSpy.mockRestore();
-    }
-  });
-});
-
-describe('EditPage — Undo and Redo', () => {
-  const undoButton = () => screen.getByRole('button', { name: 'Undo' });
-  const redoButton = () => screen.getByRole('button', { name: 'Redo' });
-  const canvasNodes = () => document.querySelectorAll('.react-flow__node');
-
-  it('disables both buttons until there is something to undo or redo', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-
-    renderStudio('/workflows/wf_123');
-    await screen.findByTestId('rf__node-node_gen');
-
-    expect(undoButton()).toBeDisabled();
-    expect(redoButton()).toBeDisabled();
-  });
-
-  it('undoes and redoes a node add from the keyboard, keeping Unsaved changes truthful', async () => {
-    const fetchMock = stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    const user = userEvent.setup();
-
-    renderStudio('/workflows/wf_123');
-    await screen.findByTestId('rf__node-node_gen');
-    const requestsBefore = fetchMock.mock.calls.length;
-
-    await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
-    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
-    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
-    expect(undoButton()).toBeEnabled();
-    expect(redoButton()).toBeDisabled();
-
-    fireEvent.keyDown(document.body, { key: 'z', metaKey: true });
-    await waitFor(() => expect(canvasNodes()).toHaveLength(1));
-    // Back at exactly the loaded graph: nothing is unsaved any more.
-    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
-    expect(undoButton()).toBeDisabled();
-    expect(redoButton()).toBeEnabled();
-
-    fireEvent.keyDown(document.body, { key: 'Z', metaKey: true, shiftKey: true });
-    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
-    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
-
-    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
-    await waitFor(() => expect(canvasNodes()).toHaveLength(1));
-    fireEvent.keyDown(document.body, { key: 'y', ctrlKey: true });
-    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
-
-    // Undo and Redo are local only: they never talk to the server.
-    expect(fetchMock.mock.calls.length).toBe(requestsBefore);
-  });
-
-  it('restores a deleted node together with its edges in one undo', async () => {
-    const withEdge = {
-      ...definitionWithNode(4, 'Generate'),
-      nodes: [
-        ...definitionWithNode(4, 'Generate').nodes,
-        {
-          id: 'node_next',
-          type: 'text_generation',
-          name: 'Next',
-          position: { x: 200, y: 0 },
-          config: { modelId: 'text-model-v1' },
-        },
-      ],
-      edges: [
-        {
-          id: 'edge_1',
-          source: 'node_gen',
-          sourceHandle: 'text',
-          target: 'node_next',
-          targetHandle: 'prompt',
-        },
-      ],
-    };
-    const fetchMock = stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, withEdge),
-      'POST /api/definitions/validate': () =>
-        jsonResponse(200, { valid: true, runInputSchema: DEFINITION.runInputSchema }),
-    });
-    const user = userEvent.setup();
-    // jsdom has no layout, so React Flow never draws edge paths; the graph Validate sends
-    // is what shows which edges the page holds.
-    const validatedGraph = async () => {
-      await user.click(screen.getByRole('button', { name: 'Validate' }));
-      await screen.findByText('Definition is valid.');
-      const body = callsTo(fetchMock, 'POST', '/api/definitions/validate').at(-1)!;
-      return { nodes: (body.nodes as unknown[]).length, edges: (body.edges as unknown[]).length };
-    };
-
-    renderStudio('/workflows/wf_123');
-    await selectCanvasNode('node_gen');
-    await waitFor(() => expect(screen.getByTestId('rf__node-node_gen')).toHaveClass('selected'));
-    fireEvent.keyDown(document.body, { key: 'Backspace' });
-    await waitFor(() => expect(canvasNodes()).toHaveLength(1));
-    expect(await validatedGraph()).toEqual({ nodes: 1, edges: 0 });
-
-    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
-    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
-    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
-    expect(undoButton()).toBeDisabled();
-    expect(await validatedGraph()).toEqual({ nodes: 2, edges: 1 });
-  });
-
-  it('leaves Cmd/Ctrl+Z to a focused text field and undoes one typing session as one step', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    const user = userEvent.setup();
-
-    renderStudio('/workflows/wf_123');
-    await selectCanvasNode('node_gen');
-    const nameInput = await screen.findByLabelText('Name');
-    await user.type(nameInput, ' Look');
-    expect(nameInput).toHaveValue('Generate Look');
-
-    // Focus is in the input: the page must not take over the native text undo.
-    fireEvent.keyDown(nameInput, { key: 'z', metaKey: true });
-    expect(nameInput).toHaveValue('Generate Look');
-    expect(redoButton()).toBeDisabled();
-
-    // The whole typing session is one entry: one undo restores the loaded name.
-    await user.click(undoButton());
-    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Generate'));
-    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
-    expect(undoButton()).toBeDisabled();
-
-    await user.click(redoButton());
-    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Generate Look'));
-    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
-  });
-
-  it('starts a new entry for a second typing session in the same field', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    const user = userEvent.setup();
-
-    renderStudio('/workflows/wf_123');
-    await selectCanvasNode('node_gen');
-    await user.type(await screen.findByLabelText('Name'), ' A');
-    // Leaving the field ends the typing session.
-    await user.tab();
-    await user.type(screen.getByLabelText('Name'), ' B');
-
-    await user.click(undoButton());
-    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Generate A'));
-    await user.click(undoButton());
-    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Generate'));
-  });
-
-  it('clears history when Reload latest replaces the local edits after a conflict', async () => {
-    let latest = definitionWithNode(4, 'Generate');
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, latest),
-      'PUT /api/definitions/wf_123': () => {
-        latest = definitionWithNode(5, 'Server Generate');
-        return jsonResponse(409, {
-          error: { code: 'VERSION_CONFLICT', message: 'the definition has already been saved' },
-        });
-      },
-    });
-    const user = userEvent.setup();
-
-    renderStudio('/workflows/wf_123');
-    await selectCanvasNode('node_gen');
-    await user.type(await screen.findByLabelText('Name'), ' Local');
-    expect(undoButton()).toBeEnabled();
-
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-    const conflict = await screen.findByRole('alert', { name: 'Version conflict' });
-    await user.click(within(conflict).getByRole('button', { name: 'Reload latest' }));
-
-    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Server Generate'));
-    expect(undoButton()).toBeDisabled();
-    expect(redoButton()).toBeDisabled();
-  });
-
-  it('keeps Unsaved changes and Run disabled when the canvas changes during Save', async () => {
-    let resolveSave: (response: Response) => void = () => {};
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-      'PUT /api/definitions/wf_123': () =>
-        new Promise<Response>((resolve) => {
-          resolveSave = resolve;
-        }),
-    });
-    const user = userEvent.setup();
-
-    renderStudio('/workflows/wf_123');
-    await screen.findByTestId('rf__node-node_gen');
-    await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
-    await waitFor(() => expect(canvasNodes()).toHaveLength(2));
-
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-    // The Save request is in flight; the user keeps editing.
-    await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
-    await waitFor(() => expect(canvasNodes()).toHaveLength(3));
-
-    resolveSave(jsonResponse(200, definitionWithNode(5, 'Generate')));
-    await screen.findByText('Saved version 5.');
-
-    // Run is disabled while unsaved changes exist; the third node was never saved.
-    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
-  });
-
-  it("offers the Tool Registry catalog in an Agent node's Allowed Tools", async () => {
-    stubRoutes({
-      'GET /api/node-types': () => jsonResponse(200, { items: [AGENT] }),
-      'GET /api/definitions/wf_123': () =>
-        jsonResponse(200, {
-          ...DEFINITION,
-          nodes: [
-            {
-              id: 'node_agent',
-              type: 'agent',
-              name: 'Agent',
-              position: { x: 0, y: 0 },
-              config: { allowedTools: [] },
-            },
-          ],
-        }),
-    });
-
-    renderStudio('/workflows/wf_123');
-    await selectCanvasNode('node_agent');
-
-    const group = screen.getByRole('group', { name: /Allowed Tools/i });
-    expect(
-      await within(group).findByRole('checkbox', { name: 'lookup' }),
-    ).toHaveAccessibleDescription(/Read a deterministic record/);
-  });
-
-  it('records no Undo entry for an edit that leaves the graph unchanged', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    const user = userEvent.setup();
-
-    renderStudio('/workflows/wf_123');
-    await selectCanvasNode('node_gen');
-    // Re-selecting the Model already configured reports a config equal to the current one.
-    await user.selectOptions(screen.getByLabelText(/^Model\s*\*?$/), 'text-model-v1');
-
-    expect(undoButton()).toBeDisabled();
-    expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
-  });
-});
-
-describe('EditPage — leaving with unsaved changes', () => {
-  async function dirtyEditor() {
-    const user = userEvent.setup();
-    await screen.findByTestId('rf__node-node_gen');
-    await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
-    await screen.findByTestId('unsaved-indicator');
-    return user;
-  }
-
-  it('asks before the back button leaves; Stay keeps the edits on the page', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    renderStudio('/workflows/wf_123');
-    const user = await dirtyEditor();
-
-    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
-    expect(within(dialog).getByRole('button', { name: 'Save and leave' })).toHaveFocus();
-
+describe('EditPage leave guard', () => {
+  it('stays on Stay and leaves on Leave', async () => {
+    const router = renderAt('/workflows/wf_123');
+    const user = await editName('Renamed');
+
+    void router.navigate('/workflows');
+    let dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
     await user.click(within(dialog).getByRole('button', { name: 'Stay' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(screen.getByTestId('location-path')).toHaveTextContent('/workflows/wf_123');
-    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
-  });
+    expect(location()).toBe('/workflows/wf_123');
 
-  it('leaves without saving on Leave', async () => {
-    const fetchMock = stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    const { router } = renderStudio('/workflows/wf_123');
-    const user = await dirtyEditor();
-
-    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
+    void router.navigate('/workflows');
+    dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
     await user.click(within(dialog).getByRole('button', { name: 'Leave' }));
-
-    await waitFor(() => expect(router.state.location.pathname).toBe('/workflows'));
-    expect(callsTo(fetchMock, 'PUT', '/api/definitions/wf_123')).toEqual([]);
+    await waitFor(() => expect(location()).toBe('/workflows'));
+    expect(api.saveDefinition).not.toHaveBeenCalled();
   });
 
-  it('saves a new version, then leaves, on Save and leave', async () => {
-    const fetchMock = stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-      'PUT /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(5, 'Generate')),
-    });
-    const { router } = renderStudio('/workflows/wf_123');
-    const user = await dirtyEditor();
+  it('saves and then leaves on Save and leave', async () => {
+    api.saveDefinition.mockResolvedValue(definition(undefined, 5));
+    const router = renderAt('/workflows/wf_123');
+    const user = await editName('Renamed');
 
-    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
+    void router.navigate('/workflows');
     const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
     await user.click(within(dialog).getByRole('button', { name: 'Save and leave' }));
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/workflows'));
-    expect(callsTo(fetchMock, 'PUT', '/api/definitions/wf_123')).toHaveLength(1);
+    await waitFor(() => expect(location()).toBe('/workflows'));
+    expect(api.saveDefinition).toHaveBeenCalledTimes(1);
   });
 
-  it('stays when Save and leave cannot save', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-      'PUT /api/definitions/wf_123': () =>
-        jsonResponse(500, { error: { code: 'INTERNAL', message: 'boom' } }),
-    });
-    const { router } = renderStudio('/workflows/wf_123');
-    const user = await dirtyEditor();
+  it('offers only Leave and Stay when the changes cannot be saved', async () => {
+    api.getDefinition.mockResolvedValue(definition([INPUT, OUTPUT, { ...OUTPUT, id: 'out2' }]));
+    const router = renderAt('/workflows/wf_123');
+    await editName('Renamed');
+    await screen.findByRole('button', { name: /^\d+ issues?$/ }, { timeout: 3000 });
 
-    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
+    void router.navigate('/workflows');
     const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
-    await user.click(within(dialog).getByRole('button', { name: 'Save and leave' }));
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(router.state.location.pathname).toBe('/workflows/wf_123');
-    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
-  });
-
-  it('offers only Leave and Stay when the changes have issues, with Stay first in focus', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-      'POST /api/definitions/validate': () =>
-        jsonResponse(200, {
-          valid: false,
-          errors: [{ code: 'DAG_HAS_CYCLE', path: '', message: 'the graph has a cycle' }],
-        }),
-    });
-    renderStudio('/workflows/wf_123');
-    const user = await dirtyEditor();
-    await user.click(screen.getByRole('button', { name: 'Validate' }));
-    await screen.findByRole('list', { name: 'Validation errors' });
-
-    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
+    expect(within(dialog).getByRole('button', { name: 'Leave' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Stay' })).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Save and leave' })).toBeNull();
-    expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveFocus();
-  });
-
-  it('holds browser Back the same way', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    const { router } = renderStudio({ pathname: '/workflows', state: null });
-    await act(async () => {
-      await router.navigate('/workflows/wf_123');
-    });
-    await dirtyEditor();
-
-    await act(async () => {
-      await router.navigate(-1);
-    });
-    expect(
-      await screen.findByRole('dialog', { name: 'Leave without saving?' }),
-    ).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/workflows/wf_123');
-  });
-
-  it('lets a change of the query string through and asks the browser before unload', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    const { router } = renderStudio('/workflows/wf_123');
-    await dirtyEditor();
-
-    await act(async () => {
-      await router.navigate('/workflows/wf_123?x=1');
-    });
-    expect(router.state.location.search).toBe('?x=1');
-    expect(screen.queryByRole('dialog')).toBeNull();
-
-    const event = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(true);
-  });
-
-  it('does not ask once nothing is unsaved', async () => {
-    stubRoutes({
-      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
-    });
-    const { router } = renderStudio('/workflows/wf_123');
-    await screen.findByTestId('rf__node-node_gen');
-
-    const event = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(false);
-
-    await act(async () => {
-      await router.navigate('/workflows');
-    });
-    expect(router.state.location.pathname).toBe('/workflows');
   });
 });

@@ -29,3 +29,12 @@ function randomHex(): string {
 
 /** The generator EditPage uses; one instance per Studio session. */
 export const newNodeId: NodeIdGenerator = createNodeIdGenerator();
+
+/** The generator for link ids; links share the counter scheme but carry their own prefix. */
+export const newEdgeId: () => string = (() => {
+  let counter = 0;
+  return () => {
+    counter += 1;
+    return `edge_${counter}_${randomHex()}`;
+  };
+})();

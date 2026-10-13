@@ -25,11 +25,15 @@ export function MenuContent({
   align = 'end',
   side = 'bottom',
   label,
+  onCloseAutoFocus,
 }: {
   children: ReactNode;
   align?: 'start' | 'center' | 'end';
   side?: 'top' | 'bottom';
   label?: string;
+  /** Runs once the menu has closed, before focus returns to the trigger; an item that
+   *  opens a dialog waits for this so the dialog's focus is not taken back. */
+  onCloseAutoFocus?: (e: Event) => void;
 }) {
   return (
     <DropdownMenu.Portal>
@@ -39,6 +43,7 @@ export function MenuContent({
         sideOffset={4}
         collisionPadding={8}
         aria-label={label}
+        onCloseAutoFocus={onCloseAutoFocus}
         style={{
           minWidth: 'max(var(--radix-dropdown-menu-trigger-width), 180px)',
           maxWidth: 420,

@@ -15,11 +15,11 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // so a shared piece either moves to src/components or src/lib, or is added here deliberately. A feature
 // directory missing from this map gets an empty allowlist.
 const FEATURE_IMPORT_ALLOWLIST = {
-  definitions: [],
   editor: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
   observe: ['run-input/RunInputDialog', 'run-input/runInputLabels', 'runs/StartRunDialog'],
   'run-input': [],
   runs: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
+  workflows: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
 };
 
 const FEATURES = readdirSync(new URL('./src/features', import.meta.url), { withFileTypes: true })

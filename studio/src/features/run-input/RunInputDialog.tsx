@@ -1,5 +1,5 @@
 import { History, LoaderCircle, Play } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ImageField } from './ImageField';
 import { ObjectFields } from './ObjectFields';
@@ -54,6 +54,8 @@ interface RunInputDialogProps {
   latestVersion?: number;
   /** A new run: the workflow's last run, offered through "Use last run's input". */
   lastRun?: RunInputSource;
+  /** Values a new run starts with when there is no source run, such as images staged in the Editor. */
+  prefill?: JsonObject;
   submitting?: boolean;
   /** Why the last attempt didn't start a run: what createRun threw, or null. */
   submitError?: unknown;
@@ -80,6 +82,7 @@ export function RunInputDialog({
   source,
   latestVersion,
   lastRun,
+  prefill,
   submitting = false,
   submitError = null,
   onSubmit,
@@ -105,12 +108,12 @@ export function RunInputDialog({
   // The form is seeded each time the dialog opens, and again when the bound version's
   // fields arrive after it opened.
   const seedKey = open
-    ? `${String(definitionVersion)}|${fields.map((f) => f.key).join(',')}|${source?.runId ?? ''}`
+    ? `${String(definitionVersion)}|${fields.map((f) => f.key).join(',')}|${source?.runId ?? ''}|${JSON.stringify(prefill ?? {})}`
     : '';
   const [seededFor, setSeededFor] = useState('');
   if (seedKey !== seededFor) {
     setSeededFor(seedKey);
-    setValues(seedValues(fields, source?.input));
+    setValues(seedValues(fields, source?.input ?? prefill));
     setErrors({});
     setTouched({});
     setViews({});
@@ -141,6 +144,22 @@ export function RunInputDialog({
     );
     target?.focus();
   };
+
+  // Fields that arrive after the dialog opened (the bound version was still loading) take
+  // the focus the dialog itself held meanwhile.
+  const firstKey = fields[0]?.key;
+  useEffect(() => {
+    if (!open || !ready || !firstKey) return;
+    const form = formRef.current;
+    const dialog = form?.closest('[role="dialog"]') ?? null;
+    if (dialog === null || document.activeElement !== dialog) return;
+    form
+      ?.querySelector(`[data-field="${CSS.escape(firstKey)}"]`)
+      ?.querySelector<HTMLElement>(
+        'textarea:not([hidden]), input:not([type=file]), button:not([disabled]), [role=radio][data-state=checked]',
+      )
+      ?.focus();
+  }, [open, ready, firstKey]);
 
   const fillFromLast = () => {
     if (!lastRun) return;

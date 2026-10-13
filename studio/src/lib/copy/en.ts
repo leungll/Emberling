@@ -6,7 +6,9 @@
  * Strings that take a count or a value are functions, and they handle the plural.
  */
 
+import { editor } from './editor';
 import { runs } from './runs';
+import { workflows } from './workflows';
 
 const plural = (n: number, one: string, many = `${one}s`): string =>
   `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
@@ -218,16 +220,6 @@ export const en = {
       action: 'Go to Runs',
     },
     crumb: 'Not found',
-  },
-
-  leaveGuard: {
-    title: 'Leave without saving?',
-    body: 'Your changes to this workflow haven’t been saved. If you leave, they’re lost.',
-    bodyIssues:
-      'Your changes to this workflow haven’t been saved, and they have issues that stop a save. If you leave, they’re lost.',
-    leave: 'Leave',
-    stay: 'Stay',
-    saveAndLeave: 'Save and leave',
   },
 
   status: {
@@ -558,6 +550,9 @@ export const en = {
   },
 
   runs,
+  workflows,
+  editor,
+
   listNames,
   plural,
 } as const;

@@ -8,7 +8,9 @@ import { useCopy } from '@/lib/copy';
 interface LeaveGuardDialogProps {
   blocker: Blocker;
   /** Changes with issues cannot be saved, so only Leave and Stay are offered. */
-  hasIssues: boolean;
+  issues: number;
+  /** The latest saved version; `null` for a workflow never saved. */
+  version: number | null;
   /** Saves the changes; resolves true when they were saved. */
   onSaveAndLeave: () => Promise<boolean>;
 }
@@ -17,9 +19,15 @@ interface LeaveGuardDialogProps {
  * "Leave without saving?": Leave (ghost), Stay (secondary) and Save and leave (primary,
  * initial focus). With issues, Stay is the primary choice and there is no Save and leave.
  */
-export function LeaveGuardDialog({ blocker, hasIssues, onSaveAndLeave }: LeaveGuardDialogProps) {
+export function LeaveGuardDialog({
+  blocker,
+  issues,
+  version,
+  onSaveAndLeave,
+}: LeaveGuardDialogProps) {
   const copy = useCopy();
-  const g = copy.leaveGuard;
+  const g = copy.editor.leave;
+  const hasIssues = issues > 0;
   const [saving, setSaving] = useState(false);
   const open = blocker.state === 'blocked';
 
@@ -62,13 +70,15 @@ export function LeaveGuardDialog({ blocker, hasIssues, onSaveAndLeave }: LeaveGu
                 });
               }}
             >
-              {g.saveAndLeave}
+              {saving ? g.saving : g.saveAndLeave}
             </Button>
           )}
         </>
       }
     >
-      <p className="m-0 text-md text-fg-secondary">{hasIssues ? g.bodyIssues : g.body}</p>
+      <p className="m-0 text-md text-fg-secondary">
+        {hasIssues ? g.bodyIssues(issues) : version === null ? g.bodyNew : g.body(version)}
+      </p>
     </Dialog>
   );
 }

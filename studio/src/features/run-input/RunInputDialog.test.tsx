@@ -73,6 +73,14 @@ const startButton = () => screen.getByRole('button', { name: 'Start run' });
 const referenceInput = () => screen.getByLabelText(/^Reference/, { selector: 'input' });
 
 describe('RunInputDialog', () => {
+  it('starts a new run from prefilled values, such as images staged in the Editor', async () => {
+    const { onSubmit } = renderDialog({ prefill: { reference: assetRef } });
+    const user = userEvent.setup();
+    await user.type(screen.getByRole('textbox', { name: /Brief/ }), 'clay');
+    await user.click(startButton());
+    expect(onSubmit).toHaveBeenCalledWith({ brief: 'clay', reference: assetRef });
+  });
+
   it('is titled by the workflow name and version, never its raw ID', () => {
     renderDialog();
     expect(screen.getByRole('dialog', { name: 'Photo Effect' })).toBeInTheDocument();

@@ -25,6 +25,8 @@ interface PopoverContentProps {
   onOpenAutoFocus?: (e: Event) => void;
   /** Called when Tab moves focus out of the popover. */
   onTabOut?: () => void;
+  /** Runs as the popover closes, before focus returns to the trigger; may move focus elsewhere. */
+  onCloseAutoFocus?: (e: Event) => void;
 }
 
 export function PopoverContent({
@@ -36,6 +38,7 @@ export function PopoverContent({
   style,
   onOpenAutoFocus,
   onTabOut,
+  onCloseAutoFocus,
 }: PopoverContentProps) {
   return (
     <RPopover.Portal>
@@ -46,6 +49,7 @@ export function PopoverContent({
         sideOffset={4}
         collisionPadding={8}
         onOpenAutoFocus={onOpenAutoFocus}
+        onCloseAutoFocus={onCloseAutoFocus}
         onFocusOutside={() => onTabOut?.()}
         style={style}
         className={cn(POPUP_SURFACE, 'p-1 text-sm', className)}

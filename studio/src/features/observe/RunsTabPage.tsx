@@ -235,15 +235,14 @@ export function RunsTabPage() {
         tab="runs"
         runId={runId ? runId : undefined}
         identity={
-          // Below the wide layout the header keeps one row for the name and the tabs.
-          <span className="hidden xl:inline-flex">
-            <IdChip
-              id={workflowId}
-              kind={v.workflowId}
-              label={v.workflowId.toLowerCase()}
-              size="md"
-            />
-          </span>
+          // The header fits itself to its width: the ID stays, and when the name and the ID
+          // outgrow one row the switch and actions move to a second row.
+          <IdChip
+            id={workflowId}
+            kind={v.workflowId}
+            label={v.workflowId.toLowerCase()}
+            size="md"
+          />
         }
         actions={
           <>
