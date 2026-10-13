@@ -91,6 +91,8 @@ export function RunsTable({ items, busy }: { items: readonly RunListItem[]; busy
           const sub = runSubline(item);
           const status = statusInfo({ kind: 'run', value: item.status });
           const ms = endedDurationMs(item);
+          // A row restored on return holds focus quietly; it is shaded only once a key
+          // press makes that focus visible, or the tint it already had would never fade.
           return (
             <tr
               key={item.id}
@@ -98,7 +100,7 @@ export function RunsTable({ items, busy }: { items: readonly RunListItem[]; busy
               onClick={(e) => {
                 onRowClick(e, href);
               }}
-              className="cursor-pointer border-b border-border-subtle last:border-b-0 hover:bg-surface-hover focus-within:bg-surface-hover"
+              className="cursor-pointer border-b border-border-subtle last:border-b-0 hover:bg-surface-hover focus-within:not-has-[[data-quiet-focus]]:bg-surface-hover"
             >
               <td className={CELL}>
                 <div className="flex min-w-0 flex-col gap-0.5">
