@@ -167,6 +167,7 @@ type execFakeTx struct {
 
 func (t *execFakeTx) Definitions() store.DefinitionRepository   { return t.defs }
 func (t *execFakeTx) Runs() store.RunRepository                 { return t.runs }
+func (t *execFakeTx) RunList() store.RunListRepository          { return nil }
 func (t *execFakeTx) NodeRuns() store.NodeRunRepository         { return t.nodeRuns }
 func (t *execFakeTx) NodeAttempts() store.NodeAttemptRepository { return t.attempts }
 func (t *execFakeTx) Events() store.EventRepository             { return t.events }
@@ -328,7 +329,7 @@ func (r *execFakeNodeAttemptRepo) ListDuePolls(context.Context, time.Time, int) 
 func (r *execFakeNodeAttemptRepo) MarkSucceeded(context.Context, string, domain.NodeAttemptStatus, time.Time, json.RawMessage) error {
 	return errExecFakeNotImplemented
 }
-func (r *execFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError) error {
+func (r *execFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError, bool) error {
 	return errExecFakeNotImplemented
 }
 func (r *execFakeNodeAttemptRepo) ListExpired(context.Context, time.Time, int) ([]domain.NodeAttempt, error) {
@@ -349,6 +350,9 @@ func (r *execFakeEventRepo) Append(_ context.Context, lock *store.RunLock, ev do
 	return ev, nil
 }
 func (r *execFakeEventRepo) ListAfter(context.Context, string, int64, int) ([]domain.Event, error) {
+	return nil, errExecFakeNotImplemented
+}
+func (r *execFakeEventRepo) ListForNodeRun(context.Context, string, string, []domain.EventType, int) ([]domain.Event, error) {
 	return nil, errExecFakeNotImplemented
 }
 

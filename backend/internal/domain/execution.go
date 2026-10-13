@@ -77,6 +77,10 @@ type NodeAttempt struct {
 	// Claiming a poll increments PollCount, writes no Event and never moves DeadlineAt.
 	NextPollAt *time.Time `json:"nextPollAt"`
 	PollCount  int        `json:"pollCount"`
+	// Uncertain records, for a FAILED Attempt only, whether its external outcome was
+	// uncertain when it failed. It is written once with the failure and is nil on every
+	// other Attempt, and on Attempts that failed before the value was recorded.
+	Uncertain *bool `json:"uncertain"`
 }
 
 // ExecutionError is the persisted failure summary. It carries no stack traces, database

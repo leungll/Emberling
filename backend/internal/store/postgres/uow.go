@@ -77,6 +77,7 @@ type tx struct {
 	assets           *assetRepository
 	artifacts        *artifactRepository
 	runs             *runRepository
+	runList          *runListRepository
 	nodeRuns         *nodeRunRepository
 	nodeAttempts     *nodeAttemptRepository
 	callbackBindings *callbackBindingRepository
@@ -99,6 +100,7 @@ func newTx(conn pgx.Tx) *tx {
 		assets:           &assetRepository{conn: conn},
 		artifacts:        &artifactRepository{conn: conn},
 		runs:             &runRepository{conn: conn},
+		runList:          &runListRepository{conn: conn},
 		nodeRuns:         &nodeRunRepository{conn: conn},
 		nodeAttempts:     &nodeAttemptRepository{conn: conn},
 		callbackBindings: &callbackBindingRepository{conn: conn},
@@ -120,6 +122,7 @@ func (t *tx) Definitions() store.DefinitionRepository   { return t.definitions }
 func (t *tx) Assets() store.AssetRepository             { return t.assets }
 func (t *tx) Artifacts() store.ArtifactRepository       { return t.artifacts }
 func (t *tx) Runs() store.RunRepository                 { return t.runs }
+func (t *tx) RunList() store.RunListRepository          { return t.runList }
 func (t *tx) NodeRuns() store.NodeRunRepository         { return t.nodeRuns }
 func (t *tx) NodeAttempts() store.NodeAttemptRepository { return t.nodeAttempts }
 func (t *tx) Events() store.EventRepository             { return t.events }

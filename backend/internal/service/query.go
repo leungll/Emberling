@@ -182,6 +182,10 @@ type AgentTraceTurn struct {
 	Action           *domain.AgentAction
 	ToolAttempts     []domain.ToolAttempt
 	CallbackBindings map[string]domain.CallbackBinding
+	// TurnClaimSource is who claimed the Turn, nil until its AGENT_TURN_STARTED exists.
+	TurnClaimSource *domain.ClaimSource
+	// ActionSources is how the Action was claimed and ended, read from its Events.
+	ActionSources AgentActionSources
 }
 
 // AgentTrace reads one Agent NodeRun's Agent Run, Turns, Decisions, Actions, Tool
@@ -257,6 +261,18 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 			round.CallbackBindings = byAttempt
 
 			rounds = append(rounds, round)
+		}
+		turnClaims, actionSources, err := agentTraceSources(ctx, tx, runID, nodeRunID, len(turns))
+		if err != nil {
+			return err
+		}
+		for i := range rounds {
+			if claim, ok := turnClaims[rounds[i].Turn.ID]; ok {
+				rounds[i].TurnClaimSource = &claim
+			}
+			if rounds[i].Action != nil {
+				rounds[i].ActionSources = actionSources[rounds[i].Action.ID]
+			}
 		}
 		facts, err := agentTraceFacts(ctx, tx, agentRun.ID)
 		if err != nil {

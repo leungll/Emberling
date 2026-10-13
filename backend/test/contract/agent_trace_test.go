@@ -238,10 +238,20 @@ func TestAgentTrace_CompletedTwoRoundLoop_ProjectsTurnsInOrder(t *testing.T) {
 		if got, _ := action["status"].(string); got != "SUCCEEDED" {
 			t.Errorf("turns[%d].action.status = %v, want SUCCEEDED", i, action["status"])
 		}
-		for _, key := range []string{"id", "type", "status", "startedAt", "completedAt", "error"} {
+		for _, key := range []string{"id", "type", "status", "startedAt", "completedAt", "error",
+			"claimSource", "completionSource", "failureSource"} {
 			if _, present := action[key]; !present {
 				t.Errorf("turns[%d].action is missing the required key %q: %s", i, key, body)
 			}
+		}
+		if action["claimSource"] != "IMMEDIATE" || action["completionSource"] != "SYNC_EXECUTION" || action["failureSource"] != nil {
+			t.Errorf("turns[%d].action sources = claim %v completion %v failure %v, want IMMEDIATE, SYNC_EXECUTION, null",
+				i, action["claimSource"], action["completionSource"], action["failureSource"])
+		}
+	}
+	for i, turn := range []map[string]any{first, second} {
+		if turn["claimSource"] != "IMMEDIATE" {
+			t.Errorf("turns[%d].claimSource = %v, want IMMEDIATE", i, turn["claimSource"])
 		}
 	}
 

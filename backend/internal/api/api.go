@@ -35,6 +35,10 @@ type Deps struct {
 	Assets      *service.AssetService
 	Artifacts   *service.ArtifactService
 
+	// Build identifies the running binary on /health and /ready. cmd/emberling fills it
+	// from values injected at build time; an empty field is reported as "unknown".
+	Build BuildInfo
+
 	// Readiness answers /health and /ready. It is read-only from this package's
 	// perspective; cmd/emberling owns running the startup gate against it.
 	Readiness *readiness.Probe

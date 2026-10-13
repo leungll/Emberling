@@ -513,7 +513,7 @@ func TestNodeAttempts_MarkSucceeded_FromFailed_ReturnsInvalidStateTransition(t *
 	}
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.NodeAttempts().MarkFailed(ctx, attempt.ID, domain.NodeAttemptStarted, fixtureTime.Add(time.Minute),
-			domain.ExecutionError{Code: "TIMEOUT", Message: "deadline exceeded"})
+			domain.ExecutionError{Code: "TIMEOUT", Message: "deadline exceeded"}, true)
 	}); err != nil {
 		t.Fatalf("MarkFailed: %v", err)
 	}

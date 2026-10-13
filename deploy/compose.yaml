@@ -150,6 +150,9 @@ services:
       dockerfile: ../deploy/Dockerfile.backend
       args:
         CMD: emberling
+        # Optional build labels, e.g. EMBERLING_BUILD_COMMIT=$(git rev-parse --short HEAD).
+        EMBERLING_BUILD_VERSION: ${EMBERLING_BUILD_VERSION:-}
+        EMBERLING_BUILD_COMMIT: ${EMBERLING_BUILD_COMMIT:-}
     depends_on:
       postgres:
         condition: service_healthy
