@@ -145,12 +145,26 @@ export function useRunData(
 
   const [records, setRecords] = useState<Records>({ runId, details: {}, traces: {}, read: {} });
   const requested = useRef<{ runId: string; read: Record<string, string> }>({ runId, read: {} });
+  // Reads belong to the run, not to one signature: a newer signature for one NodeRun must
+  // not cut off another NodeRun's read in flight. They stop when the run changes.
+  const reads = useRef<{ runId: string; controller: AbortController } | null>(null);
+  useEffect(
+    () => () => {
+      reads.current?.controller.abort();
+      reads.current = null;
+      // The cut-off reads are made again when the run is shown again.
+      requested.current = { runId: '', read: {} };
+    },
+    [runId],
+  );
 
   useEffect(() => {
     if (!signature) return;
     if (requested.current.runId !== runId) requested.current = { runId, read: {} };
-    const controller = new AbortController();
-    const { signal } = controller;
+    if (reads.current?.runId !== runId) {
+      reads.current = { runId, controller: new AbortController() };
+    }
+    const { signal } = reads.current.controller;
     for (const part of signature.split(',')) {
       const [id = '', nodeType = '', status = '', count = ''] = part.split('|');
       const sig = `${status}|${count}`;
@@ -161,11 +175,8 @@ export function useRunData(
         getNodeRunDetail(runId, id, signal),
         agent ? getAgentTrace(runId, id, signal) : Promise.resolve(null),
       ]).then(([detail, trace]) => {
-        if (signal.aborted) {
-          // Read again on the next pass: this one was cut off.
-          if (requested.current.read[id] === sig) requested.current.read[id] = '';
-          return;
-        }
+        // A read for another run, or one a newer read of this NodeRun replaces.
+        if (signal.aborted || requested.current.read[id] !== sig) return;
         setRecords((r) => {
           const base = r.runId === runId ? r : { runId, details: {}, traces: {}, read: {} };
           return {
@@ -183,9 +194,6 @@ export function useRunData(
         });
       });
     }
-    return () => {
-      controller.abort();
-    };
   }, [signature, runId]);
 
   const own = records.runId === runId ? records : null;
