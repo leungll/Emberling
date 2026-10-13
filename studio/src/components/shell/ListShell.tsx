@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Outlet, useLocation } from 'react-router';
 
 import { AppSidebar, type NavCounts } from './AppSidebar';
-import { listDefinitions } from '@/api/client';
-import type { DefinitionListItem } from '@/api/types';
+import { listDefinitions, listRuns } from '@/api/client';
+import type { DefinitionListItem, RunStatusCounts } from '@/api/types';
 import { LIST_PATH, listHref, type ListName } from '@/lib/nav/list-state';
 import { readRecent, recentWorkflows } from '@/lib/nav/recent';
 import { useSidebarCollapsed } from '@/lib/nav/use-sidebar';
@@ -19,12 +19,14 @@ function sectionOf(pathname: string): ListName | null {
 
 /**
  * The frame of the list pages and of not-found pages: the sidebar and a page column that
- * scrolls with the window. The sidebar's counts and Recent come from the workflow list; it
- * shows nothing extra while that list is loading or failed.
+ * scrolls with the window. The sidebar's workflow count and Recent come from the workflow
+ * list, the Runs count from the run list's counts; each shows nothing extra while its list is
+ * loading or failed.
  */
 export function ListShell({ children }: { children?: ReactNode }) {
   const { pathname } = useLocation();
   const [items, setItems] = useState<DefinitionListItem[] | null>(null);
+  const [runCounts, setRunCounts] = useState<RunStatusCounts | null>(null);
   const connection = useReadiness();
   const [collapsed, toggle] = useSidebarCollapsed();
   const openSheet = useShortcutsStore((s) => s.setOpen);
@@ -40,6 +42,23 @@ export function ListShell({ children }: { children?: ReactNode }) {
     };
   }, []);
 
+  // The Runs count and its live dot are the server's counts over every run; read again on
+  // each page change so a run started elsewhere shows up.
+  useEffect(() => {
+    const controller = new AbortController();
+    listRuns({ limit: 1 }, controller.signal).then(
+      (page) => {
+        setRunCounts(page.counts);
+      },
+      () => {
+        // A convenience like the workflow count: the Runs page reports its own errors.
+      },
+    );
+    return () => {
+      controller.abort();
+    };
+  }, [pathname]);
+
   const section = sectionOf(pathname);
   const onListPage = section !== null && pathname === LIST_PATH[section];
   const hrefs: Record<ListName, string> = {
@@ -47,7 +66,12 @@ export function ListShell({ children }: { children?: ReactNode }) {
     workflows:
       onListPage && section === 'workflows' ? LIST_PATH.workflows : listHref('workflows', true),
   };
-  const counts: NavCounts = { runs: null, workflows: items ? items.length : null };
+  const counts: NavCounts = {
+    runs: runCounts
+      ? { total: runCounts.all, running: runCounts.running, waiting: runCounts.paused }
+      : null,
+    workflows: items ? items.length : null,
+  };
   const recent = useMemo(() => (items ? recentWorkflows(items, readRecent()) : []), [items]);
 
   return (

@@ -40,6 +40,16 @@ beforeEach(() => {
       if (url === '/ready') return Promise.resolve(jsonResponse(200, { status: 'ready' }));
       if (url === '/api/definitions') return Promise.resolve(jsonResponse(200, { items: [] }));
       if (url === '/api/runs/run_0123456789abcdef') return Promise.resolve(jsonResponse(200, RUN));
+      if (url.startsWith('/api/runs?')) {
+        return Promise.resolve(
+          jsonResponse(200, {
+            items: [],
+            nextCursor: null,
+            prevCursor: null,
+            counts: { all: 0, running: 0, paused: 0, completed: 0, failed: 0 },
+          }),
+        );
+      }
       if (url.startsWith('/api/runs/')) {
         return Promise.resolve(
           jsonResponse(404, { error: { code: 'RUN_NOT_FOUND', message: 'run not found' } }),
@@ -67,7 +77,10 @@ describe('routes', () => {
 
     expect(await screen.findByRole('heading', { name: 'Runs' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/runs');
-    expect(screen.getByRole('link', { name: 'Runs' })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('link', { name: /^Runs: / })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   it('shows not found inside the sidebar shell, with the way back to Runs', async () => {

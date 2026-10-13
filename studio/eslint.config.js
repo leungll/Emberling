@@ -24,6 +24,7 @@ const FEATURE_IMPORT_ALLOWLIST = {
     'run-input/runInputLabels',
   ],
   'run-input': [],
+  runs: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
 };
 
 const FEATURES = readdirSync(new URL('./src/features', import.meta.url), { withFileTypes: true })

@@ -3,12 +3,12 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 import { LegacyStudioRedirect } from './LegacyStudioRedirect';
 import { RouteErrorPage } from './RouteErrorPage';
 import { RunRedirect } from './RunRedirect';
-import { RunsPlaceholder } from './RunsPlaceholder';
 import { WorkflowRunsPlaceholder } from './WorkflowRunsPlaceholder';
 import { ListShell } from '@/components/shell/ListShell';
 import { NotFoundView } from '@/components/shell/NotFoundView';
 import { DefinitionsPage } from '@/features/definitions/DefinitionsPage';
 import { EditPage } from '@/features/editor/EditPage';
+import { RunsPage } from '@/features/runs/RunsPage';
 import { ObservePage } from '@/features/observe/ObservePage';
 
 /**
@@ -27,7 +27,7 @@ export const routes: RouteObject[] = [
       {
         element: <ListShell />,
         children: [
-          { path: '/runs', element: <RunsPlaceholder /> },
+          { path: '/runs', element: <RunsPage /> },
           // A run's own address resolves to its workflow's Runs tab.
           { path: '/runs/:runId', element: <RunRedirect /> },
           { path: '/workflows', element: <DefinitionsPage /> },

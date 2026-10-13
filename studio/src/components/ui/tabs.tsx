@@ -21,6 +21,8 @@ interface TabsProps<V extends string> {
   size?: 'sm' | 'md';
   className?: string;
   listClassName?: string;
+  /** Shows counts as small badges (a list card's status tabs) instead of muted numbers. */
+  countBadges?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export function Tabs<V extends string>({
   size = 'sm',
   className,
   listClassName,
+  countBadges = false,
 }: TabsProps<V>) {
   return (
     <RTabs.Root
@@ -61,11 +64,22 @@ export function Tabs<V extends string>({
               'relative z-local inline-flex items-center gap-1.5 border-b-2 border-transparent text-sm font-medium whitespace-nowrap text-fg-muted hover:text-fg focus-visible:outline-offset-0',
               'data-[state=active]:border-accent data-[state=active]:text-fg',
               size === 'md' ? 'h-control-md' : 'h-control-sm',
+              // A short label keeps a full-size target while its count is still loading.
+              countBadges && 'min-w-control-xs justify-center',
             )}
           >
             {item.label}
-            {item.count === undefined ? null : ' '}
-            {item.count === undefined ? null : (
+            {item.count === undefined || countBadges ? null : ' '}
+            {item.count === undefined ? null : countBadges ? (
+              <span
+                className={cn(
+                  'inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-surface-hover px-1.5 text-xs font-medium tabular-nums text-fg-muted',
+                  item.value === value && 'bg-surface-selected text-accent-fg',
+                )}
+              >
+                {item.count.toLocaleString('en-US')}
+              </span>
+            ) : (
               <span className="text-fg-muted tabular-nums font-normal">
                 {item.count.toLocaleString('en-US')}
               </span>

@@ -13,6 +13,8 @@ import path from 'node:path';
 
 import type { Page, Route } from '@playwright/test';
 
+import { recordedRuns, runList } from './runs';
+
 interface FixtureIndex {
   recordedAt: string;
   paths: Record<string, { file: string; status: number }>;
@@ -55,6 +57,8 @@ export function errorBody(code: string, message: string): unknown {
 }
 
 function recorded(pathname: string, url: URL): Reply | null {
+  // The run list was not recorded; it is answered from the recorded runs.
+  if (pathname === '/api/runs') return runList(recordedRuns())(url);
   const entry = fixtureIndex.paths[pathname];
   if (!entry) return null;
   if (pathname === '/ready') return { status: entry.status, body: { status: 'ready' } };

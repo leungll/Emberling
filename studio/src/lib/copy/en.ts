@@ -6,6 +6,8 @@
  * Strings that take a count or a value are functions, and they handle the plural.
  */
 
+import { runs } from './runs';
+
 const plural = (n: number, one: string, many = `${one}s`): string =>
   `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
@@ -571,6 +573,7 @@ export const en = {
     title: 'Components',
   },
 
+  runs,
   listNames,
   plural,
 } as const;
