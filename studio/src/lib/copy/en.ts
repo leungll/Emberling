@@ -60,22 +60,6 @@ export const en = {
     newWorkflowRuns: 'Save the workflow to run it.',
   },
 
-  /** Pages that only point the way until their full version exists. */
-  placeholders: {
-    runs: {
-      title: 'Each workflow keeps its runs on its Runs tab.',
-      body: 'Open a workflow, then its Runs tab.',
-      action: 'Go to Workflows',
-    },
-    workflowRuns: {
-      title: 'Open this workflow’s last run.',
-      action: 'Open last run',
-      none: 'This workflow hasn’t run yet.',
-      noneBody: 'Run it from the Editor and its runs appear here.',
-      toEditor: 'Go to Editor',
-    },
-  },
-
   /** Backend connection, from GET /ready (ready or starting) or a failed request (unreachable). */
   backend: {
     ready: { label: 'Connected', help: 'The backend is reachable and ready.' },

@@ -17,12 +17,7 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const FEATURE_IMPORT_ALLOWLIST = {
   definitions: [],
   editor: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
-  observe: [
-    'editor/WorkflowCanvas',
-    'editor/RegisteredNode',
-    'run-input/RunInputDialog',
-    'run-input/runInputLabels',
-  ],
+  observe: ['run-input/RunInputDialog', 'run-input/runInputLabels', 'runs/StartRunDialog'],
   'run-input': [],
   runs: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
 };
