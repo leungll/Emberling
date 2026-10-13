@@ -131,7 +131,11 @@ export function inspectPage(options: InspectOptions): InspectResult {
     if (name.startsWith('--shadow')) shadows.add(resolved('box-shadow', `var(${name})`));
   }
   if (tokenNames.length === 0) {
-    violations.push({ check: 'tokens', selector: ':root', detail: 'no design tokens found on :root' });
+    violations.push({
+      check: 'tokens',
+      selector: ':root',
+      detail: 'no design tokens found on :root',
+    });
   }
 
   const FONT_PAIRS: Record<string, string> = {
@@ -214,8 +218,31 @@ export function inspectPage(options: InspectOptions): InspectResult {
     (el) => !el.closest('[aria-hidden="true"]') || el.tagName === 'svg',
   );
 
+  // Visually hidden text (sr-only): a 1 px clipped box that exists for assistive technology.
+  function visuallyHidden(el: Element): boolean {
+    const r = el.getBoundingClientRect();
+    return r.width <= 1 && r.height <= 1;
+  }
+  // React Flow's own containers (pane, viewport, panels, attribution) are third-party
+  // internals; the nodes and controls Studio renders inside them are still checked.
+  function thirdParty(el: Element): boolean {
+    return (
+      Array.from(el.classList).some((name) => /^react-flow(__|$)/.test(name)) &&
+      !el.closest('[data-id]')
+    );
+  }
+  // Tailwind composes ring and shadow layers; transparent zero-size layers draw nothing.
+  function drawnShadow(value: string): string {
+    if (value === 'none') return value;
+    const layers = value.split(/,(?![^(]*\))/).map((layer) => layer.trim());
+    const drawn = layers.filter(
+      (layer) => !/^rgba\(0, 0, 0, 0\) 0px 0px( 0px)?( 0px)?$/.test(layer),
+    );
+    return drawn.length ? drawn.join(', ') : 'none';
+  }
+
   for (const el of all) {
-    if (!visible(el)) continue;
+    if (!visible(el) || visuallyHidden(el)) continue;
     const style = getComputedStyle(el);
     const text = ownText(el);
     const isSvg = el instanceof SVGElement;
@@ -252,7 +279,8 @@ export function inspectPage(options: InspectOptions): InspectResult {
       for (const prop of ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'] as const) {
         const v = Math.abs(px(style[prop]));
         // Larger values are almost always auto margins centring a column.
-        if (v <= 64 && !SPACE.has(v)) add('tokens', el, `${prop} ${style[prop]}`);
+        if (v <= 64 && !SPACE.has(v) && !thirdParty(el))
+          add('tokens', el, `${prop} ${style[prop]}`);
       }
       for (const corner of [
         'borderTopLeftRadius',
@@ -262,8 +290,10 @@ export function inspectPage(options: InspectOptions): InspectResult {
       ] as const) {
         if (!RADII.has(style[corner])) add('tokens', el, `${corner} ${style[corner]}`);
       }
-      if (!shadows.has(style.boxShadow)) add('tokens', el, `box-shadow ${style.boxShadow}`);
-      if (!Z.has(style.zIndex)) add('tokens', el, `z-index ${style.zIndex}`);
+      if (!shadows.has(drawnShadow(style.boxShadow))) {
+        add('tokens', el, `box-shadow ${drawnShadow(style.boxShadow)}`);
+      }
+      if (!Z.has(style.zIndex) && !thirdParty(el)) add('tokens', el, `z-index ${style.zIndex}`);
       if (
         style.backgroundImage !== 'none' &&
         style.backgroundImage.includes('gradient') &&
@@ -288,7 +318,9 @@ export function inspectPage(options: InspectOptions): InspectResult {
             /^(text|search|number|email|url|)$/.test((el as HTMLInputElement).type))) &&
         el.getAttribute('data-variant') !== 'link' &&
         !el.closest('[role="menu"], [role="listbox"], table, [role="tree"], [role="option"]');
-      if (isControl && !CONTROL.has(Math.round(el.getBoundingClientRect().height))) {
+      // Taller buttons are rows and cards, not controls.
+      const controlHeight = Math.round(el.getBoundingClientRect().height);
+      if (isControl && controlHeight <= 40 && !CONTROL.has(controlHeight)) {
         add('tokens', el, `control height ${Math.round(el.getBoundingClientRect().height)}px`);
       }
       // No truncation: no ellipsis, no clamp, no clipped text.
