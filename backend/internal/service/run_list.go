@@ -204,11 +204,17 @@ func runListFilterOf(req ListRunsRequest) (store.RunListFilter, int, error) {
 	return filter, limit, nil
 }
 
-// normalizeRunCode accepts 8 to 64 ASCII letters or digits. Run IDs are lowercase, so
-// the code is lowercased and a short code typed in capitals still finds its Run.
+// normalizeRunCode accepts 8 to 64 ASCII letters or digits, optionally preceded by the
+// Run ID prefix, so a pasted full Run ID resolves through the same bounded prefix query as
+// a short code. Run IDs are lowercase, so the code is lowercased and a short code typed in
+// capitals still finds its Run.
 func normalizeRunCode(code string) (string, error) {
 	invalid := &RunListQueryError{
-		Message: fmt.Sprintf("code must be %d to %d letters or digits", minRunCodeLength, maxRunCodeLength),
+		Message: fmt.Sprintf("code must be a Run ID or %d to %d letters or digits", minRunCodeLength, maxRunCodeLength),
+	}
+	runPrefix := domain.IDPrefixRun + "_"
+	if len(code) > len(runPrefix) && strings.EqualFold(code[:len(runPrefix)], runPrefix) {
+		code = code[len(runPrefix):]
 	}
 	if len(code) < minRunCodeLength || len(code) > maxRunCodeLength {
 		return "", invalid

@@ -238,6 +238,11 @@ func TestAPI_ListRuns_CursorPaging_WalksBothWaysAndBindsFilters(t *testing.T) {
 	if ids := listItemIDs(t, byCode); !slices.Contains(ids, created[0]) {
 		t.Errorf("code=%s items = %v, want to include %s", code, ids, created[0])
 	}
+	// The full Run ID resolves through the same parameter to exactly that Run.
+	byFullID := env.listRuns(t, url.Values{"code": {created[0]}})
+	if ids := listItemIDs(t, byFullID); !slices.Equal(ids, []string{created[0]}) {
+		t.Errorf("code=%s items = %v, want only that Run", created[0], ids)
+	}
 }
 
 func withCursor(q url.Values, cursor string) url.Values {

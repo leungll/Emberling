@@ -108,3 +108,20 @@ func TestRunListFilterOf_ValidValues_NormalizeCodeAndDefaultLimit(t *testing.T) 
 		t.Errorf("StartedFrom = %v, want %v in UTC at microsecond precision", filter.StartedFrom, at)
 	}
 }
+
+func TestRunListFilterOf_FullRunID_ResolvesThroughCode(t *testing.T) {
+	for _, code := range []string{"run_abcdef12", "RUN_ABCDEF12"} {
+		filter, _, err := runListFilterOf(ListRunsRequest{Code: code})
+		if err != nil {
+			t.Fatalf("runListFilterOf(%q): %v", code, err)
+		}
+		if filter.IDPrefix != "run_abcdef12" {
+			t.Errorf("code %q: IDPrefix = %q, want run_abcdef12", code, filter.IDPrefix)
+		}
+	}
+	for _, code := range []string{"run_abc1234", "run_", "wf_abcdef12", "run_run_abcdef12"} {
+		if _, _, err := runListFilterOf(ListRunsRequest{Code: code}); err == nil {
+			t.Errorf("runListFilterOf(%q): want a query error", code)
+		}
+	}
+}

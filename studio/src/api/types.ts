@@ -432,7 +432,7 @@ export interface RunListQuery {
   status?: RunStatus;
   /** RFC 3339; keeps Runs started at or after this instant. */
   startedAfter?: string;
-  /** 8 to 64 letters or digits from the start of the Run ID after `run_`. */
+  /** A full Run ID, or 8 to 64 letters or digits from the start of the Run ID after `run_`. */
   code?: string;
   /** A `nextCursor` or `prevCursor` issued for the same filters. */
   cursor?: string;
