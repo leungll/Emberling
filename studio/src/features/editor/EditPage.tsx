@@ -420,6 +420,7 @@ export function EditPage() {
           onRun={openRun}
           runReason={runReason}
           onValidate={() => void validateNow()}
+          loading={!ready}
         />
         {ready ? (
           <>

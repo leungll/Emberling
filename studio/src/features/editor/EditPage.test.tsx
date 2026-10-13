@@ -116,6 +116,18 @@ describe('EditPage', () => {
     await waitFor(() => expect(location()).toBe('/workflows/wf_123'));
   });
 
+  it('claims no save state or issues while the workflow is still loading', async () => {
+    api.getDefinition.mockReturnValue(new Promise(() => undefined));
+    renderAt('/workflows/wf_123');
+
+    expect(await screen.findByText('Loading the workflow')).toBeInTheDocument();
+    // Long enough for the checks of the empty draft to have settled.
+    await new Promise((r) => setTimeout(r, 700));
+    expect(screen.queryByText('Not saved yet')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^\d+ issues?$/ })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Workflow name' })).toBeNull();
+  });
+
   it('names the tab after the workflow', async () => {
     renderAt('/workflows/wf_123');
 

@@ -85,6 +85,8 @@ export interface EditorHeaderProps {
   onRun: () => void;
   runReason: string | null;
   onValidate: () => void;
+  /** The saved workflow is still loading: nothing about its draft is known yet. */
+  loading?: boolean;
 }
 
 /**
@@ -94,6 +96,21 @@ export interface EditorHeaderProps {
 export function EditorHeader(p: EditorHeaderProps) {
   const copy = useCopy();
   const t = copy.editor.header;
+  const idChip = p.workflowId ? (
+    <IdChip id={p.workflowId} kind={t.idKind} label={t.idLabel} />
+  ) : null;
+  // Until the saved version arrives the draft is empty, so its name, save state and checks
+  // would describe nothing: the header shows only where the viewer is.
+  if (p.loading) {
+    return (
+      <WorkflowHeader
+        workflowId={p.workflowId ?? undefined}
+        name=""
+        identity={idChip}
+        tab="editor"
+      />
+    );
+  }
   const n = p.issues.length;
   const next = (p.version ?? 0) + 1;
 
@@ -196,9 +213,7 @@ export function EditorHeader(p: EditorHeaderProps) {
       workflowId={p.workflowId ?? undefined}
       name={p.name}
       nameSlot={<NameField value={p.name} onChange={p.onName} onCommit={p.onNameCommit} />}
-      identity={
-        p.workflowId ? <IdChip id={p.workflowId} kind={t.idKind} label={t.idLabel} /> : null
-      }
+      identity={idChip}
       tab="editor"
       actions={actions}
     />
