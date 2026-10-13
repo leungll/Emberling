@@ -3,13 +3,12 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 import { LegacyStudioRedirect } from './LegacyStudioRedirect';
 import { RouteErrorPage } from './RouteErrorPage';
 import { RunRedirect } from './RunRedirect';
-import { WorkflowRunsPlaceholder } from './WorkflowRunsPlaceholder';
 import { ListShell } from '@/components/shell/ListShell';
 import { NotFoundView } from '@/components/shell/NotFoundView';
 import { DefinitionsPage } from '@/features/definitions/DefinitionsPage';
 import { EditPage } from '@/features/editor/EditPage';
 import { RunsPage } from '@/features/runs/RunsPage';
-import { ObservePage } from '@/features/observe/ObservePage';
+import { RunsTabPage } from '@/features/observe/RunsTabPage';
 
 /**
  * The hierarchy: Runs (home) and Workflows are list pages with the sidebar; a workflow has
@@ -40,8 +39,8 @@ export const routes: RouteObject[] = [
       // collide with the literal segment "new".
       { path: '/workflows/new', element: <EditPage /> },
       { path: '/workflows/:workflowId', element: <EditPage /> },
-      { path: '/workflows/:workflowId/runs', element: <WorkflowRunsPlaceholder /> },
-      { path: '/workflows/:workflowId/runs/:runId', element: <ObservePage /> },
+      // One route for the tab with and without a run, so opening a run keeps the page.
+      { path: '/workflows/:workflowId/runs/:runId?', element: <RunsTabPage /> },
       { path: '/studio/new', element: <LegacyStudioRedirect /> },
       { path: '/studio/:workflowId', element: <LegacyStudioRedirect /> },
       // The component gallery for the UI review suite; development builds only, so the

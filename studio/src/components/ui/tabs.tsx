@@ -23,6 +23,8 @@ interface TabsProps<V extends string> {
   listClassName?: string;
   /** Shows counts as small badges (a list card's status tabs) instead of muted numbers. */
   countBadges?: boolean;
+  /** Classes for the selected tab's panel, such as a scrolling body below the list. */
+  contentClassName?: string;
 }
 
 /**
@@ -39,6 +41,7 @@ export function Tabs<V extends string>({
   className,
   listClassName,
   countBadges = false,
+  contentClassName,
 }: TabsProps<V>) {
   return (
     <RTabs.Root
@@ -87,7 +90,11 @@ export function Tabs<V extends string>({
           </RTabs.Trigger>
         ))}
       </RTabs.List>
-      <RTabs.Content value={value} className="focus-visible:outline-none" tabIndex={-1}>
+      <RTabs.Content
+        value={value}
+        className={cn('focus-visible:outline-none', contentClassName)}
+        tabIndex={-1}
+      >
         {children}
       </RTabs.Content>
     </RTabs.Root>
