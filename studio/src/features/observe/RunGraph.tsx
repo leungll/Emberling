@@ -228,7 +228,7 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
       style={{
         contain: 'paint',
         backgroundImage:
-          'repeating-linear-gradient(135deg, var(--color-canvas-stripe) 0 1px, transparent 1px 12px)',
+          'repeating-linear-gradient(135deg, var(--canvas-stripe) 0 1px, transparent 1px 12px)',
       }}
       className="relative min-h-16 flex-auto bg-bg"
     >
@@ -267,7 +267,7 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
                   key={e.id}
                   d={d}
                   fill="none"
-                  stroke={dim ? 'var(--color-border)' : 'var(--color-border-control)'}
+                  stroke={dim ? 'var(--border)' : 'var(--border-control)'}
                   strokeWidth={lod ? 1.5 / shown.z : 1.5}
                   strokeDasharray={dim ? '4 4' : undefined}
                 />

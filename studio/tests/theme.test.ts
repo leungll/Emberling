@@ -108,4 +108,22 @@ describe('token theme', () => {
     const ours = await generated(themeCss, [...stock]);
     expect([...stock].filter((word) => !ours.has(word)).sort()).toEqual([]);
   }, 120_000);
+
+  it('defines every custom property that source code reads by name', () => {
+    // The utility theme is a reference block: its --color-*, --text-* and other names exist
+    // only while Tailwind compiles and are never emitted, so an inline style that reads one
+    // resolves to nothing (an SVG stroke silently becomes none). Inline styles read the raw
+    // tokens declared outside that block instead.
+    const referenceBlock = /@theme inline reference \{[\s\S]*?\n\}/;
+    const emitted = new Set(
+      [...themeCss.replace(referenceBlock, '').matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]),
+    );
+    const undefinedReads = sourceFiles(SRC).flatMap((file) =>
+      [...readFileSync(file, 'utf8').matchAll(/var\((--[a-z0-9-]+)/g)]
+        .map((m) => m[1])
+        .filter((name) => !name.startsWith('--radix-') && !emitted.has(name))
+        .map((name) => `${path.relative(SRC, file)}: ${name}`),
+    );
+    expect(undefinedReads).toEqual([]);
+  });
 });
