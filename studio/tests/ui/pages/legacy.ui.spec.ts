@@ -10,14 +10,6 @@ import { review, type ReviewState } from '../support/review';
 
 const states: ReviewState[] = [
   {
-    name: 'legacy-editor',
-    url: `/workflows/${data.completed.workflowId}`,
-    mode: 'report',
-    ready: async (page) => {
-      await expect(page.locator('.react-flow__node').first()).toBeVisible();
-    },
-  },
-  {
     name: 'legacy-observe-failed',
     url: `/workflows/${data.failed.workflowId}/runs/${data.failed.runId}`,
     mode: 'report',

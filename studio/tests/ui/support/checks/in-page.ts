@@ -225,6 +225,28 @@ export function inspectPage(options: InspectOptions): InspectResult {
     const r = el.getBoundingClientRect();
     return r.width <= 1 && r.height <= 1;
   }
+  // The part of an element its clipping ancestors (scroll areas, the canvas) leave visible;
+  // null when they hide all of it, as for a field scrolled out of a panel.
+  function shownRect(
+    el: Element,
+  ): { left: number; top: number; right: number; bottom: number } | null {
+    const r = el.getBoundingClientRect();
+    let box = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    for (let n = el.parentElement; n; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (s.position === 'fixed') break;
+      if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+      const c = n.getBoundingClientRect();
+      box = {
+        left: Math.max(box.left, c.left),
+        top: Math.max(box.top, c.top),
+        right: Math.min(box.right, c.right),
+        bottom: Math.min(box.bottom, c.bottom),
+      };
+      if (box.right - box.left <= 1 || box.bottom - box.top <= 1) return null;
+    }
+    return box;
+  }
   // React Flow's own containers (pane, viewport, panels, attribution) are third-party
   // internals; the nodes and controls Studio renders inside them are still checked.
   function thirdParty(el: Element): boolean {
@@ -339,10 +361,15 @@ export function inspectPage(options: InspectOptions): InspectResult {
             /^(text|search|number|email|url|)$/.test((el as HTMLInputElement).type))) &&
         el.getAttribute('data-variant') !== 'link' &&
         !el.closest('[role="menu"], [role="listbox"], table, [role="tree"], [role="option"]');
-      // Taller buttons are rows and cards, not controls.
-      const controlHeight = Math.round(el.getBoundingClientRect().height);
+      // Taller buttons are rows and cards, not controls. On the canvas the zoom scales what
+      // is drawn, so a control there is measured at its layout height.
+      const controlHeight = Math.round(
+        insideCanvas(el) && el instanceof HTMLElement
+          ? el.offsetHeight
+          : el.getBoundingClientRect().height,
+      );
       if (isControl && controlHeight <= 40 && !CONTROL.has(controlHeight)) {
-        add('tokens', el, `control height ${Math.round(el.getBoundingClientRect().height)}px`);
+        add('tokens', el, `control height ${controlHeight}px`);
       }
       // No truncation: no ellipsis, no clamp, no clipped text.
       if (style.textOverflow === 'ellipsis') add('overflow', el, 'text-overflow: ellipsis');
@@ -354,7 +381,13 @@ export function inspectPage(options: InspectOptions): InspectResult {
         (clipsX && el.scrollWidth > el.clientWidth + 1) ||
         (clipsY && el.scrollHeight > el.clientHeight + 1)
       ) {
-        if ((el.textContent ?? '').trim() && !el.matches('.sr-only') && el.clientWidth > 1) {
+        // React Flow's pane and viewport clip on purpose: the canvas pans beyond the view.
+        if (
+          (el.textContent ?? '').trim() &&
+          !el.matches('.sr-only') &&
+          el.clientWidth > 1 &&
+          !thirdParty(el)
+        ) {
           add(
             'overflow',
             el,
@@ -404,8 +437,12 @@ export function inspectPage(options: InspectOptions): InspectResult {
     document.querySelectorAll(
       'a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="menuitem"], [role="option"], [tabindex="0"]',
     ),
-  ).filter((el) => visible(el) && !visuallyHidden(el) && !el.closest('[aria-hidden="true"]'));
+  )
+    .filter((el) => visible(el) && !visuallyHidden(el) && !el.closest('[aria-hidden="true"]'))
+    .filter((el) => shownRect(el) !== null);
   const rects = interactive.map((el) => el.getBoundingClientRect());
+  // What a scrolling or clipping ancestor leaves on screen; overlaps are measured there.
+  const shown = interactive.map((el) => shownRect(el)!);
   const layers = interactive.map(layerOf);
   interactive.forEach((el, i) => {
     const r = rects[i]!;
@@ -422,9 +459,10 @@ export function inspectPage(options: InspectOptions): InspectResult {
     for (let j = i + 1; j < interactive.length; j += 1) {
       const other = interactive[j]!;
       if (el.contains(other) || other.contains(el) || layers[i] !== layers[j]) continue;
-      const q = rects[j]!;
-      const w = Math.min(r.right, q.right) - Math.max(r.left, q.left);
-      const h = Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top);
+      const a = shown[i]!;
+      const q = shown[j]!;
+      const w = Math.min(a.right, q.right) - Math.max(a.left, q.left);
+      const h = Math.min(a.bottom, q.bottom) - Math.max(a.top, q.top);
       if (w > 2 && h > 2)
         add('overlap', el, `overlaps ${selectorOf(other)} by ${Math.round(w)}x${Math.round(h)}`);
     }

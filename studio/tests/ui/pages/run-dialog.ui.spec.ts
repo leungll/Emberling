@@ -1,6 +1,5 @@
 /**
- * The Run dialog over the page that opens it. The pages behind are still the legacy ones,
- * so these states are reviewed in report mode until those pages move to block mode.
+ * The Run dialog over the Editor that opens it, reviewed in block mode.
  */
 import { expect, test, type Page } from '@playwright/test';
 
@@ -16,7 +15,7 @@ const states: ReviewState[] = [
   {
     name: 'run-dialog-new',
     url: `/workflows/${data.completed.workflowId}?run=1`,
-    mode: 'report',
+    mode: 'block',
     ready: dialogOpen,
     // Focus is trapped in the dialog on purpose.
     noTabWalk: true,
@@ -24,14 +23,14 @@ const states: ReviewState[] = [
   {
     name: 'run-dialog-photos',
     url: `/workflows/${data.photos.workflowId}?run=1`,
-    mode: 'report',
+    mode: 'block',
     ready: dialogOpen,
     noTabWalk: true,
   },
   {
     name: 'run-dialog-errors',
     url: `/workflows/${data.photos.workflowId}?run=1`,
-    mode: 'report',
+    mode: 'block',
     ready: dialogOpen,
     act: async (page) => {
       await page.getByRole('button', { name: 'Start run' }).click();

@@ -50,6 +50,12 @@ export interface FixtureServer {
   unexpected: string[];
 }
 
+/** A 4 x 3 grey PNG, served for every image the recorded runs refer to. */
+const PLACEHOLDER_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAADklEQVR4nGM4gQQYcHIAJLUcIQKArPgAAAAASUVORK5CYII=',
+  'base64',
+);
+
 export function errorBody(code: string, message: string): unknown {
   return { error: { code, message } };
 }
@@ -102,6 +108,11 @@ export async function serveFixtures(page: Page, overrides: Overrides = {}): Prom
       // stream closes at once and the page keeps the history it already read.
       if (method === 'GET' && request.headers().accept?.includes('text/event-stream')) {
         await route.fulfill({ status: 204, body: '' });
+        return;
+      }
+      // Image content is not recorded: every asset answers with the same small picture.
+      if (method === 'GET' && /^\/api\/assets\/[^/]+\/content$/.test(key)) {
+        await route.fulfill({ status: 200, contentType: 'image/png', body: PLACEHOLDER_PNG });
         return;
       }
       const reply = method === 'GET' ? recorded(key, url) : null;
