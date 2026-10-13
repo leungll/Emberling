@@ -116,11 +116,13 @@ describe('token theme', () => {
     // tokens declared outside that block instead.
     const referenceBlock = /@theme inline reference \{[\s\S]*?\n\}/;
     const emitted = new Set(
-      [...themeCss.replace(referenceBlock, '').matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]),
+      [...themeCss.replace(referenceBlock, '').matchAll(/(--[a-z0-9-]+)\s*:/g)].map(
+        (m) => m[1] ?? '',
+      ),
     );
     const undefinedReads = sourceFiles(SRC).flatMap((file) =>
       [...readFileSync(file, 'utf8').matchAll(/var\((--[a-z0-9-]+)/g)]
-        .map((m) => m[1])
+        .map((m) => m[1] ?? '')
         .filter((name) => !name.startsWith('--radix-') && !emitted.has(name))
         .map((name) => `${path.relative(SRC, file)}: ${name}`),
     );
