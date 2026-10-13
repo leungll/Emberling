@@ -62,7 +62,7 @@ export function AssetField({
       <div
         role="group"
         aria-labelledby={labelId}
-        className="space-y-2 rounded-md border border-dashed border-[var(--border)] p-3 focus-within:ring-2 focus-within:ring-[var(--ring)]"
+        className="space-y-2 rounded-md border border-dashed border-border p-3 focus-within:ring-2 focus-within:ring-focus"
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDrop}
       >
@@ -84,21 +84,21 @@ export function AssetField({
               <img
                 src={`${API_BASE}/assets/${encodeURIComponent(value.assetId)}/content`}
                 alt={name}
-                className="h-16 w-16 rounded border border-[var(--border)] object-cover"
+                className="h-16 w-16 rounded-sm border border-border object-cover"
               />
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 aria-label={`Remove ${fileName ?? 'image'}`}
-                className="absolute right-1 top-1 h-6 w-6 rounded-full bg-[var(--card)]"
+                className="absolute right-1 top-1 h-6 w-6 rounded-full bg-surface"
                 onClick={() => choose(undefined)}
               >
-                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                <X className="h-icon-sm w-icon-sm" aria-hidden="true" />
               </Button>
             </div>
             <div className="min-w-0 space-y-1">
-              <p className="truncate text-[13px] text-[var(--foreground)]">
+              <p className="truncate text-sm text-fg">
                 {name}, {formatBytes(value.sizeBytes)}
               </p>
               <Button
@@ -122,15 +122,13 @@ export function AssetField({
             >
               Choose image
             </Button>
-            <span className="text-[13px] text-[var(--muted-foreground)]">or drop it here</span>
+            <span className="text-sm text-fg-muted">or drop it here</span>
           </div>
         )}
-        {uploading ? (
-          <p className="text-[13px] text-[var(--muted-foreground)]">Uploading…</p>
-        ) : null}
+        {uploading ? <p className="text-sm text-fg-muted">Uploading…</p> : null}
       </div>
       {error ? (
-        <p role="alert" className="text-[13px] text-red-500">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

@@ -56,18 +56,14 @@ export function SchemaForm({
   const fields = resolveFields(configSchema, uiSchema);
 
   if (fields.length === 0) {
-    return (
-      <p className="text-xs text-[var(--muted-foreground)]">This node has no configuration.</p>
-    );
+    return <p className="text-xs text-fg-muted">This node has no configuration.</p>;
   }
 
   return (
     <div className="space-y-4">
       {groupFields(fields).map(([group, groupedFields]) => (
         <fieldset key={group} className="space-y-3">
-          <legend className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-            {groupLabel(group)}
-          </legend>
+          <legend className="text-xs font-semibold text-fg-muted">{groupLabel(group)}</legend>
           {groupedFields.map((field) => (
             <SchemaField
               key={field.path}
@@ -222,13 +218,13 @@ function SchemaField({
       ) : null}
 
       {field.schema.description ? (
-        <p id={descriptionId} className="text-xs text-[var(--muted-foreground)]">
+        <p id={descriptionId} className="text-xs text-fg-muted">
           {field.schema.description}
         </p>
       ) : null}
 
       {errors.length > 0 ? (
-        <ul id={errorId} className="text-xs text-red-500">
+        <ul id={errorId} className="text-xs text-danger-fg">
           {errors.map((message, index) => (
             <li key={index}>{message}</li>
           ))}
@@ -241,7 +237,7 @@ function SchemaField({
 function RequiredMark({ required }: { required: boolean }) {
   if (!required) return null;
   return (
-    <span aria-hidden="true" className="ml-0.5 text-red-500">
+    <span aria-hidden="true" className="ml-0.5 text-danger-fg">
       *
     </span>
   );
@@ -320,7 +316,7 @@ function ModelSelector({
         ))}
       </Select>
       {modelDescriptionId ? (
-        <p id={modelDescriptionId} className="text-xs text-[var(--muted-foreground)]">
+        <p id={modelDescriptionId} className="text-xs text-fg-muted">
           {selectedDescription}
         </p>
       ) : null}
@@ -451,13 +447,13 @@ function ToolSelector({
         <RequiredMark required={field.required} />
       </legend>
       {tools.length === 0 && unregistered.length === 0 ? (
-        <p className="text-xs text-[var(--muted-foreground)]">No Tools are registered.</p>
+        <p className="text-xs text-fg-muted">No Tools are registered.</p>
       ) : null}
       {tools.map((tool) => {
         const detailsId = `${id}-${tool.name}-details`;
         return (
-          <div key={tool.name} className="rounded-md border border-[var(--border)] p-2">
-            <label className="flex items-center gap-2 text-sm font-medium">
+          <div key={tool.name} className="rounded-md border border-border p-2">
+            <label className="flex items-center gap-2 text-md font-medium">
               <input
                 type="checkbox"
                 disabled={disabled}
@@ -467,18 +463,15 @@ function ToolSelector({
               />
               {tool.name}
             </label>
-            <div
-              id={detailsId}
-              className="mt-1 space-y-0.5 pl-6 text-xs text-[var(--muted-foreground)]"
-            >
+            <div id={detailsId} className="mt-1 space-y-0.5 pl-6 text-xs text-fg-muted">
               <p>{tool.description}</p>
               <p>
-                {executionKindLabel(tool.executionKind)} ·{' '}
-                {tool.sideEffect.kind === 'EXTERNAL' ? 'External write' : 'No side effect'} ·{' '}
+                {executionKindLabel(tool.executionKind)},{' '}
+                {tool.sideEffect.kind === 'EXTERNAL' ? 'External write' : 'No side effect'},{' '}
                 {tool.sideEffect.idempotency}
               </p>
               <p>
-                Input: {schemaPropertyNames(tool.inputSchema)} · Output:{' '}
+                Input: {schemaPropertyNames(tool.inputSchema)}, Output:{' '}
                 {schemaPropertyNames(tool.outputSchema)}
               </p>
             </div>
@@ -488,8 +481,8 @@ function ToolSelector({
       {unregistered.map((name) => {
         const detailsId = `${id}-${name}-details`;
         return (
-          <div key={name} className="rounded-md border border-[var(--border)] p-2">
-            <label className="flex items-center gap-2 text-sm font-medium">
+          <div key={name} className="rounded-md border border-border p-2">
+            <label className="flex items-center gap-2 text-md font-medium">
               <input
                 type="checkbox"
                 disabled={disabled}
@@ -499,7 +492,7 @@ function ToolSelector({
               />
               {name}
             </label>
-            <p id={detailsId} className="mt-1 pl-6 text-xs text-[var(--status-failed-fg)]">
+            <p id={detailsId} className="mt-1 pl-6 text-xs text-st-failed-fg">
               Not registered in the Tool Registry.
             </p>
           </div>
@@ -561,13 +554,13 @@ function JsonField({
     <>
       <Textarea
         {...control}
-        className="font-mono text-sm"
+        className="font-mono text-md"
         spellCheck={false}
         placeholder={expectsArray ? '[]' : '{}'}
         value={text}
         onChange={(e) => handleChange(e.target.value)}
       />
-      {parseError ? <p className="text-xs text-red-500">{parseError}</p> : null}
+      {parseError ? <p className="text-xs text-danger-fg">{parseError}</p> : null}
     </>
   );
 }

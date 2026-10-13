@@ -40,7 +40,7 @@ test('Document Processing completes synchronously and shows its output', async (
 
   // Item 5: observe mode hides the Palette and edit forms; item 6: the bound Definition
   // version is shown throughout (asserted via the header's "v<version>" text below).
-  await expect(page.getByText(`${workflowId} · v`)).toBeVisible();
+  await expect(page.getByText(`${workflowId}, v`)).toBeVisible();
 
   // Observe must not render the Palette or the node config/edit form.
   // NodePalette.tsx and PropertiesPanel.tsx render "NODE REGISTRY" and "PROPERTIES ·
@@ -48,7 +48,7 @@ test('Document Processing completes synchronously and shows its output', async (
   // ObservePage - so their absence here proves the edit-only surfaces were never rendered,
   // not merely hidden by CSS.
   await expect(page.getByText('NODE REGISTRY')).toHaveCount(0);
-  await expect(page.getByText('PROPERTIES · DEFINITION')).toHaveCount(0);
+  await expect(page.getByText('PROPERTIES, DEFINITION')).toHaveCount(0);
 
   const status = page.getByTestId('run-status');
   await expect(status).toHaveText('Completed', { timeout: 30_000 });

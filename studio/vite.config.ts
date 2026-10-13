@@ -57,7 +57,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // tests/theme.test.ts compiles the stylesheet with Tailwind in Node.
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/theme.test.ts'],
     // Playwright specs drive a real browser and are run by `pnpm e2e`.
     exclude: ['node_modules/**', 'dist/**', 'tests/e2e/**'],
   },

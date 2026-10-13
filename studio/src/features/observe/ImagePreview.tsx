@@ -42,7 +42,8 @@ export function ImagePreview({ image }: { image: ImageRef }) {
         // checkerboard so transparent pixels read as such.
         <div
           data-testid="image-preview-box"
-          className="flex h-40 w-40 items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--muted)] bg-[repeating-conic-gradient(var(--accent)_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]"
+          style={{ width: 160, height: 160 }}
+          className="flex items-center justify-center overflow-hidden rounded-lg border border-border bg-checker"
         >
           <img
             src={src}
@@ -52,8 +53,8 @@ export function ImagePreview({ image }: { image: ImageRef }) {
           />
         </div>
       ) : null}
-      <p className="text-[13px] text-[var(--muted-foreground)] [overflow-wrap:anywhere]">
-        {image.source} · {reference ?? '—'}
+      <p className="text-sm text-fg-muted wrap-anywhere">
+        {image.source}, {reference ?? '—'}
       </p>
     </div>
   );

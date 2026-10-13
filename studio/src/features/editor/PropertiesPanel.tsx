@@ -35,28 +35,24 @@ export function PropertiesPanel({
   onConfigChange,
 }: PropertiesPanelProps) {
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--card)]">
-      <div className="border-b border-[var(--border)] p-3">
-        <h2 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
-          PROPERTIES · DEFINITION
-        </h2>
+    <aside
+      style={{ width: 320 }}
+      className="flex shrink-0 flex-col border-l border-border bg-surface"
+    >
+      <div className="border-b border-border p-3">
+        <h2 className="text-xs font-semibold text-fg-muted">PROPERTIES, DEFINITION</h2>
       </div>
 
       <ScrollArea className="flex-1 p-3">
         {!node ? (
-          <p className="text-sm text-[var(--muted-foreground)]">
-            Select a node to edit its configuration.
-          </p>
+          <p className="text-md text-fg-muted">Select a node to edit its configuration.</p>
         ) : (
           <div className="space-y-4">
             {/* Title row: the node's name with its registered Node Type as a pill,
                 tinted like the selected card (Agent purple, everything else amber). The name
                 wraps rather than truncating so it is always fully readable beside the pill. */}
             <div className="flex items-start justify-between gap-3">
-              <p
-                className="min-w-0 flex-1 text-xl leading-7 font-bold break-words"
-                title={node.name}
-              >
+              <p className="min-w-0 flex-1 text-xl font-semibold break-words" title={node.name}>
                 {node.name}
               </p>
               {metadata ? (
@@ -64,8 +60,8 @@ export function PropertiesPanel({
                   className={cn(
                     'mt-0.5 shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
                     metadata.category === 'Agent'
-                      ? 'bg-[var(--node-selected-agent-fill)] text-[#b9a8ff]'
-                      : 'bg-[var(--node-selected-fill)] text-[#fdb022]',
+                      ? 'bg-surface-selected text-accent-fg'
+                      : 'bg-surface-selected text-st-waiting-fg',
                   )}
                 >
                   {metadata.displayName}
@@ -94,13 +90,13 @@ export function PropertiesPanel({
                 />
                 <Separator />
                 <section className="space-y-2">
-                  <h3 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
-                    RUNTIME CONTRACT · READ ONLY
+                  <h3 className="text-xs font-semibold text-fg-muted">
+                    RUNTIME CONTRACT, READ ONLY
                   </h3>
                   {/* Read-only registration facts. Not node config, not editable. */}
-                  <dl className="space-y-1.5 text-sm">
+                  <dl className="space-y-1.5 text-md">
                     <div className="flex justify-between gap-2">
-                      <dt className="text-[var(--muted-foreground)]">Execution</dt>
+                      <dt className="text-fg-muted">Execution</dt>
                       <dd>
                         <Badge variant="outline">
                           {executionKindLabel(metadata.executionKind)}
@@ -108,10 +104,10 @@ export function PropertiesPanel({
                       </dd>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <dt className="text-[var(--muted-foreground)]">Side effect</dt>
+                      <dt className="text-fg-muted">Side effect</dt>
                       <dd>
                         <Badge variant="outline">
-                          {metadata.sideEffect.kind === 'EXTERNAL' ? 'External write' : 'None'} ·{' '}
+                          {metadata.sideEffect.kind === 'EXTERNAL' ? 'External write' : 'None'},{' '}
                           {metadata.sideEffect.idempotency}
                         </Badge>
                       </dd>
@@ -119,16 +115,16 @@ export function PropertiesPanel({
                     {node.executionPolicy ? (
                       <>
                         <div className="flex justify-between gap-2">
-                          <dt className="text-[var(--muted-foreground)]">Timeout</dt>
+                          <dt className="text-fg-muted">Timeout</dt>
                           <dd>{node.executionPolicy.timeoutMs} ms</dd>
                         </div>
                         <div className="flex justify-between gap-2">
-                          <dt className="text-[var(--muted-foreground)]">Max attempts</dt>
+                          <dt className="text-fg-muted">Max attempts</dt>
                           <dd>{node.executionPolicy.maxAttempts}</dd>
                         </div>
                       </>
                     ) : (
-                      <p className="text-xs text-[var(--muted-foreground)]">
+                      <p className="text-xs text-fg-muted">
                         No execution policy override; the Registry default applies.
                       </p>
                     )}
@@ -136,7 +132,7 @@ export function PropertiesPanel({
                 </section>
               </>
             ) : (
-              <p className="text-sm text-[var(--status-failed-fg)]">
+              <p className="text-md text-st-failed-fg">
                 Node type <code>{node.type}</code> is not in the Registry. Save is blocked until it
                 resolves.
               </p>

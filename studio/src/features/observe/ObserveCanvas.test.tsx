@@ -273,18 +273,15 @@ describe('ObserveCanvas', () => {
     );
 
     const imageNode = await screen.findByTestId('rf__node-node_image');
-    // SUCCEEDED uses the same `lib/status.ts` border class as everywhere else in Studio:
-    // `nodeRunBorderClass` returns a `border-[var(--status-*-dot)]` Tailwind arbitrary-value
-    // class, so a substring match on the CSS variable name is used instead of matching the
-    // literal (bracket- and paren-laden) class string.
-    expect(imageNode.querySelector('[class*="status-succeeded-dot"]')).toBeInTheDocument();
+    // SUCCEEDED uses the same `lib/status.ts` border class as everywhere else in Studio.
+    expect(imageNode.querySelector('[class*="border-st-succeeded-dot"]')).toBeInTheDocument();
 
     const captionNode = screen.getByTestId('rf__node-node_caption');
     // No NodeRun yet: idle, not any terminal or in-flight status colour.
-    expect(captionNode.querySelector('[class*="status-succeeded-dot"]')).not.toBeInTheDocument();
-    expect(captionNode.querySelector('[class*="status-running-dot"]')).not.toBeInTheDocument();
-    expect(captionNode.querySelector('[class*="status-waiting-dot"]')).not.toBeInTheDocument();
-    expect(captionNode.querySelector('[class*="status-failed-dot"]')).not.toBeInTheDocument();
+    expect(captionNode.querySelector('[class*="border-st-succeeded-dot"]')).not.toBeInTheDocument();
+    expect(captionNode.querySelector('[class*="border-st-running-dot"]')).not.toBeInTheDocument();
+    expect(captionNode.querySelector('[class*="border-st-waiting-dot"]')).not.toBeInTheDocument();
+    expect(captionNode.querySelector('[class*="border-st-failed-dot"]')).not.toBeInTheDocument();
   });
 
   it('keeps the NodeRun status border on a selected node instead of the Edit selection colour', async () => {
@@ -303,11 +300,12 @@ describe('ObserveCanvas', () => {
     const card = imageNode.querySelector<HTMLElement>('[title="Generate"]');
     expect(card).not.toBeNull();
     // Status colours are never overridden: a selected SUCCEEDED node still reads as
-    // succeeded, and the Edit-mode amber selected border/fill is not applied over it.
-    expect(card).toHaveClass('border-[var(--status-succeeded-dot)]');
+    // succeeded, and the Edit-mode selected border and fill is not applied over it.
+    expect(card).toHaveClass('border-st-succeeded-dot');
     expect(card?.style.borderColor).toBe('');
     expect(card?.style.backgroundColor).toBe('');
-    expect(card?.outerHTML).not.toMatch(/fdb022|rgb\(253, 176, 34\)/i);
+    expect(card).not.toHaveClass('border-accent');
+    expect(card).not.toHaveClass('bg-surface-selected');
     // Selection is still visible, through a cue that does not replace the status border.
     expect(card).toHaveAttribute('data-selected', 'true');
   });
@@ -459,8 +457,8 @@ describe('ObserveCanvas', () => {
     expect(document.querySelector('[data-port-hint]')).toBeNull();
     expect(imageNode).not.toHaveTextContent('IMAGE GENERATION');
     // Name and status keep the 12px label floor at the card's 100% fit.
-    expect(imageNode.querySelector('.text-\\[13px\\]')).toHaveTextContent('Generate');
-    expect(status).toHaveClass('text-[12px]');
+    expect(imageNode.querySelector('.text-sm')).toHaveTextContent('Generate');
+    expect(status).toHaveClass('text-xs');
   });
 
   it('grows to the whole layout height so a deep graph opens at 100% instead of shrinking its text', async () => {

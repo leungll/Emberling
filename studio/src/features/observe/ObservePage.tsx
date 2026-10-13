@@ -160,8 +160,8 @@ export function ObservePage() {
 
   if (!snapshot) {
     return (
-      <main className="dark flex h-screen items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
-        <p className="text-sm text-[var(--muted-foreground)]">Loading run…</p>
+      <main className="flex h-screen items-center justify-center bg-bg text-fg">
+        <p className="text-md text-fg-muted">Loading run…</p>
       </main>
     );
   }
@@ -211,7 +211,7 @@ export function ObservePage() {
   );
 
   return (
-    <div className="dark flex h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
+    <div className="flex h-screen flex-col bg-bg text-fg">
       <ObserveHeader
         run={snapshot.run}
         definitionName={bound.definition?.name}
@@ -223,13 +223,14 @@ export function ObservePage() {
         // an Event stream strip.
         <>
           <main className="flex min-h-0 flex-1">
-            <aside className="flex w-[360px] shrink-0 flex-col gap-4 overflow-auto border-r border-[var(--border)] p-5">
+            <aside
+              style={{ width: 360 }}
+              className="flex shrink-0 flex-col gap-4 overflow-auto border-r border-border p-5"
+            >
               <section className="shrink-0">
                 <div className="flex items-center justify-between gap-3 pb-4">
-                  <SectionLabel>Workflow · Read only</SectionLabel>
-                  <span className="text-[13px] text-[var(--muted-foreground)]">
-                    {snapshot.nodeRuns.length} NodeRuns
-                  </span>
+                  <SectionLabel>Workflow, Read only</SectionLabel>
+                  <span className="text-sm text-fg-muted">{snapshot.nodeRuns.length} NodeRuns</span>
                 </div>
                 {bound.definition ? (
                   <WorkflowStepper
@@ -240,9 +241,7 @@ export function ObservePage() {
                     onSelect={selectNode}
                   />
                 ) : (
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    {bound.error ?? 'Loading workflow…'}
-                  </p>
+                  <p className="text-md text-fg-muted">{bound.error ?? 'Loading workflow…'}</p>
                 )}
               </section>
               <RunSummaryCompact
@@ -268,11 +267,15 @@ export function ObservePage() {
         // The top row grows with the Run Summary so its RUNNING / WAITING lists are never
         // clipped; the page scrolls when the lower row would drop below its minimum.
         <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-          <div data-testid="run-view-top-row" className="flex min-h-[400px] shrink-0 gap-4">
+          <div
+            data-testid="run-view-top-row"
+            style={{ minHeight: 400 }}
+            className="flex shrink-0 gap-4"
+          >
             <Panel
               title="Read-only Topology"
               meta={`Definition v${snapshot.run.definitionVersion}`}
-              className="w-[430px] shrink-0"
+              className="w-panel shrink-0"
               bodyClassName="px-2 pb-2"
             >
               {canvas}
@@ -289,8 +292,11 @@ export function ObservePage() {
               </RunSummaryCard>
             </div>
           </div>
-          <div className="flex min-h-[320px] flex-1 gap-4">
-            <section className="flex w-[490px] shrink-0 flex-col rounded-xl border border-[var(--border)] bg-[var(--card)]">
+          <div style={{ minHeight: 320 }} className="flex flex-1 gap-4">
+            <section
+              style={{ width: 490 }}
+              className="flex shrink-0 flex-col rounded-xl border border-border bg-surface"
+            >
               <EventTimeline
                 events={events}
                 selectedSeq={selectedEventSeq}
@@ -300,7 +306,7 @@ export function ObservePage() {
                 nodeRunNames={nodeRunNames}
               />
             </section>
-            <section className="flex min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--card)]">
+            <section className="flex min-w-0 flex-1 rounded-xl border border-border bg-surface">
               {detail}
             </section>
           </div>

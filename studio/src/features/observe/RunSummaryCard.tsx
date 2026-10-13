@@ -8,11 +8,11 @@ import { runStatusLabel, runStatusTone, type StatusTone } from '@/lib/status';
 import { cn } from '@/lib/utils';
 
 const BANNER_TONE: Record<StatusTone, string> = {
-  neutral: 'border-[var(--border)] bg-[var(--muted)]',
-  running: 'border-[var(--status-running-dot)] bg-[var(--status-running-bg)]',
-  waiting: 'border-[var(--status-waiting-dot)] bg-[var(--status-waiting-bg)]',
-  succeeded: 'border-[var(--status-succeeded-dot)] bg-[var(--status-succeeded-bg)]',
-  failed: 'border-[var(--status-failed-dot)] bg-[var(--status-failed-bg)]',
+  neutral: 'border-border bg-surface-inset',
+  running: 'border-st-running-dot bg-st-running-bg',
+  waiting: 'border-st-waiting-dot bg-st-waiting-bg',
+  succeeded: 'border-st-succeeded-dot bg-st-succeeded-bg',
+  failed: 'border-st-failed-dot bg-st-failed-bg',
 };
 
 /** Re-renders once a second while `active`, so a stopwatch over server timestamps ticks. */
@@ -127,7 +127,7 @@ export function RunSummaryCard({
   return (
     <section
       data-testid="run-summary"
-      className="flex min-w-0 flex-1 flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--card)] px-5 pt-4 pb-5"
+      className="flex min-w-0 flex-1 flex-col gap-4 rounded-xl border border-border bg-surface px-5 pt-4 pb-5"
     >
       <SectionLabel>Run Summary</SectionLabel>
 
@@ -138,40 +138,45 @@ export function RunSummaryCard({
       >
         <StatusDot tone={tone} className="mt-1.5 h-4 w-4" />
         <div className="min-w-0 flex-1">
-          <p className="text-[19px] leading-tight font-bold">{head.title}</p>
-          <p className="mt-1.5 text-[14px] text-[var(--muted-foreground)]">{head.detail}</p>
+          <p className="text-lg font-semibold">{head.title}</p>
+          <p className="mt-1.5 text-md text-fg-muted">{head.detail}</p>
         </div>
         <div className="shrink-0 text-center">
-          <p className="text-[26px] leading-none font-bold tabular-nums">{head.clock}</p>
-          <p className="mt-1.5 text-xs text-[var(--muted-foreground)]">{head.clockLabel}</p>
+          <p className="text-xl font-semibold tabular-nums">{head.clock}</p>
+          <p className="mt-1.5 text-xs text-fg-muted">{head.clockLabel}</p>
         </div>
       </div>
 
       {/* The Run ID column is the widest so a full Run ID fits on one line; if it still
           has to wrap it breaks anywhere rather than leaving a one- or two-character tail. */}
-      <dl className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.7fr)] gap-4">
+      <dl
+        style={{
+          gridTemplateColumns: 'minmax(0,2fr) minmax(0,1.6fr) minmax(0,0.7fr) minmax(0,0.7fr)',
+        }}
+        className="grid gap-4"
+      >
         <Fact label="Run ID" value={run.id} wrap />
         <Fact
           label="Definition"
           value={
             definitionName
-              ? `${definitionName} · v${run.definitionVersion}`
+              ? `${definitionName}, v${run.definitionVersion}`
               : `v${run.definitionVersion}`
           }
-          helper={`${run.workflowId} · v${run.definitionVersion}`}
+          helper={`${run.workflowId}, v${run.definitionVersion}`}
         />
         <Fact label="Started" value={formatClock(run.startedAt)} />
         <Fact label="Events" value={`${events.length} committed`} />
       </dl>
 
-      <div className="flex items-center justify-between rounded-lg bg-[var(--muted)] px-5 py-2.5 text-[14px]">
-        <span className="flex items-center gap-3 text-[var(--muted-foreground)]">
+      <div className="flex items-center justify-between rounded-lg bg-surface-inset px-5 py-3 text-md">
+        <span className="flex items-center gap-3 text-fg-muted">
           {live ? (followLive ? 'Following live' : 'Viewing history') : 'Run finished'}
           <StatusDot tone={live && followLive ? 'succeeded' : 'neutral'} className="h-2 w-2" />
         </span>
-        <span className="text-[13px] text-[var(--muted-foreground)] tabular-nums">
+        <span className="text-sm text-fg-muted tabular-nums">
           {run.tokenUsage ? (
-            <span data-testid="run-token-total">{run.tokenUsage.totalTokens} tokens · </span>
+            <span data-testid="run-token-total">{run.tokenUsage.totalTokens} tokens, </span>
           ) : null}
           latest seq {latestSeq}
         </span>
@@ -195,21 +200,14 @@ function Fact({
 }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
-        {label}
-      </dt>
+      <dt className="text-xs font-semibold text-fg-muted">{label}</dt>
       <dd
-        className={cn(
-          'mt-1.5 text-[15px] font-semibold',
-          wrap ? '[overflow-wrap:anywhere]' : 'truncate',
-        )}
+        className={cn('mt-1.5 text-md font-semibold', wrap ? 'wrap-anywhere' : 'truncate')}
         title={value}
       >
         {value}
       </dd>
-      {helper ? (
-        <dd className="truncate text-xs text-[var(--muted-foreground)]">{helper}</dd>
-      ) : null}
+      {helper ? <dd className="truncate text-xs text-fg-muted">{helper}</dd> : null}
     </div>
   );
 }
@@ -237,16 +235,16 @@ export function RunSummaryCompact({
   return (
     <section
       data-testid="run-summary"
-      className="rounded-xl border border-[var(--border)] bg-[var(--card)] px-5 pt-4 pb-4"
+      className="rounded-xl border border-border bg-surface px-5 pt-4 pb-4"
     >
       <SectionLabel>Run Summary</SectionLabel>
-      <dl className="mt-3 space-y-2.5 text-[14px]">
+      <dl className="mt-3 space-y-3 text-md">
         <Row label="Status" value={run.status} />
         <Row
           label="Waiting NodeRuns"
           value={
             waiting.length > 0
-              ? `${waiting.map((n) => nodeRunName(n, nodeNames)).join(', ')} · ${waiting.length}`
+              ? `${waiting.map((n) => nodeRunName(n, nodeNames)).join(', ')}, ${waiting.length}`
               : '—'
           }
         />
@@ -265,7 +263,7 @@ export function RunSummaryCompact({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3">
-      <dt className="text-[var(--muted-foreground)]">{label}</dt>
+      <dt className="text-fg-muted">{label}</dt>
       <dd className="truncate text-right font-semibold">{value}</dd>
     </div>
   );

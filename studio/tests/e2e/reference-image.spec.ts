@@ -79,7 +79,7 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   await expect(referenceNode).toContainText('Succeeded');
   await referenceNode.click();
 
-  await expect(page.getByText(`ASSET · ${assetId}`)).toBeVisible();
+  await expect(page.getByText(`ASSET, ${assetId}`)).toBeVisible();
   const preview = page.getByAltText('ASSET image preview');
   await expect(preview).toBeVisible({ timeout: 10_000 });
   await expect(preview).toHaveAttribute('src', `/api/assets/${assetId}/content`);

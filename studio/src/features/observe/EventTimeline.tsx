@@ -58,16 +58,16 @@ export function EventTimeline({
   }, [followLive, lastSeq, variant]);
 
   const liveControl = followLive ? (
-    <span className="text-[13px] font-semibold text-[var(--foreground)]">Live</span>
+    <span className="text-sm font-semibold text-fg">Live</span>
   ) : (
-    <Button variant="ghost" size="sm" className="text-[13px]" onClick={onResumeLive}>
+    <Button variant="ghost" size="sm" className="text-sm" onClick={onResumeLive}>
       Resume Live
     </Button>
   );
 
   if (variant === 'strip') {
     return (
-      <section className="flex h-16 shrink-0 items-center gap-6 border-t border-[var(--border)] bg-[var(--card)] px-5">
+      <section className="flex h-16 shrink-0 items-center gap-6 border-t border-border bg-surface px-5">
         <SectionLabel className="shrink-0">Event Stream</SectionLabel>
         <div
           ref={scroller}
@@ -81,9 +81,9 @@ export function EventTimeline({
               onClick={() => onSelect(event)}
               title={eventLabel(event.type)}
               className={cn(
-                'flex shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-[14px] text-[var(--muted-foreground)] hover:bg-[var(--accent)]',
-                event.seq === selectedSeq && 'bg-[var(--accent)] text-[var(--foreground)]',
-                event.seq === lastSeq && 'font-semibold text-[var(--foreground)]',
+                'flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-md text-fg-muted hover:bg-surface-hover',
+                event.seq === selectedSeq && 'bg-surface-hover text-fg',
+                event.seq === lastSeq && 'font-semibold text-fg',
               )}
             >
               <StatusDot tone={eventTone(event.type)} className="h-2 w-2" />
@@ -109,13 +109,14 @@ export function EventTimeline({
 
       <div ref={scroller} className="min-h-0 flex-1 overflow-auto px-4 pb-4">
         {ordered.length === 0 ? (
-          <p className="px-1 text-sm text-[var(--muted-foreground)]">No events yet.</p>
+          <p className="px-1 text-md text-fg-muted">No events yet.</p>
         ) : (
           <ol className="relative">
             {/* The connecting rail behind the dots. */}
             <span
               aria-hidden="true"
-              className="absolute top-3 bottom-3 left-[23px] w-px bg-[var(--border)]"
+              style={{ left: 23 }}
+              className="absolute top-3 bottom-3 w-px bg-border"
             />
             {ordered.map((event) => {
               const selected = event.seq === selectedSeq;
@@ -126,24 +127,24 @@ export function EventTimeline({
                     type="button"
                     onClick={() => onSelect(event)}
                     className={cn(
-                      'flex w-full items-start gap-4 rounded-lg border border-transparent px-4 py-2.5 text-left hover:bg-[var(--accent)]',
+                      'flex w-full items-start gap-4 rounded-lg border border-transparent px-4 py-3 text-left hover:bg-surface-hover',
                       selected && TONE_CARD[eventTone(event.type)],
                     )}
                   >
                     <StatusDot tone={eventTone(event.type)} className="relative mt-1" />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-xs text-[var(--muted-foreground)] tabular-nums">
-                        {formatClock(event.timestamp)} · seq {event.seq}
+                      <span className="block text-xs text-fg-muted tabular-nums">
+                        {formatClock(event.timestamp)}, seq {event.seq}
                       </span>
                       <span className="mt-0.5 flex items-center justify-between gap-2">
-                        <span className="truncate text-[15px] font-semibold">{event.type}</span>
+                        <span className="truncate text-md font-semibold">{event.type}</span>
                         {selected ? (
-                          <span className="shrink-0 text-[13px] font-semibold">selected</span>
+                          <span className="shrink-0 text-sm font-semibold">selected</span>
                         ) : null}
                       </span>
-                      <span className="mt-0.5 flex flex-wrap gap-x-2 text-[14px] text-[var(--muted-foreground)]">
+                      <span className="mt-0.5 flex flex-wrap gap-x-2 text-md text-fg-muted">
                         <span>{eventLabel(event.type)}</span>
-                        {nodeName ? <span>· {nodeName}</span> : null}
+                        {nodeName ? <span>, {nodeName}</span> : null}
                         {eventPayloadSummary(event.payload).map((field) => (
                           <span key={field}>{field}</span>
                         ))}

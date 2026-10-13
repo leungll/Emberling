@@ -95,18 +95,19 @@ function DetailPanelContent({
   // Agent view: Turn timeline beside the NodeRun detail.
   if (selectedNodeRun && agentNodeRunId) {
     return (
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
-        <section className="flex min-h-0 min-w-0 flex-col border-r border-[var(--border)]">
+      <div
+        style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,440px)' }}
+        className="grid min-h-0 min-w-0 flex-1"
+      >
+        <section className="flex min-h-0 min-w-0 flex-col border-r border-border">
           <div className="flex shrink-0 items-center justify-between px-6 pt-5 pb-3">
-            <SectionLabel>Agent Execution · Turn Timeline</SectionLabel>
-            <span className="text-[13px] text-[var(--muted-foreground)] tabular-nums">
+            <SectionLabel>Agent Execution, Turn Timeline</SectionLabel>
+            <span className="text-sm text-fg-muted tabular-nums">
               {trace.value ? `turn ${trace.value.agentRun.currentTurnNo}` : null}
             </span>
           </div>
           <div className="min-h-0 flex-1 overflow-auto px-6 pb-6">
-            {trace.error ? (
-              <p className="text-sm text-[var(--destructive)]">{trace.error}</p>
-            ) : null}
+            {trace.error ? <p className="text-md text-danger">{trace.error}</p> : null}
             {trace.value ? (
               <ol className="space-y-4">
                 {trace.value.turns.map((turn) => (
@@ -124,9 +125,9 @@ function DetailPanelContent({
 
         <aside
           data-testid="detail-panel"
-          className="min-h-0 min-w-0 overflow-auto px-6 pt-5 pb-6 text-[14px]"
+          className="min-h-0 min-w-0 overflow-auto px-6 pt-5 pb-6 text-md"
         >
-          <SectionLabel>Detail · Agent NodeRun</SectionLabel>
+          <SectionLabel>Detail, Agent NodeRun</SectionLabel>
           <div className="mt-3 space-y-5">
             <NodeRunHeading nodeRun={selectedNodeRun} nodeName={nodeName} />
             {selectedNodeRun.status === 'WAITING_CALLBACK' ? (
@@ -140,7 +141,7 @@ function DetailPanelContent({
             <AgentFactsLedger trace={trace.value} />
             <NodeRunFacts nodeRun={selectedNodeRun} compact />
             <NodeRunValues nodeRun={selectedNodeRun} />
-            {detail.error ? <p className="text-[var(--destructive)]">{detail.error}</p> : null}
+            {detail.error ? <p className="text-danger">{detail.error}</p> : null}
             {eventView}
           </div>
         </aside>
@@ -149,7 +150,7 @@ function DetailPanelContent({
   }
 
   return (
-    <aside data-testid="detail-panel" className="flex min-h-0 min-w-0 flex-1 flex-col text-[14px]">
+    <aside data-testid="detail-panel" className="flex min-h-0 min-w-0 flex-1 flex-col text-md">
       <div className="shrink-0 px-6 pt-4 pb-2">
         <SectionLabel>
           {selectedNodeRun ? 'Node Run Detail' : selectedEvent ? 'Event Detail' : 'Run Detail'}
@@ -177,8 +178,8 @@ function DetailPanelContent({
 
 function EventDetail({ event }: { event: RunEvent }) {
   return (
-    <section className="space-y-2 rounded-xl border border-[var(--border)] px-5 py-4">
-      <h3 className="text-[15px] font-semibold">Event #{event.seq}</h3>
+    <section className="space-y-2 rounded-xl border border-border px-5 py-4">
+      <h3 className="text-md font-semibold">Event #{event.seq}</h3>
       <Field label="Type" value={event.type} />
       <Field label="At" value={formatTimestamp(event.timestamp)} />
       <Field label="NodeRun" value={event.nodeRunId ?? '— (run level)'} stacked />
@@ -285,12 +286,10 @@ function NodeRunHeading({ nodeRun, nodeName }: { nodeRun: NodeRun; nodeName?: st
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h3 className="truncate text-[22px] leading-tight font-bold">
-          {nodeName ?? nodeRun.nodeId}
-        </h3>
-        <p className="mt-1 text-[13px] text-[var(--muted-foreground)] [overflow-wrap:anywhere]">
-          {nodeName ? `${nodeRun.nodeId} · ` : ''}
-          {nodeRun.nodeType} · {nodeRun.id}
+        <h3 className="truncate text-xl font-semibold">{nodeName ?? nodeRun.nodeId}</h3>
+        <p className="mt-1 text-sm text-fg-muted wrap-anywhere">
+          {nodeName ? `${nodeRun.nodeId}, ` : ''}
+          {nodeRun.nodeType}, {nodeRun.id}
         </p>
       </div>
       {/* The raw NodeRun status sits beside its display wording. */}
@@ -345,12 +344,12 @@ function NodeRunValues({ nodeRun }: { nodeRun: NodeRun }) {
 /** When the NodeRun started waiting and for how long; "—" until the Backend reports it. */
 function waitingSince(nodeRun: NodeRun): string {
   return nodeRun.waitingAt
-    ? `${formatTimestamp(nodeRun.waitingAt)} · ${formatDuration(nodeRun.waitingAt)}`
+    ? `${formatTimestamp(nodeRun.waitingAt)}, ${formatDuration(nodeRun.waitingAt)}`
     : '—';
 }
 
 function latestEventText(latestEvent: RunEvent | null): string {
-  return latestEvent ? `${latestEvent.type} · seq ${latestEvent.seq}` : '—';
+  return latestEvent ? `${latestEvent.type}, seq ${latestEvent.seq}` : '—';
 }
 
 /** Amber WAITING DIAGNOSTICS block of a WAITING_CALLBACK NodeRun. */
@@ -358,7 +357,7 @@ function WaitingDiagnostics({ title, children }: { title: string; children: Reac
   return (
     <section
       data-testid="waiting-diagnostics"
-      className="rounded-xl border border-[var(--status-waiting-dot)] bg-[var(--status-waiting-bg)] px-5 py-4"
+      className="rounded-xl border border-st-waiting-dot bg-st-waiting-bg px-5 py-4"
     >
       <SectionLabel>{title}</SectionLabel>
       <div className="mt-3">{children}</div>
@@ -412,17 +411,15 @@ function NodeRunDetailView({
 
       <NodeRunFacts nodeRun={nodeRun} />
       <NodeRunValues nodeRun={nodeRun} />
-      {detailError ? <p className="text-[var(--destructive)]">{detailError}</p> : null}
+      {detailError ? <p className="text-danger">{detailError}</p> : null}
       {detail && detail.attempts.length > 0 ? (
         <div className="space-y-2">
-          <span className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
-            Attempts
-          </span>
+          <span className="text-xs font-semibold text-fg-muted">Attempts</span>
           <ul className="space-y-2">
             {detail.attempts.map((attempt) => (
               <li
                 key={attempt.id}
-                className="rounded-lg border border-[var(--border)] bg-[var(--muted)] px-4 py-2.5"
+                className="rounded-lg border border-border bg-surface-inset px-4 py-3"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold">#{attempt.attemptNo}</span>
@@ -432,7 +429,7 @@ function NodeRunDetailView({
                     the earlier Attempt and its own Binding in this list, while a
                     synchronous Attempt has no Binding and shows no Binding rows at all. */}
                 {attempt.callbackBinding ? (
-                  <div className="mt-2 space-y-1 text-[14px]">
+                  <div className="mt-2 space-y-1 text-md">
                     <Field label="Callback provider" value={attempt.callbackBinding.providerId} />
                     <Field
                       label="External task"
@@ -489,7 +486,7 @@ function AgentWaiting({
         />
         <Field
           label="Tool Attempt"
-          value={attempt ? `${attempt.toolName} · attempt ${attempt.attemptNo}` : '—'}
+          value={attempt ? `${attempt.toolName}, attempt ${attempt.attemptNo}` : '—'}
           strong
         />
         <Field label="Waiting Since" value={waitingSince(nodeRun)} strong />
@@ -507,10 +504,8 @@ function AgentWaiting({
  */
 function AgentRunSummary({ trace }: { trace: AgentTrace | null }) {
   return (
-    <section className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--muted)] px-5 py-4">
-      <h3 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
-        Agent
-      </h3>
+    <section className="space-y-2 rounded-xl border border-border bg-surface-inset px-5 py-4">
+      <h3 className="text-xs font-semibold text-fg-muted">Agent</h3>
       {trace ? (
         <>
           <Field label="Agent Run" value={trace.agentRun.id} stacked />
@@ -548,26 +543,26 @@ function AgentTurnCard({
   return (
     <li
       data-testid="agent-turn"
-      className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--muted)] px-5 py-4 text-[14px]"
+      className="space-y-3 rounded-xl border border-border bg-surface-inset px-5 py-4 text-md"
     >
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-3">
           <StatusDot tone={tone} />
-          <span className="text-[16px] font-bold">Turn {turn.turnNo}</span>
+          <span className="text-lg font-semibold">Turn {turn.turnNo}</span>
         </span>
         <Badge variant={agentTurnStatusVariant(turn.status)}>{turn.status}</Badge>
       </div>
 
       {allowedTools ? (
         <div data-testid="candidate-tools" className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] text-[var(--muted-foreground)]">Candidate tools</span>
+          <span className="text-sm text-fg-muted">Candidate tools</span>
           {allowedTools.length === 0 ? (
-            <span className="text-[14px] text-[var(--muted-foreground)]">none</span>
+            <span className="text-md text-fg-muted">none</span>
           ) : (
             allowedTools.map((tool) => (
               <span
                 key={tool}
-                className="rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[14px] font-medium"
+                className="rounded-md border border-border bg-surface px-2 py-0.5 text-md font-medium"
               >
                 {tool}
               </span>
@@ -584,14 +579,14 @@ function AgentTurnCard({
         </div>
       ) : null}
       {turn.usage ? (
-        <div data-testid="agent-turn-usage" className="text-[13px] text-[var(--muted-foreground)]">
-          {turn.usage.totalTokens} tokens ({turn.usage.inputTokens} in · {turn.usage.outputTokens}{' '}
+        <div data-testid="agent-turn-usage" className="text-sm text-fg-muted">
+          {turn.usage.totalTokens} tokens ({turn.usage.inputTokens} in, {turn.usage.outputTokens}{' '}
           out)
         </div>
       ) : null}
       {turn.action ? (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[var(--muted-foreground)]">Action {turn.action.type}</span>
+          <span className="text-fg-muted">Action {turn.action.type}</span>
           <Badge variant={agentActionStatusVariant(turn.action.status)}>{turn.action.status}</Badge>
         </div>
       ) : null}
@@ -603,8 +598,8 @@ function AgentTurnCard({
           className={cn(
             'space-y-1.5 rounded-lg border px-4 py-3',
             attempt.status === 'DISPATCHED'
-              ? 'border-[var(--status-waiting-dot)] bg-[var(--status-waiting-bg)]'
-              : 'border-[var(--border)] bg-[var(--card)]',
+              ? 'border-st-waiting-dot bg-st-waiting-bg'
+              : 'border-border bg-surface',
           )}
         >
           <div className="flex items-center justify-between gap-2">
@@ -615,7 +610,7 @@ function AgentTurnCard({
           </div>
           {/* A synchronous Tool Attempt has no Binding; no empty row is printed for it. */}
           {attempt.callbackBinding ? (
-            <div className="space-y-1 text-[14px]">
+            <div className="space-y-1 text-md">
               <Field label="Callback provider" value={attempt.callbackBinding.providerId} />
               <Field label="External task" value={attempt.callbackBinding.externalTaskId} stacked />
             </div>
@@ -649,7 +644,7 @@ function ToolResultImages({
   if (images.length === 0) return null;
   return (
     <div data-testid="tool-result-images" className="space-y-1.5">
-      <span className="text-[13px] text-[var(--muted-foreground)]">Result image</span>
+      <span className="text-sm text-fg-muted">Result image</span>
       {images.map((image) => (
         <ImagePreview key={image.artifact?.artifactId} image={image} />
       ))}
@@ -676,21 +671,18 @@ function Field({
   return (
     <div
       data-field-layout={stacked ? 'stacked' : strong ? 'strong' : 'row'}
+      style={strong && !stacked ? { gridTemplateColumns: '116px minmax(0,1fr)' } : undefined}
       className={cn(
-        stacked
-          ? 'flex flex-col gap-0.5'
-          : strong
-            ? 'grid grid-cols-[116px_minmax(0,1fr)] gap-4'
-            : 'flex justify-between gap-4',
+        stacked ? 'flex flex-col gap-0.5' : strong ? 'grid gap-4' : 'flex justify-between gap-4',
       )}
     >
-      <span className="shrink-0 text-[13px] text-[var(--muted-foreground)]">{label}</span>
+      <span className="shrink-0 text-sm text-fg-muted">{label}</span>
       <span
         className={cn(
           stacked
-            ? 'font-mono text-[14px] [overflow-wrap:anywhere]'
+            ? 'font-mono text-md wrap-anywhere'
             : strong
-              ? 'font-semibold [overflow-wrap:anywhere]'
+              ? 'font-semibold wrap-anywhere'
               : 'text-right break-all',
         )}
       >
@@ -704,10 +696,8 @@ function Field({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <span className="block text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
-        {label}
-      </span>
-      <span className="mt-1 block text-[15px] font-semibold break-all">{value}</span>
+      <span className="block text-xs font-semibold text-fg-muted">{label}</span>
+      <span className="mt-1 block text-md font-semibold break-all">{value}</span>
     </div>
   );
 }
@@ -732,7 +722,8 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
     // keeps a bounded height and scrolls vertically.
     <pre
       data-testid="json-block"
-      className="max-h-56 overflow-x-hidden overflow-y-auto px-4 py-3 text-[14px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
+      style={{ maxHeight: 224 }}
+      className="overflow-x-hidden overflow-y-auto px-4 py-3 text-md whitespace-pre-wrap wrap-anywhere"
     >
       {json}
     </pre>
@@ -740,21 +731,19 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
 
   return (
     <div className="space-y-2">
-      <span className="block text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
-        {label}
-      </span>
+      <span className="block text-xs font-semibold text-fg-muted">{label}</span>
       {images.map((image, index) => (
         <ImagePreview key={index} image={image} />
       ))}
       {collapsedByDefault ? (
-        <details className="rounded-lg border border-[var(--border)] bg-[var(--background)]">
-          <summary className="cursor-pointer px-4 py-2 text-xs text-[var(--muted-foreground)] select-none">
+        <details className="rounded-lg border border-border bg-bg">
+          <summary className="cursor-pointer px-4 py-2 text-xs text-fg-muted select-none">
             Raw JSON
           </summary>
           {pre}
         </details>
       ) : (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--background)]">{pre}</div>
+        <div className="rounded-lg border border-border bg-bg">{pre}</div>
       )}
     </div>
   );

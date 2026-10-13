@@ -69,7 +69,7 @@ const models: ModelMetadata[] = [
 describe('nodeSummaryLine', () => {
   it('names the bound Run input field, whether it is required, and its accepted type for an Input node', () => {
     expect(nodeSummaryLine(textInput, { inputKey: 'brief', required: true })).toBe(
-      'brief · required · text',
+      'brief, required, text',
     );
     // The type comes from the registered output port, not from the node type's name.
     expect(
@@ -82,13 +82,13 @@ describe('nodeSummaryLine', () => {
         },
         { inputKey: 'reference_image', required: false },
       ),
-    ).toBe('reference_image · optional · image');
+    ).toBe('reference_image, optional, image');
   });
 
   it('shows model, spec and sync/async mode for a generation node', () => {
     expect(
       nodeSummaryLine(imageGeneration, { modelId: 'image-model-v1', width: 1024 }, models),
-    ).toBe('Image Model v1 · width 1024 · Async');
+    ).toBe('Image Model v1, width 1024, Async');
   });
 
   it('shows model, allowed tool count and Max Turns for an Agent', () => {
@@ -98,7 +98,7 @@ describe('nodeSummaryLine', () => {
         { modelId: 'text-model-v1', allowedTools: ['lookup', 'render'], maxTurns: 6 },
         models,
       ),
-    ).toBe('Text Model v1 · 2 allowed tools · max 6 turns');
+    ).toBe('Text Model v1, 2 allowed tools, max 6 turns');
   });
 
   it('summarises an Output node whose uiSchema fields are null', () => {
@@ -109,16 +109,16 @@ describe('nodeSummaryLine', () => {
 describe('paletteSummaryLine', () => {
   it('describes the type without config placeholders', () => {
     expect(paletteSummaryLine(textInput)).toBe('text source');
-    expect(paletteSummaryLine(imageGeneration)).toBe('Model call · Async');
-    expect(paletteSummaryLine(agent)).toBe('Model · Tools · managed loop');
+    expect(paletteSummaryLine(imageGeneration)).toBe('Model call, Async');
+    expect(paletteSummaryLine(agent)).toBe('Model, Tools, managed loop');
     expect(paletteSummaryLine(textOutput)).toBe('Run output');
   });
 });
 
 describe('nodeAccentColor', () => {
   it('handles empty port lists from the Backend', () => {
-    expect(nodeAccentColor(textInput)).toBe('#a48afb');
-    expect(nodeAccentColor(textOutput)).toBe('#a48afb');
-    expect(nodeAccentColor({ ...textOutput, inputs: [] })).toBe('#93a0b5');
+    expect(nodeAccentColor(textInput)).toBe('var(--port-text)');
+    expect(nodeAccentColor(textOutput)).toBe('var(--port-text)');
+    expect(nodeAccentColor({ ...textOutput, inputs: [] })).toBe('var(--port-any)');
   });
 });

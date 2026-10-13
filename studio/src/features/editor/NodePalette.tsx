@@ -53,15 +53,14 @@ export function NodePalette({ nodeTypes, onAdd, error }: NodePaletteProps) {
   const semantics = useMemo(() => runtimeSemanticsCounts(nodeTypes), [nodeTypes]);
 
   return (
-    <aside className="flex w-[286px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--muted)]">
-      <div className="border-b border-[var(--border)] p-3">
+    <aside
+      style={{ width: 286 }}
+      className="flex shrink-0 flex-col border-r border-border bg-surface-inset"
+    >
+      <div className="border-b border-border p-3">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
-            NODE REGISTRY
-          </h2>
-          <span className="text-xs text-[var(--muted-foreground)]">
-            {nodeTypes.length} registered
-          </span>
+          <h2 className="text-xs font-semibold text-fg-muted">NODE REGISTRY</h2>
+          <span className="text-xs text-fg-muted">{nodeTypes.length} registered</span>
         </div>
         <Input
           type="search"
@@ -69,21 +68,19 @@ export function NodePalette({ nodeTypes, onAdd, error }: NodePaletteProps) {
           aria-label="Search nodes"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="bg-[var(--secondary)]"
+          className="bg-surface-hover"
         />
       </div>
 
       <ScrollArea className="flex-1 p-3">
-        {error ? <p className="text-xs text-[var(--status-failed-fg)]">{error}</p> : null}
+        {error ? <p className="text-xs text-st-failed-fg">{error}</p> : null}
         {!error && nodeTypes.length === 0 ? (
-          <p className="text-xs text-[var(--muted-foreground)]">No registered node types.</p>
+          <p className="text-xs text-fg-muted">No registered node types.</p>
         ) : null}
 
         {grouped.map(([category, items]) => (
           <section key={category} className="mb-4">
-            <h3 className="mb-2 text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
-              {category.toUpperCase()}
-            </h3>
+            <h3 className="mb-2 text-xs font-semibold text-fg-muted">{category.toUpperCase()}</h3>
             {/* Input and Output types are short, so they pair up two per row. */}
             <ul
               className={
@@ -95,9 +92,9 @@ export function NodePalette({ nodeTypes, onAdd, error }: NodePaletteProps) {
                   <button
                     type="button"
                     onClick={() => onAdd(metadata)}
-                    className="h-full w-full rounded-[9px] border border-[var(--border)] bg-[var(--secondary)] px-3 py-2.5 text-left hover:bg-[var(--accent)]"
+                    className="h-full w-full rounded-lg border border-border bg-surface-hover px-3 py-3 text-left hover:bg-surface-hover"
                   >
-                    <span className="flex items-center gap-2 text-sm font-semibold">
+                    <span className="flex items-center gap-2 text-md font-semibold">
                       <span
                         aria-hidden="true"
                         className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -105,7 +102,7 @@ export function NodePalette({ nodeTypes, onAdd, error }: NodePaletteProps) {
                       />
                       {metadata.displayName}
                     </span>
-                    <span className="mt-0.5 block pl-3.5 text-xs text-[var(--muted-foreground)]">
+                    <span className="mt-0.5 block pl-4 text-xs text-fg-muted">
                       {paletteSummaryLine(metadata)}
                     </span>
                   </button>
@@ -116,18 +113,16 @@ export function NodePalette({ nodeTypes, onAdd, error }: NodePaletteProps) {
         ))}
       </ScrollArea>
 
-      <div className="border-t border-[var(--border)] p-3">
-        <p className="mb-2 text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
-          RUNTIME SEMANTICS
-        </p>
+      <div className="border-t border-border p-3">
+        <p className="mb-2 text-xs font-semibold text-fg-muted">RUNTIME SEMANTICS</p>
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-1">
+          <span className="rounded-full border border-border bg-surface-hover px-3 py-1">
             sync × {semantics.sync}
           </span>
-          <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-1">
+          <span className="rounded-full border border-border bg-surface-hover px-3 py-1">
             async × {semantics.async}
           </span>
-          <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-1">
+          <span className="rounded-full border border-border bg-surface-hover px-3 py-1">
             agent × {semantics.agent}
           </span>
         </div>

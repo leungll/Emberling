@@ -67,11 +67,9 @@ function Group({
 }) {
   return (
     <section className="min-w-0">
-      <h3 className="mb-2 text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)] uppercase">
-        {title}
-      </h3>
+      <h3 className="mb-2 text-xs font-semibold text-fg-muted">{title}</h3>
       {nodeRuns.length === 0 ? (
-        <p className="text-sm text-[var(--muted-foreground)]">None</p>
+        <p className="text-md text-fg-muted">None</p>
       ) : (
         <ul className="space-y-2">
           {nodeRuns.map((nodeRun) => {
@@ -83,22 +81,19 @@ function Group({
                   type="button"
                   onClick={() => onSelect(nodeRun.id)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-left hover:bg-[var(--accent)]',
-                    nodeRun.id === selectedNodeRunId &&
-                      'border-[var(--primary)] bg-[var(--node-selected-agent-fill)]',
+                    'flex w-full items-center gap-3 rounded-lg border border-border bg-surface-inset px-3 py-2 text-left hover:bg-surface-hover',
+                    nodeRun.id === selectedNodeRunId && 'border-accent bg-surface-selected',
                   )}
                 >
                   <StatusGlyph tone={tone} />
                   <span className="min-w-0 flex-1">
                     {name ? (
-                      <span className="block truncate text-[14px] font-semibold">{name}</span>
+                      <span className="block truncate text-md font-semibold">{name}</span>
                     ) : null}
                     <span
                       className={cn(
                         'block truncate',
-                        name
-                          ? 'text-xs text-[var(--muted-foreground)]'
-                          : 'text-[14px] font-semibold',
+                        name ? 'text-xs text-fg-muted' : 'text-md font-semibold',
                       )}
                     >
                       {nodeRun.nodeId}

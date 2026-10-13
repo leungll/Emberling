@@ -644,7 +644,7 @@ export function EditPage() {
   }
 
   return (
-    <div className="dark flex h-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
+    <div className="flex h-screen flex-col bg-bg text-fg">
       <StudioHeader
         name={definition?.name ?? draftMeta?.name ?? workflowId}
         workflowId={workflowId}
@@ -661,16 +661,14 @@ export function EditPage() {
         <p
           role="alert"
           // Same FAILED tokens and body-text size as the Validation errors row below.
-          className="border-b border-[var(--status-failed-dot)]/40 bg-[var(--status-failed-bg)] px-4 py-2.5 text-sm text-[var(--foreground)]"
+          className="border-b border-st-failed-dot/40 bg-st-failed-bg px-4 py-3 text-md text-fg"
         >
           {loadError}
         </p>
       ) : null}
 
       {notice ? (
-        <p className="border-b border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)]">
-          {notice}
-        </p>
+        <p className="border-b border-border px-4 py-2 text-xs text-fg-muted">{notice}</p>
       ) : null}
 
       {validationErrors ? (
@@ -680,7 +678,7 @@ export function EditPage() {
           // The FAILED red is shared with Canvas, Timeline and Detail, so the row uses
           // the status-failed tokens; the message is body text (≥14px) and the Backend path a
           // helper label (≥12px).
-          className="space-y-1.5 border-b border-[var(--status-failed-dot)]/40 bg-[var(--status-failed-bg)] px-4 py-2.5"
+          className="space-y-1.5 border-b border-st-failed-dot/40 bg-st-failed-bg px-4 py-3"
         >
           {validationErrors.map((error) => {
             const nodeId = error.nodeId ?? nodeIdFromPath(error.path);
@@ -688,19 +686,17 @@ export function EditPage() {
             return (
               <li
                 key={`${error.code}-${error.path}`}
-                className="flex flex-wrap items-center gap-x-2.5 gap-y-1"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1"
               >
                 <Badge variant="failed">{error.code}</Badge>
-                <span className="text-sm text-[var(--foreground)]">{error.message}</span>
+                <span className="text-md text-fg">{error.message}</span>
                 {error.path ? (
-                  <span className="font-mono text-xs text-[var(--muted-foreground)]">
-                    {error.path}
-                  </span>
+                  <span className="font-mono text-xs text-fg-muted">{error.path}</span>
                 ) : null}
                 {node ? (
                   <button
                     type="button"
-                    className="text-sm font-medium text-[var(--status-failed-fg)] underline underline-offset-2 hover:text-[var(--foreground)]"
+                    className="text-md font-medium text-st-failed-fg underline underline-offset-2 hover:text-fg"
                     onClick={() => focusValidationError(node.id)}
                   >
                     {node.name}
@@ -715,13 +711,9 @@ export function EditPage() {
       <div className="flex min-h-0 flex-1">
         <NodePalette nodeTypes={nodeTypes} onAdd={addNode} error={loadError} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2">
-            <h2 className="text-xs font-bold tracking-[0.08em] text-[var(--muted-foreground)]">
-              WORKFLOW CANVAS
-            </h2>
-            <span className="text-xs text-[var(--muted-foreground)]">
-              ports · schema · execution contract
-            </span>
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
+            <h2 className="text-xs font-semibold text-fg-muted">WORKFLOW CANVAS</h2>
+            <span className="text-xs text-fg-muted">ports, schema, execution contract</span>
           </div>
           <div data-testid="canvas-region" className="relative min-h-0 flex-1">
             {conflict ? (
@@ -730,9 +722,9 @@ export function EditPage() {
               <div
                 role="alert"
                 aria-label="Version conflict"
-                className="absolute inset-x-3 top-3 z-10 flex items-start gap-4 rounded-lg border border-amber-500/60 bg-[var(--card)] px-4 py-3 text-[14px] shadow-lg"
+                className="absolute inset-x-3 top-3 z-canvas-ui flex items-start gap-4 rounded-lg border border-caution-fg bg-surface px-4 py-3 text-md shadow-3"
               >
-                <p className="min-w-0 flex-1 text-amber-500">
+                <p className="min-w-0 flex-1 text-caution-fg">
                   The definition was saved as v{conflict.version} on the server while you were
                   editing v{definition?.version ?? '?'} locally. Reload to see the latest version,
                   or keep your edits and compare before saving again.

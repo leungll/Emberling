@@ -1,21 +1,19 @@
 import { cva } from 'class-variance-authority';
 
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90',
-        outline:
-          'border border-[var(--border)] bg-transparent hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
-        secondary: 'bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:opacity-90',
-        ghost: 'hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
-        destructive:
-          'bg-[var(--destructive)] text-[var(--destructive-foreground)] hover:opacity-90',
+        default: 'bg-accent text-fg-on-accent hover:opacity-90',
+        outline: 'border border-border bg-transparent hover:bg-surface-hover hover:text-fg',
+        secondary: 'bg-surface-hover text-fg hover:opacity-90',
+        ghost: 'hover:bg-surface-hover hover:text-fg',
+        destructive: 'bg-danger text-fg-on-accent hover:opacity-90',
       },
       size: {
         default: 'h-8 px-3 py-1',
-        sm: 'h-7 rounded px-2 text-xs',
+        sm: 'h-control-sm rounded-sm px-2 text-xs',
         lg: 'h-10 px-6',
         icon: 'h-8 w-8',
       },

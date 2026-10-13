@@ -16,7 +16,7 @@ interface StudioHeaderProps {
 }
 
 /** Header actions follow the mock's large, equal-weight buttons. */
-const ACTION = 'h-9 min-w-[88px] px-5 font-semibold';
+const ACTION = 'h-control-lg px-5 font-semibold';
 
 /** Edit-mode header. Observe mode keeps the same shell but swaps the actions. */
 export function StudioHeader({
@@ -31,36 +31,33 @@ export function StudioHeader({
   onRun,
 }: StudioHeaderProps) {
   return (
-    <header className="flex h-[72px] shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--card)] px-4">
+    <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4">
       <div className="flex items-center gap-3">
         <Link
           to="/"
           aria-label="Back to Definitions"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--primary)] text-[18px] font-bold text-[var(--primary-foreground)]"
+          className="flex h-control-lg w-control-lg shrink-0 items-center justify-center rounded-lg bg-accent text-lg font-semibold text-fg-on-accent"
         >
           E
         </Link>
         <div>
-          <h1 className="text-[15px] font-semibold">{name}</h1>
+          <h1 className="text-md font-semibold">{name}</h1>
           {/* The mode is always explicit, so Edit states "Definition vN · Editing".
               The workflow id stays available on hover as the bound Definition identity. */}
           <p
             data-testid="studio-subtitle"
             title={version === null ? undefined : `Workflow ${workflowId}`}
-            className="text-xs text-[var(--muted-foreground)]"
+            className="text-xs text-fg-muted"
           >
-            {version === null ? 'Unsaved draft' : `Definition v${version}`} · Editing
+            {version === null ? 'Unsaved draft' : `Definition v${version}`}, Editing
           </p>
         </div>
         {hasUnsavedChanges ? (
           <span
             data-testid="unsaved-indicator"
-            className="flex items-center gap-1.5 text-xs text-[var(--status-waiting-fg)]"
+            className="flex items-center gap-1.5 text-xs text-st-waiting-fg"
           >
-            <span
-              aria-hidden="true"
-              className="h-2 w-2 rounded-full bg-[var(--status-waiting-dot)]"
-            />
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-st-waiting-dot" />
             Unsaved changes
           </span>
         ) : null}

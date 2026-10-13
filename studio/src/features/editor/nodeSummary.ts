@@ -36,9 +36,9 @@ function modelLabel(modelId: unknown, models: ModelMetadata[]): string {
 function inputSummary(metadata: NodeMetadata, config: JsonObject): string {
   const inputKey = typeof config.inputKey === 'string' && config.inputKey ? config.inputKey : '—';
   const required = config.required === true;
-  const summary = `${inputKey} · ${required ? 'required' : 'optional'}`;
+  const summary = `${inputKey}, ${required ? 'required' : 'optional'}`;
   const accepted = portTypeList(metadata.outputs);
-  return accepted ? `${summary} · ${accepted}` : summary;
+  return accepted ? `${summary}, ${accepted}` : summary;
 }
 
 /**
@@ -73,7 +73,7 @@ function generationSummary(
     }
   }
   parts.push(executionKindLabel(metadata.executionKind));
-  return parts.join(' · ');
+  return parts.join(', ');
 }
 
 /**
@@ -86,7 +86,7 @@ function agentSummary(config: JsonObject, models: ModelMetadata[]): string {
   const toolCount = Array.isArray(config.allowedTools) ? config.allowedTools.length : 0;
   parts.push(`${toolCount} allowed tool${toolCount === 1 ? '' : 's'}`);
   if (typeof config.maxTurns === 'number') parts.push(`max ${config.maxTurns} turns`);
-  return parts.join(' · ');
+  return parts.join(', ');
 }
 
 function portTypeList(ports: NodeMetadata['inputs']): string {
@@ -135,9 +135,9 @@ export function paletteSummaryLine(metadata: NodeMetadata): string {
     return outputs ? `${outputs} source` : 'Run input';
   }
   if (metadata.category === 'Output') return 'Run output';
-  if (metadata.category === 'Agent') return 'Model · Tools · managed loop';
+  if (metadata.category === 'Agent') return 'Model, Tools, managed loop';
   const hasModel = metadata.uiSchema.fields.some((field) => field.widget === 'MODEL_SELECTOR');
-  if (hasModel) return `Model call · ${executionKindLabel(metadata.executionKind)}`;
+  if (hasModel) return `Model call, ${executionKindLabel(metadata.executionKind)}`;
   return portFlowSummary(metadata);
 }
 

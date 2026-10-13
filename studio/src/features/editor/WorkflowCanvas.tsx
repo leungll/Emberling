@@ -34,8 +34,8 @@ const PORT_HINT_MIN_ZOOM = 1;
  */
 const READ_ONLY_MIN_ZOOM = 0.1;
 
-/** Port-hint floor on screen: hint text never renders under 10px at any zoom. */
-const PORT_HINT_MIN_PX = 10;
+/** Port-hint floor on screen: hint text never renders under 12px at any zoom. */
+const PORT_HINT_MIN_PX = 12;
 
 /**
  * Fit margin around the whole graph. A fixed pixel margin, rather than React Flow's

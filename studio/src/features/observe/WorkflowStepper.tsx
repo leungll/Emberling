@@ -70,7 +70,8 @@ export function WorkflowStepper({
       {/* The connecting rail behind the glyphs. */}
       <span
         aria-hidden="true"
-        className="absolute top-5 bottom-5 left-[19px] w-px bg-[var(--border)]"
+        style={{ left: 19 }}
+        className="absolute top-5 bottom-5 w-px bg-border"
       />
       {steps.map((node, index) => {
         const nodeRun = nodeRunByNodeId.get(node.id);
@@ -82,9 +83,9 @@ export function WorkflowStepper({
         const turnNo = agent && nodeRun ? latestTurnNo(events, nodeRun.id) : null;
         const helper = nodeRun
           ? agent
-            ? `${nodeRun.status}${turnNo !== null ? ` · Turn ${turnNo}` : ''}`
-            : `${nodeRun.status} · ${statusNote(nodeRun)}`
-          : 'Not started · no NodeRun yet';
+            ? `${nodeRun.status}${turnNo !== null ? `, Turn ${turnNo}` : ''}`
+            : `${nodeRun.status}, ${statusNote(nodeRun)}`
+          : 'Not started, no NodeRun yet';
 
         return (
           <li
@@ -98,7 +99,7 @@ export function WorkflowStepper({
                 aria-hidden="true"
                 data-testid="stepper-glyph"
                 data-tone="neutral"
-                className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[var(--status-neutral-dot)] bg-[var(--background)] text-[14px] font-semibold text-[var(--status-neutral-fg)] tabular-nums"
+                className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-st-queued-dot bg-bg text-md font-semibold text-st-queued-fg tabular-nums"
               >
                 {index + 1}
               </span>
@@ -113,28 +114,21 @@ export function WorkflowStepper({
               aria-pressed={selected}
               onClick={() => nodeRun && onSelect(nodeRun.id)}
               className={cn(
-                'min-w-0 flex-1 rounded-lg border px-4 py-3 text-left enabled:hover:bg-[var(--accent)]',
+                'min-w-0 flex-1 rounded-lg border px-4 py-3 text-left enabled:hover:bg-surface-hover',
                 agent
                   ? cn(
-                      'border-2 bg-[var(--node-selected-agent-fill)]',
-                      selected ? 'border-[#a48afb]' : 'border-[var(--primary)]/50',
+                      'border-2 bg-surface-selected',
+                      selected ? 'border-accent' : 'border-accent/50',
                     )
                   : selected
-                    ? 'border-[var(--muted-foreground)] bg-[var(--accent)]'
+                    ? 'border-fg-muted bg-surface-hover'
                     : 'border-transparent',
               )}
             >
-              {agent ? (
-                <span className="block text-xs font-semibold tracking-[0.06em] uppercase">
-                  Agent NodeRun
-                </span>
-              ) : null}
-              <span className="block truncate text-[15px] font-semibold">{node.name}</span>
+              {agent ? <span className="block text-xs font-semibold">Agent NodeRun</span> : null}
+              <span className="block truncate text-md font-semibold">{node.name}</span>
               <span
-                className={cn(
-                  'mt-0.5 block truncate text-[13px]',
-                  agent ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]',
-                )}
+                className={cn('mt-0.5 block truncate text-sm', agent ? 'text-fg' : 'text-fg-muted')}
               >
                 {helper}
               </span>

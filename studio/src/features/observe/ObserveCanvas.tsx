@@ -195,9 +195,9 @@ export function ObserveCanvas({
       style={minHeight > 0 ? { minHeight } : undefined}
     >
       {error ? (
-        <p className="p-3 text-sm text-[var(--destructive)]">{error}</p>
+        <p className="p-3 text-md text-danger">{error}</p>
       ) : !definition ? (
-        <p className="p-3 text-sm text-[var(--muted-foreground)]">Loading topology…</p>
+        <p className="p-3 text-md text-fg-muted">Loading topology…</p>
       ) : (
         <WorkflowCanvas<CompactStatusFlowNode>
           nodes={flowNodes}

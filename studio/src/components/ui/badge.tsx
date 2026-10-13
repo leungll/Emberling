@@ -15,10 +15,7 @@ export function Badge({ className, variant, dot, children, ...props }: BadgeProp
   return (
     <span className={cn(badgeVariants({ variant }), className)} {...props}>
       {dot ? (
-        <span
-          aria-hidden="true"
-          className="h-[5px] w-[5px] shrink-0 rounded-full bg-current opacity-90"
-        />
+        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-current opacity-90" />
       ) : null}
       {children}
     </span>

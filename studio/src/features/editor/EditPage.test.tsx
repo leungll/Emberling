@@ -309,7 +309,7 @@ describe('EditPage — creating a Definition', () => {
     });
 
     expect(await screen.findByText('Document Processing')).toBeInTheDocument();
-    expect(screen.getByTestId('studio-subtitle')).toHaveTextContent('Unsaved draft · Editing');
+    expect(screen.getByTestId('studio-subtitle')).toHaveTextContent('Unsaved draft, Editing');
 
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -319,7 +319,7 @@ describe('EditPage — creating a Definition', () => {
     expect(callsTo(fetchMock, 'POST', '/api/definitions')).toEqual([
       { name: 'Document Processing', description: 'Summarise a document', nodes: [], edges: [] },
     ]);
-    expect(await screen.findByText('Definition v1 · Editing')).toHaveAttribute(
+    expect(await screen.findByText('Definition v1, Editing')).toHaveAttribute(
       'title',
       'Workflow wf_new',
     );
@@ -356,7 +356,7 @@ describe('EditPage — version conflict', () => {
     // palette, canvas and properties keep their full height (no squashed layout).
     expect(screen.getByTestId('canvas-region')).toContainElement(conflict);
     expect(conflict).toHaveClass('absolute');
-    expect(conflict).toHaveClass('text-[14px]');
+    expect(conflict).toHaveClass('text-md');
     expect(screen.getByLabelText('Name')).toHaveValue('Local Generate');
     expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
 
@@ -374,7 +374,7 @@ describe('EditPage — version conflict', () => {
     // Reload: local edits are discarded explicitly and the page is on the server's v5.
     await user.click(within(again).getByRole('button', { name: 'Reload latest' }));
     await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Server Generate'));
-    expect(screen.getByText('Definition v5 · Editing')).toHaveAttribute('title', 'Workflow wf_123');
+    expect(screen.getByText('Definition v5, Editing')).toHaveAttribute('title', 'Workflow wf_123');
     expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
     expect(screen.queryByRole('alert', { name: 'Version conflict' })).toBeNull();
   });
@@ -407,7 +407,7 @@ describe('EditPage — Backend validation errors', () => {
     const user = userEvent.setup();
 
     renderStudio('/studio/wf_123');
-    await screen.findByText('Definition v4 · Editing');
+    await screen.findByText('Definition v4, Editing');
     await user.click(screen.getByRole('button', { name: 'Validate' }));
 
     const list = await screen.findByRole('list', { name: 'Validation errors' });
@@ -416,14 +416,14 @@ describe('EditPage — Backend validation errors', () => {
     expect(items[2]).toHaveTextContent('the graph has a cycle');
     // Shared status palette: the row uses the shared FAILED tokens, the message is body text (≥14px)
     // and the path is a helper label (≥12px); no off-palette Tailwind red.
-    expect(list.className).toContain('bg-[var(--status-failed-bg)]');
+    expect(list.className).toContain('bg-st-failed-bg');
     expect(list.className).not.toMatch(/text-red-|text-xs/);
     expect(within(items[0]!).getByText('required input "prompt" is not connected')).toHaveClass(
-      'text-sm',
+      'text-md',
     );
     expect(within(items[0]!).getByText('nodes[node_gen].inputs.prompt')).toHaveClass('text-xs');
     expect(within(items[0]!).getByRole('button', { name: /Generate/ })).toHaveClass(
-      'text-[var(--status-failed-fg)]',
+      'text-st-failed-fg',
     );
     // A whole-graph error has no node to focus.
     expect(within(items[2]!).queryByRole('button')).toBeNull();
@@ -461,12 +461,12 @@ describe('EditPage — Backend validation errors', () => {
     const user = userEvent.setup();
 
     renderStudio('/studio/wf_123');
-    await screen.findByText('Definition v4 · Editing');
+    await screen.findByText('Definition v4, Editing');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     const list = await screen.findByRole('list', { name: 'Validation errors' });
     expect(list).toHaveTextContent('edge "edge_1" carries image into a text port');
-    expect(screen.getByText('Definition v4 · Editing')).toHaveAttribute('title', 'Workflow wf_123');
+    expect(screen.getByText('Definition v4, Editing')).toHaveAttribute('title', 'Workflow wf_123');
   });
 });
 
@@ -486,9 +486,9 @@ describe('EditPage — load errors', () => {
     // Shared status palette, the same tokens and sizes as the Validation errors row: the FAILED red
     // is shared across the surfaces, the message is body text (≥14px) in the foreground
     // colour, with no off-palette Tailwind red.
-    expect(alert.className).toContain('bg-[var(--status-failed-bg)]');
-    expect(alert.className).toContain('border-[var(--status-failed-dot)]/40');
-    expect(alert).toHaveClass('text-sm', 'text-[var(--foreground)]');
+    expect(alert.className).toContain('bg-st-failed-bg');
+    expect(alert.className).toContain('border-st-failed-dot/40');
+    expect(alert).toHaveClass('text-md', 'text-fg');
     expect(alert.className).not.toMatch(/text-red-|text-xs/);
   });
 

@@ -127,7 +127,7 @@ describe('DetailPanel — WAITING_CALLBACK', () => {
     expect(fieldValue('External Task ID')).toBe('ext_task_789');
     expect(fieldValue('Attempt')).toBe('1');
     expect(fieldValue('Runtime State')).toBe('DISPATCHED');
-    expect(fieldValue('Latest Event')).toBe('NODE_DISPATCHED · seq 5');
+    expect(fieldValue('Latest Event')).toBe('NODE_DISPATCHED, seq 5');
     expect(fieldValue('Deadline')).toBe('2026-08-03 12:05:00Z');
 
     // The Attempts list is rendered in addition to the WAITING_CALLBACK summary fields.
@@ -289,8 +289,9 @@ describe('DetailPanel — JsonBlock default visibility', () => {
 
     const block = screen.getByTestId('json-block');
     // A long unbroken value wraps at any character instead of running off the right edge.
-    expect(block).toHaveClass('whitespace-pre-wrap', '[overflow-wrap:anywhere]');
-    expect(block).toHaveClass('max-h-56', 'overflow-y-auto', 'text-[14px]');
+    expect(block).toHaveClass('whitespace-pre-wrap', 'wrap-anywhere');
+    expect(block).toHaveClass('overflow-y-auto', 'text-md');
+    expect(block.style.maxHeight).toBe('224px');
   });
 });
 
@@ -346,7 +347,7 @@ describe('DetailPanel — ImageRef preview', () => {
     // The raw reference (the URI itself, given as-is — never a proxy) is shown as text too,
     // distinct from the collapsed raw JSON below (which also contains this substring).
     expect(
-      screen.getByText('EXTERNAL · https://cdn.example.com/generated/cat.png'),
+      screen.getByText('EXTERNAL, https://cdn.example.com/generated/cat.png'),
     ).toBeInTheDocument();
   });
 
@@ -370,7 +371,7 @@ describe('DetailPanel — ImageRef preview', () => {
     const box = screen.getByTestId('image-preview-box');
     expect(box).toContainElement(img);
     // A 16x16 mock image is scaled up into the box rather than rendered as a speck.
-    expect(box).toHaveClass('h-40', 'w-40');
+    expect(box).toHaveStyle({ width: '160px', height: '160px' });
     expect(img).toHaveClass('h-full', 'w-full', 'object-contain');
   });
 
@@ -430,8 +431,11 @@ describe('DetailPanel — generated image preview', () => {
     });
     expect(img.getAttribute('src')).toBe(uri);
     expect(img).toHaveAttribute('referrerpolicy', 'no-referrer');
-    expect(screen.getByTestId('image-preview-box')).toHaveClass('h-40', 'w-40');
-    expect(screen.getByText(`EXTERNAL · ${uri}`)).toBeInTheDocument();
+    expect(screen.getByTestId('image-preview-box')).toHaveStyle({
+      width: '160px',
+      height: '160px',
+    });
+    expect(screen.getByText(`EXTERNAL, ${uri}`)).toBeInTheDocument();
   });
 
   it('previews an ASSET fallback through the Backend asset content route', async () => {
@@ -445,7 +449,7 @@ describe('DetailPanel — generated image preview', () => {
     await screen.findByText('Output');
     const img = await screen.findByRole<HTMLImageElement>('img', { name: 'ASSET image preview' });
     expect(img.getAttribute('src')).toBe('/api/assets/asset_photo%201/content');
-    expect(screen.getByText('ASSET · asset_photo 1')).toBeInTheDocument();
+    expect(screen.getByText('ASSET, asset_photo 1')).toBeInTheDocument();
   });
 
   it('previews a generated ARTIFACT through the content route of the observed Run', async () => {
@@ -466,7 +470,7 @@ describe('DetailPanel — generated image preview', () => {
       name: 'ARTIFACT image preview',
     });
     expect(img.getAttribute('src')).toBe(`/api/runs/run_1/artifacts/${ARTIFACT_ID}/content`);
-    expect(screen.getByText(`ARTIFACT · ${ARTIFACT_ID}`)).toBeInTheDocument();
+    expect(screen.getByText(`ARTIFACT, ${ARTIFACT_ID}`)).toBeInTheDocument();
   });
 
   it.each([
@@ -521,7 +525,7 @@ describe('DetailPanel — generated image preview', () => {
     await screen.findByText('Output');
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.queryByTestId('image-preview-box')).not.toBeInTheDocument();
-    expect(screen.getByText(new RegExp(`^${image.source} · `))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`^${image.source}, `))).toBeInTheDocument();
   });
 });
 
@@ -663,9 +667,7 @@ describe('DetailPanel — Agent Trace', () => {
       'data-field-layout',
       'stacked',
     );
-    expect(screen.getByText('Agent Run').nextElementSibling).toHaveClass(
-      '[overflow-wrap:anywhere]',
-    );
+    expect(screen.getByText('Agent Run').nextElementSibling).toHaveClass('wrap-anywhere');
     expect(screen.getByText('External task').parentElement).toHaveAttribute(
       'data-field-layout',
       'stacked',
@@ -695,10 +697,10 @@ describe('DetailPanel — Agent Trace', () => {
     // Only the Turn whose model call reported usage shows it; a null usage prints nothing.
     const usages = screen.getAllByTestId('agent-turn-usage');
     expect(usages).toHaveLength(1);
-    expect(usages[0]).toHaveTextContent('52 tokens (40 in · 12 out)');
+    expect(usages[0]).toHaveTextContent('52 tokens (40 in, 12 out)');
 
     // The fact ledger and generation budget sit in the detail panel, as received.
-    expect(screen.getByTestId('generation-budget')).toHaveTextContent('0 · no limit');
+    expect(screen.getByTestId('generation-budget')).toHaveTextContent('0, no limit');
     expect(screen.getByText('No facts recorded')).toBeInTheDocument();
   });
 
@@ -825,7 +827,7 @@ describe('DetailPanel — Waiting Diagnostics', () => {
 
     await waitFor(() => expect(fieldValue('Provider')).toBe('stability-ai'));
     expect(screen.getByTestId('waiting-diagnostics')).toBeInTheDocument();
-    expect(fieldValue('Waiting Since')).toMatch(/^2026-08-03 12:00:02Z · \S/);
+    expect(fieldValue('Waiting Since')).toMatch(/^2026-08-03 12:00:02Z, \S/);
   });
 
   it('reads "—" for Waiting Since when the Backend reports no waitingAt', async () => {
@@ -952,7 +954,7 @@ describe('DetailPanel — Agent Turn timeline', () => {
     await screen.findByText('Tool Attempt');
     expect(fieldValue('Provider')).toBe('tool-provider-v1');
     expect(fieldValue('External Task ID')).toBe('provider_task_789');
-    expect(fieldValue('Tool Attempt')).toBe('lookup · attempt 1');
+    expect(fieldValue('Tool Attempt')).toBe('lookup, attempt 1');
   });
 });
 
@@ -1002,7 +1004,7 @@ describe('DetailPanel — Tool result image', () => {
       name: 'ARTIFACT image preview',
     });
     expect(img.getAttribute('src')).toBe(`/api/runs/run_1/artifacts/${ARTIFACT_ID}/content`);
-    expect(within(images).getByText(`ARTIFACT · ${ARTIFACT_ID}`)).toBeInTheDocument();
+    expect(within(images).getByText(`ARTIFACT, ${ARTIFACT_ID}`)).toBeInTheDocument();
   });
 
   it.each([

@@ -63,7 +63,7 @@ describe('RunSummaryCard', () => {
     expect(card).not.toHaveClass('min-h-0');
     // The Run ID wraps anywhere instead of break-all with a one-character tail.
     const runId = screen.getByText('run_1');
-    expect(runId).toHaveClass('[overflow-wrap:anywhere]');
+    expect(runId).toHaveClass('wrap-anywhere');
     expect(runId).not.toHaveClass('break-all');
   });
 
@@ -80,8 +80,8 @@ describe('RunSummaryCard', () => {
 
     expect(screen.getByTestId('run-summary-banner')).toHaveAttribute('data-tone', 'waiting');
     expect(screen.getByText('Waiting for Image Generation callback')).toBeInTheDocument();
-    expect(screen.getByText('AIGC Media · v4')).toBeInTheDocument();
-    expect(screen.getByText('wf_media · v4')).toBeInTheDocument();
+    expect(screen.getByText('AIGC Media, v4')).toBeInTheDocument();
+    expect(screen.getByText('wf_media, v4')).toBeInTheDocument();
     expect(screen.getByText('latest seq 8')).toBeInTheDocument();
   });
 

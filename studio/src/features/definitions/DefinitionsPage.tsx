@@ -20,30 +20,25 @@ type LoadState =
  */
 function Sidebar() {
   return (
-    <aside className="flex w-[230px] shrink-0 flex-col bg-[var(--sidebar)] text-[var(--sidebar-foreground)]">
+    <aside className="flex w-sidebar shrink-0 flex-col bg-surface-inset text-fg">
       <div className="flex items-center gap-2 px-6 pt-8 pb-10">
         <span
           aria-hidden="true"
-          className="inline-block h-7 w-7 rounded-full bg-[var(--primary)]"
+          className="inline-block h-control-sm w-control-sm rounded-full bg-accent"
         />
-        <span className="text-lg font-bold">Emberling</span>
+        <span className="text-lg font-semibold">Emberling</span>
       </div>
 
-      <nav className="flex-1 px-3.5">
-        <p className="px-2.5 text-xs font-bold tracking-[0.08em] text-[var(--sidebar-muted)]">
-          RUNTIME
-        </p>
-        <div className="mt-2 rounded-lg bg-[var(--sidebar-active)] px-4 py-3 text-[15px] font-semibold">
+      <nav className="flex-1 px-4">
+        <p className="px-3 text-xs font-semibold text-fg-muted">RUNTIME</p>
+        <div className="mt-2 rounded-lg bg-surface-hover px-4 py-3 text-md font-semibold">
           Definitions
         </div>
       </nav>
 
-      <div className="flex items-center gap-2.5 border-t border-[var(--sidebar-border)] px-6 py-5">
-        <span
-          aria-hidden="true"
-          className="inline-block h-8 w-8 rounded-full bg-[var(--sidebar-active)]"
-        />
-        <span className="text-[15px]">Local workspace</span>
+      <div className="flex items-center gap-3 border-t border-border px-6 py-5">
+        <span aria-hidden="true" className="inline-block h-8 w-8 rounded-full bg-surface-hover" />
+        <span className="text-md">Local workspace</span>
       </div>
     </aside>
   );
@@ -88,41 +83,40 @@ export function DefinitionsPage() {
   }, [state, search]);
 
   return (
-    <div className="flex min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <div className="flex min-h-screen bg-bg text-fg">
       <Sidebar />
 
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-8">
-          <p className="text-[15px] text-[var(--muted-foreground)]">Runtime / Definitions</p>
+        <header className="flex h-header shrink-0 items-center justify-between border-b border-border bg-surface px-8">
+          <p className="text-md text-fg-muted">Runtime / Definitions</p>
           <Button onClick={() => setNewDialogOpen(true)}>+ New Definition</Button>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-8 py-8">
+        <main style={{ maxWidth: 1152 }} className="mx-auto w-full flex-1 px-8 py-8">
           <div className="mb-6">
-            <h1 className="text-[28px] font-bold">Definitions</h1>
-            <p className="mt-1 text-[15px] text-[var(--muted-foreground)]">
+            <h1 className="text-xl font-semibold">Definitions</h1>
+            <p className="mt-1 text-md text-fg-muted">
               Build a versioned DAG, validate it, then create a Run.
             </p>
           </div>
 
-          <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+          <div className="mb-5 rounded-xl border border-border bg-surface px-4 py-3">
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search definitions…"
               aria-label="Search definitions"
-              className="h-9 max-w-md rounded-lg border-transparent bg-[var(--muted)]"
+              style={{ maxWidth: 448 }}
+              className="h-control-lg rounded-lg border-transparent bg-surface-inset"
             />
           </div>
 
-          {state.kind === 'loading' ? (
-            <p className="text-[var(--muted-foreground)]">Loading definitions…</p>
-          ) : null}
+          {state.kind === 'loading' ? <p className="text-fg-muted">Loading definitions…</p> : null}
 
           {state.kind === 'error' ? (
             <div
               role="alert"
-              className="rounded-md border border-[var(--status-failed-dot)]/40 bg-[var(--status-failed-bg)] px-4 py-3 text-[var(--status-failed-fg)]"
+              className="rounded-md border border-st-failed-dot/40 bg-st-failed-bg px-4 py-3 text-st-failed-fg"
             >
               <p className="font-medium">Could not load definitions</p>
               <p className="mt-1 text-xs">
@@ -134,7 +128,7 @@ export function DefinitionsPage() {
           {state.kind === 'loaded' ? (
             <>
               <DefinitionsTable items={filteredItems} />
-              <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+              <p className="mt-3 text-xs text-fg-muted">
                 {filteredItems.length} definition{filteredItems.length === 1 ? '' : 's'}
               </p>
             </>
@@ -209,7 +203,7 @@ function NewDefinitionDialog({ open, onClose, onCreate }: NewDefinitionDialogPro
     >
       <div className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="new-definition-name" className="text-[14px] font-semibold">
+          <Label htmlFor="new-definition-name" className="text-md font-semibold">
             Name
           </Label>
           <Input
@@ -221,7 +215,7 @@ function NewDefinitionDialog({ open, onClose, onCreate }: NewDefinitionDialogPro
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="new-definition-description" className="text-[14px] font-semibold">
+          <Label htmlFor="new-definition-description" className="text-md font-semibold">
             Description
           </Label>
           <Textarea

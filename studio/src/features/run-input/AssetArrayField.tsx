@@ -114,7 +114,7 @@ export function AssetArrayField({
       <div
         role="group"
         aria-labelledby={labelId}
-        className="space-y-2 rounded-md border border-dashed border-[var(--border)] p-3 focus-within:ring-2 focus-within:ring-[var(--ring)]"
+        className="space-y-2 rounded-md border border-dashed border-border p-3 focus-within:ring-2 focus-within:ring-focus"
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDrop}
       >
@@ -139,9 +139,9 @@ export function AssetArrayField({
           >
             Add photos
           </Button>
-          <span className="text-[13px] text-[var(--muted-foreground)]">or drop them here</span>
+          <span className="text-sm text-fg-muted">or drop them here</span>
         </div>
-        <p className="text-[13px] text-[var(--muted-foreground)]">
+        <p className="text-sm text-fg-muted">
           {uploading ? 'Uploading…' : photoSetStatus(refs.length, minItems, maxItems)}
         </p>
         {refs.length > 0 ? (
@@ -153,20 +153,20 @@ export function AssetArrayField({
                   src={`${API_BASE}/assets/${encodeURIComponent(ref.assetId)}/content`}
                   alt={`Image ${index + 1}`}
                   title={ref.assetId}
-                  className="h-16 w-16 rounded border border-[var(--border)] object-cover"
+                  className="h-16 w-16 rounded-sm border border-border object-cover"
                 />
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   aria-label={`Remove ${fileNames[ref.assetId] ?? `image ${index + 1}`}`}
-                  className="absolute right-1 top-1 h-6 w-6 rounded-full bg-[var(--card)]"
+                  className="absolute right-1 top-1 h-6 w-6 rounded-full bg-surface"
                   onClick={() => {
                     onErrorChange(null);
                     onChange((prev) => prev.filter((_, i) => i !== index));
                   }}
                 >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  <X className="h-icon-sm w-icon-sm" aria-hidden="true" />
                 </Button>
               </li>
             ))}
@@ -174,7 +174,7 @@ export function AssetArrayField({
         ) : null}
       </div>
       {error ? (
-        <p role="alert" className="text-[13px] text-red-500">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

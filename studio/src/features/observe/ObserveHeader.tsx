@@ -14,26 +14,22 @@ interface ObserveHeaderProps {
 }
 
 /** Header actions share the Edit header's large, equal-weight buttons. */
-const ACTION = 'h-9 min-w-[88px] px-5 font-semibold';
+const ACTION = 'h-control-lg px-5 font-semibold';
 
 const PILL_TONE: Record<StatusTone, string> = {
-  neutral: 'border-[var(--border)] bg-[var(--status-neutral-bg)] text-[var(--status-neutral-fg)]',
-  running:
-    'border-[var(--status-running-dot)] bg-[var(--status-running-bg)] text-[var(--status-running-fg)]',
-  waiting:
-    'border-[var(--status-waiting-dot)] bg-[var(--status-waiting-bg)] text-[var(--status-waiting-fg)]',
-  succeeded:
-    'border-[var(--status-succeeded-dot)] bg-[var(--status-succeeded-bg)] text-[var(--status-succeeded-fg)]',
-  failed:
-    'border-[var(--status-failed-dot)] bg-[var(--status-failed-bg)] text-[var(--status-failed-fg)]',
+  neutral: 'border-border bg-st-queued-bg text-st-queued-fg',
+  running: 'border-st-running-dot bg-st-running-bg text-st-running-fg',
+  waiting: 'border-st-waiting-dot bg-st-waiting-bg text-st-waiting-fg',
+  succeeded: 'border-st-succeeded-dot bg-st-succeeded-bg text-st-succeeded-fg',
+  failed: 'border-st-failed-dot bg-st-failed-bg text-st-failed-fg',
 };
 
 const DOT_TONE: Record<StatusTone, string> = {
-  neutral: 'bg-[var(--status-neutral-dot)]',
-  running: 'bg-[var(--status-running-dot)] animate-pulse',
-  waiting: 'bg-[var(--status-waiting-dot)]',
-  succeeded: 'bg-[var(--status-succeeded-dot)]',
-  failed: 'bg-[var(--status-failed-dot)]',
+  neutral: 'bg-st-queued-dot',
+  running: 'bg-st-running-dot animate-pulse',
+  waiting: 'bg-st-waiting-dot',
+  succeeded: 'bg-st-succeeded-dot',
+  failed: 'bg-st-failed-dot',
 };
 
 /**
@@ -46,25 +42,28 @@ export function ObserveHeader({ run, definitionName, onRunAgain }: ObserveHeader
   const tone = runStatusTone(run.status);
 
   return (
-    <header className="grid h-[72px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-[var(--border)] bg-[var(--card)] px-4">
+    <header
+      style={{ gridTemplateColumns: '1fr auto 1fr' }}
+      className="grid h-header shrink-0 items-center gap-4 border-b border-border bg-surface px-4"
+    >
       <div className="flex min-w-0 items-center gap-3">
         <Link
           to="/"
           aria-label="Back to Definitions"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--primary)] text-[18px] font-bold text-[var(--primary-foreground)]"
+          className="flex h-control-lg w-control-lg shrink-0 items-center justify-center rounded-lg bg-accent text-lg font-semibold text-fg-on-accent"
         >
           E
         </Link>
         <div className="min-w-0">
-          <h1 className="truncate text-[15px] font-semibold">{definitionName ?? run.workflowId}</h1>
+          <h1 className="truncate text-md font-semibold">{definitionName ?? run.workflowId}</h1>
           {/* The mode is always explicit, and the Run stays bound to its own
               immutable version, never the latest. */}
           <p
             data-testid="observe-subtitle"
             title={`Workflow ${run.workflowId}`}
-            className="truncate text-xs text-[var(--muted-foreground)]"
+            className="truncate text-xs text-fg-muted"
           >
-            Run {run.id} · Definition v{run.definitionVersion} · Observe
+            Run {run.id}, Definition v{run.definitionVersion}, Observe
           </p>
         </div>
       </div>
@@ -72,11 +71,11 @@ export function ObserveHeader({ run, definitionName, onRunAgain }: ObserveHeader
       {/* The raw Run status is shown next to its display wording. */}
       <div
         className={cn(
-          'flex items-center gap-2 rounded-full border px-4 py-1.5 text-[14px] font-semibold',
+          'flex items-center gap-2 rounded-full border px-4 py-1.5 text-md font-semibold',
           PILL_TONE[tone],
         )}
       >
-        <span aria-hidden="true" className={cn('h-2.5 w-2.5 rounded-full', DOT_TONE[tone])} />
+        <span aria-hidden="true" className={cn('h-2 w-2 rounded-full', DOT_TONE[tone])} />
         <span>{run.status}</span>
         <span aria-hidden="true">·</span>
         <span data-testid="run-status">{runStatusLabel(run.status)}</span>

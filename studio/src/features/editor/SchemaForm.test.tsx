@@ -382,7 +382,7 @@ describe('SchemaForm — schema-driven widgets', () => {
     expect(lookup).toBeChecked();
     expect(lookup).toHaveAccessibleDescription(/Read a deterministic record/);
     expect(lookup).toHaveAccessibleDescription(/Sync/);
-    expect(lookup).toHaveAccessibleDescription(/No side effect · SAFE/);
+    expect(lookup).toHaveAccessibleDescription(/No side effect, SAFE/);
     expect(lookup).toHaveAccessibleDescription(/Input: key/);
     expect(lookup).toHaveAccessibleDescription(/Output: key, record/);
 
@@ -390,7 +390,7 @@ describe('SchemaForm — schema-driven widgets', () => {
     expect(remote).not.toBeChecked();
     expect(remote).toHaveAccessibleDescription(/asynchronous Provider task/);
     expect(remote).toHaveAccessibleDescription(/Async/);
-    expect(remote).toHaveAccessibleDescription(/External write · UNKNOWN/);
+    expect(remote).toHaveAccessibleDescription(/External write, UNKNOWN/);
 
     await user.click(remote);
     // Registry order is kept so the saved allowlist does not depend on click order.

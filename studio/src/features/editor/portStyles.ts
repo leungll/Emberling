@@ -5,10 +5,10 @@ import type { NodeMetadata, PortDataType } from '@/api/types';
  * border and status badge and must never reuse these colours.
  */
 const PORT_COLORS: Record<PortDataType, string> = {
-  text: '#a48afb', // purple
-  image: '#ff78b2', // pink
-  json: '#fdb022', // amber
-  any: '#93a0b5', // slate
+  text: 'var(--port-text)',
+  image: 'var(--port-image)',
+  json: 'var(--port-json)',
+  any: 'var(--port-any)',
 };
 
 export function portColor(dataType: PortDataType): string {

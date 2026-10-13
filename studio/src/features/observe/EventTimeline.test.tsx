@@ -116,7 +116,7 @@ describe('EventTimeline — status dots', () => {
       />,
     );
 
-    expect(screen.getByText('12:00:03Z · seq 7')).toBeInTheDocument();
+    expect(screen.getByText('12:00:03Z, seq 7')).toBeInTheDocument();
     expect(screen.getByText('selected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Resume Live' })).toBeInTheDocument();
   });

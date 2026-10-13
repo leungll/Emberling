@@ -54,36 +54,25 @@ export function RegisteredNode({ data, selected, isConnectable }: NodeProps<Regi
   const inputs = metadata?.inputs ?? [];
   const outputs = metadata?.outputs ?? [];
   const accent = nodeAccentColor(metadata);
-  const isAgent = metadata?.category === 'Agent';
-  // Selected state follows two literal treatments rather than the node's own
-  // accent: every non-Agent category gets the amber border on the warm tint, Agent gets
-  // the purple border on its own tint. That treatment applies only to a card without a
-  // NodeRun status: status colours are never overridden, so a selected card that
+  // A selected card takes the accent border on the selected tint rather than the node's
+  // own accent. That treatment applies only to a card without a NodeRun status: status colours are never overridden, so a selected card that
   // carries a status keeps its status border and is marked by an outer neutral ring.
   const hasStatus = data.nodeRunStatus !== undefined;
   const editSelected = selected && !hasStatus;
-  const selectedFill = isAgent ? 'var(--node-selected-agent-fill)' : 'var(--node-selected-fill)';
-  const selectedBorder = isAgent ? '#a48afb' : '#fdb022';
 
   return (
     <div
       title={data.label}
       data-selected={selected ? 'true' : 'false'}
       className={cn(
-        'flex h-[128px] w-[176px] flex-col rounded-[9px] border-2 px-3 py-2.5 text-[var(--card-foreground)] shadow-sm',
-        !editSelected && 'bg-[var(--card)]',
-        hasStatus
-          ? nodeRunBorderClass(data.nodeRunStatus)
-          : !editSelected && 'border-[var(--border)]',
-        selected &&
-          hasStatus &&
-          'ring-2 ring-[var(--foreground)] ring-offset-2 ring-offset-[var(--background)]',
+        'flex flex-col rounded-lg border-2 px-3 py-3 text-fg',
+        editSelected ? 'border-accent bg-surface-selected' : 'bg-surface',
+        hasStatus ? nodeRunBorderClass(data.nodeRunStatus) : !editSelected && 'border-border',
+        selected && hasStatus && 'ring-2 ring-fg ring-offset-bg',
       )}
-      style={
-        editSelected ? { borderColor: selectedBorder, backgroundColor: selectedFill } : undefined
-      }
+      style={{ width: 176, height: 128 }}
     >
-      <div className="flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.06em] text-[var(--muted-foreground)]">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-fg-muted">
         <span
           aria-hidden="true"
           className="h-2 w-2 shrink-0 rounded-full"
@@ -93,12 +82,12 @@ export function RegisteredNode({ data, selected, isConnectable }: NodeProps<Regi
           {(metadata?.displayName ?? 'Unregistered type').toUpperCase()}
         </span>
       </div>
-      <div className="mt-1 truncate text-[15px] leading-5 font-semibold">{data.label}</div>
+      <div className="mt-1 truncate text-md font-semibold">{data.label}</div>
       {/* Two lines while editing (model · spec · mode rarely fits one at this width); one
           in Observe, where the NodeRun status badge takes the second line. */}
       <div
         className={cn(
-          'mt-0.5 text-xs leading-4 text-[var(--muted-foreground)]',
+          'mt-0.5 text-xs text-fg-muted',
           data.nodeRunStatus ? 'truncate' : 'line-clamp-2',
         )}
       >
@@ -110,7 +99,7 @@ export function RegisteredNode({ data, selected, isConnectable }: NodeProps<Regi
       {data.nodeRunStatus ? (
         <Badge
           variant={nodeRunStatusVariant(data.nodeRunStatus)}
-          className="mt-1 w-fit px-2 py-0.5 text-[12px]"
+          className="mt-1 w-fit px-2 py-0.5 text-xs"
         >
           {nodeRunStatusLabel(data.nodeRunStatus)}
         </Badge>
@@ -135,7 +124,7 @@ export function RegisteredNode({ data, selected, isConnectable }: NodeProps<Regi
           <span
             aria-hidden="true"
             data-port-hint
-            className="pointer-events-none absolute top-1/2 left-full ml-1.5 -translate-y-1/2 whitespace-nowrap text-[length:var(--port-hint-font,10px)] group-data-[port-hints=hidden]/canvas:hidden text-[var(--muted-foreground)]"
+            className="pointer-events-none absolute top-1/2 left-full ml-1.5 -translate-y-1/2 whitespace-nowrap text-port-hint group-data-[port-hints=hidden]/canvas:hidden text-fg-muted"
           >
             {port.name}
             {port.required ? '' : '?'}
@@ -162,7 +151,7 @@ export function RegisteredNode({ data, selected, isConnectable }: NodeProps<Regi
           <span
             aria-hidden="true"
             data-port-hint
-            className="pointer-events-none absolute top-1/2 right-full mr-1.5 -translate-y-1/2 whitespace-nowrap text-[length:var(--port-hint-font,10px)] group-data-[port-hints=hidden]/canvas:hidden text-[var(--muted-foreground)]"
+            className="pointer-events-none absolute top-1/2 right-full mr-1.5 -translate-y-1/2 whitespace-nowrap text-port-hint group-data-[port-hints=hidden]/canvas:hidden text-fg-muted"
           >
             {port.name}
             {port.required ? '' : '?'}

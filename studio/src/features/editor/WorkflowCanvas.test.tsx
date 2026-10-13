@@ -126,7 +126,7 @@ describe('WorkflowCanvas', () => {
       });
       expect(canvas).toHaveAttribute('data-port-hints', 'shown');
       expect(screen.getByTestId('handle-out-text').querySelector('[data-port-hint]')).toHaveClass(
-        'text-[length:var(--port-hint-font,10px)]',
+        'text-port-hint',
       );
     } finally {
       vi.restoreAllMocks();

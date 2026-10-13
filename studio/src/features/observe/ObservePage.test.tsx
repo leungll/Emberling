@@ -269,7 +269,7 @@ describe('ObservePage — Run Again', () => {
     // On success, Studio navigates to the new Run's own Observe page.
     await waitFor(() =>
       expect(screen.getByTestId('observe-subtitle')).toHaveTextContent(
-        'Run run_new · Definition v3 · Observe',
+        'Run run_new, Definition v3, Observe',
       ),
     );
   });
@@ -296,9 +296,9 @@ describe('ObservePage — Run view layout', () => {
 
     const row = await screen.findByTestId('run-view-top-row');
     expect(row).toContainElement(screen.getByTestId('run-summary'));
-    // A fixed h-[400px] clipped the RUNNING / WAITING lists; a minimum height does not.
-    expect(row).not.toHaveClass('h-[400px]');
-    expect(row).toHaveClass('min-h-[400px]');
+    // A fixed height clipped the RUNNING / WAITING lists; a minimum height does not.
+    expect(row.style.height).toBe('');
+    expect(row.style.minHeight).toBe('400px');
   });
 });
 

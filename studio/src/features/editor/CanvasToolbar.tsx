@@ -42,8 +42,8 @@ function ToolbarButton({
       aria-pressed={active}
       title={label}
       className={cn(
-        'flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-xs font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]',
-        active && 'bg-[var(--accent)] text-[var(--accent-foreground)]',
+        'flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg',
+        active && 'bg-surface-hover text-fg',
         'disabled:pointer-events-none disabled:opacity-40',
       )}
     >
@@ -74,7 +74,7 @@ export function CanvasToolbar({
 
   return (
     <Panel position="bottom-center" className="flex items-center gap-2">
-      <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--card)] p-1 shadow-md">
+      <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1 shadow-1">
         <ToolbarButton
           active={mode === 'select'}
           onClick={() => onModeChange('select')}
@@ -107,11 +107,11 @@ export function CanvasToolbar({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--card)] px-1 py-1 shadow-md">
+      <div className="flex items-center gap-1 rounded-full border border-border bg-surface px-1 py-1 shadow-1">
         <ToolbarButton onClick={() => zoomOut()} label="Zoom out">
           −
         </ToolbarButton>
-        <span className="min-w-10 text-center text-xs tabular-nums text-[var(--muted-foreground)]">
+        <span className="min-w-10 text-center text-xs tabular-nums text-fg-muted">
           {zoomPercent}%
         </span>
         <ToolbarButton onClick={() => zoomIn()} label="Zoom in">

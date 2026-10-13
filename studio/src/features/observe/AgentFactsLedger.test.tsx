@@ -56,7 +56,7 @@ describe('AgentFactsLedger', () => {
     expect(rows).toHaveLength(2);
     expect(within(rows[0]!).getByText('image_generated')).toBeInTheDocument();
     expect(
-      within(rows[0]!).getByText('photoAssetId=photo_a · settingsDigest=sha256:abc'),
+      within(rows[0]!).getByText('photoAssetId=photo_a, settingsDigest=sha256:abc'),
     ).toBeInTheDocument();
     expect(within(rows[0]!).getByText('—')).toBeInTheDocument();
     expect(within(rows[1]!).getByText('asset_reviewed')).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('AgentFactsLedger', () => {
       />,
     );
 
-    expect(screen.getByTestId('generation-budget')).toHaveTextContent('2 · no limit');
+    expect(screen.getByTestId('generation-budget')).toHaveTextContent('2, no limit');
     expect(screen.getByTestId('agent-facts-truncated')).toHaveTextContent('oldest 2 facts');
   });
 

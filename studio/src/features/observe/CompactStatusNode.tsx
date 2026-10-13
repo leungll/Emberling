@@ -61,9 +61,9 @@ export function CompactStatusNode({ data, selected }: NodeProps<CompactStatusFlo
       data-selected={selected ? 'true' : 'false'}
       style={{ width: COMPACT_NODE_WIDTH, height: COMPACT_NODE_HEIGHT }}
       className={cn(
-        'relative flex flex-col items-center justify-center rounded-lg border-2 bg-[var(--card)] px-2 text-center text-[var(--card-foreground)]',
-        status ? nodeRunBorderClass(status) : 'border-[var(--border)]',
-        selected && 'ring-2 ring-[var(--foreground)] ring-offset-2 ring-offset-[var(--card)]',
+        'relative flex flex-col items-center justify-center rounded-lg border-2 bg-surface px-2 text-center text-fg',
+        status ? nodeRunBorderClass(status) : 'border-border',
+        selected && 'ring-2 ring-fg ring-offset-surface',
       )}
     >
       {selected ? (
@@ -74,18 +74,18 @@ export function CompactStatusNode({ data, selected }: NodeProps<CompactStatusFlo
           data-testid="compact-node-tint"
           className={cn(
             'pointer-events-none absolute inset-0 rounded-md',
-            status ? TONE_CARD[tone] : 'bg-[var(--accent)]',
+            status ? TONE_CARD[tone] : 'bg-surface-hover',
           )}
         />
       ) : null}
-      <span className="relative line-clamp-2 w-full text-[13px] leading-4 font-semibold break-words">
+      <span className="relative line-clamp-2 w-full text-sm font-semibold break-words">
         {data.label}
       </span>
       <span
         data-testid="compact-node-status"
         className={cn(
-          'relative mt-0.5 text-[12px] leading-4 font-semibold',
-          status ? TONE_TEXT[tone] : 'text-[var(--muted-foreground)]',
+          'relative mt-0.5 text-xs font-semibold',
+          status ? TONE_TEXT[tone] : 'text-fg-muted',
         )}
       >
         {status ? (

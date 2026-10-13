@@ -212,7 +212,7 @@ export function RunInputDialog({
       title="Run workflow"
       description={
         <span className="flex flex-wrap gap-x-3">
-          {workflowName ? <span className="text-[var(--foreground)]">{workflowName}</span> : null}
+          {workflowName ? <span className="text-fg">{workflowName}</span> : null}
           <span>Version {definitionVersion}</span>
         </span>
       }
@@ -229,9 +229,7 @@ export function RunInputDialog({
     >
       <div className="space-y-4">
         {fields.length === 0 ? (
-          <p className="text-[14px] text-[var(--muted-foreground)]">
-            This workflow has no run inputs.
-          </p>
+          <p className="text-md text-fg-muted">This workflow has no run inputs.</p>
         ) : null}
 
         {fields.map((field) => {
@@ -245,14 +243,10 @@ export function RunInputDialog({
 
           return (
             <div key={field.key} className="space-y-1.5">
-              <Label
-                id={labelId}
-                htmlFor={id}
-                className="text-[14px] font-semibold text-[var(--foreground)]"
-              >
+              <Label id={labelId} htmlFor={id} className="text-md font-semibold text-fg">
                 {inputLabels?.[field.key] ?? field.schema.title ?? field.key}
                 {field.required ? (
-                  <span aria-hidden="true" className="ml-0.5 text-red-500">
+                  <span aria-hidden="true" className="ml-0.5 text-danger-fg">
                     *
                   </span>
                 ) : null}
@@ -305,7 +299,7 @@ export function RunInputDialog({
         })}
 
         {errorMessage ? (
-          <p role="alert" className="text-[13px] text-red-500">
+          <p role="alert" className="text-sm text-danger-fg">
             {errorMessage}
           </p>
         ) : null}

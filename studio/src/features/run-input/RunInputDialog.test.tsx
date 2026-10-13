@@ -326,7 +326,7 @@ describe('RunInputDialog — Input node labels and typography', () => {
 
     const field = screen.getByRole('textbox', { name: /Creative Brief/ });
     expect(screen.queryByText(/required ·|· text/)).not.toBeInTheDocument();
-    expect(screen.getByText('Creative Brief')).toHaveClass('text-[14px]');
+    expect(screen.getByText('Creative Brief')).toHaveClass('text-md');
 
     // The label is display only: the submitted field name is still the input key.
     await userEvent.type(field, 'a lighthouse');
@@ -340,8 +340,8 @@ describe('RunInputDialog — Input node labels and typography', () => {
     for (const element of dialog.querySelectorAll('*')) {
       expect(element.getAttribute('class') ?? '').not.toMatch(/text-\[(10|11)px\]|text-xs/);
     }
-    expect(screen.getByRole('button', { name: 'Create run' })).toHaveClass('text-sm');
-    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('text-sm');
+    expect(screen.getByRole('button', { name: 'Create run' })).toHaveClass('text-md');
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('text-md');
   });
 });
 

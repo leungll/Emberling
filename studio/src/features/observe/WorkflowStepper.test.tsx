@@ -118,20 +118,20 @@ describe('WorkflowStepper', () => {
 
     const glyph = (nodeId: string) => within(step(nodeId)).getByTestId('stepper-glyph');
     expect(glyph('node_input')).toHaveAttribute('data-tone', 'succeeded');
-    expect(step('node_input')).toHaveTextContent('SUCCEEDED · 27 ms');
+    expect(step('node_input')).toHaveTextContent('SUCCEEDED, 27 ms');
 
     expect(glyph('node_agent')).toHaveAttribute('data-tone', 'waiting');
     expect(glyph('node_running')).toHaveAttribute('data-tone', 'running');
-    expect(step('node_running')).toHaveTextContent('RUNNING · started 12:00:02Z');
+    expect(step('node_running')).toHaveTextContent('RUNNING, started 12:00:02Z');
     expect(glyph('node_failed')).toHaveAttribute('data-tone', 'failed');
-    expect(step('node_failed')).toHaveTextContent('FAILED · PROVIDER_ERROR');
+    expect(step('node_failed')).toHaveTextContent('FAILED, PROVIDER_ERROR');
 
     // READY and not-yet-created NodeRuns are numbered and neutral, by step position.
     expect(glyph('node_ready')).toHaveAttribute('data-tone', 'neutral');
     expect(glyph('node_ready')).toHaveTextContent('6');
     expect(step('node_output')).toHaveAttribute('data-status', 'NOT_STARTED');
     expect(glyph('node_output')).toHaveTextContent('3');
-    expect(step('node_output')).toHaveTextContent('Not started · no NodeRun yet');
+    expect(step('node_output')).toHaveTextContent('Not started, no NodeRun yet');
   });
 
   it('shows the Agent NodeRun as its own card with the latest committed Turn number', () => {
@@ -140,7 +140,7 @@ describe('WorkflowStepper', () => {
     const agent = step('node_agent');
     expect(agent).toHaveTextContent('Agent NodeRun');
     expect(agent).toHaveTextContent('Tool Assistant');
-    expect(agent).toHaveTextContent('WAITING_CALLBACK · Turn 2');
+    expect(agent).toHaveTextContent('WAITING_CALLBACK, Turn 2');
     expect(within(agent).getByRole('button')).toHaveAttribute('aria-pressed', 'true');
   });
 

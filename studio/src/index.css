@@ -3,136 +3,350 @@
 /* React Flow styles load after the Tailwind layers so utility classes win. */
 @import '@xyflow/react/dist/style.css';
 
-/* Studio is a fixed dark workspace; Definitions stays light. The `dark` class is applied
-   to the Studio layout root, not to <html>: the MVP has no theme switch. */
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-}
-
-/* Palette anchors are the literal hex values of the Definitions and Studio mocks: Definitions
-   stays light, Studio (Edit/Observe) is a fixed dark workspace with no runtime theme toggle. */
+/*
+ * Design tokens. Studio has one light theme, and every colour, size, space, radius, shadow,
+ * layer and duration comes from this closed set. Page code uses the Tailwind utilities that
+ * @theme generates from these tokens; nothing else generates a utility.
+ */
 :root {
-  --radius: 0.5rem;
-  --background: #f6f7f9;
-  --foreground: #18212f;
-  --card: #ffffff;
-  --card-foreground: #18212f;
-  --popover: #ffffff;
-  --popover-foreground: #18212f;
-  --primary: #7657ff;
-  --primary-foreground: #ffffff;
-  --secondary: #f0f2f5;
-  --secondary-foreground: #18212f;
-  --muted: #f7f8fa;
-  --muted-foreground: #667085;
-  --accent: #f0f2f5;
-  --accent-foreground: #18212f;
-  --destructive: #f04438;
-  --destructive-foreground: #ffffff;
-  --border: #dfe3e8;
-  --input: #dfe3e8;
-  --ring: #7657ff;
+  color-scheme: light;
 
-  /* Sidebar/shell tokens (dark chrome around the light Definitions surface). */
-  --sidebar: #101828;
-  --sidebar-foreground: #f2f4f7;
-  --sidebar-muted: #98a2b3;
-  --sidebar-active: #262f40;
-  --sidebar-border: #344054;
+  /* Type: one line height per size; 12 px is the floor. Weights 400/500/600 only. */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --text-xs: 12px; /* captions, column heads, IDs, kbd, badges */
+  --text-xs--line-height: 16px;
+  --text-sm: 13px; /* secondary lines, table cells, menu items, tabs, small buttons */
+  --text-sm--line-height: 18px;
+  --text-md: 14px; /* body, values, buttons, primary cells */
+  --text-md--line-height: 20px;
+  --text-lg: 16px; /* panel, dialog and detail titles */
+  --text-lg--line-height: 24px;
+  --text-xl: 20px; /* page titles */
+  --text-xl--line-height: 28px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
 
-  /* Status tokens: shared by Definitions status pills, Canvas and Trace. */
-  --status-running-bg: #eff8ff;
-  --status-running-fg: #175cd3;
-  --status-running-dot: #53a7ff;
-  --status-waiting-bg: #fffaeb;
-  --status-waiting-fg: #b54708;
-  --status-waiting-dot: #f79009;
-  --status-succeeded-bg: #ecfdf3;
-  --status-succeeded-fg: #027a48;
-  --status-succeeded-dot: #12b76a;
-  --status-failed-bg: #fef3f2;
-  --status-failed-fg: #b42318;
-  --status-failed-dot: #f04438;
-  --status-neutral-bg: #f2f4f7;
-  --status-neutral-fg: #475467;
-  --status-neutral-dot: #98a2b3;
+  /* Space: 4 px grid. The half steps (2, 6) are only for the gap between an icon and its label. */
+  --sp-0-5: 2px;
+  --sp-1: 4px;
+  --sp-1-5: 6px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* Shape: no other radius; no pill-shaped chips or buttons. */
+  --radius-sm: 4px; /* badges, kbd, ID chips, type tags */
+  --radius-md: 6px; /* buttons, inputs, menu items, segmented items */
+  --radius-lg: 8px; /* popovers, menus, tooltips, toasts, step cards, code blocks */
+  --radius-xl: 12px; /* dialogs only */
+  --radius-full: 9999px; /* status dots, switch track and thumb */
+
+  /* Elevation: three overlay shadows, plus the resting lift of a canvas step card.
+     Other in-flow content has none. */
+  --shadow-1: 0 4px 12px -2px rgba(16, 24, 40, 0.12), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-2: 0 6px 16px -4px rgba(16, 24, 40, 0.12), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --shadow-3: 0 24px 48px -12px rgba(16, 24, 40, 0.24);
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
+
+  /* Layers. Local stacking inside a component uses 0 or 1 only. */
+  --z-base: 0;
+  --z-canvas-ui: 10;
+  --z-sticky: 20;
+  --z-header: 30;
+  --z-drawer: 40;
+  --z-dialog: 50;
+  --z-popover: 60; /* above dialogs, because menus and tooltips open from inside them */
+  --z-toast: 70;
+
+  /* Motion. Exit uses 0.75 x the enter duration. */
+  --dur-1: 100ms; /* hover, press, colour */
+  --dur-2: 160ms; /* popover, menu, tooltip enter */
+  --dur-3: 220ms; /* dialog, drawer, panel collapse */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Control and row sizes */
+  --control-xs: 24px;
+  --control-sm: 28px;
+  --control-md: 32px;
+  --control-lg: 36px; /* dialog footer buttons only */
+  --row-dense: 32px;
+  --row-table: 40px;
+  --header-h: 48px;
+  --icon-xs: 12px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px; /* state block icons only */
+
+  /* Layout */
+  --sidebar-w: 224px;
+  --sidebar-rail: 48px;
+  --panel-w: 440px; /* Editor side panel default; the user can drag it */
+
+  /* Colour */
+  --bg: #f7f7f8; /* app background, canvas, run view */
+  --surface: #ffffff; /* header, panels, tables, step cards */
+  --surface-raised: #ffffff; /* popover, menu, tooltip, dialog, toast, canvas floats */
+  --surface-hover: #f0f1f3; /* row and item hover, quiet chips */
+  --surface-pressed: #e6e8ec; /* a row or item while it is pressed */
+  --surface-inset: #f9fafb; /* sidebar, inputs, code blocks, JSON */
+  --surface-selected: rgba(118, 87, 255, 0.1); /* selected row fill, with a 2 px accent bar */
+  --border: #e3e6eb; /* panel and table dividers, card outlines */
+  --border-subtle: #eceef2; /* row separators */
+  --border-control: #8d96a5; /* input, checkbox and secondary button outline, canvas links */
+  --fg: #18212f; /* primary text, values */
+  --fg-secondary: #344054; /* secondary emphasis */
+  --fg-muted: #5d6678; /* labels, captions, metadata, units, IDs */
+  --fg-placeholder: #98a2b3; /* placeholder and disabled text only, never information */
+  --fg-on-accent: #ffffff; /* text on an accent fill */
+  --accent: #7657ff; /* primary button, selection bar, active nav marker */
+  --accent-hover: #6440f2;
+  --accent-fg: #6941f5; /* links, accent text */
+  --focus: #7657ff; /* focus ring, 2 px */
+  --scrim: rgba(16, 24, 40, 0.45); /* behind dialogs and drawers */
+
+  /* Status tones, used only through the status components. -fg is AA text on white and on
+     its own -bg tint; -dot is for dots, bars and hatching. Waiting is amber. */
+  --st-running-fg: #175cd3;
+  --st-running-dot: #2e90fa;
+  --st-running-bg: #eff8ff;
+  --st-waiting-fg: #b54708;
+  --st-waiting-dot: #f79009;
+  --st-waiting-bg: #fffaeb;
+  --st-succeeded-fg: #027a48;
+  --st-succeeded-dot: #12b76a;
+  --st-succeeded-bg: #ecfdf3;
+  --st-failed-fg: #b42318;
+  --st-failed-dot: #f04438;
+  --st-failed-bg: #fef3f2;
+  --st-queued-fg: #475467;
+  --st-queued-dot: #98a2b3;
+  --st-queued-bg: #f2f4f7;
+  --st-inactive-fg: #5d6678;
+  --st-inactive-dot: #98a2b3;
+  --st-inactive-bg: transparent;
+
+  /* Caution is a notice, never a status. Danger is for destructive confirmation and field
+     errors; Run failures use the failed tone. */
+  --caution-fg: #c4320a;
+  --caution-bg: #fff4ed;
+  --danger: #d92d20;
+  --danger-hover: #b42318;
+  --danger-fg: #b42318;
+
+  /* Data-type port colours: colour expresses data type only. */
+  --port-text: #7a5af8;
+  --port-image: #dd2590;
+  --port-json: #b88200;
+  --port-any: #667085;
+
+  /* Canvas: the Editor's dot grid and the run graph's diagonal hatching. */
+  --canvas-dot: #cfd4dc;
+  --canvas-stripe: #e9ebef;
 }
 
-.dark {
-  --background: #0d1118;
-  --foreground: #e6eaf0;
-  --card: #171d28;
-  --card-foreground: #e6eaf0;
-  --popover: #181e29;
-  --popover-foreground: #e6eaf0;
-  --primary: #7657ff;
-  --primary-foreground: #ffffff;
-  --secondary: #202735;
-  --secondary-foreground: #e6eaf0;
-  --muted: #141a24;
-  --muted-foreground: #93a0b5;
-  --accent: #222a38;
-  --accent-foreground: #e6eaf0;
-  --destructive: #f04438;
-  --destructive-foreground: #ffffff;
-  --border: #30394a;
-  --input: #3a4558;
-  --ring: #7657ff;
+/*
+ * The utilities. Each Tailwind namespace is reset first, so the default palette, sizes and
+ * shadows generate nothing, and then filled from the tokens above.
+ */
+@theme inline reference {
+  --*: initial;
 
-  --sidebar: #101828;
-  --sidebar-foreground: #f2f4f7;
-  --sidebar-muted: #98a2b3;
-  --sidebar-active: #262f40;
-  --sidebar-border: #344054;
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --default-font-family: var(--font-sans);
+  --default-mono-font-family: var(--font-mono);
 
-  /* Status tokens keep the same hues on dark surfaces; only bg/fg pairs shift to the
-     mock's dark-panel equivalents (still the same four states). */
-  --status-running-bg: rgba(83, 167, 255, 0.12);
-  --status-running-fg: #53a7ff;
-  --status-running-dot: #53a7ff;
-  --status-waiting-bg: rgba(253, 176, 34, 0.12);
-  --status-waiting-fg: #fdb022;
-  --status-waiting-dot: #fdb022;
-  --status-succeeded-bg: rgba(18, 183, 106, 0.12);
-  --status-succeeded-fg: #32d583;
-  --status-succeeded-dot: #12b76a;
-  --status-failed-bg: rgba(240, 68, 56, 0.12);
-  --status-failed-fg: #f97066;
-  --status-failed-dot: #f04438;
-  --status-neutral-bg: #202735;
-  --status-neutral-fg: #93a0b5;
-  --status-neutral-dot: #93a0b5;
+  --text-xs: var(--text-xs);
+  --text-xs--line-height: var(--text-xs--line-height);
+  --text-sm: var(--text-sm);
+  --text-sm--line-height: var(--text-sm--line-height);
+  --text-md: var(--text-md);
+  --text-md--line-height: var(--text-md--line-height);
+  --text-lg: var(--text-lg);
+  --text-lg--line-height: var(--text-lg--line-height);
+  --text-xl: var(--text-xl);
+  --text-xl--line-height: var(--text-xl--line-height);
 
-  /* Selected Canvas node card fill: a generic warm tint for every category, and
-     a distinct purple tint for the Agent category. Edit-only: a card carrying a NodeRun
-     status keeps its status colours. */
-  --node-selected-fill: #282215;
-  --node-selected-agent-fill: #25213a;
+  --font-weight-normal: var(--fw-regular);
+  --font-weight-medium: var(--fw-medium);
+  --font-weight-semibold: var(--fw-semibold);
+
+  --spacing-0: 0px;
+  --spacing-0\.5: var(--sp-0-5);
+  --spacing-1: var(--sp-1);
+  --spacing-1\.5: var(--sp-1-5);
+  --spacing-2: var(--sp-2);
+  --spacing-3: var(--sp-3);
+  --spacing-4: var(--sp-4);
+  --spacing-5: var(--sp-5);
+  --spacing-6: var(--sp-6);
+  --spacing-8: var(--sp-8);
+  --spacing-10: var(--sp-10);
+  --spacing-12: var(--sp-12);
+  --spacing-16: var(--sp-16);
+  --spacing-control-xs: var(--control-xs);
+  --spacing-control-sm: var(--control-sm);
+  --spacing-control-md: var(--control-md);
+  --spacing-control-lg: var(--control-lg);
+  --spacing-row-dense: var(--row-dense);
+  --spacing-row-table: var(--row-table);
+  --spacing-header: var(--header-h);
+  --spacing-icon-xs: var(--icon-xs);
+  --spacing-icon-sm: var(--icon-sm);
+  --spacing-icon-md: var(--icon-md);
+  --spacing-icon-lg: var(--icon-lg);
+  --spacing-sidebar: var(--sidebar-w);
+  --spacing-rail: var(--sidebar-rail);
+  --spacing-panel: var(--panel-w);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-full: var(--radius-full);
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
+  --shadow-card: var(--shadow-card);
+
+  --ease-out: var(--ease-out);
+  --ease-in: var(--ease-in);
+  --default-transition-duration: var(--dur-1);
+  --default-transition-timing-function: var(--ease-out);
+  --animate-spin: spin 1s linear infinite;
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  --breakpoint-xl: 80rem;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-pressed: var(--surface-pressed);
+  --color-surface-inset: var(--surface-inset);
+  --color-surface-selected: var(--surface-selected);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-control: var(--border-control);
+  --color-fg: var(--fg);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-placeholder: var(--fg-placeholder);
+  --color-fg-on-accent: var(--fg-on-accent);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-focus: var(--focus);
+  --color-scrim: var(--scrim);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-st-running-fg: var(--st-running-fg);
+  --color-st-running-dot: var(--st-running-dot);
+  --color-st-running-bg: var(--st-running-bg);
+  --color-st-waiting-fg: var(--st-waiting-fg);
+  --color-st-waiting-dot: var(--st-waiting-dot);
+  --color-st-waiting-bg: var(--st-waiting-bg);
+  --color-st-succeeded-fg: var(--st-succeeded-fg);
+  --color-st-succeeded-dot: var(--st-succeeded-dot);
+  --color-st-succeeded-bg: var(--st-succeeded-bg);
+  --color-st-failed-fg: var(--st-failed-fg);
+  --color-st-failed-dot: var(--st-failed-dot);
+  --color-st-failed-bg: var(--st-failed-bg);
+  --color-st-queued-fg: var(--st-queued-fg);
+  --color-st-queued-dot: var(--st-queued-dot);
+  --color-st-queued-bg: var(--st-queued-bg);
+  --color-st-inactive-fg: var(--st-inactive-fg);
+  --color-st-inactive-dot: var(--st-inactive-dot);
+  --color-st-inactive-bg: var(--st-inactive-bg);
+
+  --color-caution-fg: var(--caution-fg);
+  --color-caution-bg: var(--caution-bg);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-fg: var(--danger-fg);
+
+  --color-port-text: var(--port-text);
+  --color-port-image: var(--port-image);
+  --color-port-json: var(--port-json);
+  --color-port-any: var(--port-any);
+
+  --color-canvas-dot: var(--canvas-dot);
+  --color-canvas-stripe: var(--canvas-stripe);
+}
+
+/* Layers come from the tokens through z-index utilities named after their role. */
+@utility z-base {
+  z-index: var(--z-base);
+}
+@utility z-local {
+  z-index: 1;
+}
+@utility z-canvas-ui {
+  z-index: var(--z-canvas-ui);
+}
+@utility z-sticky {
+  z-index: var(--z-sticky);
+}
+@utility z-header {
+  z-index: var(--z-header);
+}
+@utility z-drawer {
+  z-index: var(--z-drawer);
+}
+@utility z-dialog {
+  z-index: var(--z-dialog);
+}
+@utility z-popover {
+  z-index: var(--z-popover);
+}
+@utility z-toast {
+  z-index: var(--z-toast);
+}
+@utility duration-1 {
+  transition-duration: var(--dur-1);
+}
+@utility duration-2 {
+  transition-duration: var(--dur-2);
+}
+@utility duration-3 {
+  transition-duration: var(--dur-3);
+}
+
+/* Port name hints on the canvas keep a readable size as the canvas zooms out; the canvas
+   sets --port-hint-font from the zoom level. */
+@utility text-port-hint {
+  font-size: var(--port-hint-font, var(--text-xs));
+  line-height: 1;
+}
+
+/* A checkerboard behind image previews, so transparent pixels read as such. */
+@utility bg-checker {
+  background-color: var(--surface);
+  background-image: repeating-conic-gradient(var(--surface-hover) 0% 25%, transparent 0% 50%);
+  background-size: var(--sp-4) var(--sp-4);
 }
 
 @layer base {
@@ -142,22 +356,31 @@
 
   body {
     margin: 0;
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family:
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      Roboto,
-      'Helvetica Neue',
-      sans-serif;
-    /* 14px is the floor for body text, fields and values. */
-    font-size: 14px;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: var(--text-md);
+    line-height: var(--text-md--line-height);
     -webkit-font-smoothing: antialiased;
   }
 
   #root {
     min-height: 100vh;
+  }
+
+  /* Focus is a 2 px outline in the focus colour, never a glow. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

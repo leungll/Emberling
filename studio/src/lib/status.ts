@@ -144,16 +144,16 @@ export function toolAttemptStatusVariant(status: ToolAttemptStatus): BadgeVarian
 export function nodeRunBorderClass(status: NodeRunStatus | undefined): string {
   switch (status) {
     case 'READY':
-      return 'border-[var(--muted-foreground)]';
+      return 'border-fg-muted';
     case 'RUNNING':
-      return 'border-[var(--status-running-dot)]';
+      return 'border-st-running-dot';
     case 'WAITING_CALLBACK':
-      return 'border-[var(--status-waiting-dot)]';
+      return 'border-st-waiting-dot';
     case 'SUCCEEDED':
-      return 'border-[var(--status-succeeded-dot)]';
+      return 'border-st-succeeded-dot';
     case 'FAILED':
-      return 'border-[var(--status-failed-dot)]';
+      return 'border-st-failed-dot';
     default:
-      return 'border-[var(--border)]';
+      return 'border-border';
   }
 }

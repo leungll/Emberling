@@ -21,14 +21,12 @@ interface PageStateProps {
  */
 export function PageState({ title, body, detail, action }: PageStateProps) {
   return (
-    <main className="dark flex h-screen items-center justify-center bg-[var(--background)] px-4 text-[var(--foreground)]">
-      <div className="flex max-w-md flex-col items-center gap-3 text-center">
-        <h1 className="text-[15px] font-semibold">{title}</h1>
-        {body ? <p className="text-sm text-[var(--muted-foreground)]">{body}</p> : null}
+    <main className="flex h-screen items-center justify-center bg-bg px-4 text-fg">
+      <div style={{ maxWidth: 448 }} className="flex flex-col items-center gap-3 text-center">
+        <h1 className="text-md font-semibold">{title}</h1>
+        {body ? <p className="text-md text-fg-muted">{body}</p> : null}
         {detail ? (
-          <p className="font-mono text-xs break-all text-[var(--muted-foreground)] select-all">
-            {detail}
-          </p>
+          <p className="font-mono text-xs break-all text-fg-muted select-all">{detail}</p>
         ) : null}
         <div className="flex items-center gap-2 pt-2">
           {action}

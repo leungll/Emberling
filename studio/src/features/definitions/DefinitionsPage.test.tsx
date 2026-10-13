@@ -154,14 +154,10 @@ describe('DefinitionsPage — New Definition dialog typography', () => {
 
     await user.click(await screen.findByRole('button', { name: '+ New Definition' }));
     const dialog = screen.getByRole('dialog', { name: 'New Definition' });
-    // The Definitions page is light; only the Studio pages render inside `.dark`.
-    expect(dialog.closest('.dark')).toBeNull();
-    expect(within(dialog).getByRole('heading', { name: 'New Definition' })).toHaveClass(
-      'text-[16px]',
-    );
-    expect(within(dialog).getByText('Name')).toHaveClass('text-[14px]');
-    expect(within(dialog).getByText('Description')).toHaveClass('text-[14px]');
-    expect(within(dialog).getByRole('button', { name: 'Create' })).toHaveClass('text-sm');
-    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveClass('text-sm');
+    expect(within(dialog).getByRole('heading', { name: 'New Definition' })).toHaveClass('text-lg');
+    expect(within(dialog).getByText('Name')).toHaveClass('text-md');
+    expect(within(dialog).getByText('Description')).toHaveClass('text-md');
+    expect(within(dialog).getByRole('button', { name: 'Create' })).toHaveClass('text-md');
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveClass('text-md');
   });
 });
