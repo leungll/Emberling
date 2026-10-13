@@ -49,6 +49,7 @@ func NewRouter(deps Deps) http.Handler {
 		})
 
 		r.Route("/runs", func(r chi.Router) {
+			r.Get("/", deps.listRuns)
 			r.Post("/", deps.createRun)
 			r.Get("/{runId}", deps.getRunSnapshot)
 			r.Get("/{runId}/events", deps.handleEvents)

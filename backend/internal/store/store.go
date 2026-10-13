@@ -35,6 +35,7 @@ type Tx interface {
 	Assets() AssetRepository
 	Artifacts() ArtifactRepository
 	Runs() RunRepository
+	RunList() RunListRepository
 	NodeRuns() NodeRunRepository
 	NodeAttempts() NodeAttemptRepository
 	CallbackBindings() CallbackBindingRepository
@@ -289,9 +290,10 @@ type NodeAttemptRepository interface {
 	// *domain.InvalidStateTransitionError semantics as Transition.
 	MarkSucceeded(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage) error
 
-	// MarkFailed conditionally moves an Attempt to FAILED and writes its error and
-	// completed_at, with the same semantics as MarkSucceeded.
-	MarkFailed(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError) error
+	// MarkFailed conditionally moves an Attempt to FAILED and writes its error,
+	// completed_at and whether the failed call's external outcome was uncertain, with the
+	// same semantics as MarkSucceeded. A losing call writes none of them.
+	MarkFailed(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError, uncertain bool) error
 
 	// ListExpired returns non-terminal Attempts (STARTED or DISPATCHED) whose deadline_at
 	// has passed. It backs Reconciler timeout rediscovery (the Reconciler must be able to
@@ -625,6 +627,10 @@ type EventRepository interface {
 	// ListAfter returns committed Events with seq greater than afterSeq, ascending. It
 	// backs both Snapshot-to-SSE handoff windows; the limit bounds the read.
 	ListAfter(ctx context.Context, runID string, afterSeq int64, limit int) ([]domain.Event, error)
+
+	// ListForNodeRun returns the committed Events of one NodeRun of runID whose type is
+	// one of types, ascending by seq. The limit bounds the read.
+	ListForNodeRun(ctx context.Context, runID, nodeRunID string, types []domain.EventType, limit int) ([]domain.Event, error)
 }
 
 // RunLock is proof that the caller holds the Run aggregate lock inside the current

@@ -110,6 +110,10 @@ export interface DefinitionLastRun {
   id: string;
   status: RunStatus;
   createdAt: string;
+  /** Only the stable code of the Run error summary; `null` unless the Run is `FAILED`. */
+  error: RunErrorCode | null;
+  /** The step the Run error summary describes; `null` unless the Run is `FAILED`. */
+  failedStep: RunStepRef | null;
 }
 
 export interface DefinitionListItem {
@@ -365,6 +369,77 @@ export interface Run {
   lastSeq?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Run list
+// ---------------------------------------------------------------------------
+
+/** The code of a Run error summary. Lists never carry the message or details. */
+export interface RunErrorCode {
+  code: string;
+}
+
+/** One node of the Definition version a Run is bound to. */
+export interface RunStepRef {
+  nodeId: string;
+  nodeName: string;
+}
+
+/** A NodeRun of a `PAUSED` Run that is waiting for an external result. */
+export interface RunWaitingStep extends RunStepRef {
+  waitingAt: string | null;
+}
+
+export interface RunListItem {
+  id: string;
+  workflowId: string;
+  /** The Workflow's current name. */
+  workflowName: string;
+  definitionVersion: number;
+  /** The Workflow's latest version; a smaller `definitionVersion` is an older version. */
+  latestVersion: number;
+  status: RunStatus;
+  /** Equal to `startedAt`: a Run starts in the transaction that creates it. */
+  createdAt: string;
+  startedAt: string;
+  completedAt: string | null;
+  error: RunErrorCode | null;
+  failedStep: RunStepRef | null;
+  /** Filled only for a `PAUSED` Run, ordered by `waitingAt`; empty otherwise. */
+  waitingSteps: RunWaitingStep[];
+}
+
+/** Server-side counts for the current workflow, time and code filters, ignoring `status`. */
+export interface RunStatusCounts {
+  all: number;
+  running: number;
+  paused: number;
+  completed: number;
+  failed: number;
+}
+
+export interface RunListResponse {
+  /** Newest first. */
+  items: RunListItem[];
+  /** Continues to older Runs; `null` on the last page. */
+  nextCursor: string | null;
+  /** Continues to newer Runs; `null` on the first page. */
+  prevCursor: string | null;
+  counts: RunStatusCounts;
+}
+
+export interface RunListQuery {
+  workflowId?: string;
+  status?: RunStatus;
+  /** RFC 3339; keeps Runs started at or after this instant. */
+  startedAfter?: string;
+  /** A full Run ID, or 8 to 64 letters or digits from the start of the Run ID after `run_`. */
+  code?: string;
+  /** A `nextCursor` or `prevCursor` issued for the same filters. */
+  cursor?: string;
+  /** 1 to 100; the Backend defaults to 20. */
+  limit?: number;
+}
+
 export interface NodeRun {
   id: string;
   runId: string;
@@ -406,6 +481,11 @@ export interface NodeAttempt {
   dispatchedAt: string | null;
   completedAt: string | null;
   error: ExecutionError | null;
+  /**
+   * For a `FAILED` Attempt, whether its external outcome was uncertain when it failed.
+   * `null` on any other Attempt, and on one that failed before this was recorded.
+   */
+  uncertain: boolean | null;
   /** `null` for a synchronous Attempt. */
   callbackBinding: CallbackBindingSummary | null;
 }
@@ -467,6 +547,15 @@ export interface AgentDecisionTrace {
   hasStatePatch: boolean;
 }
 
+/** Who won the conditional claim of a Turn or Action. */
+export type ClaimSource = 'IMMEDIATE' | 'RECONCILER';
+
+/** The path that delivered an Action's successful result. */
+export type CompletionSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL';
+
+/** The path that failed an Action. */
+export type FailureSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL' | 'TIMEOUT';
+
 export interface AgentActionTrace {
   id: string;
   type: string;
@@ -474,6 +563,12 @@ export interface AgentActionTrace {
   startedAt: string | null;
   completedAt: string | null;
   error: ExecutionError | null;
+  /** Read from the Action's committed Events; `null` until the Action was claimed. */
+  claimSource: ClaimSource | null;
+  /** `null` unless the Action succeeded. */
+  completionSource: CompletionSource | null;
+  /** `null` unless the Action failed. */
+  failureSource: FailureSource | null;
 }
 
 /** One Tool Attempt. A retry preserves the earlier Attempt and adds a new `attemptNo`. */
@@ -500,6 +595,8 @@ export interface AgentTurnTrace {
   error: ExecutionError | null;
   /** Usage the model reported for this Turn; `null` when unreported or not yet known. */
   usage: TokenUsage | null;
+  /** Read from the Turn's committed Event; `null` until the Turn was claimed. */
+  claimSource: ClaimSource | null;
   /** `null` before the Turn committed a Decision. */
   decision: AgentDecisionTrace | null;
   /** `null` for a Turn whose Decision created no Action. */
@@ -669,4 +766,15 @@ export interface ApiError {
     message: string;
     details?: JsonValue;
   };
+}
+
+/**
+ * The 200 body of the Backend's liveness (`/health`) and readiness (`/ready`) probes,
+ * served at the root path rather than under `/api`. `version` and `commit` are build
+ * labels; either is `"unknown"` when the build did not record it.
+ */
+export interface BackendProbeResponse {
+  status: 'ok' | 'ready';
+  version: string;
+  commit: string;
 }

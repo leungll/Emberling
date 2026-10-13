@@ -15,6 +15,8 @@ import type {
   NodeRunDetail,
   NodeTypeListResponse,
   RunEvent,
+  RunListQuery,
+  RunListResponse,
   RunSnapshot,
   SaveDefinitionRequest,
   ToolListResponse,
@@ -185,6 +187,20 @@ export function uploadAsset(file: File, signal?: AbortSignal): Promise<AssetRef>
 
 export function createRun(body: CreateRunRequest): Promise<CreateRunResponse> {
   return request<CreateRunResponse>('/runs', { method: 'POST', body });
+}
+
+/**
+ * One page of the Run list, newest first, with server-computed status counts. Cursors are
+ * opaque and bound to the filters they were issued for.
+ */
+export function listRuns(query: RunListQuery = {}, signal?: AbortSignal): Promise<RunListResponse> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query) as [string, string | number | undefined][]) {
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  }
+  const encoded = params.toString();
+  const suffix = encoded === '' ? '' : `?${encoded}`;
+  return request<RunListResponse>(`/runs${suffix}`, { ...(signal ? { signal } : {}) });
 }
 
 export function getRun(runId: string, signal?: AbortSignal): Promise<RunSnapshot> {

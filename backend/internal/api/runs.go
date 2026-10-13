@@ -108,18 +108,21 @@ type callbackBindingDTO struct {
 // null; Studio's NodeAttempt.callbackBinding is a required, non-optional key
 // (studio/src/api/types.ts), so the key must still be present on every Attempt.
 type nodeAttemptDTO struct {
-	ID              string                   `json:"id"`
-	NodeRunID       string                   `json:"nodeRunId,omitempty"`
-	AttemptNo       int                      `json:"attemptNo"`
-	Status          domain.NodeAttemptStatus `json:"status"`
-	Input           json.RawMessage          `json:"input"`
-	Result          json.RawMessage          `json:"result"`
-	StartedAt       time.Time                `json:"startedAt"`
-	DeadlineAt      *time.Time               `json:"deadlineAt"`
-	DispatchedAt    *time.Time               `json:"dispatchedAt"`
-	CompletedAt     *time.Time               `json:"completedAt"`
-	Error           *domain.ExecutionError   `json:"error"`
-	CallbackBinding any                      `json:"callbackBinding"`
+	ID           string                   `json:"id"`
+	NodeRunID    string                   `json:"nodeRunId,omitempty"`
+	AttemptNo    int                      `json:"attemptNo"`
+	Status       domain.NodeAttemptStatus `json:"status"`
+	Input        json.RawMessage          `json:"input"`
+	Result       json.RawMessage          `json:"result"`
+	StartedAt    time.Time                `json:"startedAt"`
+	DeadlineAt   *time.Time               `json:"deadlineAt"`
+	DispatchedAt *time.Time               `json:"dispatchedAt"`
+	CompletedAt  *time.Time               `json:"completedAt"`
+	Error        *domain.ExecutionError   `json:"error"`
+	// Uncertain is the failure's recorded determination: true or false on a FAILED
+	// Attempt, null on any other Attempt and on one that failed before it was recorded.
+	Uncertain       *bool `json:"uncertain"`
+	CallbackBinding any   `json:"callbackBinding"`
 }
 
 // toNodeAttemptDTO projects a, together with its Callback Binding when one exists.
@@ -137,6 +140,7 @@ func toNodeAttemptDTO(a domain.NodeAttempt, binding *domain.CallbackBinding) nod
 		DispatchedAt: a.DispatchedAt,
 		CompletedAt:  a.CompletedAt,
 		Error:        a.Error,
+		Uncertain:    a.Uncertain,
 	}
 	if binding != nil {
 		dto.CallbackBinding = callbackBindingDTO{
@@ -245,10 +249,13 @@ type agentTraceTurnDTO struct {
 	Error       *domain.ExecutionError `json:"error"`
 	// Usage is the Token usage this Turn's model call reported, null when the Provider
 	// reported none or the Turn has no committed model result.
-	Usage        *domain.TokenUsage `json:"usage"`
-	Decision     *agentDecisionDTO  `json:"decision"`
-	Action       *agentActionDTO    `json:"action"`
-	ToolAttempts []toolAttemptDTO   `json:"toolAttempts"`
+	Usage *domain.TokenUsage `json:"usage"`
+	// ClaimSource is who claimed the Turn, read from its committed Event; null before the
+	// Turn was claimed.
+	ClaimSource  *domain.ClaimSource `json:"claimSource"`
+	Decision     *agentDecisionDTO   `json:"decision"`
+	Action       *agentActionDTO     `json:"action"`
+	ToolAttempts []toolAttemptDTO    `json:"toolAttempts"`
 }
 
 // agentDecisionDTO says what the model committed to, without saying what it said: the
@@ -261,14 +268,18 @@ type agentDecisionDTO struct {
 	HasStatePatch bool                `json:"hasStatePatch"`
 }
 
-// agentActionDTO projects the durable work item created with the Decision.
+// agentActionDTO projects the durable work item created with the Decision. The three
+// sources are read from the Action's committed Events, each null until that Event exists.
 type agentActionDTO struct {
-	ID          string                   `json:"id"`
-	Type        domain.AgentActionType   `json:"type"`
-	Status      domain.AgentActionStatus `json:"status"`
-	StartedAt   *time.Time               `json:"startedAt"`
-	CompletedAt *time.Time               `json:"completedAt"`
-	Error       *domain.ExecutionError   `json:"error"`
+	ID               string                   `json:"id"`
+	Type             domain.AgentActionType   `json:"type"`
+	Status           domain.AgentActionStatus `json:"status"`
+	StartedAt        *time.Time               `json:"startedAt"`
+	CompletedAt      *time.Time               `json:"completedAt"`
+	Error            *domain.ExecutionError   `json:"error"`
+	ClaimSource      *domain.ClaimSource      `json:"claimSource"`
+	CompletionSource *domain.CompletionSource `json:"completionSource"`
+	FailureSource    *domain.FailureSource    `json:"failureSource"`
 }
 
 // toolAttemptDTO projects one real Tool call. CallbackBinding is typed as `any` for the
@@ -366,6 +377,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 		CompletedAt:  utcTimePtr(round.Turn.CompletedAt),
 		Error:        round.Turn.Error,
 		Usage:        round.Turn.TokenUsage,
+		ClaimSource:  round.TurnClaimSource,
 		ToolAttempts: []toolAttemptDTO{},
 	}
 	if round.Decision != nil {
@@ -383,6 +395,10 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 			StartedAt:   utcTimePtr(round.Action.StartedAt),
 			CompletedAt: utcTimePtr(round.Action.CompletedAt),
 			Error:       round.Action.Error,
+
+			ClaimSource:      round.ActionSources.Claim,
+			CompletionSource: round.ActionSources.Completion,
+			FailureSource:    round.ActionSources.Failure,
 		}
 	}
 	for _, attempt := range round.ToolAttempts {

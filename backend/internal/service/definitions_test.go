@@ -117,6 +117,7 @@ func newDefsFakeTx() *defsFakeTx {
 
 func (t *defsFakeTx) Definitions() store.DefinitionRepository   { return t.defs }
 func (t *defsFakeTx) Runs() store.RunRepository                 { return t.runs }
+func (t *defsFakeTx) RunList() store.RunListRepository          { return nil }
 func (t *defsFakeTx) NodeRuns() store.NodeRunRepository         { return t.nodeRuns }
 func (t *defsFakeTx) NodeAttempts() store.NodeAttemptRepository { return t.attempts }
 func (t *defsFakeTx) Events() store.EventRepository             { return t.events }
@@ -384,7 +385,7 @@ func (r *defsFakeNodeAttemptRepo) ListDuePolls(context.Context, time.Time, int) 
 func (r *defsFakeNodeAttemptRepo) MarkSucceeded(context.Context, string, domain.NodeAttemptStatus, time.Time, json.RawMessage) error {
 	return errDefsFakeNotImplemented
 }
-func (r *defsFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError) error {
+func (r *defsFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError, bool) error {
 	return errDefsFakeNotImplemented
 }
 func (r *defsFakeNodeAttemptRepo) ListExpired(context.Context, time.Time, int) ([]domain.NodeAttempt, error) {
@@ -414,6 +415,10 @@ func (r *defsFakeEventRepo) ListAfter(ctx context.Context, runID string, afterSe
 	r.lastAfterSeq = afterSeq
 	r.lastLimit = limit
 	return r.events, nil
+}
+
+func (r *defsFakeEventRepo) ListForNodeRun(context.Context, string, string, []domain.EventType, int) ([]domain.Event, error) {
+	return nil, errDefsFakeNotImplemented
 }
 
 var _ store.EventRepository = (*defsFakeEventRepo)(nil)

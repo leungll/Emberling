@@ -282,6 +282,7 @@ func run(logger *slog.Logger) error {
 		Assets:                  assetService,
 		Artifacts:               artifactService,
 		Readiness:               probe,
+		Build:                   currentBuildInfo(),
 		Notifier:                notifier,
 		Clock:                   clock,
 		Logger:                  logger,

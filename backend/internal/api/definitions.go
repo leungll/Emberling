@@ -29,14 +29,17 @@ type saveDefinitionRequest struct {
 	BaseVersion int `json:"baseVersion"`
 }
 
-// lastRunDTO is DefinitionListItem.lastRun's shape: only
-// id/status/createdAt, never the full Run. createdAt is sourced from domain.Run.StartedAt:
-// domain.Run has no CreatedAt field of its own, and StartedAt is set the moment CreateRun
-// commits, so it is the only fact this field can mean.
+// lastRunDTO is DefinitionListItem.lastRun's shape: id/status/createdAt plus, for a
+// FAILED Run, its error code and failed step, never the full Run or the error message.
+// createdAt is sourced from domain.Run.StartedAt: domain.Run has no CreatedAt field of its
+// own, and StartedAt is set the moment CreateRun commits, so it is the only fact this
+// field can mean. error and failedStep are always present and null unless the Run failed.
 type lastRunDTO struct {
-	ID        string           `json:"id"`
-	Status    domain.RunStatus `json:"status"`
-	CreatedAt time.Time        `json:"createdAt"`
+	ID         string           `json:"id"`
+	Status     domain.RunStatus `json:"status"`
+	CreatedAt  time.Time        `json:"createdAt"`
+	Error      *runErrorCodeDTO `json:"error"`
+	FailedStep *runStepDTO      `json:"failedStep"`
 }
 
 // definitionListItemDTO is one row of GET /definitions. LastRun is a pointer with no
@@ -60,7 +63,14 @@ func toDefinitionListItemDTO(item service.DefinitionListItem) definitionListItem
 		UpdatedAt:     item.Workflow.UpdatedAt,
 	}
 	if item.LastRun != nil {
-		dto.LastRun = &lastRunDTO{ID: item.LastRun.ID, Status: item.LastRun.Status, CreatedAt: item.LastRun.StartedAt}
+		run := item.LastRun
+		dto.LastRun = &lastRunDTO{ID: run.ID, Status: run.Status, CreatedAt: run.StartedAt}
+		if run.Error != nil {
+			dto.LastRun.Error = toRunErrorCodeDTO(run.Status, run.Error.Code)
+		}
+		if run.Status == domain.RunFailed {
+			dto.LastRun.FailedStep = toRunStepDTO(item.LastRunFailedStep)
+		}
 	}
 	return dto
 }

@@ -5,6 +5,10 @@ ARG GO_VERSION=1.27.1
 
 FROM golang:${GO_VERSION} AS build
 ARG CMD=emberling
+# Build labels reported by the Backend's /health and /ready. The build context carries no
+# Git metadata, so the commit is passed in; left empty, the Backend reports "unknown".
+ARG EMBERLING_BUILD_VERSION=
+ARG EMBERLING_BUILD_COMMIT=
 WORKDIR /src
 
 # Dependencies are copied first so that a source-only change reuses the module layer.
@@ -12,7 +16,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -o /out/service ./cmd/${CMD}
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-X main.buildVersion=${EMBERLING_BUILD_VERSION} -X main.buildCommit=${EMBERLING_BUILD_COMMIT}" \
+    -o /out/service ./cmd/${CMD}
 # The operator's Execution Artifact sweeper ships in every image beside the selected
 # binary, so it runs with the Backend's environment and mounted storage root, e.g.
 # `docker compose run --rm --entrypoint /usr/local/bin/artifactsweep backend`.

@@ -5,6 +5,7 @@ import {
   getAgentTrace,
   getNodeRunDetail,
   listDefinitions,
+  listRuns,
   saveDefinition,
   uploadAsset,
 } from './client';
@@ -89,6 +90,37 @@ describe('api client', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.workflowId).toBe('wf_123');
     expect(items[0]?.lastRun).toBeNull();
+  });
+
+  it('lists Runs with only the given filters in the query string', async () => {
+    const page = {
+      items: [],
+      nextCursor: null,
+      prevCursor: null,
+      counts: { all: 0, running: 0, paused: 0, completed: 0, failed: 0 },
+    };
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, page)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listRuns()).resolves.toEqual(page);
+    await listRuns({
+      workflowId: 'wf_123',
+      status: 'FAILED',
+      startedAfter: '2026-08-03T12:00:00Z',
+      cursor: 'abc',
+      limit: 50,
+    });
+
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('/api/runs');
+    const url = new URL((fetchMock.mock.calls[1] as [string])[0], 'http://studio.test');
+    expect(url.pathname).toBe('/api/runs');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      workflowId: 'wf_123',
+      status: 'FAILED',
+      startedAfter: '2026-08-03T12:00:00Z',
+      cursor: 'abc',
+      limit: '50',
+    });
   });
 
   it('sends a save as PUT with baseVersion in the body', async () => {
