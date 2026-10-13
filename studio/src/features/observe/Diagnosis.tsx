@@ -1,6 +1,6 @@
 import { CircleAlert, Hourglass, PencilLine, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
 import { Elapsed, RunOffset } from './RunFacts';
 import { Words } from './Words';
@@ -53,6 +53,7 @@ export function FailCard({
   withEffect?: boolean;
 }) {
   const copy = useCopy();
+  const { search } = useLocation();
   const d = copy.runs.diagnosis;
   const tools = failure.tool ? [failure.tool] : [];
   return (
@@ -83,7 +84,7 @@ export function FailCard({
         ) : null}
         <div className="mt-1 flex flex-wrap gap-2">
           <Link
-            to={editHref(workflowId, failure.step.node.id, failure.field)}
+            to={editHref(workflowId, failure.step.node.id, failure.field, search)}
             className={cn(buttonVariants({ variant: 'primary', size: 'sm' }), 'no-underline')}
           >
             <PencilLine aria-hidden="true" className="size-icon-sm" />

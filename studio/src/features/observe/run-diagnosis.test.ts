@@ -123,6 +123,7 @@ describe('editHref', () => {
     expect(editHref('wf 1', 'agent', 'timeoutMs')).toBe(
       '/workflows/wf%201?select=agent&field=timeoutMs',
     );
+    expect(editHref('wf_1', null, null, '?from=runs&el=x')).toBe('/workflows/wf_1?from=runs');
     expect(editHref('wf_1', null, null)).toBe('/workflows/wf_1');
   });
 });

@@ -1,6 +1,6 @@
 import { ChevronRight, CircleAlert } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
 import { FailCard, SelectLink, WaitCard } from './Diagnosis';
 import { ElementTime, RunOffset, Tokens } from './RunFacts';
@@ -175,6 +175,7 @@ function allowedTools(step: Step): string[] {
  */
 export function WorkflowAbout({ ctx }: { ctx: DetailContext }) {
   const copy = useCopy();
+  const { search } = useLocation();
   const d = copy.runs.details;
   const def = ctx.model.definition;
   const used = ctx.model.snapshot.run.definitionVersion;
@@ -196,7 +197,7 @@ export function WorkflowAbout({ ctx }: { ctx: DetailContext }) {
             <p className="m-0 text-sm text-fg-secondary">
               {d.olderNote(used)}{' '}
               <Link
-                to={editHref(ctx.workflowId, null, null)}
+                to={editHref(ctx.workflowId, null, null, search)}
                 className="text-accent-fg underline-offset-3 hover:underline"
               >
                 {d.openLatest}
@@ -211,6 +212,7 @@ export function WorkflowAbout({ ctx }: { ctx: DetailContext }) {
 
 function RunOverview({ ctx }: { ctx: DetailContext }) {
   const copy = useCopy();
+  const { search } = useLocation();
   const d = copy.runs.details;
   const f = d.facts;
   const { model } = ctx;
@@ -247,7 +249,7 @@ function RunOverview({ ctx }: { ctx: DetailContext }) {
                 <IdChip
                   id={run.workflowId}
                   label={copy.runs.view.workflowId.toLowerCase()}
-                  to={editHref(ctx.workflowId, null, null)}
+                  to={editHref(ctx.workflowId, null, null, search)}
                 />
               ),
             },

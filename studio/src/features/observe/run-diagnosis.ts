@@ -2,6 +2,7 @@ import { between, failFocusId, type RunModel, type Step } from './run-model';
 import type { AgentTurnTrace, ToolAttemptTrace, ToolMetadata } from '@/api/types';
 import { copy } from '@/lib/copy';
 import { duration, limitText } from '@/lib/time';
+import { carryFrom } from '@/lib/nav/list-state';
 
 /**
  * What happened, why and what to do next, from returned fields only: Studio wording per
@@ -183,11 +184,19 @@ const FIELD_OF: Record<string, string> = {
   INVALID_ACTION: 'outputSchema',
 };
 
-/** The Editor address for a step and field of the run's workflow. */
-export function editHref(workflowId: string, nodeId: string | null, field: string | null): string {
+/**
+ * The Editor address for a step and field of the run's workflow. `search` is the run view's
+ * own address, so the Editor keeps going back to the list the run was opened from.
+ */
+export function editHref(
+  workflowId: string,
+  nodeId: string | null,
+  field: string | null,
+  search = '',
+): string {
   const q = new URLSearchParams();
   if (nodeId) q.set('select', nodeId);
   if (field) q.set('field', field);
   const s = q.toString();
-  return `/workflows/${encodeURIComponent(workflowId)}${s ? `?${s}` : ''}`;
+  return carryFrom(`/workflows/${encodeURIComponent(workflowId)}${s ? `?${s}` : ''}`, search);
 }

@@ -223,7 +223,7 @@ export function RunView({
     } else if (k === 'e') {
       e.preventDefault();
       const step = stepElementOf(model.byId.get(selectedId));
-      void navigate(editHref(workflowId, step?.id ?? null, null));
+      void navigate(editHref(workflowId, step?.id ?? null, null, search));
     } else if (k === 'r') {
       e.preventDefault();
       onRunAgain();
