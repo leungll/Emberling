@@ -437,6 +437,16 @@ export const runs = {
     groupLead: (unit: string, reps: number) =>
       `The agent repeated ${unit} ${reps} times. Every call succeeded.`,
     turnsSection: 'Turns',
+    media: {
+      label: 'Images',
+      source: {
+        ASSET: 'Uploaded image',
+        ARTIFACT: 'Image saved by this run',
+        EXTERNAL: 'Image from an outside service',
+      } as Record<string, string>,
+      alt: (what: string) => `Preview: ${what}`,
+      noPreview: 'No preview for this reference.',
+    },
     io: {
       noInput: 'No input.',
       noOutput: 'No output.',

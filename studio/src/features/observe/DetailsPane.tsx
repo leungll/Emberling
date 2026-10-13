@@ -1,6 +1,7 @@
 import { Activity, ChevronRight, X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 
+import { MediaPreview } from './MediaPreview';
 import { ElementOverview } from './ElementOverview';
 import { RunOffset } from './RunFacts';
 import { TurnsTab } from './TurnsTab';
@@ -168,6 +169,7 @@ function IoTab({
   }
   return (
     <Pad>
+      <MediaPreview value={value} runId={run.id} />
       <JsonViewer value={value} root={root} />
     </Pad>
   );
