@@ -53,10 +53,8 @@ export function LastRunStrip({
     );
   }
 
-  const runHref = carryFrom(
-    `/workflows/${encodeURIComponent(workflowId)}/runs/${encodeURIComponent(run.id)}`,
-    location.search,
-  );
+  const runPath = `/workflows/${encodeURIComponent(workflowId)}/runs/${encodeURIComponent(run.id)}`;
+  const runHref = carryFrom(runPath, location.search);
   const tookMs =
     run.startedAt && run.completedAt
       ? new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()
@@ -151,10 +149,9 @@ export function LastRunStrip({
                 ) : null}
                 {nr ? (
                   <Link
-                    to={carryFrom(
-                      `${runHref.split('?')[0] ?? ''}?step=${encodeURIComponent(n.id)}`,
-                      location.search,
-                    )}
+                    // The run view selects the element its `el` parameter names; a step's
+                    // element is its node ID.
+                    to={carryFrom(`${runPath}?el=${encodeURIComponent(n.id)}`, location.search)}
                     aria-label={t.openStepLabel(n.name)}
                     className={linkClass}
                   >

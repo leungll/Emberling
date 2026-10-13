@@ -64,7 +64,7 @@ describe('failureOf', () => {
       title: 'Reviewer ran out of time',
       cause: 'It reached its 2 min time limit in turn 2, while deploy was running.',
       effect: 'Result did not run.',
-      field: 'limits.timeout',
+      field: 'timeoutMs',
       nextLabel: 'Change the time limit',
       notRetriedTool: 'deploy',
       focus: 'act_2',
@@ -120,8 +120,8 @@ describe('failureOf', () => {
 
 describe('editHref', () => {
   it('links to the step and field in the Editor', () => {
-    expect(editHref('wf 1', 'agent', 'limits.timeout')).toBe(
-      '/workflows/wf%201?select=agent&field=limits.timeout',
+    expect(editHref('wf 1', 'agent', 'timeoutMs')).toBe(
+      '/workflows/wf%201?select=agent&field=timeoutMs',
     );
     expect(editHref('wf_1', null, null)).toBe('/workflows/wf_1');
   });

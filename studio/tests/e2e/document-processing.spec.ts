@@ -60,3 +60,33 @@ test('Document Processing completes synchronously and shows its output', async (
   await expect(output.getByText('No output.')).toHaveCount(0);
   await expect(output).toContainText(/\S/);
 });
+
+test('a step opens in the run from the Editor and in the Editor from the run', async ({ page }) => {
+  const generated = JSON.parse(
+    await readFile(GENERATED_DEFINITIONS_PATH, 'utf-8'),
+  ) as GeneratedDefinitions;
+  const { workflowId } = generated.documentProcessing;
+
+  await page.goto(`/workflows/${workflowId}`);
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Document').fill('A short document for the cross-page links.');
+  await dialog.getByRole('button', { name: 'Start run' }).click();
+  await page.waitForURL(/\/runs\//);
+  await expect(runStatus(page)).toHaveText('Completed', { timeout: 30_000 });
+
+  // Editor → run: the Last run strip opens a step with that step selected in the run.
+  await page.getByRole('link', { name: 'Editor', exact: true }).click();
+  await page.getByRole('button', { name: 'Show the steps of the last run' }).click();
+  await page.getByRole('link', { name: 'Open Summary in the run' }).click();
+  await page.waitForURL(/\/runs\/[^/?]+\?el=node_summary/);
+  await expect(details(page).getByRole('heading', { level: 2 })).toHaveText('Summary');
+
+  // Run → Editor: the run's "open in the Editor" shortcut opens the selected step's settings.
+  await page.keyboard.press('e');
+  await page.waitForURL(new RegExp(`/workflows/${workflowId}$`));
+  await expect(page.getByRole('button', { name: 'Workflow overview' })).toBeVisible();
+  await expect(
+    page.getByRole('complementary').getByRole('textbox', { name: 'Step name' }),
+  ).toHaveValue('Summary');
+});

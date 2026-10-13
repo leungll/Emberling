@@ -38,7 +38,9 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
   const s = t.sections;
   const { registry, issues, focusRequest } = useEditor();
   const [opened, setOpened] = useState<Partial<Record<DisclosureId, boolean>>>({});
-  const [seenSeq, setSeenSeq] = useState(focusRequest?.seq ?? 0);
+  // Null on mount, so a request that selected this step (an issue, a link from a run) also
+  // opens its disclosure: the focus below runs on mount for the same request.
+  const [seenSeq, setSeenSeq] = useState<number | null>(null);
   const [picker, setPicker] = useState(false);
   const body = useRef<HTMLDivElement>(null);
 

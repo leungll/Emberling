@@ -6,11 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from '@/api/client';
 import type { Definition, Node } from '@/api/types';
 import { link, MODELS, NODE_TYPES, step, TOOLS } from '@/test/registry-fixture';
+import { nodeRun, snapshot } from '@/test/run-fixtures';
 import { EditPage } from './EditPage';
 import { useEditorStore } from './editor-store';
 
 const api = vi.hoisted(() => ({
   getDefinition: vi.fn(),
+  getRun: vi.fn(),
   saveDefinition: vi.fn(),
   createDefinition: vi.fn(),
   listDefinitions: vi.fn(),
@@ -182,6 +184,54 @@ describe('EditPage', () => {
 
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/^Fix \d+ issues? to save\.$/));
     expect(api.saveDefinition).not.toHaveBeenCalled();
+  });
+});
+
+describe('EditPage links between the Editor and a run', () => {
+  it('opens the step and field that ?select= and &field= name, then drops them', async () => {
+    renderAt('/workflows/wf_123?select=in&field=inputKey');
+
+    expect(await screen.findByRole('button', { name: 'Workflow overview' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.activeElement?.closest<HTMLElement>('[data-field]')?.dataset.field).toBe(
+        'inputKey',
+      ),
+    );
+    await waitFor(() => expect(location()).toBe('/workflows/wf_123'));
+  });
+
+  it('keeps the overview for a step the workflow no longer has', async () => {
+    renderAt('/workflows/wf_123?select=gone');
+
+    await waitFor(() => expect(location()).toBe('/workflows/wf_123'));
+    expect(screen.queryByRole('button', { name: 'Workflow overview' })).toBeNull();
+  });
+
+  it('opens a step of the last run with the element the run view selects', async () => {
+    api.listDefinitions.mockResolvedValue([
+      {
+        workflowId: 'wf_123',
+        name: 'Answer a brief',
+        description: '',
+        latestVersion: 4,
+        updatedAt: '2026-08-03T12:00:00Z',
+        lastRun: { id: 'run_9', status: 'COMPLETED', createdAt: '2026-08-03T12:00:00Z' },
+      },
+    ]);
+    api.getRun.mockResolvedValue(
+      snapshot('COMPLETED', [nodeRun('in', 'text_input'), nodeRun('out', 'text_output')], {
+        id: 'run_9',
+        workflowId: 'wf_123',
+        definitionVersion: 4,
+      }),
+    );
+    localStorage.setItem('emb.editor.strip', '1');
+    renderAt('/workflows/wf_123?from=runs');
+
+    expect(await screen.findByRole('link', { name: 'Open Brief in the run' })).toHaveAttribute(
+      'href',
+      '/workflows/wf_123/runs/run_9?el=in&from=runs',
+    );
   });
 });
 

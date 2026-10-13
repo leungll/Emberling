@@ -94,7 +94,7 @@ export function failureOf(model: RunModel, tools: readonly ToolMetadata[]): Fail
         turn?.turnNo ?? null,
         tool,
       );
-      field = 'limits.timeout';
+      field = 'timeoutMs';
       nextLabel = d.changeTimeLimit;
       break;
     case 'PRECONDITION_UNMET': {
@@ -118,7 +118,7 @@ export function failureOf(model: RunModel, tools: readonly ToolMetadata[]): Fail
     case 'GENERATION_LIMIT_REACHED':
       title = d.limitReached(name);
       cause = d.usedOf(numberText(details.used), numberText(details.limit), tool);
-      field = 'limits.maxGenerationCalls';
+      field = 'maxGenerationCalls';
       nextLabel = d.changeGenerationLimit;
       break;
     default: {
@@ -168,16 +168,19 @@ export function failureOf(model: RunModel, tools: readonly ToolMetadata[]): Fail
   };
 }
 
-/** The Editor field each stable error code's fix lives in. */
+/**
+ * The Editor field each stable error code's fix lives in, named by the step's config key as
+ * the Editor's `?field=` reads it.
+ */
 const FIELD_OF: Record<string, string> = {
-  TIMEOUT: 'limits.timeout',
-  MAX_TURNS: 'limits.maxTurns',
+  TIMEOUT: 'timeoutMs',
+  MAX_TURNS: 'maxTurns',
   PRECONDITION_UNMET: 'instructions',
-  GENERATION_LIMIT_REACHED: 'limits.maxGenerationCalls',
+  GENERATION_LIMIT_REACHED: 'maxGenerationCalls',
   FACT_BASIS_MISSING: 'instructions',
-  MODEL_ERROR: 'model',
+  MODEL_ERROR: 'modelId',
   TOOL_ERROR: 'instructions',
-  INVALID_ACTION: 'advanced.outputSchema',
+  INVALID_ACTION: 'outputSchema',
 };
 
 /** The Editor address for a step and field of the run's workflow. */

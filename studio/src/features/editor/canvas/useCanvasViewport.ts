@@ -31,7 +31,9 @@ function writeStored(key: string, value: string): void {
   }
 }
 
+/** The pan animation's length; none under reduced motion or where media queries are missing. */
 function duration(): number {
+  if (typeof window.matchMedia !== 'function') return 0;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220;
 }
 

@@ -34,6 +34,7 @@ import { EditorHeader } from './EditorHeader';
 import { LastRunStrip } from './LastRunStrip';
 import { LeaveGuardDialog } from './LeaveGuardDialog';
 import { serverIssues, validate, type Issue } from './model/checks';
+import { fieldKeyFor } from './model/fields';
 import { stagedInput } from './model/images';
 import { SidePanel } from './panel/SidePanel';
 import { StepsSidebar } from './StepsSidebar';
@@ -194,6 +195,30 @@ export function EditPage() {
     setFocusRequest((r) => ({ nodeId, field, seq: (r?.seq ?? 0) + 1 }));
     requestAnimationFrame(() => geometry.current.reveal(nodeId));
   }, []);
+  // `?select=<step>&field=<config key>` (a run's "Open step in the Editor" or a failure's fix)
+  // opens that step's settings at the field once the draft is loaded. The parameters are then
+  // dropped, so a reload or Back does not take the selection back from the viewer.
+  const deepLink = useRef(
+    searchParams.get('select')
+      ? { nodeId: searchParams.get('select') ?? '', field: searchParams.get('field') }
+      : null,
+  );
+  useEffect(() => {
+    const link = deepLink.current;
+    if (!ready || !link) return;
+    deepLink.current = null;
+    const node = useEditorStore.getState().doc.nodes.find((n) => n.id === link.nodeId);
+    if (node) openSettings(node.id, link.field ? fieldKeyFor(node.type, link.field) : null);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('select');
+        next.delete('field');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [ready, openSettings, setSearchParams]);
   const showIssue = useCallback(
     (issue: Issue) => {
       if (issue.node) {
