@@ -57,8 +57,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
-    // tests/theme.test.ts compiles the stylesheet with Tailwind in Node.
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/theme.test.ts'],
+    // tests/theme.test.ts compiles the stylesheet with Tailwind in Node; tests/lint-rules.test.ts
+    // runs the syntax rules of eslint.config.js on examples.
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/theme.test.ts', 'tests/lint-rules.test.ts'],
     // Playwright specs drive a real browser and are run by `pnpm e2e`.
     exclude: ['node_modules/**', 'dist/**', 'tests/e2e/**'],
   },

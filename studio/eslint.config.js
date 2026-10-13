@@ -93,6 +93,38 @@ const styleSelectors = (pattern, message) => [
   { selector: `JSXText[value=${pattern}]`, message },
 ];
 
+const styleRules = [
+  ...styleSelectors(ARBITRARY, STYLE_RULE_MESSAGE.arbitrary),
+  ...styleSelectors(COLOUR, STYLE_RULE_MESSAGE.colour),
+  ...styleSelectors(PALETTE, STYLE_RULE_MESSAGE.palette),
+  ...styleSelectors(NUMERIC_LAYER, STYLE_RULE_MESSAGE.layer),
+  ...styleSelectors(DOTS, STYLE_RULE_MESSAGE.dots),
+];
+
+// Copy rules: every user-facing word in shared components and the app shell comes from the
+// copy module (src/lib/copy), so a word is changed in one table and a second language can be
+// added as one more table. The legacy feature pages are replaced page by page and join the
+// rule as they are rebuilt.
+const COPY_RULE_MESSAGE =
+  'Put user-facing text in the copy module (src/lib/copy) and read it with useCopy().';
+const copyRules = [
+  { selector: 'JSXText[value=/[A-Za-z]/]', message: COPY_RULE_MESSAGE },
+  {
+    selector:
+      'JSXAttribute[name.name=/^(aria-label|title|placeholder|alt)$/] > Literal[value=/[A-Za-z]/]',
+    message: COPY_RULE_MESSAGE,
+  },
+];
+const COPY_FILES = ['src/components/**/*.tsx'];
+const COPY_EXEMPT = ['src/components/ui/**', 'src/components/PageState.tsx'];
+
+// Overlay roles come only from the overlay primitives, so every dialog and menu shares one
+// keyboard and focus behaviour.
+const overlayRoleRule = {
+  selector: 'JSXAttribute[name.name="role"] > Literal[value=/^(dialog|alertdialog|menu)$/]',
+  message: 'Build dialogs and menus from src/components/ui (Dialog, Menu, Popover).',
+};
+
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'tests/ui/report'] },
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
@@ -227,19 +259,22 @@ export default tseslint.config(
       ],
     },
   },
+  // Each file receives one `no-restricted-syntax` list: a later block replaces, not merges,
+  // the options of an earlier one, so the copy block repeats the style rules.
   {
     files: ['src/**/*.{ts,tsx}'],
     ignores: TEST_FILES,
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        ...styleSelectors(ARBITRARY, STYLE_RULE_MESSAGE.arbitrary),
-        ...styleSelectors(COLOUR, STYLE_RULE_MESSAGE.colour),
-        ...styleSelectors(PALETTE, STYLE_RULE_MESSAGE.palette),
-        ...styleSelectors(NUMERIC_LAYER, STYLE_RULE_MESSAGE.layer),
-        ...styleSelectors(DOTS, STYLE_RULE_MESSAGE.dots),
-      ],
-    },
+    rules: { 'no-restricted-syntax': ['error', ...styleRules] },
+  },
+  {
+    files: ['src/features/**/*.tsx'],
+    ignores: TEST_FILES,
+    rules: { 'no-restricted-syntax': ['error', ...styleRules, overlayRoleRule] },
+  },
+  {
+    files: COPY_FILES,
+    ignores: [...TEST_FILES, ...COPY_EXEMPT],
+    rules: { 'no-restricted-syntax': ['error', ...styleRules, ...copyRules, overlayRoleRule] },
   },
   ...featureImportBlocks,
 );
