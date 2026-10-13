@@ -204,7 +204,11 @@ export function WorkflowsPage() {
         />
       );
     }
-    return <WorkflowsTable rows={rows} q={q} onRun={setRunFor} />;
+    return (
+      <div className="overflow-x-auto">
+        <WorkflowsTable rows={rows} q={q} onRun={setRunFor} />
+      </div>
+    );
   })();
 
   const toolbar = (

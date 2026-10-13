@@ -20,6 +20,12 @@ const HEAD = 'h-row-dense px-4 text-left align-middle text-xs font-medium text-f
 const CELL = 'px-4 py-3 align-top text-sm';
 /** Columns that size to their content; the workflow column takes the rest and wraps. */
 const FIT = { width: '1%' } as const;
+/**
+ * The workflow column never narrows below this. Names may break anywhere, so without a
+ * floor the fitted columns would squeeze them to one letter per line; the table scrolls
+ * inside its card instead.
+ */
+const NAME_MIN = { minWidth: 192 } as const;
 
 /**
  * Every run as one row, newest first. The whole row opens the run (⌘ or Ctrl opens it in a
@@ -62,7 +68,7 @@ export function RunsTable({ items, busy }: { items: readonly RunListItem[]; busy
     <table aria-busy={busy || undefined} className="w-full border-collapse text-sm">
       <thead>
         <tr className="border-b border-border-subtle bg-surface-inset">
-          <th scope="col" className={HEAD}>
+          <th scope="col" style={NAME_MIN} className={HEAD}>
             {t.columns.workflow}
           </th>
           <th scope="col" style={FIT} className={cn(HEAD, 'whitespace-nowrap')}>

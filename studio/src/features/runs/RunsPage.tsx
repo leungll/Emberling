@@ -264,7 +264,9 @@ export function RunsPage() {
     const from = offset + 1;
     body = (
       <>
-        <RunsTable items={current.items} busy={loaded?.key !== key} />
+        <div className="overflow-x-auto">
+          <RunsTable items={current.items} busy={loaded?.key !== key} />
+        </div>
         {total !== null && total > PAGE_SIZES[0] ? (
           <Pager
             from={from}

@@ -244,7 +244,7 @@ function EventsTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   return (
     <ul
       aria-label={copy.runs.events.forElement}
-      className="m-0 flex list-none flex-col p-0 pt-1 pb-16"
+      className="m-0 flex min-w-fit list-none flex-col p-0 pt-1 pb-16"
     >
       {list.map((e) => {
         const target = elementOfEvent(ctx.model, e);
@@ -256,7 +256,7 @@ function EventsTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
               onClick={() => {
                 ctx.onSelect(target.id);
               }}
-              style={{ gridTemplateColumns: '32px 72px minmax(0, 1fr) minmax(0, 1fr)' }}
+              style={{ gridTemplateColumns: '32px 72px minmax(7rem, 1fr) minmax(7rem, 1fr)' }}
               className="grid min-h-row-dense w-full items-start gap-3 px-4 py-1.5 text-left text-sm hover:bg-surface-hover"
             >
               <span className="text-right font-mono text-fg-muted tabular-nums">{e.seq}</span>

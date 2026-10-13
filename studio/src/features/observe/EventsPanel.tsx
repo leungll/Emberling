@@ -34,7 +34,8 @@ import { cn } from '@/lib/utils';
  * a text filter. The selected element's Events are tinted in the full log.
  */
 
-const COLUMNS = '40px 80px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr)';
+// The text columns keep a readable floor; below it the log scrolls sideways in its pane.
+const COLUMNS = '40px 80px minmax(7rem, 1.4fr) minmax(6rem, 1fr) minmax(7rem, 1.2fr)';
 
 interface EventsPanelProps {
   model: RunModel;
@@ -203,6 +204,7 @@ export function EventsPanel({
             role="grid"
             aria-label={e.label}
             aria-readonly="true"
+            className="min-w-fit"
             aria-rowcount={list.length + 1}
             onKeyDown={onKey}
             onFocus={(ev) => {

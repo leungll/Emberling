@@ -57,8 +57,11 @@ interface TracePanelProps {
   searchRef: RefObject<HTMLInputElement | null>;
 }
 
+// The name column keeps room for an indented name beside its step type at every depth;
+// below that the trace scrolls sideways inside its pane rather than breaking names into
+// single letters.
 function columns(bars: boolean): string {
-  return bars ? 'minmax(16ch, 1fr) minmax(32px, 20%) 80px 128px' : 'minmax(0, 1fr) 88px 128px';
+  return bars ? 'minmax(14rem, 1fr) minmax(32px, 20%) 80px 128px' : 'minmax(14rem, 1fr) 88px 128px';
 }
 
 function Bar({ model, el, axis }: { model: RunModel; el: TraceElement; axis: Axis }) {
@@ -480,6 +483,7 @@ export function TracePanel({
           role="treegrid"
           aria-label={t.label}
           aria-readonly="true"
+          className="min-w-fit"
           onKeyDown={onKey}
           onFocus={(e) => {
             const row = (e.target as HTMLElement).closest<HTMLElement>('[role="row"][data-id]');

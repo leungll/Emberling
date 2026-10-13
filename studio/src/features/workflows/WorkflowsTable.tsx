@@ -30,6 +30,13 @@ const ROW_RING = [
 
 const MARK = 'rounded-sm bg-surface-selected text-accent-fg';
 
+/**
+ * The name column never narrows below this. Names may break anywhere, so without a floor
+ * the fitted columns would squeeze them to one letter per line; the table scrolls inside
+ * its card instead.
+ */
+const NAME_MIN_WIDTH = 192;
+
 function Highlighted({ text, q }: { text: string; q: string }) {
   return (
     <>
@@ -97,7 +104,7 @@ export function WorkflowsTable({ rows, q, onRun }: WorkflowsTableProps) {
     <table className="w-full border-collapse">
       <thead>
         <tr>
-          <Th>{c.name}</Th>
+          <Th minWidth={NAME_MIN_WIDTH}>{c.name}</Th>
           <Th fit>{c.lastRun}</Th>
           <Th fit>{c.updated}</Th>
           <Th fit>{c.workflowId}</Th>
@@ -163,11 +170,21 @@ export function WorkflowsTable({ rows, q, onRun }: WorkflowsTableProps) {
   );
 }
 
-function Th({ children, fit, className }: { children: string; fit?: boolean; className?: string }) {
+function Th({
+  children,
+  fit,
+  minWidth,
+  className,
+}: {
+  children: string;
+  fit?: boolean;
+  minWidth?: number;
+  className?: string;
+}) {
   return (
     <th
       scope="col"
-      style={fit ? { width: '1%' } : undefined}
+      style={fit ? { width: '1%' } : { minWidth }}
       className={cn(
         'h-row-dense border-b border-border-subtle bg-surface-inset px-4 text-left align-middle text-xs font-medium whitespace-nowrap text-fg-muted',
         className,
