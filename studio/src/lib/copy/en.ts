@@ -6,6 +6,9 @@
  * Strings that take a count or a value are functions, and they handle the plural.
  */
 
+import { editor } from './editor';
+import { workflows } from './workflows';
+
 const plural = (n: number, one: string, many = `${one}s`): string =>
   `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
@@ -570,6 +573,9 @@ export const en = {
   gallery: {
     title: 'Components',
   },
+
+  workflows,
+  editor,
 
   listNames,
   plural,

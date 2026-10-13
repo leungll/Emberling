@@ -38,7 +38,7 @@ export function PageHeader({ title, actions }: PageHeaderProps) {
           (32 px in from its edge), while the preferences stay 16 px from the window edge. */}
       <span
         aria-hidden="true"
-        style={{ width: 'max(0px, calc(50% - 612px))' }}
+        style={{ width: 'max(8px, calc(50% - 612px))' }}
         className="shrink-0"
       />
       <div className="flex min-w-0 flex-1 items-center gap-3">

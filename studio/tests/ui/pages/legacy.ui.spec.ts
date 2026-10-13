@@ -10,14 +10,6 @@ import { review, type ReviewState } from '../support/review';
 
 const states: ReviewState[] = [
   {
-    name: 'legacy-definitions',
-    url: '/workflows',
-    mode: 'report',
-    ready: async (page) => {
-      await expect(page.getByRole('table')).toBeVisible();
-    },
-  },
-  {
     name: 'legacy-editor',
     url: `/workflows/${data.completed.workflowId}`,
     mode: 'report',

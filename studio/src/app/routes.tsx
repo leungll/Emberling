@@ -7,9 +7,9 @@ import { RunsPlaceholder } from './RunsPlaceholder';
 import { WorkflowRunsPlaceholder } from './WorkflowRunsPlaceholder';
 import { ListShell } from '@/components/shell/ListShell';
 import { NotFoundView } from '@/components/shell/NotFoundView';
-import { DefinitionsPage } from '@/features/definitions/DefinitionsPage';
 import { EditPage } from '@/features/editor/EditPage';
 import { ObservePage } from '@/features/observe/ObservePage';
+import { WorkflowsPage } from '@/features/workflows/WorkflowsPage';
 
 /**
  * The hierarchy: Runs (home) and Workflows are list pages with the sidebar; a workflow has
@@ -30,7 +30,7 @@ export const routes: RouteObject[] = [
           { path: '/runs', element: <RunsPlaceholder /> },
           // A run's own address resolves to its workflow's Runs tab.
           { path: '/runs/:runId', element: <RunRedirect /> },
-          { path: '/workflows', element: <DefinitionsPage /> },
+          { path: '/workflows', element: <WorkflowsPage /> },
           { path: '*', element: <NotFoundView kind="page" /> },
         ],
       },

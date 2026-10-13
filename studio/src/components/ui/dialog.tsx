@@ -39,6 +39,9 @@ function focusInitial(root: HTMLElement | null): void {
     root.querySelector<HTMLElement>('[data-dialog-primary]') ??
     root;
   target.focus();
+  // A primary button that is disabled while the dialog loads cannot take focus; the dialog
+  // itself takes it so focus never stays on the page behind.
+  if (document.activeElement !== target) root.focus();
 }
 
 /**

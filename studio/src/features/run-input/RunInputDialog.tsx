@@ -1,5 +1,5 @@
 import { History, LoaderCircle, Play } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ImageField } from './ImageField';
 import { ObjectFields } from './ObjectFields';
@@ -141,6 +141,22 @@ export function RunInputDialog({
     );
     target?.focus();
   };
+
+  // Fields that arrive after the dialog opened (the bound version was still loading) take
+  // the focus the dialog itself held meanwhile.
+  const firstKey = fields[0]?.key;
+  useEffect(() => {
+    if (!open || !ready || !firstKey) return;
+    const form = formRef.current;
+    const dialog = form?.closest('[role="dialog"]') ?? null;
+    if (dialog === null || document.activeElement !== dialog) return;
+    form
+      ?.querySelector(`[data-field="${CSS.escape(firstKey)}"]`)
+      ?.querySelector<HTMLElement>(
+        'textarea:not([hidden]), input:not([type=file]), button:not([disabled]), [role=radio][data-state=checked]',
+      )
+      ?.focus();
+  }, [open, ready, firstKey]);
 
   const fillFromLast = () => {
     if (!lastRun) return;
