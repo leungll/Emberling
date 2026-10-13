@@ -730,7 +730,7 @@ export function EditPage() {
                   or keep your edits and compare before saving again.
                 </p>
                 <div className="flex shrink-0 gap-2">
-                  <Button variant="outline" onClick={() => setConflict(null)}>
+                  <Button variant="secondary" onClick={() => setConflict(null)}>
                     Keep my edits
                   </Button>
                   <Button onClick={() => applyDefinition(conflict)}>Reload latest</Button>

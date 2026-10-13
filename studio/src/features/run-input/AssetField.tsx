@@ -88,10 +88,10 @@ export function AssetField({
               />
               <Button
                 type="button"
-                variant="outline"
-                size="icon"
+                variant="secondary"
+                size="sm"
                 aria-label={`Remove ${fileName ?? 'image'}`}
-                className="absolute right-1 top-1 h-6 w-6 rounded-full bg-surface"
+                className="absolute right-1 top-1 size-control-xs rounded-full bg-surface px-0"
                 onClick={() => choose(undefined)}
               >
                 <X className="h-icon-sm w-icon-sm" aria-hidden="true" />
@@ -103,7 +103,7 @@ export function AssetField({
               </p>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 aria-label={`Replace ${fileName ?? 'image'}`}
                 disabled={uploading}
                 onClick={() => fileInput.current?.click()}
@@ -116,7 +116,7 @@ export function AssetField({
           <div className="flex items-center gap-2">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               disabled={uploading}
               onClick={() => fileInput.current?.click()}
             >

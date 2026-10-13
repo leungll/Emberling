@@ -90,6 +90,19 @@ if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
   globalThis.DOMMatrixReadOnly = DOMMatrixReadOnlyStub as unknown as typeof DOMMatrixReadOnly;
 }
 
+// Radix overlays call pointer-capture and scrolling APIs that jsdom does not implement.
+// No-op stand-ins are enough: tests drive the overlays by keyboard and click.
+if (typeof Element !== 'undefined' && !('hasPointerCapture' in Element.prototype)) {
+  Object.assign(Element.prototype, {
+    hasPointerCapture: () => false,
+    setPointerCapture: () => undefined,
+    releasePointerCapture: () => undefined,
+  });
+}
+if (typeof Element !== 'undefined' && !('scrollIntoView' in Element.prototype)) {
+  Object.assign(Element.prototype, { scrollIntoView: () => undefined });
+}
+
 afterEach(() => {
   cleanup();
 });

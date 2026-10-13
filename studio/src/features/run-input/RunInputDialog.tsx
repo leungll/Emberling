@@ -218,7 +218,7 @@ export function RunInputDialog({
       }
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
           <Button onClick={submit} disabled={runDisabled}>

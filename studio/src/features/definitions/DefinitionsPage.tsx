@@ -183,7 +183,7 @@ function NewDefinitionDialog({ open, onClose, onCreate }: NewDefinitionDialogPro
       title="New Definition"
       footer={
         <>
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
           <Button

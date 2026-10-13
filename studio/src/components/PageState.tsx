@@ -30,7 +30,10 @@ export function PageState({ title, body, detail, action }: PageStateProps) {
         ) : null}
         <div className="flex items-center gap-2 pt-2">
           {action}
-          <Link to="/" className={cn(buttonVariants({ variant: action ? 'outline' : 'default' }))}>
+          <Link
+            to="/"
+            className={cn(buttonVariants({ variant: action ? 'secondary' : 'primary' }))}
+          >
             Back to Definitions
           </Link>
         </div>

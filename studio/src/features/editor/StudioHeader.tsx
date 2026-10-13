@@ -64,10 +64,10 @@ export function StudioHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="outline" className={ACTION} onClick={onSave} disabled={busy || !canSave}>
+        <Button variant="secondary" className={ACTION} onClick={onSave} disabled={busy || !canSave}>
           Save
         </Button>
-        <Button variant="outline" className={ACTION} onClick={onValidate} disabled={busy}>
+        <Button variant="secondary" className={ACTION} onClick={onValidate} disabled={busy}>
           Validate
         </Button>
         {/* Run targets the saved, validated version only, so unsaved edits disable it. */}

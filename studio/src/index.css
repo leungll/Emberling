@@ -226,6 +226,9 @@
   --default-transition-timing-function: var(--ease-out);
   --animate-spin: spin 1s linear infinite;
   --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  /* A running status icon turns once every 1.2 s; skeletons pulse at the same pace. */
+  --animate-spin-slow: spin 1.2s linear infinite;
+  --animate-skeleton: skeleton-pulse 1.2s var(--ease-out) infinite;
 
   @keyframes spin {
     to {
@@ -235,6 +238,11 @@
   @keyframes pulse {
     50% {
       opacity: 0.5;
+    }
+  }
+  @keyframes skeleton-pulse {
+    50% {
+      opacity: 0.45;
     }
   }
 

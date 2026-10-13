@@ -362,7 +362,7 @@ function StringListField({ field, value, onChange, disabled }: FieldProps) {
       ))}
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         size="sm"
         disabled={disabled}
         onClick={() => onChange([...items, ''])}

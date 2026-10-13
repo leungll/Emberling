@@ -84,7 +84,7 @@ export function ObserveHeader({ run, definitionName, onRunAgain }: ObserveHeader
       <div className="flex items-center justify-end gap-2">
         <Link
           to={`/studio/${run.workflowId}`}
-          className={cn(buttonVariants({ variant: 'outline' }), ACTION)}
+          className={cn(buttonVariants({ variant: 'secondary' }), ACTION)}
         >
           Back to Edit
         </Link>

@@ -133,7 +133,7 @@ export function AssetArrayField({
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             disabled={disabled}
             onClick={() => fileInput.current?.click()}
           >
@@ -157,10 +157,10 @@ export function AssetArrayField({
                 />
                 <Button
                   type="button"
-                  variant="outline"
-                  size="icon"
+                  variant="secondary"
+                  size="sm"
                   aria-label={`Remove ${fileNames[ref.assetId] ?? `image ${index + 1}`}`}
-                  className="absolute right-1 top-1 h-6 w-6 rounded-full bg-surface"
+                  className="absolute right-1 top-1 size-control-xs rounded-full bg-surface px-0"
                   onClick={() => {
                     onErrorChange(null);
                     onChange((prev) => prev.filter((_, i) => i !== index));
