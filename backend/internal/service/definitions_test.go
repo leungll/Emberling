@@ -417,6 +417,10 @@ func (r *defsFakeEventRepo) ListAfter(ctx context.Context, runID string, afterSe
 	return r.events, nil
 }
 
+func (r *defsFakeEventRepo) ListForNodeRun(context.Context, string, string, []domain.EventType, int) ([]domain.Event, error) {
+	return nil, errDefsFakeNotImplemented
+}
+
 var _ store.EventRepository = (*defsFakeEventRepo)(nil)
 
 func newDefsTestDefinitionService(t *testing.T) (*DefinitionService, *defsFakeTx, *defsFakeIDs) {

@@ -319,4 +319,15 @@ func TestAPI_AgentAsyncToolCallback_Duplicate_Returns200DuplicateWithoutNewEvent
 	if n := agentAsyncCallbackCompletions(eventsAfter); n != 1 {
 		t.Errorf("AGENT_ACTION_COMPLETED with completionSource CALLBACK = %d, want 1", n)
 	}
+
+	// The Trace keeps reporting the first completion's source after the duplicate.
+	_, traceBody := getAgentTrace(t, r.env, r.runID, r.agentNodeRunID)
+	trace := decodeBody[map[string]any](t, traceBody)
+	turns, _ := trace["turns"].([]any)
+	firstTurn, _ := turns[0].(map[string]any)
+	toolAction, _ := firstTurn["action"].(map[string]any)
+	if toolAction["completionSource"] != "CALLBACK" || toolAction["claimSource"] != "IMMEDIATE" {
+		t.Errorf("tool action sources after a duplicate = claim %v completion %v, want IMMEDIATE and CALLBACK",
+			toolAction["claimSource"], toolAction["completionSource"])
+	}
 }

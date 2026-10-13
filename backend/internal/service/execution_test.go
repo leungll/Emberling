@@ -352,6 +352,9 @@ func (r *execFakeEventRepo) Append(_ context.Context, lock *store.RunLock, ev do
 func (r *execFakeEventRepo) ListAfter(context.Context, string, int64, int) ([]domain.Event, error) {
 	return nil, errExecFakeNotImplemented
 }
+func (r *execFakeEventRepo) ListForNodeRun(context.Context, string, string, []domain.EventType, int) ([]domain.Event, error) {
+	return nil, errExecFakeNotImplemented
+}
 
 // TestAdvance_SuccessfulClaim_NotifiesEventsCommitted proves Advance's post-commit
 // obligation: a successful claim must wake an SSE cursor for the Run it just advanced,

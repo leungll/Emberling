@@ -464,6 +464,9 @@ func (r *cbEventRepo) Append(_ context.Context, lock *store.RunLock, ev domain.E
 func (r *cbEventRepo) ListAfter(context.Context, string, int64, int) ([]domain.Event, error) {
 	return nil, errCbNotImplemented
 }
+func (r *cbEventRepo) ListForNodeRun(context.Context, string, string, []domain.EventType, int) ([]domain.Event, error) {
+	return nil, errCbNotImplemented
+}
 
 // ---------------------------------------------------------------------------
 // Fakes: clock, ids, async executor

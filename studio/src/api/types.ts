@@ -547,6 +547,15 @@ export interface AgentDecisionTrace {
   hasStatePatch: boolean;
 }
 
+/** Who won the conditional claim of a Turn or Action. */
+export type ClaimSource = 'IMMEDIATE' | 'RECONCILER';
+
+/** The path that delivered an Action's successful result. */
+export type CompletionSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL';
+
+/** The path that failed an Action. */
+export type FailureSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL' | 'TIMEOUT';
+
 export interface AgentActionTrace {
   id: string;
   type: string;
@@ -554,6 +563,12 @@ export interface AgentActionTrace {
   startedAt: string | null;
   completedAt: string | null;
   error: ExecutionError | null;
+  /** Read from the Action's committed Events; `null` until the Action was claimed. */
+  claimSource: ClaimSource | null;
+  /** `null` unless the Action succeeded. */
+  completionSource: CompletionSource | null;
+  /** `null` unless the Action failed. */
+  failureSource: FailureSource | null;
 }
 
 /** One Tool Attempt. A retry preserves the earlier Attempt and adds a new `attemptNo`. */
@@ -580,6 +595,8 @@ export interface AgentTurnTrace {
   error: ExecutionError | null;
   /** Usage the model reported for this Turn; `null` when unreported or not yet known. */
   usage: TokenUsage | null;
+  /** Read from the Turn's committed Event; `null` until the Turn was claimed. */
+  claimSource: ClaimSource | null;
   /** `null` before the Turn committed a Decision. */
   decision: AgentDecisionTrace | null;
   /** `null` for a Turn whose Decision created no Action. */

@@ -249,10 +249,13 @@ type agentTraceTurnDTO struct {
 	Error       *domain.ExecutionError `json:"error"`
 	// Usage is the Token usage this Turn's model call reported, null when the Provider
 	// reported none or the Turn has no committed model result.
-	Usage        *domain.TokenUsage `json:"usage"`
-	Decision     *agentDecisionDTO  `json:"decision"`
-	Action       *agentActionDTO    `json:"action"`
-	ToolAttempts []toolAttemptDTO   `json:"toolAttempts"`
+	Usage *domain.TokenUsage `json:"usage"`
+	// ClaimSource is who claimed the Turn, read from its committed Event; null before the
+	// Turn was claimed.
+	ClaimSource  *domain.ClaimSource `json:"claimSource"`
+	Decision     *agentDecisionDTO   `json:"decision"`
+	Action       *agentActionDTO     `json:"action"`
+	ToolAttempts []toolAttemptDTO    `json:"toolAttempts"`
 }
 
 // agentDecisionDTO says what the model committed to, without saying what it said: the
@@ -265,14 +268,18 @@ type agentDecisionDTO struct {
 	HasStatePatch bool                `json:"hasStatePatch"`
 }
 
-// agentActionDTO projects the durable work item created with the Decision.
+// agentActionDTO projects the durable work item created with the Decision. The three
+// sources are read from the Action's committed Events, each null until that Event exists.
 type agentActionDTO struct {
-	ID          string                   `json:"id"`
-	Type        domain.AgentActionType   `json:"type"`
-	Status      domain.AgentActionStatus `json:"status"`
-	StartedAt   *time.Time               `json:"startedAt"`
-	CompletedAt *time.Time               `json:"completedAt"`
-	Error       *domain.ExecutionError   `json:"error"`
+	ID               string                   `json:"id"`
+	Type             domain.AgentActionType   `json:"type"`
+	Status           domain.AgentActionStatus `json:"status"`
+	StartedAt        *time.Time               `json:"startedAt"`
+	CompletedAt      *time.Time               `json:"completedAt"`
+	Error            *domain.ExecutionError   `json:"error"`
+	ClaimSource      *domain.ClaimSource      `json:"claimSource"`
+	CompletionSource *domain.CompletionSource `json:"completionSource"`
+	FailureSource    *domain.FailureSource    `json:"failureSource"`
 }
 
 // toolAttemptDTO projects one real Tool call. CallbackBinding is typed as `any` for the
@@ -370,6 +377,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 		CompletedAt:  utcTimePtr(round.Turn.CompletedAt),
 		Error:        round.Turn.Error,
 		Usage:        round.Turn.TokenUsage,
+		ClaimSource:  round.TurnClaimSource,
 		ToolAttempts: []toolAttemptDTO{},
 	}
 	if round.Decision != nil {
@@ -387,6 +395,10 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 			StartedAt:   utcTimePtr(round.Action.StartedAt),
 			CompletedAt: utcTimePtr(round.Action.CompletedAt),
 			Error:       round.Action.Error,
+
+			ClaimSource:      round.ActionSources.Claim,
+			CompletionSource: round.ActionSources.Completion,
+			FailureSource:    round.ActionSources.Failure,
 		}
 	}
 	for _, attempt := range round.ToolAttempts {

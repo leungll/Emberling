@@ -94,4 +94,38 @@ func (r *eventRepository) ListAfter(ctx context.Context, runID string, afterSeq 
 	return out, nil
 }
 
+func (r *eventRepository) ListForNodeRun(ctx context.Context, runID, nodeRunID string, types []domain.EventType, limit int) ([]domain.Event, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres events.ListForNodeRun: run=%s: limit must be positive, got %d", runID, limit)
+	}
+	typeNames := make([]string, len(types))
+	for i, t := range types {
+		typeNames[i] = string(t)
+	}
+
+	const query = `SELECT ` + eventColumns + `
+		  FROM events
+		 WHERE run_id = $1 AND node_run_id = $2 AND type = ANY($3)
+		 ORDER BY seq ASC
+		 LIMIT $4`
+
+	rows, err := r.conn.Query(ctx, query, runID, nodeRunID, typeNames, limit)
+	if err != nil {
+		return nil, mapError("events.ListForNodeRun", err, runID, nodeRunID)
+	}
+	events, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Event, error) {
+		var (
+			ev  domain.Event
+			typ string
+		)
+		err := row.Scan(&ev.ID, &ev.RunID, &ev.NodeRunID, &typ, &ev.Seq, &ev.Timestamp, &ev.Payload)
+		ev.Type = domain.EventType(typ)
+		return ev, err
+	})
+	if err != nil {
+		return nil, mapError("events.ListForNodeRun", err, runID, nodeRunID)
+	}
+	return events, nil
+}
+
 var _ store.EventRepository = (*eventRepository)(nil)

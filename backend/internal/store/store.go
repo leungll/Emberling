@@ -627,6 +627,10 @@ type EventRepository interface {
 	// ListAfter returns committed Events with seq greater than afterSeq, ascending. It
 	// backs both Snapshot-to-SSE handoff windows; the limit bounds the read.
 	ListAfter(ctx context.Context, runID string, afterSeq int64, limit int) ([]domain.Event, error)
+
+	// ListForNodeRun returns the committed Events of one NodeRun of runID whose type is
+	// one of types, ascending by seq. The limit bounds the read.
+	ListForNodeRun(ctx context.Context, runID, nodeRunID string, types []domain.EventType, limit int) ([]domain.Event, error)
 }
 
 // RunLock is proof that the caller holds the Run aggregate lock inside the current
