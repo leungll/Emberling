@@ -95,7 +95,7 @@ describe('DefinitionsPage', () => {
     expect(screen.getByText('Never run')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Last Run' })).toHaveAttribute(
       'href',
-      '/runs/run_123',
+      '/workflows/wf_123/runs/run_123',
     );
   });
 });
@@ -116,7 +116,7 @@ describe('DefinitionsPage — New Definition', () => {
       <MemoryRouter>
         <Routes>
           <Route path="/" element={<DefinitionsPage />} />
-          <Route path="/studio/new" element={<DraftProbe />} />
+          <Route path="/workflows/new" element={<DraftProbe />} />
         </Routes>
       </MemoryRouter>,
     );

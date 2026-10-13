@@ -43,7 +43,7 @@ export function RecentExecutionBar({ loaded, snapshot }: RecentExecutionBarProps
         <span className="text-fg-muted">{lastSeq} events</span>
       </div>
       <Link
-        to={`/runs/${run.id}`}
+        to={`/workflows/${run.workflowId}/runs/${run.id}`}
         className="rounded-md border border-border px-4 py-2 font-semibold hover:bg-surface-hover"
       >
         Open Last Run

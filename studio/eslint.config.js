@@ -115,8 +115,8 @@ const copyRules = [
     message: COPY_RULE_MESSAGE,
   },
 ];
-const COPY_FILES = ['src/components/**/*.tsx'];
-const COPY_EXEMPT = ['src/components/ui/**', 'src/components/PageState.tsx'];
+const COPY_FILES = ['src/components/**/*.tsx', 'src/app/**/*.tsx'];
+const COPY_EXEMPT = ['src/components/ui/**', 'src/app/dev/**'];
 
 // Overlay roles come only from the overlay primitives, so every dialog and menu shares one
 // keyboard and focus behaviour.

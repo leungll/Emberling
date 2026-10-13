@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ObservePage } from './ObservePage';
@@ -83,9 +83,9 @@ const OLD_DEFINITION_VERSION = {
 
 function renderObservePage() {
   return render(
-    <MemoryRouter initialEntries={['/runs/run_old']}>
+    <MemoryRouter initialEntries={['/workflows/wf_123/runs/run_old']}>
       <Routes>
-        <Route path="/runs/:runId" element={<ObservePage />} />
+        <Route path="/workflows/:workflowId/runs/:runId" element={<ObservePage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -162,9 +162,9 @@ describe('ObservePage — live pipeline', () => {
     );
 
     render(
-      <MemoryRouter initialEntries={['/runs/run_live']}>
+      <MemoryRouter initialEntries={['/workflows/wf_123/runs/run_live']}>
         <Routes>
-          <Route path="/runs/:runId" element={<ObservePage />} />
+          <Route path="/workflows/:workflowId/runs/:runId" element={<ObservePage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -316,9 +316,8 @@ describe('ObservePage — load failures', () => {
 
     renderObservePage();
 
-    expect(await screen.findByRole('heading', { name: 'Run not found' })).toBeInTheDocument();
-    expect(screen.getByText('run_old')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Definitions' })).toHaveAttribute('href', '/');
+    expect(await screen.findByText(/^Run .+ doesn’t exist\.$/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to Runs' })).toHaveAttribute('href', '/runs');
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(screen.queryByText(/RUN_NOT_FOUND/)).toBeNull();
   });
@@ -349,18 +348,19 @@ describe('ObservePage — load failures', () => {
 
     renderObservePage();
 
-    expect(
-      await screen.findByRole('heading', { name: "Couldn't load this run" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Run not found' })).toBeNull();
-    expect(screen.getByText('DEPENDENCY_UNAVAILABLE')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Definitions' })).toHaveAttribute('href', '/');
+    expect(await screen.findByText('Couldn’t load this run.')).toBeInTheDocument();
+    expect(screen.queryByText(/doesn’t exist/)).toBeNull();
+    expect(screen.getByText('503 DEPENDENCY_UNAVAILABLE')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to Workflows' })).toHaveAttribute(
+      'href',
+      '/workflows?ret=1',
+    );
 
     backendUp = true;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByRole('button', { name: 'Run Again' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: "Couldn't load this run" })).toBeNull();
+    expect(screen.queryByText('Couldn’t load this run.')).toBeNull();
   });
 
   it('treats a network failure as retryable rather than a missing Run', async () => {
@@ -372,9 +372,51 @@ describe('ObservePage — load failures', () => {
 
     renderObservePage();
 
-    expect(
-      await screen.findByRole('heading', { name: "Couldn't load this run" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t load this run.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+});
+
+describe('ObservePage — address', () => {
+  function Where() {
+    const { pathname } = useLocation();
+    return <p data-testid="where">{pathname}</p>;
+  }
+
+  it('moves a run addressed under another workflow to its own workflow', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url === '/api/runs/run_old') {
+          return Promise.resolve(jsonResponse(200, { run: OLD_RUN, nodeRuns: [], lastSeq: 0 }));
+        }
+        if (url === '/api/definitions/wf_123/versions/3') {
+          return Promise.resolve(jsonResponse(200, OLD_DEFINITION_VERSION));
+        }
+        return Promise.resolve(jsonResponse(200, { items: [] }));
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/workflows/wf_other/runs/run_old']}>
+        <Routes>
+          <Route
+            path="/workflows/:workflowId/runs/:runId"
+            element={
+              <>
+                <ObservePage />
+                <Where />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent('/workflows/wf_123/runs/run_old'),
+    );
   });
 });

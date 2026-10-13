@@ -19,7 +19,7 @@ test('Document Processing completes synchronously and shows its output', async (
   // Definition creation happened in global-setup via a direct POST (not through the UI);
   // this is the first UI interaction, matching "start a Run from Studio's Run Input
   // Dialog" (item 1: build and run a scenario from Definitions/Studio).
-  await page.goto(`/studio/${workflowId}`);
+  await page.goto(`/workflows/${workflowId}`);
 
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeEnabled();

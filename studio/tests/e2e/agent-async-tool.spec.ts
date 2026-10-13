@@ -29,7 +29,7 @@ test('Agent with an asynchronous Tool pauses at the Agent NodeRun, then resumes 
   ) as GeneratedDefinitions;
   const { workflowId } = generated.agentLookup;
 
-  await page.goto(`/studio/${workflowId}`);
+  await page.goto(`/workflows/${workflowId}`);
 
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeEnabled();

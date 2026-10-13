@@ -14,7 +14,9 @@ import { newNodeId } from './nodeIds';
 import { NodePalette } from './NodePalette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { RecentExecutionBar } from './RecentExecutionBar';
+import { LeaveGuardDialog } from './LeaveGuardDialog';
 import { StudioHeader } from './StudioHeader';
+import { useUnsavedGuard } from './useUnsavedGuard';
 import type { CanvasFocusRequest } from './WorkflowCanvas';
 import { NODE_CARD_HEIGHT, NODE_CARD_WIDTH, type RegisteredFlowNode } from './RegisteredNode';
 import { WorkflowCanvas } from './WorkflowCanvas';
@@ -42,11 +44,16 @@ import type {
   ToolMetadata,
   ValidationError,
 } from '@/api/types';
+import { ListShell } from '@/components/shell/ListShell';
+import { NotFoundView } from '@/components/shell/NotFoundView';
 import { Badge } from '@/components/ui/badge';
-import { PageState } from '@/components/PageState';
 import { Button } from '@/components/ui/button';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { runInputLabels } from '@/features/run-input/runInputLabels';
+import { useCopy } from '@/lib/copy';
+import { carryFrom } from '@/lib/nav/list-state';
+import { noteRecent } from '@/lib/nav/recent';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { type EditorGraph, useStudioStore } from '@/stores/studio-store';
 
 /**
@@ -120,8 +127,8 @@ function extractValidationErrors(error: unknown): ValidationError[] | null {
 }
 
 export function EditPage() {
-  // `/studio/new` (no :workflowId) is a brand-new, unsaved Definition; `/studio/:workflowId`
-  // is a saved one. They are distinct routes, not a sentinel value, so a real workflowId can
+  // `/workflows/new` (no :workflowId) is a brand-new, unsaved Definition;
+  // `/workflows/:workflowId` is a saved one. They are distinct routes, not a sentinel value, so a real workflowId can
   // never collide with the literal segment "new".
   const { workflowId: workflowIdParam } = useParams();
   const isNewDraft = workflowIdParam === undefined;
@@ -129,6 +136,7 @@ export function EditPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const copy = useCopy();
 
   const selectedNodeId = useStudioStore((s) => s.selectedNodeId);
   const selectNode = useStudioStore((s) => s.selectNode);
@@ -188,6 +196,13 @@ export function EditPage() {
   // Definition is loading or failed to load there is neither.
   const canSave = isNewDraft || definition !== null;
 
+  const blocker = useUnsavedGuard(
+    () => useStudioStore.getState().hasUnsavedChanges,
+    hasUnsavedChanges,
+  );
+  const shownName = definition?.name ?? draftMeta?.name ?? '';
+  useDocumentTitle(shownName ? copy.pageTitles.editor(shownName) : null);
+
   const applyDefinition = useCallback(
     (loaded: Definition) => {
       setDefinition(loaded);
@@ -235,7 +250,10 @@ export function EditPage() {
     // until the first Save creates version 1.
     if (!isNewDraft) {
       getDefinition(workflowId, controller.signal)
-        .then(applyDefinition)
+        .then((loaded) => {
+          noteRecent(loaded.workflowId);
+          applyDefinition(loaded);
+        })
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
           if (error instanceof ApiRequestError && error.status === 404) {
@@ -526,62 +544,72 @@ export function EditPage() {
     }
   }, [currentDraft]);
 
-  const handleSave = useCallback(async () => {
-    if (!canSave) return;
-    setBusy(true);
-    setNotice(null);
-    try {
-      if (isNewDraft) {
-        const created = await createDefinition(currentDraft());
-        setUnsavedChanges(false);
-        // The Definition now exists: hand off to the saved-version route, which loads it
-        // fresh rather than trusting this response as the new source of truth.
-        void navigate(`/studio/${created.workflowId}`, { replace: true });
-        return;
-      }
-      if (!definition) return;
-      const saved = await saveDefinition(workflowId, {
-        ...currentDraft(),
-        baseVersion: definition.version,
-      });
-      setDefinition(saved);
-      setValidationErrors(null);
-      setConflict(null);
-      // The graph just saved is the new clean point; history is kept.
-      markSaved(graph);
-      setNotice(`Saved version ${saved.version}.`);
-    } catch (error) {
-      if (error instanceof ApiRequestError && error.code === 'VERSION_CONFLICT') {
-        // The Backend never includes the newer version in a 409 body (it names no
-        // resource to avoid leaking one Definition's content into another's error path),
-        // so naming it to the user needs a fresh read. Local edits are untouched either
-        // way: nothing here may overwrite them.
-        try {
-          setConflict(await getDefinition(workflowId));
-        } catch (reloadError) {
-          setNotice(
-            describeError(reloadError, 'A newer version exists, but it could not be loaded'),
-          );
+  /** Saves the graph; resolves true when it was saved. Leaving skips the hand-off below. */
+  const handleSave = useCallback(
+    async (leaving = false): Promise<boolean> => {
+      if (!canSave) return false;
+      setBusy(true);
+      setNotice(null);
+      try {
+        if (isNewDraft) {
+          const created = await createDefinition(currentDraft());
+          setUnsavedChanges(false);
+          // The Definition now exists: hand off to the saved-version route, which loads it
+          // fresh rather than trusting this response as the new source of truth.
+          if (!leaving) {
+            void navigate(`/workflows/${encodeURIComponent(created.workflowId)}`, {
+              replace: true,
+            });
+          }
+          return true;
         }
-      } else {
-        const errors = extractValidationErrors(error);
-        if (errors) setValidationErrors(errors);
-        else setNotice(describeError(error, 'Save failed'));
+        if (!definition) return false;
+        const saved = await saveDefinition(workflowId, {
+          ...currentDraft(),
+          baseVersion: definition.version,
+        });
+        setDefinition(saved);
+        setValidationErrors(null);
+        setConflict(null);
+        // The graph just saved is the new clean point; history is kept.
+        markSaved(graph);
+        setNotice(`Saved version ${saved.version}.`);
+        return true;
+      } catch (error) {
+        if (error instanceof ApiRequestError && error.code === 'VERSION_CONFLICT') {
+          // The Backend never includes the newer version in a 409 body (it names no
+          // resource to avoid leaking one Definition's content into another's error path),
+          // so naming it to the user needs a fresh read. Local edits are untouched either
+          // way: nothing here may overwrite them.
+          try {
+            setConflict(await getDefinition(workflowId));
+          } catch (reloadError) {
+            setNotice(
+              describeError(reloadError, 'A newer version exists, but it could not be loaded'),
+            );
+          }
+        } else {
+          const errors = extractValidationErrors(error);
+          if (errors) setValidationErrors(errors);
+          else setNotice(describeError(error, 'Save failed'));
+        }
+        return false;
+      } finally {
+        setBusy(false);
       }
-    } finally {
-      setBusy(false);
-    }
-  }, [
-    canSave,
-    isNewDraft,
-    definition,
-    workflowId,
-    currentDraft,
-    navigate,
-    setUnsavedChanges,
-    graph,
-    markSaved,
-  ]);
+    },
+    [
+      canSave,
+      isNewDraft,
+      definition,
+      workflowId,
+      currentDraft,
+      navigate,
+      setUnsavedChanges,
+      graph,
+      markSaved,
+    ],
+  );
 
   const handleCreateRun = useCallback(
     async (input: JsonObject) => {
@@ -595,15 +623,20 @@ export function EditPage() {
           input,
         });
         setRunDialogOpen(false);
-        // Creating a Run switches Studio into observe mode.
-        void navigate(`/runs/${run.id}`);
+        // Creating a Run opens it in the workflow's Runs tab.
+        void navigate(
+          carryFrom(
+            `/workflows/${encodeURIComponent(workflowId)}/runs/${encodeURIComponent(run.id)}`,
+            location.search,
+          ),
+        );
       } catch (error) {
         setRunError(describeError(error, 'Could not create run'));
       } finally {
         setBusy(false);
       }
     },
-    [definition, workflowId, navigate],
+    [definition, workflowId, navigate, location.search],
   );
 
   const focusValidationError = useCallback(
@@ -635,11 +668,9 @@ export function EditPage() {
   // that no Save could ever persist.
   if (!isNewDraft && missingWorkflowId === workflowId) {
     return (
-      <PageState
-        title="Definition not found"
-        body="No definition exists with this ID."
-        detail={workflowId}
-      />
+      <ListShell>
+        <NotFoundView kind="workflow" id={workflowId} />
+      </ListShell>
     );
   }
 
@@ -784,6 +815,12 @@ export function EditPage() {
       </div>
 
       <RecentExecutionBar loaded={recentRunLoaded} snapshot={recentRun} />
+
+      <LeaveGuardDialog
+        blocker={blocker}
+        hasIssues={validationErrors !== null && validationErrors.length > 0}
+        onSaveAndLeave={() => handleSave(true)}
+      />
 
       {definition ? (
         <RunInputDialog

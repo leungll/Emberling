@@ -64,7 +64,7 @@ export function DefinitionsTable({ items }: { items: DefinitionListItem[] }) {
             const avatar = avatarStyle(item.workflowId);
             const initial = item.name.trim().charAt(0).toUpperCase() || '?';
             return (
-              <TableRow key={item.workflowId} className="[&>td]:py-4">
+              <TableRow key={item.workflowId} data-row={item.workflowId} className="[&>td]:py-4">
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <span
@@ -76,7 +76,8 @@ export function DefinitionsTable({ items }: { items: DefinitionListItem[] }) {
                     </span>
                     <div>
                       <Link
-                        to={`/studio/${item.workflowId}`}
+                        to={`/workflows/${item.workflowId}`}
+                        data-row-primary
                         className="text-md font-semibold hover:underline"
                       >
                         {item.name}
@@ -114,14 +115,17 @@ export function DefinitionsTable({ items }: { items: DefinitionListItem[] }) {
                 </TableCell>
                 <TableCell>
                   <span className="flex gap-3 text-md font-medium">
-                    <Link to={`/studio/${item.workflowId}`} className="hover:underline">
+                    <Link to={`/workflows/${item.workflowId}`} className="hover:underline">
                       Edit
                     </Link>
-                    <Link to={`/studio/${item.workflowId}?run=1`} className="hover:underline">
+                    <Link to={`/workflows/${item.workflowId}?run=1`} className="hover:underline">
                       Run
                     </Link>
                     {item.lastRun ? (
-                      <Link to={`/runs/${item.lastRun.id}`} className="hover:underline">
+                      <Link
+                        to={`/workflows/${item.workflowId}/runs/${item.lastRun.id}`}
+                        className="hover:underline"
+                      >
                         Open Last Run
                       </Link>
                     ) : null}

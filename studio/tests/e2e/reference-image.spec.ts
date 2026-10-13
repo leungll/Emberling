@@ -29,7 +29,7 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   ) as GeneratedDefinitions;
   const { workflowId } = generated.referenceImage;
 
-  await page.goto(`/studio/${workflowId}`);
+  await page.goto(`/workflows/${workflowId}`);
 
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeEnabled();
@@ -102,7 +102,7 @@ test('Photo set upload starts the Photo Effect Template and Run Again keeps the 
   ) as GeneratedDefinitions;
   const { workflowId } = generated.photoSet;
 
-  await page.goto(`/studio/${workflowId}`);
+  await page.goto(`/workflows/${workflowId}`);
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeEnabled();
   await runButton.click();

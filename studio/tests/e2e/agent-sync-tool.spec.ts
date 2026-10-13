@@ -22,7 +22,7 @@ test('Agent with a synchronous Tool runs the Tool on Turn 1, answers FINAL on Tu
   ) as GeneratedDefinitions;
   const { workflowId } = generated.agentSyncLookup;
 
-  await page.goto(`/studio/${workflowId}`);
+  await page.goto(`/workflows/${workflowId}`);
 
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeEnabled();

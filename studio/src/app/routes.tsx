@@ -1,30 +1,49 @@
-import { createBrowserRouter, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 
-import { NotFoundPage, RouteErrorPage } from './RouteErrorPage';
+import { LegacyStudioRedirect } from './LegacyStudioRedirect';
+import { RouteErrorPage } from './RouteErrorPage';
+import { RunRedirect } from './RunRedirect';
+import { RunsPlaceholder } from './RunsPlaceholder';
+import { WorkflowRunsPlaceholder } from './WorkflowRunsPlaceholder';
+import { ListShell } from '@/components/shell/ListShell';
+import { NotFoundView } from '@/components/shell/NotFoundView';
 import { DefinitionsPage } from '@/features/definitions/DefinitionsPage';
 import { EditPage } from '@/features/editor/EditPage';
 import { ObservePage } from '@/features/observe/ObservePage';
 
 /**
- * The MVP has exactly three pages. An Observe URL carries a Run ID, which is one of the
- * three ways to reach a historical Run; there is no Run search page.
+ * The hierarchy: Runs (home) and Workflows are list pages with the sidebar; a workflow has
+ * an Editor and a Runs tab, full width with one back button, and a run always opens in its
+ * workflow's Runs tab.
  *
- * One pathless parent gives every page the same error page, and the final catch-all
- * answers any other address with a not-found page that links back to Definitions.
+ * One pathless parent gives every page the same error page. The list shell also frames the
+ * not-found page, so an address that names nothing keeps the sidebar.
  */
 export const routes: RouteObject[] = [
   {
     errorElement: <RouteErrorPage />,
     children: [
-      { path: '/', element: <DefinitionsPage /> },
-      // An unsaved new Definition has no workflowId yet: POST /definitions creates the first
-      // version with no baseVersion, but since backend/internal/runtime/graph.go
-      // rejects a graph with no Output Node, that POST is deferred until the first Save. This
-      // is a distinct static route rather than a special :workflowId value so an actual
-      // Definition can never collide with the literal segment "new".
-      { path: '/studio/new', element: <EditPage /> },
-      { path: '/studio/:workflowId', element: <EditPage /> },
-      { path: '/runs/:runId', element: <ObservePage /> },
+      { path: '/', element: <Navigate to="/runs" replace /> },
+      {
+        element: <ListShell />,
+        children: [
+          { path: '/runs', element: <RunsPlaceholder /> },
+          // A run's own address resolves to its workflow's Runs tab.
+          { path: '/runs/:runId', element: <RunRedirect /> },
+          { path: '/workflows', element: <DefinitionsPage /> },
+          { path: '*', element: <NotFoundView kind="page" /> },
+        ],
+      },
+      // An unsaved new workflow has no workflowId yet: creating it is deferred to the first
+      // Save, because the Backend rejects a graph with no Output step. This is a distinct
+      // static route rather than a special :workflowId value so a real workflow can never
+      // collide with the literal segment "new".
+      { path: '/workflows/new', element: <EditPage /> },
+      { path: '/workflows/:workflowId', element: <EditPage /> },
+      { path: '/workflows/:workflowId/runs', element: <WorkflowRunsPlaceholder /> },
+      { path: '/workflows/:workflowId/runs/:runId', element: <ObservePage /> },
+      { path: '/studio/new', element: <LegacyStudioRedirect /> },
+      { path: '/studio/:workflowId', element: <LegacyStudioRedirect /> },
       // The component gallery for the UI review suite; development builds only, so the
       // production bundle does not contain it.
       ...(import.meta.env.DEV
@@ -35,7 +54,6 @@ export const routes: RouteObject[] = [
             },
           ]
         : []),
-      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ];

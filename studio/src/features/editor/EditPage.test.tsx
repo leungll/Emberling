@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation, useSearchParams } from 'react-router';
+import { createMemoryRouter, RouterProvider, useLocation, useSearchParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditPage } from './EditPage';
@@ -56,22 +56,23 @@ function stubFetch() {
   return fetchMock;
 }
 
+/** The Editor's leave guard needs a data router, as the app has. */
 function renderEditPage(initialPath: string) {
-  return render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route
-          path="/studio/:workflowId"
-          element={
-            <>
-              <EditPage />
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/workflows/:workflowId',
+        element: (
+          <>
+            <EditPage />
+            <LocationProbe />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: [initialPath] },
   );
+  return render(<RouterProvider router={router} />);
 }
 
 beforeEach(() => {
@@ -86,7 +87,7 @@ describe('EditPage — Run via query param', () => {
   it('opens the Run Input Dialog once the definition loads when the URL carries ?run=1', async () => {
     stubFetch();
 
-    renderEditPage('/studio/wf_123?run=1');
+    renderEditPage('/workflows/wf_123?run=1');
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('AIGC Media Generation');
@@ -104,7 +105,7 @@ describe('EditPage — Run via query param', () => {
   it('does not open the Run Input Dialog without the query param', async () => {
     stubFetch();
 
-    renderEditPage('/studio/wf_123');
+    renderEditPage('/workflows/wf_123');
 
     // Wait for the definition to finish loading before asserting the dialog stayed closed.
     await screen.findByText('AIGC Media Generation');
@@ -253,14 +254,17 @@ function renderStudio(entry: string | { pathname: string; state: unknown }) {
       <PathProbe />
     </>
   );
-  return render(
-    <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route path="/studio/new" element={element} />
-        <Route path="/studio/:workflowId" element={element} />
-      </Routes>
-    </MemoryRouter>,
+  const router = createMemoryRouter(
+    [
+      { path: '/workflows/new', element },
+      { path: '/workflows/:workflowId', element },
+      { path: '/workflows/:workflowId/runs/:runId', element: <PathProbe /> },
+      { path: '/workflows', element: <PathProbe /> },
+    ],
+    { initialEntries: [entry] },
   );
+  const view = render(<RouterProvider router={router} />);
+  return { ...view, router };
 }
 
 async function selectCanvasNode(nodeId: string) {
@@ -281,7 +285,7 @@ describe('EditPage — canvas measurement', () => {
       'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
     });
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
 
     const node = await screen.findByTestId('rf__node-node_gen');
     await waitFor(() => expect(node).toHaveStyle({ visibility: 'visible' }));
@@ -304,7 +308,7 @@ describe('EditPage — creating a Definition', () => {
     const user = userEvent.setup();
 
     renderStudio({
-      pathname: '/studio/new',
+      pathname: '/workflows/new',
       state: { name: 'Document Processing', description: 'Summarise a document' },
     });
 
@@ -314,7 +318,7 @@ describe('EditPage — creating a Definition', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
-      expect(screen.getByTestId('location-path')).toHaveTextContent('/studio/wf_new');
+      expect(screen.getByTestId('location-path')).toHaveTextContent('/workflows/wf_new');
     });
     expect(callsTo(fetchMock, 'POST', '/api/definitions')).toEqual([
       { name: 'Document Processing', description: 'Summarise a document', nodes: [], edges: [] },
@@ -341,7 +345,7 @@ describe('EditPage — version conflict', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await selectCanvasNode('node_gen');
     const nameInput = await screen.findByLabelText('Name');
     await user.clear(nameInput);
@@ -406,7 +410,7 @@ describe('EditPage — Backend validation errors', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await screen.findByText('Definition v4, Editing');
     await user.click(screen.getByRole('button', { name: 'Validate' }));
 
@@ -460,7 +464,7 @@ describe('EditPage — Backend validation errors', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await screen.findByText('Definition v4, Editing');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -479,7 +483,7 @@ describe('EditPage — load errors', () => {
         }),
     });
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('DEPENDENCY_UNAVAILABLE: database unavailable');
@@ -500,7 +504,7 @@ describe('EditPage — load errors', () => {
         }),
     });
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
 
     await screen.findByRole('alert');
     const save = screen.getByRole('button', { name: 'Save' });
@@ -519,7 +523,7 @@ describe('EditPage — load errors', () => {
         }),
     });
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
 
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     release(jsonResponse(200, DEFINITION));
@@ -534,13 +538,13 @@ describe('EditPage — load errors', () => {
         }),
     });
 
-    renderStudio('/studio/wf_missing');
+    renderStudio('/workflows/wf_missing');
 
-    expect(
-      await screen.findByRole('heading', { name: 'Definition not found' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('wf_missing')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Definitions' })).toHaveAttribute('href', '/');
+    expect(await screen.findByText(/^Workflow .+ doesn’t exist\.$/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to Workflows' })).toHaveAttribute(
+      'href',
+      '/workflows',
+    );
     // No editor: nothing to edit, save, validate or run.
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Validate' })).toBeNull();
@@ -553,7 +557,7 @@ describe('EditPage — load errors', () => {
   it('still opens the editor for a new definition', async () => {
     stubRoutes({});
 
-    renderStudio({ pathname: '/studio/new', state: { name: 'Fresh workflow' } });
+    renderStudio({ pathname: '/workflows/new', state: { name: 'Fresh workflow' } });
 
     expect(await screen.findByText('Fresh workflow')).toBeInTheDocument();
     expect(screen.getByTestId('canvas-region')).toBeInTheDocument();
@@ -572,7 +576,7 @@ describe('EditPage — adding nodes', () => {
     const user = userEvent.setup();
 
     try {
-      renderStudio('/studio/wf_123');
+      renderStudio('/workflows/wf_123');
       await screen.findByTestId('rf__node-node_gen');
 
       const addTextGeneration = () =>
@@ -602,7 +606,7 @@ describe('EditPage — Undo and Redo', () => {
       'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
     });
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await screen.findByTestId('rf__node-node_gen');
 
     expect(undoButton()).toBeDisabled();
@@ -615,7 +619,7 @@ describe('EditPage — Undo and Redo', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await screen.findByTestId('rf__node-node_gen');
     const requestsBefore = fetchMock.mock.calls.length;
 
@@ -683,7 +687,7 @@ describe('EditPage — Undo and Redo', () => {
       return { nodes: (body.nodes as unknown[]).length, edges: (body.edges as unknown[]).length };
     };
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await selectCanvasNode('node_gen');
     await waitFor(() => expect(screen.getByTestId('rf__node-node_gen')).toHaveClass('selected'));
     fireEvent.keyDown(document.body, { key: 'Backspace' });
@@ -703,7 +707,7 @@ describe('EditPage — Undo and Redo', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await selectCanvasNode('node_gen');
     const nameInput = await screen.findByLabelText('Name');
     await user.type(nameInput, ' Look');
@@ -731,7 +735,7 @@ describe('EditPage — Undo and Redo', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await selectCanvasNode('node_gen');
     await user.type(await screen.findByLabelText('Name'), ' A');
     // Leaving the field ends the typing session.
@@ -757,7 +761,7 @@ describe('EditPage — Undo and Redo', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await selectCanvasNode('node_gen');
     await user.type(await screen.findByLabelText('Name'), ' Local');
     expect(undoButton()).toBeEnabled();
@@ -782,7 +786,7 @@ describe('EditPage — Undo and Redo', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await screen.findByTestId('rf__node-node_gen');
     await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
     await waitFor(() => expect(canvasNodes()).toHaveLength(2));
@@ -818,7 +822,7 @@ describe('EditPage — Undo and Redo', () => {
         }),
     });
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await selectCanvasNode('node_agent');
 
     const group = screen.getByRole('group', { name: /Allowed Tools/i });
@@ -833,12 +837,162 @@ describe('EditPage — Undo and Redo', () => {
     });
     const user = userEvent.setup();
 
-    renderStudio('/studio/wf_123');
+    renderStudio('/workflows/wf_123');
     await selectCanvasNode('node_gen');
     // Re-selecting the Model already configured reports a config equal to the current one.
     await user.selectOptions(screen.getByLabelText(/^Model\s*\*?$/), 'text-model-v1');
 
     expect(undoButton()).toBeDisabled();
     expect(screen.queryByTestId('unsaved-indicator')).toBeNull();
+  });
+});
+
+describe('EditPage — leaving with unsaved changes', () => {
+  async function dirtyEditor() {
+    const user = userEvent.setup();
+    await screen.findByTestId('rf__node-node_gen');
+    await user.click(screen.getAllByRole('button', { name: /^Text Generation/ })[0]!);
+    await screen.findByTestId('unsaved-indicator');
+    return user;
+  }
+
+  it('asks before the back button leaves; Stay keeps the edits on the page', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    renderStudio('/workflows/wf_123');
+    const user = await dirtyEditor();
+
+    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
+    expect(within(dialog).getByRole('button', { name: 'Save and leave' })).toHaveFocus();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Stay' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByTestId('location-path')).toHaveTextContent('/workflows/wf_123');
+    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
+  });
+
+  it('leaves without saving on Leave', async () => {
+    const fetchMock = stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    const { router } = renderStudio('/workflows/wf_123');
+    const user = await dirtyEditor();
+
+    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Leave' }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workflows'));
+    expect(callsTo(fetchMock, 'PUT', '/api/definitions/wf_123')).toEqual([]);
+  });
+
+  it('saves a new version, then leaves, on Save and leave', async () => {
+    const fetchMock = stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+      'PUT /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(5, 'Generate')),
+    });
+    const { router } = renderStudio('/workflows/wf_123');
+    const user = await dirtyEditor();
+
+    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Save and leave' }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workflows'));
+    expect(callsTo(fetchMock, 'PUT', '/api/definitions/wf_123')).toHaveLength(1);
+  });
+
+  it('stays when Save and leave cannot save', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+      'PUT /api/definitions/wf_123': () =>
+        jsonResponse(500, { error: { code: 'INTERNAL', message: 'boom' } }),
+    });
+    const { router } = renderStudio('/workflows/wf_123');
+    const user = await dirtyEditor();
+
+    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Save and leave' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(router.state.location.pathname).toBe('/workflows/wf_123');
+    expect(screen.getByTestId('unsaved-indicator')).toBeInTheDocument();
+  });
+
+  it('offers only Leave and Stay when the changes have issues, with Stay first in focus', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+      'POST /api/definitions/validate': () =>
+        jsonResponse(200, {
+          valid: false,
+          errors: [{ code: 'DAG_HAS_CYCLE', path: '', message: 'the graph has a cycle' }],
+        }),
+    });
+    renderStudio('/workflows/wf_123');
+    const user = await dirtyEditor();
+    await user.click(screen.getByRole('button', { name: 'Validate' }));
+    await screen.findByRole('list', { name: 'Validation errors' });
+
+    await user.click(screen.getByRole('link', { name: 'Back to Workflows' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
+    expect(within(dialog).queryByRole('button', { name: 'Save and leave' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveFocus();
+  });
+
+  it('holds browser Back the same way', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    const { router } = renderStudio({ pathname: '/workflows', state: null });
+    await act(async () => {
+      await router.navigate('/workflows/wf_123');
+    });
+    await dirtyEditor();
+
+    await act(async () => {
+      await router.navigate(-1);
+    });
+    expect(
+      await screen.findByRole('dialog', { name: 'Leave without saving?' }),
+    ).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/workflows/wf_123');
+  });
+
+  it('lets a change of the query string through and asks the browser before unload', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    const { router } = renderStudio('/workflows/wf_123');
+    await dirtyEditor();
+
+    await act(async () => {
+      await router.navigate('/workflows/wf_123?x=1');
+    });
+    expect(router.state.location.search).toBe('?x=1');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('does not ask once nothing is unsaved', async () => {
+    stubRoutes({
+      'GET /api/definitions/wf_123': () => jsonResponse(200, definitionWithNode(4, 'Generate')),
+    });
+    const { router } = renderStudio('/workflows/wf_123');
+    await screen.findByTestId('rf__node-node_gen');
+
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+
+    await act(async () => {
+      await router.navigate('/workflows');
+    });
+    expect(router.state.location.pathname).toBe('/workflows');
   });
 });

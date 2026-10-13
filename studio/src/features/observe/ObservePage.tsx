@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { DetailPanel } from './DetailPanel';
 import { EventTimeline } from './EventTimeline';
@@ -13,8 +13,15 @@ import { useBoundDefinition } from './boundDefinition';
 import { observeRun, type ObservedRun } from './runObserver';
 import { ApiRequestError, createRun, getDefinitionVersion } from '@/api/client';
 import type { Definition, JsonObject, RunEvent } from '@/api/types';
-import { PageState } from '@/components/PageState';
-import { Button } from '@/components/ui/button';
+import { ListShell } from '@/components/shell/ListShell';
+import { NotFoundView } from '@/components/shell/NotFoundView';
+import { WorkflowHeader } from '@/components/shell/WorkflowHeader';
+import { Skeleton, StateBlock } from '@/components/state/StateBlock';
+import { useCopy } from '@/lib/copy';
+import { carryFrom } from '@/lib/nav/list-state';
+import { noteRecent } from '@/lib/nav/recent';
+import { shortCode } from '@/lib/short-code';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { runInputLabels } from '@/features/run-input/runInputLabels';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { useStudioStore } from '@/stores/studio-store';
@@ -49,8 +56,10 @@ function allowedToolsOf(definition: Definition | null, nodeId: string): string[]
 }
 
 export function ObservePage() {
-  const { runId = '' } = useParams();
+  const { runId = '', workflowId = '' } = useParams();
+  const { search, hash } = useLocation();
   const navigate = useNavigate();
+  const copy = useCopy();
 
   const selectedNodeId = useStudioStore((s) => s.selectedNodeId);
   const selectNode = useStudioStore((s) => s.selectNode);
@@ -94,6 +103,24 @@ export function ObservePage() {
     return () => observer.close();
   }, [runId, loadAttempt]);
 
+  // A run always opens under its own workflow: an address that pairs it with another
+  // workflow is corrected in place rather than shown under the wrong name.
+  const snapshotWorkflowId = snapshot?.run.workflowId;
+  useEffect(() => {
+    if (!snapshotWorkflowId) return;
+    noteRecent(snapshotWorkflowId);
+    if (snapshotWorkflowId === workflowId) return;
+    void navigate(
+      `/workflows/${encodeURIComponent(snapshotWorkflowId)}/runs/${encodeURIComponent(runId)}${search}${hash}`,
+      { replace: true },
+    );
+  }, [snapshotWorkflowId, workflowId, runId, search, hash, navigate]);
+
+  const workflowName = bound.definition?.name;
+  useDocumentTitle(
+    workflowName ? copy.pageTitles.run(workflowName, shortCode(runId)) : copy.nav.runs,
+  );
+
   const onRetryLoad = useCallback(() => {
     setObserved({ snapshot: null, events: [], loadError: null });
     setLoadAttempt((attempt) => attempt + 1);
@@ -132,37 +159,56 @@ export function ObservePage() {
       })
         .then((run) => {
           setRunAgainOpen(false);
-          void navigate(`/runs/${run.id}`);
+          void navigate(
+            carryFrom(
+              `/workflows/${encodeURIComponent(run.workflowId)}/runs/${encodeURIComponent(run.id)}`,
+              search,
+            ),
+          );
         })
         .catch((error: unknown) => {
           setRunAgainError(describeError(error, 'Could not create run'));
         })
         .finally(() => setRunAgainSubmitting(false));
     },
-    [snapshot, navigate],
+    [snapshot, navigate, search],
   );
 
   // Only a 404 means the Run does not exist. A network failure or a server error says
   // nothing about the Run, so it offers Retry instead of declaring the Run missing.
   if (loadError !== null) {
     if (loadError instanceof ApiRequestError && loadError.status === 404) {
-      return <PageState title="Run not found" body="No run exists with this ID." detail={runId} />;
+      return (
+        <ListShell>
+          <NotFoundView kind="run" id={runId} />
+        </ListShell>
+      );
     }
     return (
-      <PageState
-        title="Couldn't load this run"
-        body="Check that the Emberling server is running, then try again."
-        detail={loadError instanceof ApiRequestError ? loadError.code : undefined}
-        action={<Button onClick={onRetryLoad}>Retry</Button>}
-      />
+      <div className="flex min-h-screen flex-col bg-bg text-fg">
+        <WorkflowHeader workflowId={workflowId} runId={runId} name="" tab="runs" />
+        <StateBlock
+          kind="error"
+          title={copy.states.loadFailed(copy.states.what.run)}
+          body={copy.states.errorBody}
+          code={
+            loadError instanceof ApiRequestError
+              ? copy.states.errorCode(loadError.status, loadError.code)
+              : undefined
+          }
+          action={{ label: copy.retry, primary: true, onClick: onRetryLoad }}
+          className="flex-1 justify-center"
+        />
+      </div>
     );
   }
 
   if (!snapshot) {
     return (
-      <main className="flex h-screen items-center justify-center bg-bg text-fg">
-        <p className="text-md text-fg-muted">Loading run…</p>
-      </main>
+      <div className="flex h-screen flex-col bg-bg text-fg">
+        <WorkflowHeader workflowId={workflowId} runId={runId} name="" tab="runs" />
+        <Skeleton kind="text" className="p-8" />
+      </div>
     );
   }
 

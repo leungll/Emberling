@@ -55,7 +55,7 @@ test('Observe reconnects after a Backend restart and shows the resumed Run compl
   ) as GeneratedDefinitions;
   const { workflowId } = generated.aigcMedia;
 
-  await page.goto(`/studio/${workflowId}`);
+  await page.goto(`/workflows/${workflowId}`);
 
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeEnabled();

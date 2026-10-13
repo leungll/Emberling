@@ -25,7 +25,7 @@ test('AIGC Media Generation waits for an external callback, then completes with 
   ) as GeneratedDefinitions;
   const { workflowId } = generated.aigcMedia;
 
-  await page.goto(`/studio/${workflowId}`);
+  await page.goto(`/workflows/${workflowId}`);
 
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeEnabled();
