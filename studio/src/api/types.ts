@@ -767,3 +767,14 @@ export interface ApiError {
     details?: JsonValue;
   };
 }
+
+/**
+ * The 200 body of the Backend's liveness (`/health`) and readiness (`/ready`) probes,
+ * served at the root path rather than under `/api`. `version` and `commit` are build
+ * labels; either is `"unknown"` when the build did not record it.
+ */
+export interface BackendProbeResponse {
+  status: 'ok' | 'ready';
+  version: string;
+  commit: string;
+}
