@@ -264,7 +264,7 @@ func TestNodeAttempts_ListDuePolls_ReturnsOnlyDueDispatchedInOrderWithinLimit(t 
 	_, attDone := seedPollAttempt(ctx, t, uow, f, "done", &oldest)
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.NodeAttempts().MarkFailed(ctx, attDone, domain.NodeAttemptDispatched, now,
-			domain.ExecutionError{Code: "TIMEOUT", Message: "attempt deadline exceeded"})
+			domain.ExecutionError{Code: "TIMEOUT", Message: "attempt deadline exceeded"}, true)
 	}); err != nil {
 		t.Fatalf("MarkFailed: %v", err)
 	}

@@ -126,7 +126,7 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 			return err
 		}
 
-		if err := tx.NodeAttempts().MarkFailed(ctx, attempt.ID, p.fromAttempt, now, p.execError); err != nil {
+		if err := tx.NodeAttempts().MarkFailed(ctx, attempt.ID, p.fromAttempt, now, p.execError, p.uncertain); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				// Late/duplicate failure of an Attempt already resolved elsewhere
 				// (e.g. it already succeeded, or a competing callback won). Ignored, not

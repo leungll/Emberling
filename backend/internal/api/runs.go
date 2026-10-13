@@ -108,18 +108,21 @@ type callbackBindingDTO struct {
 // null; Studio's NodeAttempt.callbackBinding is a required, non-optional key
 // (studio/src/api/types.ts), so the key must still be present on every Attempt.
 type nodeAttemptDTO struct {
-	ID              string                   `json:"id"`
-	NodeRunID       string                   `json:"nodeRunId,omitempty"`
-	AttemptNo       int                      `json:"attemptNo"`
-	Status          domain.NodeAttemptStatus `json:"status"`
-	Input           json.RawMessage          `json:"input"`
-	Result          json.RawMessage          `json:"result"`
-	StartedAt       time.Time                `json:"startedAt"`
-	DeadlineAt      *time.Time               `json:"deadlineAt"`
-	DispatchedAt    *time.Time               `json:"dispatchedAt"`
-	CompletedAt     *time.Time               `json:"completedAt"`
-	Error           *domain.ExecutionError   `json:"error"`
-	CallbackBinding any                      `json:"callbackBinding"`
+	ID           string                   `json:"id"`
+	NodeRunID    string                   `json:"nodeRunId,omitempty"`
+	AttemptNo    int                      `json:"attemptNo"`
+	Status       domain.NodeAttemptStatus `json:"status"`
+	Input        json.RawMessage          `json:"input"`
+	Result       json.RawMessage          `json:"result"`
+	StartedAt    time.Time                `json:"startedAt"`
+	DeadlineAt   *time.Time               `json:"deadlineAt"`
+	DispatchedAt *time.Time               `json:"dispatchedAt"`
+	CompletedAt  *time.Time               `json:"completedAt"`
+	Error        *domain.ExecutionError   `json:"error"`
+	// Uncertain is the failure's recorded determination: true or false on a FAILED
+	// Attempt, null on any other Attempt and on one that failed before it was recorded.
+	Uncertain       *bool `json:"uncertain"`
+	CallbackBinding any   `json:"callbackBinding"`
 }
 
 // toNodeAttemptDTO projects a, together with its Callback Binding when one exists.
@@ -137,6 +140,7 @@ func toNodeAttemptDTO(a domain.NodeAttempt, binding *domain.CallbackBinding) nod
 		DispatchedAt: a.DispatchedAt,
 		CompletedAt:  a.CompletedAt,
 		Error:        a.Error,
+		Uncertain:    a.Uncertain,
 	}
 	if binding != nil {
 		dto.CallbackBinding = callbackBindingDTO{

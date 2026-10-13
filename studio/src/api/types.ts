@@ -481,6 +481,11 @@ export interface NodeAttempt {
   dispatchedAt: string | null;
   completedAt: string | null;
   error: ExecutionError | null;
+  /**
+   * For a `FAILED` Attempt, whether its external outcome was uncertain when it failed.
+   * `null` on any other Attempt, and on one that failed before this was recorded.
+   */
+  uncertain: boolean | null;
   /** `null` for a synchronous Attempt. */
   callbackBinding: CallbackBindingSummary | null;
 }

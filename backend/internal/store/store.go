@@ -290,9 +290,10 @@ type NodeAttemptRepository interface {
 	// *domain.InvalidStateTransitionError semantics as Transition.
 	MarkSucceeded(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage) error
 
-	// MarkFailed conditionally moves an Attempt to FAILED and writes its error and
-	// completed_at, with the same semantics as MarkSucceeded.
-	MarkFailed(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError) error
+	// MarkFailed conditionally moves an Attempt to FAILED and writes its error,
+	// completed_at and whether the failed call's external outcome was uncertain, with the
+	// same semantics as MarkSucceeded. A losing call writes none of them.
+	MarkFailed(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError, uncertain bool) error
 
 	// ListExpired returns non-terminal Attempts (STARTED or DISPATCHED) whose deadline_at
 	// has passed. It backs Reconciler timeout rediscovery (the Reconciler must be able to

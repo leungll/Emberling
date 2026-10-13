@@ -385,7 +385,7 @@ func (r *defsFakeNodeAttemptRepo) ListDuePolls(context.Context, time.Time, int) 
 func (r *defsFakeNodeAttemptRepo) MarkSucceeded(context.Context, string, domain.NodeAttemptStatus, time.Time, json.RawMessage) error {
 	return errDefsFakeNotImplemented
 }
-func (r *defsFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError) error {
+func (r *defsFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError, bool) error {
 	return errDefsFakeNotImplemented
 }
 func (r *defsFakeNodeAttemptRepo) ListExpired(context.Context, time.Time, int) ([]domain.NodeAttempt, error) {

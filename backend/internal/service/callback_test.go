@@ -360,7 +360,7 @@ func (r *cbNodeAttemptRepo) MarkSucceeded(_ context.Context, attemptID string, f
 	r.tx.state.attempts[attemptID] = attempt
 	return nil
 }
-func (r *cbNodeAttemptRepo) MarkFailed(_ context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError) error {
+func (r *cbNodeAttemptRepo) MarkFailed(_ context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError, uncertain bool) error {
 	if !from.CanTransitionTo(domain.NodeAttemptFailed) {
 		return &domain.InvalidStateTransitionError{Entity: "NodeAttempt", ID: attemptID, From: string(from), To: string(domain.NodeAttemptFailed)}
 	}
@@ -372,6 +372,7 @@ func (r *cbNodeAttemptRepo) MarkFailed(_ context.Context, attemptID string, from
 	attempt.Status = domain.NodeAttemptFailed
 	attempt.Error = &e
 	attempt.CompletedAt = &now
+	attempt.Uncertain = &uncertain
 	r.tx.state.attempts[attemptID] = attempt
 	return nil
 }

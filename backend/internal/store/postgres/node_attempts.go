@@ -18,7 +18,7 @@ type nodeAttemptRepository struct {
 
 const nodeAttemptColumns = `id, node_run_id, attempt_no, status, input, result,
 	callback_token_hash, started_at, deadline_at, dispatched_at, completed_at, error,
-	next_poll_at, poll_count`
+	next_poll_at, poll_count, uncertain`
 
 // Create inserts a new Attempt. A retry always creates another row: an old Attempt is
 // never overwritten, so UNIQUE (node_run_id, attempt_no) rejects a duplicated retry.
@@ -30,12 +30,12 @@ func (r *nodeAttemptRepository) Create(ctx context.Context, attempt domain.NodeA
 
 	const insert = `
 		INSERT INTO node_attempts (` + nodeAttemptColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
 	if _, err := r.conn.Exec(ctx, insert,
 		attempt.ID, attempt.NodeRunID, attempt.AttemptNo, string(attempt.Status),
 		attempt.Input, nullableJSON(attempt.Result), attempt.CallbackTokenHash,
 		attempt.StartedAt, attempt.DeadlineAt, attempt.DispatchedAt, attempt.CompletedAt, errPayload,
-		attempt.NextPollAt, attempt.PollCount,
+		attempt.NextPollAt, attempt.PollCount, attempt.Uncertain,
 	); err != nil {
 		return mapError("node_attempts.Create", err, attempt.ID, attempt.NodeRunID, attempt.AttemptNo)
 	}
@@ -161,7 +161,7 @@ func (r *nodeAttemptRepository) MarkSucceeded(ctx context.Context, attemptID str
 
 // MarkFailed conditionally moves an Attempt to FAILED and writes its error and
 // completed_at, with the same semantics as MarkSucceeded.
-func (r *nodeAttemptRepository) MarkFailed(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError) error {
+func (r *nodeAttemptRepository) MarkFailed(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, execErr domain.ExecutionError, uncertain bool) error {
 	if !from.CanTransitionTo(domain.NodeAttemptFailed) {
 		return &domain.InvalidStateTransitionError{
 			Entity: "NodeAttempt", ID: attemptID, From: string(from), To: string(domain.NodeAttemptFailed),
@@ -174,10 +174,10 @@ func (r *nodeAttemptRepository) MarkFailed(ctx context.Context, attemptID string
 
 	const update = `
 		UPDATE node_attempts
-		   SET status = 'FAILED', error = $3, completed_at = $4
+		   SET status = 'FAILED', error = $3, completed_at = $4, uncertain = $5
 		 WHERE id = $1 AND status = $2`
 	affected, err := affectedRows(ctx, r.conn, "node_attempts.MarkFailed", update,
-		attemptID, string(from), errPayload, now)
+		attemptID, string(from), errPayload, now, uncertain)
 	if err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ func scanNodeAttempts(rows pgx.Rows) ([]domain.NodeAttempt, error) {
 			&attempt.Input, &result, &attempt.CallbackTokenHash,
 			&attempt.StartedAt, &attempt.DeadlineAt, &attempt.DispatchedAt,
 			&attempt.CompletedAt, &errPayload,
-			&attempt.NextPollAt, &attempt.PollCount,
+			&attempt.NextPollAt, &attempt.PollCount, &attempt.Uncertain,
 		); err != nil {
 			return nil, err
 		}
