@@ -46,6 +46,7 @@ describe('routes', () => {
       '/studio/new',
       '/studio/:workflowId',
       '/runs/:runId',
+      '/__ui',
       '*',
     ]);
   });

@@ -25,6 +25,16 @@ export const routes: RouteObject[] = [
       { path: '/studio/new', element: <EditPage /> },
       { path: '/studio/:workflowId', element: <EditPage /> },
       { path: '/runs/:runId', element: <ObservePage /> },
+      // The component gallery for the UI review suite; development builds only, so the
+      // production bundle does not contain it.
+      ...(import.meta.env.DEV
+        ? [
+            {
+              path: '/__ui',
+              lazy: async () => ({ Component: (await import('./dev/UiGallery')).UiGallery }),
+            },
+          ]
+        : []),
       { path: '*', element: <NotFoundPage /> },
     ],
   },

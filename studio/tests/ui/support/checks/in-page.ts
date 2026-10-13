@@ -209,6 +209,8 @@ export function inspectPage(options: InspectOptions): InspectResult {
   }
 
   const RAW_ENUM = /^[A-Z][A-Z0-9_]{3,}$/;
+  // Upper-case words that are ordinary product copy, not raw enum values.
+  const ACRONYMS = new Set(['JSON', 'HTTP', 'HTTPS', 'IANA', 'JPEG', 'WEBP']);
   const BANNED = /\b(definitions?|nodes?|noderuns?|executions?|jobs?|problems?|paused)\b/i;
   const BROKEN = /\b(undefined|null|NaN)\b|\[object Object\]/;
   const RAW_CONTEXT =
@@ -230,6 +232,25 @@ export function inspectPage(options: InspectOptions): InspectResult {
       Array.from(el.classList).some((name) => /^react-flow(__|$)/.test(name)) &&
       !el.closest('[data-id]')
     );
+  }
+  // Auto margins centring a column compute to equal left and right values that fill the
+  // parent's spare width; they are layout, not spacing.
+  function centred(el: Element, style: CSSStyleDeclaration): boolean {
+    const left = px(style.marginLeft);
+    if (left <= 0 || left !== px(style.marginRight) || !el.parentElement) return false;
+    const parent = el.parentElement.getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    const parentStyle = getComputedStyle(el.parentElement);
+    const inner = parent.width - px(parentStyle.paddingLeft) - px(parentStyle.paddingRight);
+    return Math.abs(inner - box.width - 2 * left) <= 1;
+  }
+  // The fixed layer an element floats in (a popover, a dialog, a toast), or null for the
+  // page. Floating layers cover the page on purpose, so overlap is only checked within one.
+  function layerOf(el: Element): Element | null {
+    for (let n: Element | null = el; n; n = n.parentElement) {
+      if (getComputedStyle(n).position === 'fixed') return n;
+    }
+    return null;
   }
   // Tailwind composes ring and shadow layers; transparent zero-size layers draw nothing.
   function drawnShadow(value: string): string {
@@ -279,7 +300,7 @@ export function inspectPage(options: InspectOptions): InspectResult {
       for (const prop of ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'] as const) {
         const v = Math.abs(px(style[prop]));
         // Larger values are almost always auto margins centring a column.
-        if (v <= 64 && !SPACE.has(v) && !thirdParty(el))
+        if (v <= 64 && !SPACE.has(v) && !thirdParty(el) && !centred(el, style))
           add('tokens', el, `${prop} ${style[prop]}`);
       }
       for (const corner of [
@@ -357,7 +378,7 @@ export function inspectPage(options: InspectOptions): InspectResult {
       // Copy: no dot-joined facts, raw enums or broken values in visible text.
       if (text && !el.closest(RAW_CONTEXT)) {
         if (text.includes(' · ')) add('copy', el, 'dot-joined text');
-        if (RAW_ENUM.test(text)) add('copy', el, `raw enum ${text}`);
+        if (RAW_ENUM.test(text) && !ACRONYMS.has(text)) add('copy', el, `raw enum ${text}`);
         if (BROKEN.test(text)) add('copy', el, `broken value in "${text.slice(0, 60)}"`);
         if (BANNED.test(text)) add('copy', el, `banned word in "${text.slice(0, 60)}"`);
       }
@@ -383,8 +404,9 @@ export function inspectPage(options: InspectOptions): InspectResult {
     document.querySelectorAll(
       'a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="menuitem"], [role="option"], [tabindex="0"]',
     ),
-  ).filter((el) => visible(el) && !el.closest('[aria-hidden="true"]'));
+  ).filter((el) => visible(el) && !visuallyHidden(el) && !el.closest('[aria-hidden="true"]'));
   const rects = interactive.map((el) => el.getBoundingClientRect());
+  const layers = interactive.map(layerOf);
   interactive.forEach((el, i) => {
     const r = rects[i]!;
     const inline =
@@ -399,7 +421,7 @@ export function inspectPage(options: InspectOptions): InspectResult {
     }
     for (let j = i + 1; j < interactive.length; j += 1) {
       const other = interactive[j]!;
-      if (el.contains(other) || other.contains(el)) continue;
+      if (el.contains(other) || other.contains(el) || layers[i] !== layers[j]) continue;
       const q = rects[j]!;
       const w = Math.min(r.right, q.right) - Math.max(r.left, q.left);
       const h = Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top);

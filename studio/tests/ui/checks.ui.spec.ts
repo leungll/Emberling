@@ -58,6 +58,36 @@ test.describe('review checks', () => {
     expect(await checks(page, '<p>WAITING_CALLBACK</p>')).toEqual(['copy']);
     expect(await checks(page, '<p>Started undefined</p>')).toEqual(['copy']);
     expect(await checks(page, '<code>WAITING_CALLBACK</code>')).toEqual([]);
+    expect(await checks(page, '<p>JSON</p>')).toEqual([]);
+  });
+
+  test('a centred column is layout, an odd margin is not', async ({ page }) => {
+    expect(
+      await checks(
+        page,
+        '<main style="width:400px"><div style="width:300px;margin:0 auto"><p>Run</p></div></main>',
+      ),
+    ).toEqual([]);
+    expect(await checks(page, '<div style="margin-left:10px"><p>Run</p></div>')).toEqual([
+      'tokens',
+    ]);
+  });
+
+  test('overlap counts within the page or within one floating layer, not across them', async ({
+    page,
+  }) => {
+    const button = (style: string, label: string) =>
+      `<button style="position:absolute;${style};height:32px;width:80px;padding:0;border:0;font:inherit;background:var(--surface);color:var(--fg)">${label}</button>`;
+    expect(
+      await checks(page, button('top:0;left:0', 'One') + button('top:8px;left:8px', 'Two')),
+    ).toEqual(['overlap']);
+    expect(
+      await checks(
+        page,
+        button('top:0;left:0', 'One') +
+          `<div style="position:fixed;top:8px;left:8px">${button('top:0;left:0', 'Menu item')}</div>`,
+      ),
+    ).toEqual([]);
   });
 
   test('low contrast and small targets are reported', async ({ page }) => {
