@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { observeRun, type ObservedRun, type RunObserverDeps } from './runObserver';
+import { MAX_RECONNECTS, observeRun, type ObservedRun, type RunObserverDeps } from './runObserver';
 import type { RunEventSubscription, SubscribeRunEventsOptions } from '@/api/sse';
 import type {
   EventType,
@@ -183,7 +183,7 @@ async function settle(): Promise<void> {
 }
 
 async function start(server: FakeServer) {
-  let state: ObservedRun = { snapshot: null, events: [], loadError: null };
+  let state: ObservedRun = { snapshot: null, events: [], loadError: null, connection: 'live' };
   const observer = observeRun('run_1', (next) => (state = next), server.deps());
   await settle();
   return {
@@ -313,6 +313,47 @@ describe('observeRun — Snapshot, history and SSE handoff', () => {
     expect(server.pendingTimers.map((t) => t.ms)).toEqual([1000]);
     view.observer.close();
     expect(server.pendingTimers).toHaveLength(0);
+  });
+
+  it('says when the stream drops and when it is back', async () => {
+    const server = runningServer();
+    const view = await start(server);
+    expect(view.state.connection).toBe('live');
+
+    server.stream.fail(false);
+    await settle();
+    expect(view.state.connection).toBe('reconnecting');
+
+    server.fireTimer();
+    await settle();
+    server.stream.open();
+    expect(view.state.connection).toBe('live');
+    view.observer.close();
+  });
+
+  it('stops after the bounded reconnects and starts again when asked', async () => {
+    const server = runningServer();
+    const view = await start(server);
+
+    for (let i = 0; i < MAX_RECONNECTS; i += 1) {
+      server.stream.fail(false);
+      await settle();
+      server.fireTimer();
+      await settle();
+    }
+    server.stream.fail(false);
+    await settle();
+    expect(view.state.connection).toBe('stopped');
+    expect(server.pendingTimers).toHaveLength(0);
+    const streams = server.streams.length;
+
+    view.observer.reconnect();
+    expect(view.state.connection).toBe('reconnecting');
+    await settle();
+    expect(server.streams).toHaveLength(streams + 1);
+    server.stream.open();
+    expect(view.state.connection).toBe('live');
+    view.observer.close();
   });
 
   it('lets the browser reconnect itself with Last-Event-ID and still re-reads', async () => {
@@ -501,7 +542,7 @@ describe('observeRun — load failure', () => {
     const server = new FakeServer();
     const deps = server.deps();
     deps.getRun = () => Promise.reject(new Error('boom'));
-    let state: ObservedRun = { snapshot: null, events: [], loadError: null };
+    let state: ObservedRun = { snapshot: null, events: [], loadError: null, connection: 'live' };
     const observer = observeRun('run_1', (next) => (state = next), deps);
     await settle();
 

@@ -66,6 +66,7 @@ export function ObservePage() {
     snapshot: null,
     events: [],
     loadError: null,
+    connection: 'live',
   });
   const { snapshot, events, loadError } = observed;
   // Bumped by Retry so the observer effect below starts over for the same Run.
@@ -122,7 +123,7 @@ export function ObservePage() {
   );
 
   const onRetryLoad = useCallback(() => {
-    setObserved({ snapshot: null, events: [], loadError: null });
+    setObserved({ snapshot: null, events: [], loadError: null, connection: 'live' });
     setLoadAttempt((attempt) => attempt + 1);
   }, []);
 

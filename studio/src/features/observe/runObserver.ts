@@ -7,6 +7,13 @@ import {
 } from '@/api/sse';
 import type { RunEvent, RunSnapshot } from '@/api/types';
 
+/**
+ * The live event stream's state, for a run that is still going: `live` while the stream is
+ * open (or the run has ended and needs none), `reconnecting` between a dropped stream and
+ * the next open, `stopped` once the bounded reconnect attempts are used up.
+ */
+export type StreamConnection = 'live' | 'reconnecting' | 'stopped';
+
 /** What Observe renders: the server Snapshot plus the committed Events, both server facts. */
 export interface ObservedRun {
   snapshot: RunSnapshot | null;
@@ -14,6 +21,7 @@ export interface ObservedRun {
   events: RunEvent[];
   /** Set only when the first Snapshot read fails; later failures keep the last view. */
   loadError: unknown;
+  connection: StreamConnection;
 }
 
 export interface RunObserverDeps {
@@ -33,6 +41,8 @@ export interface RunObserverDeps {
 export const EVENT_PAGE_LIMIT = 200;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
+/** Reconnects tried after the stream drops before the observer stops and says so. */
+export const MAX_RECONNECTS = 8;
 
 const defaultDeps: RunObserverDeps = {
   getRun: (runId, signal) => getRun(runId, signal),
@@ -64,7 +74,7 @@ export function observeRun(
   runId: string,
   onChange: (state: ObservedRun) => void,
   deps: RunObserverDeps = defaultDeps,
-): { close(): void } {
+): { close(): void; reconnect(): void } {
   const controller = new AbortController();
   const signal = controller.signal;
 
@@ -79,13 +89,20 @@ export function observeRun(
   let reconnectTimer: unknown = null;
   let reconnectAttempt = 0;
   let finished = false; // terminal and caught up: no stream, no reconnect
+  let connection: StreamConnection = 'live';
 
   const disposed = () => signal.aborted;
 
   function emit(): void {
     if (disposed()) return;
     // A fresh array per emit, so React sees a new list; appends in between stay O(1).
-    onChange({ snapshot: view, events: events.slice(), loadError: null });
+    onChange({ snapshot: view, events: events.slice(), loadError: null, connection });
+  }
+
+  function setConnection(next: StreamConnection): void {
+    if (connection === next) return;
+    connection = next;
+    if (view) emit();
   }
 
   function adopt(snapshot: RunSnapshot): void {
@@ -137,6 +154,7 @@ export function observeRun(
   function finishIfTerminal(): void {
     if (finished || !caughtUpTerminal()) return;
     finished = true;
+    connection = 'live';
     subscription?.close();
     subscription = null;
     if (reconnectTimer !== null) {
@@ -181,7 +199,7 @@ export function observeRun(
       return true;
     } catch (error) {
       if (!disposed() && base === null) {
-        onChange({ snapshot: null, events: [], loadError: error });
+        onChange({ snapshot: null, events: [], loadError: error, connection });
       }
       return false;
     } finally {
@@ -201,9 +219,11 @@ export function observeRun(
       onEvent: onStreamEvent,
       onOpen: () => {
         reconnectAttempt = 0;
+        setConnection('live');
       },
       onError: ({ reconnecting }) => {
         if (disposed() || finished) return;
+        setConnection('reconnecting');
         if (reconnecting) {
           // The browser retries with Last-Event-ID; re-read what may have been missed.
           requestSync();
@@ -218,6 +238,11 @@ export function observeRun(
 
   function scheduleReconnect(): void {
     if (disposed() || finished || reconnectTimer !== null) return;
+    if (reconnectAttempt >= MAX_RECONNECTS) {
+      setConnection('stopped');
+      return;
+    }
+    setConnection('reconnecting');
     const delay = Math.min(RECONNECT_BASE_MS * 2 ** reconnectAttempt, RECONNECT_MAX_MS);
     reconnectAttempt += 1;
     reconnectTimer = deps.setTimer(() => {
@@ -235,6 +260,17 @@ export function observeRun(
   });
 
   return {
+    /** Starts reconnecting again after the observer stopped. */
+    reconnect() {
+      if (disposed() || finished || subscription || reconnectTimer !== null) return;
+      reconnectAttempt = 0;
+      setConnection('reconnecting');
+      void sync().then((ok) => {
+        if (disposed() || finished) return;
+        if (ok) openStream();
+        else scheduleReconnect();
+      });
+    },
     close() {
       controller.abort();
       subscription?.close();
