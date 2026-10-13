@@ -229,6 +229,8 @@
   /* A running status icon turns once every 1.2 s; skeletons pulse at the same pace. */
   --animate-spin-slow: spin 1.2s linear infinite;
   --animate-skeleton: skeleton-pulse 1.2s var(--ease-out) infinite;
+  /* The row a viewer comes back to on a list is tinted, then fades over 1.5 s. */
+  --animate-row-returned: row-returned 1.5s var(--ease-in) both;
 
   @keyframes spin {
     to {
@@ -238,6 +240,14 @@
   @keyframes pulse {
     50% {
       opacity: 0.5;
+    }
+  }
+  @keyframes row-returned {
+    from {
+      background-color: var(--surface-selected);
+    }
+    to {
+      background-color: transparent;
     }
   }
   @keyframes skeleton-pulse {
@@ -380,6 +390,15 @@
   :focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
+  }
+
+  /* A list row restored on return takes focus quietly: no ring until the viewer presses a key. */
+  [data-quiet-focus]:focus-visible {
+    outline: none;
+  }
+
+  tr[data-returned] > td {
+    animation: var(--animate-row-returned);
   }
 
   @media (prefers-reduced-motion: reduce) {

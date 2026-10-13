@@ -17,6 +17,17 @@ export const en = {
   product: 'Emberling',
   documentTitle: (page: string) => `${page} – Emberling`,
 
+  /** The part of each document title before the product name. */
+  pageTitles: {
+    runs: 'Runs',
+    workflows: 'Workflows',
+    notFound: 'Not found',
+    error: 'Error',
+    editor: (name: string) => `${name} – Editor`,
+    workflowRuns: (name: string) => `${name} runs`,
+    run: (name: string, code: string) => `${name} runs – Run ${code}`,
+  },
+
   nav: {
     runs: 'Runs',
     workflows: 'Workflows',
@@ -43,6 +54,24 @@ export const en = {
       live ? `${label}: ${total}, ${live}` : `${label}: ${total}`,
     lastRun: (status: string, when: string) => `Last run ${status.toLowerCase()}, ${when}`,
     breadcrumb: 'Breadcrumb',
+    workflowViews: 'Workflow views',
+    newWorkflowRuns: 'Save the workflow to run it.',
+  },
+
+  /** Pages that only point the way until their full version exists. */
+  placeholders: {
+    runs: {
+      title: 'Each workflow keeps its runs on its Runs tab.',
+      body: 'Open a workflow, then its Runs tab.',
+      action: 'Go to Workflows',
+    },
+    workflowRuns: {
+      title: 'Open this workflow’s last run.',
+      action: 'Open last run',
+      none: 'This workflow hasn’t run yet.',
+      noneBody: 'Run it from the Editor and its runs appear here.',
+      toEditor: 'Go to Editor',
+    },
   },
 
   /** Backend connection, from GET /ready (ready or starting) or a failed request (unreachable). */
@@ -178,6 +207,7 @@ export const en = {
   states: {
     errorCode: (status: number, code: string) => `${status} ${code}`,
     loadFailed: (what: string) => `Couldn’t load ${what}.`,
+    what: { run: 'this run', workflow: 'this workflow', workflows: 'workflows', runs: 'runs' },
     errorBody: 'Try again. If it keeps failing, the details below help when you report it.',
     pageError: {
       title: 'This page couldn’t be shown.',
