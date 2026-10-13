@@ -135,7 +135,7 @@ export function SchemaSlot({
             aria-invalid={draftError ? true : undefined}
             spellCheck={false}
             value={draft}
-            placeholder='{ "type": "object", "properties": { … } }'
+            placeholder={f.schemaPlaceholder}
             onChange={(e) => {
               setDraft(e.target.value);
               setDraftError(check(e.target.value));

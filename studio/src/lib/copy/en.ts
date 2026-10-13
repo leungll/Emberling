@@ -39,13 +39,10 @@ export const en = {
     home: 'Emberling home: go to Runs',
     backToRuns: 'Back to Runs',
     backToWorkflows: 'Back to Workflows',
-    runsShort: 'Runs',
-    workflowsShort: 'Workflows',
     editor: 'Editor',
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',
     recent: 'Recent',
-    recentToggle: (open: boolean) => (open ? 'Hide recent workflows' : 'Show recent workflows'),
     shortcuts: 'Keyboard shortcuts',
     notRunYet: 'Not run yet',
     live: (running: number, waiting: number) =>
@@ -114,7 +111,6 @@ export const en = {
 
   facts: {
     notRecorded: 'Not recorded',
-    notReported: 'Not reported',
   },
 
   form: {
@@ -129,7 +125,6 @@ export const en = {
   retry: 'Retry',
   loading: 'Loading',
   actionsFor: (name: string) => `Actions for ${name}`,
-  moreActions: 'More actions',
 
   shortcuts: {
     title: 'Keyboard shortcuts',
@@ -143,9 +138,7 @@ export const en = {
     toggleSidebar: 'Collapse or expand the sidebar',
     goUp: 'Close the top layer, then go up one level',
     moveRows: 'Move between rows',
-    firstLast: 'First or last row',
     openRow: 'Open the row',
-    moveInRow: 'Move between controls in a row',
     rowMenu: 'Open the row’s actions',
     keys: {
       shiftF10: 'Shift+F10',

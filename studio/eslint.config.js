@@ -97,10 +97,9 @@ const styleRules = [
   ...styleSelectors(DOTS, STYLE_RULE_MESSAGE.dots),
 ];
 
-// Copy rules: every user-facing word in shared components and the app shell comes from the
-// copy module (src/lib/copy), so a word is changed in one table and a second language can be
-// added as one more table. The legacy feature pages are replaced page by page and join the
-// rule as they are rebuilt.
+// Copy rules: every user-facing word in the pages, the shared components and the app shell
+// comes from the copy module (src/lib/copy), so a word is changed in one table and a second
+// language can be added as one more table.
 const COPY_RULE_MESSAGE =
   'Put user-facing text in the copy module (src/lib/copy) and read it with useCopy().';
 const copyRules = [
@@ -111,7 +110,7 @@ const copyRules = [
     message: COPY_RULE_MESSAGE,
   },
 ];
-const COPY_FILES = ['src/components/**/*.tsx', 'src/app/**/*.tsx'];
+const COPY_FILES = ['src/components/**/*.tsx', 'src/app/**/*.tsx', 'src/features/**/*.tsx'];
 const COPY_EXEMPT = ['src/components/ui/**', 'src/app/dev/**'];
 
 // Overlay roles come only from the overlay primitives, so every dialog and menu shares one

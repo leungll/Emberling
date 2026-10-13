@@ -160,7 +160,7 @@ export function SidePanel({
             <Button variant="secondary" size="sm" onClick={() => ops.duplicate(ids)}>
               <Copy aria-hidden="true" />
               {copy.editor.menu.duplicate}
-              <Kbd>⌘ D</Kbd>
+              <Kbd>{copy.editor.menu.duplicateKeys}</Kbd>
             </Button>
             <Button
               variant="secondary"
@@ -192,7 +192,7 @@ export function SidePanel({
             <MenuContent label={t.stepMenu} align="end">
               <MenuItem
                 icon={<Copy aria-hidden="true" />}
-                shortcut="⌘ D"
+                shortcut={copy.editor.menu.duplicateKeys}
                 onSelect={() => ops.duplicate([node.id])}
               >
                 {t.duplicateStep}

@@ -61,7 +61,7 @@ export function CanvasMenu({
             )}
             <MenuItem
               icon={<CopyPlus aria-hidden="true" />}
-              shortcut="⌘ D"
+              shortcut={t.duplicateKeys}
               onSelect={() => onAction('duplicate')}
             >
               {many ? t.duplicateMany(many) : t.duplicate}
