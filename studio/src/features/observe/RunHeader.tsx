@@ -54,7 +54,9 @@ export function RunHeader({
             <Timestamp iso={run.startedAt} />
           </h2>
           <span className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
-            <StatusIndicator status={{ kind: 'run', value: run.status }} colourLabel focusable />
+            <span data-testid="run-status" className="inline-flex">
+              <StatusIndicator status={{ kind: 'run', value: run.status }} colourLabel focusable />
+            </span>
             <span className="text-fg-secondary tabular-nums">
               {ended !== null ? (
                 <>

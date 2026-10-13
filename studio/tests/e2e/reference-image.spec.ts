@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
+import { details, runStatus, stepCard } from './run-view';
 
 // The smallest valid PNG (1x1, RGBA): enough for the Backend to accept it as `image/png`
 // and for the browser to decode the preview to a non-zero natural size.
@@ -67,22 +68,16 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   expect(body.input.reference.sizeBytes).toBe(ONE_PIXEL_PNG.length);
   await page.waitForURL(/\/runs\//);
 
-  const status = page.getByTestId('run-status');
-  await expect(status).toHaveText('Completed', { timeout: 30_000 });
-  await expect(page.getByRole('button', { name: /Run completed/ })).toBeVisible();
+  await expect(runStatus(page)).toHaveText('Completed', { timeout: 30_000 });
 
-  // Item 7: the Image Input NodeRun's output is a server fact - the canonical ASSET
-  // ImageRef `image_input` published - rendered by DetailPanel's ImagePreview as
-  // "<source> · <assetId>" beside an `<img alt="ASSET image preview">` whose src is the
-  // Backend's own content route. The Run Rail lists only RUNNING / WAITING NodeRuns, so a
-  // finished node is selected on the read-only Canvas (ObserveCanvas.tsx maps the
-  // Definition node id to its NodeRun).
-  const referenceNode = page.locator('.react-flow__node[data-id="node_reference"]');
-  await expect(referenceNode).toContainText('Succeeded');
-  await referenceNode.click();
-
-  await expect(page.getByText(`ASSET, ${assetId}`)).toBeVisible();
-  const preview = page.getByAltText('ASSET image preview');
+  // The Image Input step's output is a server fact: the ASSET image reference that
+  // `image_input` published, previewed from the Backend's own content route beside the
+  // uploaded Asset's ID.
+  await expect(stepCard(page, 'Reference')).toHaveAccessibleName(/, Succeeded,/);
+  await stepCard(page, 'Reference').click();
+  await details(page).getByRole('tab', { name: 'Output' }).click();
+  await expect(details(page).getByText(assetId)).toBeVisible();
+  const preview = details(page).getByRole('img', { name: 'Preview: Uploaded image' });
   await expect(preview).toBeVisible({ timeout: 10_000 });
   await expect(preview).toHaveAttribute('src', `/api/assets/${assetId}/content`);
   await expect(preview).toHaveJSProperty('complete', true);
@@ -153,10 +148,11 @@ test('Photo set upload starts the Photo Effect Template and Run Again keeps the 
   await page.waitForURL(/\/runs\//);
 
   // The Backend accepted the photo set against the frozen schema and Media Brief read it.
-  const photoNode = page.locator('.react-flow__node[data-id="node_photos"]');
-  await expect(photoNode).toContainText('Succeeded', { timeout: 30_000 });
+  await expect(stepCard(page, 'Photo Set')).toHaveAccessibleName(/, Succeeded,/, {
+    timeout: 30_000,
+  });
 
-  await page.getByRole('button', { name: 'Run Again' }).click();
+  await page.getByRole('button', { name: 'Run again' }).click();
   const again = page.getByRole('dialog');
   // Run again names the earlier run's photos by position; they are the same Assets.
   const prefilled = again.getByRole('img', { name: /from the earlier run$/ });

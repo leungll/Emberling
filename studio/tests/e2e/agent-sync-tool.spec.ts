@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
+import { details, eventList, expandedTrace, runStatus, stepCard } from './run-view';
 
 /**
  * Agent with a synchronous Tool: the
@@ -34,39 +35,22 @@ test('Agent with a synchronous Tool runs the Tool on Turn 1, answers FINAL on Tu
 
   await page.waitForURL(/\/runs\//);
 
-  const status = page.getByTestId('run-status');
-  await expect(status).toHaveText('Completed', { timeout: 30_000 });
-  await expect(page.getByRole('button', { name: /Run completed/ })).toBeVisible();
+  await expect(runStatus(page)).toHaveText('Completed', { timeout: 30_000 });
+  await expect(stepCard(page, 'Answering Agent')).toHaveAccessibleName(/, Succeeded,/);
 
-  // The Run Rail lists only RUNNING / WAITING NodeRuns; a finished node is selected on the
-  // read-only Canvas (ObserveCanvas.tsx maps the Definition node id to its NodeRun).
-  const agentNode = page.locator('.react-flow__node[data-id="node_agent"]');
-  await expect(agentNode).toContainText('Succeeded');
-  await agentNode.click();
-
-  // AgentTraceView's own heading, not the Canvas chip that also reads "Agent".
-  await expect(page.getByRole('heading', { name: 'Agent', exact: true })).toBeVisible();
-
-  // Item 12: one card per persisted Turn (AgentTurnCard), each printing the Decision the
-  // Backend committed, the Action it ran and that Action's Tool Attempts - none derived.
-  const turns = page.getByTestId('agent-turn');
-  await expect(turns).toHaveCount(2);
-
-  const turn1 = turns.filter({ has: page.getByText('Turn 1', { exact: true }) });
-  await expect(turn1).toContainText('Turn 1');
-  await expect(turn1).toContainText('TOOL_CALL');
-  await expect(turn1.getByText('Action TOOL_CALL')).toBeVisible();
-  await expect(turn1.getByText(/^lookup #1$/)).toBeVisible();
-  // Exactly the Action's status badge and the `lookup` Attempt's: the Tool ran to
-  // completion synchronously, with no callback and no second Attempt.
-  await expect(turn1.getByText('SUCCEEDED', { exact: true })).toHaveCount(2);
-
-  const turn2 = turns.filter({ has: page.getByText('Turn 2', { exact: true }) });
-  await expect(turn2).toContainText('Turn 2');
-  await expect(turn2).toContainText('FINAL');
-  await expect(turn2.getByText('Action FINAL')).toBeVisible();
-  await expect(turn2.getByText(/^lookup #\d+$/)).toHaveCount(0);
+  // One trace row per persisted Turn, each named by the Decision the Backend committed and
+  // the Action it ran: Turn 1 called the Tool, Turn 2 finished.
+  const trace = await expandedTrace(page);
+  await expect(trace.getByRole('row', { name: /Turn \d+: / })).toHaveCount(2);
+  await expect(trace.getByRole('row', { name: /Turn 1: called lookup/ })).toBeVisible();
+  await expect(trace.getByRole('row', { name: /Turn 2: finished/ })).toBeVisible();
+  // The Tool answered in the same call: no wait for an outside service.
+  await expect(trace.getByRole('row', { name: /Wait(ed|ing) for/ })).toHaveCount(0);
 
   // The Agent Run's termination as the Backend recorded it.
-  await expect(page.getByText('FINAL_RESPONSE')).toBeVisible();
+  await stepCard(page, 'Answering Agent').click();
+  await expect(details(page).getByText('Finished with an answer')).toBeVisible();
+
+  const events = await eventList(page);
+  await expect(events.getByRole('row', { name: /Run completed/ })).toHaveCount(1);
 });

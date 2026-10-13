@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
+import { details, expandedTrace, runStatus, stepCard } from './run-view';
 
 /**
  * Agent with an asynchronous Tool. The Mock Model tool-call directive
@@ -48,32 +49,29 @@ test('Agent with an asynchronous Tool pauses at the Agent NodeRun, then resumes 
 
   await page.waitForURL(/\/runs\//);
 
-  const status = page.getByTestId('run-status');
-  // Item 15: while the Agent's Tool Attempt is dispatched and unresolved, the Run reads
-  // PAUSED (RUN_STATUS_LABELS -> "Waiting for external result"), same as any other
-  // WAITING_CALLBACK NodeRun - the Agent Node is not a special case for Run aggregation.
-  await expect(status).toHaveText('Waiting for external result', { timeout: 15_000 });
+  const status = runStatus(page);
+  // While the Agent's Tool Attempt is dispatched and unresolved, the Run reads PAUSED, the
+  // same as for any other waiting step: the Agent step is not a special case for the Run's
+  // status, which is the Backend's.
+  await expect(status).toHaveText('Waiting', { timeout: 15_000 });
+  await expect(stepCard(page, 'Answering Agent')).toHaveAccessibleName(/, Waiting for reply,/);
+  await expect(
+    page.getByText('Answering Agent is waiting for Mock task provider.', { exact: true }),
+  ).toBeVisible();
+  // The run opens on the wait: the dispatched remote_lookup call.
+  await expect(details(page).getByText('remote_lookup').first()).toBeVisible();
 
-  const agentNodeButton = page.getByRole('button', { name: /node_agent/ });
-  await expect(agentNodeButton).toBeVisible();
-  await expect(agentNodeButton).toContainText('Waiting for callback');
-  await agentNodeButton.click();
-
-  // The Canvas node chip also reads "Agent" (its node type label), so this must be scoped
-  // to AgentTraceView's own `<h3>` heading, not a plain text match.
-  await expect(page.getByRole('heading', { name: 'Agent', exact: true })).toBeVisible();
-  // The dispatched Tool Attempt's row prints "remote_lookup #<attemptNo>" (AgentTurnCard).
-  // Anchored, since the Turn's candidate Tools and Decision also name remote_lookup.
-  await expect(page.getByText(/^remote_lookup #\d+$/)).toBeVisible();
-
-  // Item 16: the Mock Provider's own scheduled callback (not this test) resolves the Tool
-  // Attempt, which resumes the Agent to Turn 2 and on to FINAL; the Run completes.
+  // The Mock Provider's own scheduled callback (not this test) resolves the Tool Attempt,
+  // which resumes the Agent to Turn 2 and on to FINAL; the Run completes.
   await expect(status).toHaveText('Completed', { timeout: 30_000 });
 
-  // Item 12: the Trace shows both Turns (TOOL_CALL then FINAL), the Tool result, and
-  // termination - AgentTraceView renders every value it was given, with no Studio-side
-  // aggregation of its own.
-  await expect(page.getByText('Turns', { exact: true })).toBeVisible();
-  await expect(page.getByText(/^Turn \d+$/)).toHaveCount(2);
-  await expect(page.getByText('Termination')).toBeVisible();
+  // The trace shows both Turns (TOOL_CALL then FINAL), the wait the callback ended, and the
+  // termination, each as the Backend recorded it.
+  const trace = await expandedTrace(page);
+  await expect(trace.getByRole('row', { name: /Turn \d+: / })).toHaveCount(2);
+  await expect(trace.getByRole('row', { name: /Turn 1: called remote_lookup/ })).toBeVisible();
+  await expect(trace.getByRole('row', { name: /Waited for / })).toBeVisible();
+  await expect(trace.getByRole('row', { name: /Turn 2: finished/ })).toBeVisible();
+  await stepCard(page, 'Answering Agent').click();
+  await expect(details(page).getByText('Finished with an answer')).toBeVisible();
 });

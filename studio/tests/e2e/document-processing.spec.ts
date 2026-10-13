@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
+import { details, eventList, listedSeqs, runStatus } from './run-view';
 
 /**
  * Document Processing: a fully synchronous Run. Every Node in
@@ -35,32 +36,27 @@ test('Document Processing completes synchronously and shows its output', async (
   await dialog.getByLabel('Document').fill('Emberling keeps every execution fact in PostgreSQL.');
   await dialog.getByRole('button', { name: 'Start run' }).click();
 
-  // Item 4: Run creation switches Studio from edit to observe mode.
+  // Run creation opens the new run on the workflow's Runs tab.
   await page.waitForURL(/\/runs\//);
 
-  // Item 5: observe mode hides the Palette and edit forms; item 6: the bound Definition
-  // version is shown throughout (asserted via the header's "v<version>" text below).
-  await expect(page.getByText(`${workflowId}, v`)).toBeVisible();
-
-  // Observe must not render the Palette or the node config/edit form.
-  // NodePalette.tsx and PropertiesPanel.tsx render "NODE REGISTRY" and "PROPERTIES ·
-  // DEFINITION" headings respectively and are only ever mounted by EditPage, never by
-  // ObservePage - so their absence here proves the edit-only surfaces were never rendered,
-  // not merely hidden by CSS.
+  // The run view has no step palette or edit form: those belong to the Editor only.
   await expect(page.getByText('NODE REGISTRY')).toHaveCount(0);
   await expect(page.getByText('PROPERTIES, DEFINITION')).toHaveCount(0);
 
-  const status = page.getByTestId('run-status');
-  await expect(status).toHaveText('Completed', { timeout: 30_000 });
+  await expect(runStatus(page)).toHaveText('Completed', { timeout: 30_000 });
+  // The run is bound to one Definition version, shown in its overview.
+  await expect(details(page).getByText('Workflow version', { exact: true })).toBeVisible();
 
-  // Item 7: Canvas/Trace/Detail render server facts; the Timeline is exactly the committed
-  // Event list, in order, never reordered or synthesised (EventTimeline.tsx).
-  await expect(page.getByRole('button', { name: /Run created/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Run completed/ })).toBeVisible();
+  // The Events view is exactly the committed Event list, in order.
+  const events = await eventList(page);
+  const seqs = await listedSeqs(events);
+  expect(seqs).toEqual(seqs.map((_, index) => index + 1));
+  await expect(events.getByRole('row', { name: /Run started/ })).toHaveCount(1);
+  await expect(events.getByRole('row', { name: /Run completed/ })).toHaveCount(1);
 
-  // Detail shows the Run's output (RunSummary's "Output" JsonBlock, visible by default
-  // when no NodeRun or Event is selected).
-  await expect(page.getByText('Output', { exact: true })).toBeVisible();
-  const outputBlock = page.locator('pre').last();
-  await expect(outputBlock).not.toHaveText('null');
+  // The run's output, formed once its Output step succeeded.
+  await details(page).getByRole('tab', { name: 'Output' }).click();
+  const output = details(page).getByRole('tabpanel');
+  await expect(output.getByText('No output.')).toHaveCount(0);
+  await expect(output).toContainText(/\S/);
 });
