@@ -123,38 +123,3 @@ export function nodeSummaryLine(
 
   return portFlowSummary(metadata);
 }
-
-/**
- * Palette summary for a registered Node Type (no Definition node, so no config yet). It
- * states what kind of Runtime work the type performs, from NodeMetadata alone, instead of
- * the per-node summary's config-dependent placeholders ("No model selected").
- */
-export function paletteSummaryLine(metadata: NodeMetadata): string {
-  if (metadata.category === 'Input') {
-    const outputs = portTypeList(metadata.outputs);
-    return outputs ? `${outputs} source` : 'Run input';
-  }
-  if (metadata.category === 'Output') return 'Run output';
-  if (metadata.category === 'Agent') return 'Model, Tools, managed loop';
-  const hasModel = metadata.uiSchema.fields.some((field) => field.widget === 'MODEL_SELECTOR');
-  if (hasModel) return `Model call, ${executionKindLabel(metadata.executionKind)}`;
-  return portFlowSummary(metadata);
-}
-
-export interface RuntimeSemanticsCounts {
-  sync: number;
-  async: number;
-  agent: number;
-}
-
-export function runtimeSemanticsCounts(nodeTypes: NodeMetadata[]): RuntimeSemanticsCounts {
-  return nodeTypes.reduce<RuntimeSemanticsCounts>(
-    (acc, metadata) => {
-      if (metadata.executionKind === 'SYNC') acc.sync += 1;
-      else if (metadata.executionKind === 'ASYNC') acc.async += 1;
-      else if (metadata.executionKind === 'MANAGED_AGENT') acc.agent += 1;
-      return acc;
-    },
-    { sync: 0, async: 0, agent: 0 },
-  );
-}

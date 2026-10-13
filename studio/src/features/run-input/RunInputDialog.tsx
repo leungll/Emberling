@@ -54,6 +54,8 @@ interface RunInputDialogProps {
   latestVersion?: number;
   /** A new run: the workflow's last run, offered through "Use last run's input". */
   lastRun?: RunInputSource;
+  /** Values a new run starts with when there is no source run, such as images staged in the Editor. */
+  prefill?: JsonObject;
   submitting?: boolean;
   /** Why the last attempt didn't start a run: what createRun threw, or null. */
   submitError?: unknown;
@@ -80,6 +82,7 @@ export function RunInputDialog({
   source,
   latestVersion,
   lastRun,
+  prefill,
   submitting = false,
   submitError = null,
   onSubmit,
@@ -105,12 +108,12 @@ export function RunInputDialog({
   // The form is seeded each time the dialog opens, and again when the bound version's
   // fields arrive after it opened.
   const seedKey = open
-    ? `${String(definitionVersion)}|${fields.map((f) => f.key).join(',')}|${source?.runId ?? ''}`
+    ? `${String(definitionVersion)}|${fields.map((f) => f.key).join(',')}|${source?.runId ?? ''}|${JSON.stringify(prefill ?? {})}`
     : '';
   const [seededFor, setSeededFor] = useState('');
   if (seedKey !== seededFor) {
     setSeededFor(seedKey);
-    setValues(seedValues(fields, source?.input));
+    setValues(seedValues(fields, source?.input ?? prefill));
     setErrors({});
     setTouched({});
     setViews({});
