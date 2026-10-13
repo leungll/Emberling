@@ -437,12 +437,11 @@ export function inspectPage(options: InspectOptions): InspectResult {
     document.querySelectorAll(
       'a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="menuitem"], [role="option"], [tabindex="0"]',
     ),
-  )
-    .filter((el) => visible(el) && !visuallyHidden(el) && !el.closest('[aria-hidden="true"]'))
-    .filter((el) => shownRect(el) !== null);
+  ).filter((el) => visible(el) && !visuallyHidden(el) && !el.closest('[aria-hidden="true"]'));
   const rects = interactive.map((el) => el.getBoundingClientRect());
-  // What a scrolling or clipping ancestor leaves on screen; overlaps are measured there.
-  const shown = interactive.map((el) => shownRect(el)!);
+  // What a scrolling or clipping ancestor leaves on screen; overlaps are measured there, and
+  // an element scrolled out of view overlaps nothing. Its target size is still checked.
+  const shown = interactive.map((el) => shownRect(el));
   const layers = interactive.map(layerOf);
   interactive.forEach((el, i) => {
     const r = rects[i]!;
@@ -459,8 +458,9 @@ export function inspectPage(options: InspectOptions): InspectResult {
     for (let j = i + 1; j < interactive.length; j += 1) {
       const other = interactive[j]!;
       if (el.contains(other) || other.contains(el) || layers[i] !== layers[j]) continue;
-      const a = shown[i]!;
-      const q = shown[j]!;
+      const a = shown[i];
+      const q = shown[j];
+      if (!a || !q) continue;
       const w = Math.min(a.right, q.right) - Math.max(a.left, q.left);
       const h = Math.min(a.bottom, q.bottom) - Math.max(a.top, q.top);
       if (w > 2 && h > 2)

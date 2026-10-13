@@ -90,6 +90,60 @@ test.describe('review checks', () => {
     ).toEqual([]);
   });
 
+  test('overlap is measured on what scrolling ancestors show; hidden targets are still sized', async ({
+    page,
+  }) => {
+    const button = (style: string, label: string) =>
+      `<button style="position:absolute;${style};height:32px;width:80px;padding:0;border:0;font:inherit;background:var(--surface);color:var(--fg)">${label}</button>`;
+    const scroller = (inner: string) =>
+      `<div style="position:relative;height:40px;width:200px;overflow:auto"><div style="position:relative;height:400px">${inner}</div></div>`;
+    // Two targets that meet only below the fold of a scroll area overlap nothing visible.
+    expect(
+      await checks(
+        page,
+        scroller(button('top:0;left:0', 'One') + button('top:200px;left:0', 'Two')) +
+          `<div style="position:absolute;top:100px;left:0">${button('top:-8px;left:0', 'Three')}</div>`,
+      ),
+    ).toEqual([]);
+    // Where both show, they still overlap.
+    expect(
+      await checks(
+        page,
+        scroller(button('top:0;left:0', 'One') + button('top:4px;left:8px', 'Two')),
+      ),
+    ).toEqual(['overlap']);
+    // A target scrolled out of view keeps its size check.
+    expect(
+      await checks(
+        page,
+        scroller(
+          '<button style="position:absolute;top:300px;height:16px;width:16px;padding:0;border:0;background:var(--surface)" aria-label="x"></button>',
+        ),
+      ),
+    ).toContain('target-size');
+  });
+
+  test('canvas controls are measured at layout height; the canvas may clip, the page may not', async ({
+    page,
+  }) => {
+    const canvas = (height: number) =>
+      `<div class="react-flow" style="width:300px;height:100px;overflow:hidden"><div style="transform:scale(0.5);transform-origin:0 0"><button style="height:${String(height)}px;width:80px;padding:0;border:0;font:inherit;background:var(--surface);color:var(--fg)">Open</button></div></div>`;
+    expect(await checks(page, canvas(32))).toEqual([]);
+    expect(await checks(page, canvas(30))).toEqual(['tokens']);
+    expect(
+      await checks(
+        page,
+        '<div class="react-flow" style="width:100px;height:20px;overflow:hidden"><p style="width:400px">A step far to the right of the view</p></div>',
+      ),
+    ).toEqual([]);
+    expect(
+      await checks(
+        page,
+        '<div style="width:100px;height:20px;overflow:hidden"><p style="width:400px">A step far to the right of the view</p></div>',
+      ),
+    ).toContain('overflow');
+  });
+
   test('low contrast and small targets are reported', async ({ page }) => {
     expect(await checks(page, '<p style="color:var(--border)">Run</p>')).toEqual(['contrast']);
     expect(
