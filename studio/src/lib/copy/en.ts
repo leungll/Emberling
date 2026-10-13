@@ -237,16 +237,6 @@ export const en = {
     crumb: 'Not found',
   },
 
-  leaveGuard: {
-    title: 'Leave without saving?',
-    body: 'Your changes to this workflow haven’t been saved. If you leave, they’re lost.',
-    bodyIssues:
-      'Your changes to this workflow haven’t been saved, and they have issues that stop a save. If you leave, they’re lost.',
-    leave: 'Leave',
-    stay: 'Stay',
-    saveAndLeave: 'Save and leave',
-  },
-
   status: {
     run: {
       RUNNING: { short: 'Running', long: 'Running', help: 'At least one step is running.' },

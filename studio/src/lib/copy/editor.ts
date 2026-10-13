@@ -69,6 +69,7 @@ export const editor = {
     pastedSome: (n: number, missing: number) =>
       `Pasted ${plural(n, 'step')}. ${plural(missing, 'step')} ${missing === 1 ? 'isn’t' : 'aren’t'} available on this server.`,
     replaced: (from: string) => `Replaced the link from ${from}.`,
+    removedFormat: (label: string) => `Removed ${label.toLowerCase()}.`,
     imageReady: (n: number, step: string) =>
       `${n > 1 ? `${n} images` : 'Image'} ready for the next run of ${step}.`,
     removedFromRun: 'Removed from the next run.',
@@ -300,6 +301,8 @@ export const editor = {
     },
   },
 
+  viewer: { previous: 'Previous', next: 'Next' },
+
   toolbar: {
     select: 'Select',
     pan: 'Pan',
@@ -410,7 +413,7 @@ export const editor = {
     connTo: 'to',
     connOut: (port: string) => `${port} out`,
     notUsed: 'Not used yet',
-    formatsHint: 'Describe the data as JSON Schema. Leave a format undefined to accept any shape.',
+    formatsHint: 'Describe the data as JSON Schema. A format left out accepts any shape.',
     formatsMeta: (n: number) => (n ? `${plural(n, 'format')} defined` : 'None defined'),
     behaviorMeta: (n: number) => (n ? `${plural(n, 'setting')} changed` : 'Model defaults'),
     optional: '(optional)',
@@ -442,6 +445,11 @@ export const editor = {
     pickerSearch: 'Search tools',
     pickerNoMatch: (q: string) => `No tools match “${q}”.`,
     added: 'Added',
+    recordsHelp: 'Later tools can require this saved result.',
+    passOrFail: (fact: string) => `${fact} (pass or fail)`,
+    requiresHelp: (passed: boolean) =>
+      `Emberling blocks this call until the saved result exists${passed ? ' and passed' : ''}.`,
+    requiresPassed: (fact: string) => `${fact}, passed`,
     add: 'Add',
     addNamed: (name: string) => `Add ${name}`,
     removeNamed: (name: string) => `${name} added. Remove it`,
@@ -515,6 +523,8 @@ export const editor = {
     noModelSettings: (model: string) => `${model} has no settings.`,
     defaultValue: (v: string) => `Default ${v}`,
     reset: 'Reset',
+    editAsForm: 'Edit as form',
+    editAsJson: 'Edit as JSON',
     range: (min: number, max: number) => `From ${min} to ${max}.`,
     noProviderHelp: 'No description from the model provider.',
     notSetOption: 'Not set',
@@ -538,6 +548,17 @@ export const editor = {
     schemaFields: (n: number, keys: string) => `${plural(n, 'field')}: ${keys}`,
     schemaMore: (shown: string, more: number) => `${shown} and ${more} more`,
     schemaDefined: 'Defined, no fields listed',
+    schemaType: {
+      object: 'Any object',
+      array: 'A list',
+      string: 'Text',
+      number: 'A number',
+      integer: 'A whole number',
+      boolean: 'Yes or no',
+      null: 'Empty',
+    } as Record<string, string>,
+    schemaTypeOther: 'Defined',
+    insertExample: 'Insert example',
     define: 'Define',
     edit: 'Edit',
     remove: 'Remove',
