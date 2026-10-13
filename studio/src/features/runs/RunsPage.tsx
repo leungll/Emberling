@@ -115,7 +115,10 @@ export function RunsPage() {
         // A cursor issued for other filters (or another start instant) is refused: start
         // again from the first page rather than showing an error.
         if (e instanceof ApiRequestError && e.status === 400 && query.cursor) {
-          void navigate({ search: runsSearch({ ...query, cursor: null }) }, { replace: true });
+          void navigate(
+            { search: runsSearch({ ...query, cursor: null }) },
+            { replace: true, flushSync: true },
+          );
           return;
         }
         setFailure({ key, attempt, error: e });
@@ -135,10 +138,12 @@ export function RunsPage() {
     };
   }, []);
 
+  // The address holds the tab, filters and page. Flushing renders a change with the
+  // address instead of in a later transition, so the tabs never show the previous value.
   const go = (next: RunsQuery) => {
     void navigate(
       { search: runsSearch(next, new URLSearchParams(location.search)) },
-      { replace: true },
+      { replace: true, flushSync: true },
     );
   };
 

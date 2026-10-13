@@ -145,14 +145,14 @@ export function RunsTabPage() {
         pathname: `/workflows/${encodeURIComponent(workflowId)}/runs/${encodeURIComponent(id)}`,
         search: runViewSearch({ ...ui, ...RESET }, search),
       },
-      { replace: how === 'key' },
+      { replace: how === 'key', flushSync: true },
     );
   };
 
   const setFilters = (f: RunListFilters) => {
     void navigate(
       { search: runViewSearch({ ...ui, status: f.status, range: f.range }, search) },
-      { replace: true },
+      { replace: true, flushSync: true },
     );
   };
 
