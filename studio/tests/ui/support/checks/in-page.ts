@@ -112,14 +112,14 @@ export function inspectPage(options: InspectOptions): InspectResult {
       rule instanceof CSSStyleRule && rule.selectorText === ':root' ? Array.from(rule.style) : [],
     )
     .filter((name) => name.startsWith('--'));
-  const probe = document.createElement('div');
-  probe.style.position = 'absolute';
-  probe.style.visibility = 'hidden';
-  document.body.appendChild(probe);
+  // A fresh probe element per value: Chrome can hand back a stale computed value when one
+  // element's inline style changes between reads.
   function resolved(property: string, value: string): string {
+    const probe = document.createElement('div');
     probe.style.setProperty(property, value);
+    document.body.appendChild(probe);
     const out = getComputedStyle(probe).getPropertyValue(property);
-    probe.style.removeProperty(property);
+    probe.remove();
     return out;
   }
   const colours = new Set<string>(['rgba(0, 0, 0, 0)']);
@@ -130,7 +130,9 @@ export function inspectPage(options: InspectOptions): InspectResult {
     if (/^(#|rgb|hsl|transparent)/.test(raw)) colours.add(resolved('color', `var(${name})`));
     if (name.startsWith('--shadow')) shadows.add(resolved('box-shadow', `var(${name})`));
   }
-  probe.remove();
+  if (tokenNames.length === 0) {
+    violations.push({ check: 'tokens', selector: ':root', detail: 'no design tokens found on :root' });
+  }
 
   const FONT_PAIRS: Record<string, string> = {
     '12px': '16px',
