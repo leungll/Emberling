@@ -711,7 +711,11 @@ export function waitInfo(model: RunModel): WaitInfo | null {
   if (!ws) return null;
   const turn = ws.trace?.turns.find((x) => x.action?.status === 'WAITING_CALLBACK') ?? null;
   const attempt = turn?.toolAttempts.find((a) => a.status === 'DISPATCHED') ?? null;
-  const binding = attempt?.callbackBinding ?? null;
+  // A step that is not an Agent waits on its own dispatched attempt.
+  const stepAttempt = ws.trace
+    ? null
+    : ([...(ws.detail?.attempts ?? [])].reverse().find((a) => a.status === 'DISPATCHED') ?? null);
+  const binding = attempt?.callbackBinding ?? stepAttempt?.callbackBinding ?? null;
   const actionId = turn?.action?.id ?? null;
   let focus = ws.node.id;
   if (actionId) {
@@ -719,6 +723,8 @@ export function waitInfo(model: RunModel): WaitInfo | null {
       (e) => e.kind === 'wait' && e.actionId === actionId && e.live,
     );
     focus = waitEl ? waitEl.id : actionId;
+  } else if (stepAttempt && model.byId.has(stepAttempt.id)) {
+    focus = stepAttempt.id;
   }
   return {
     step: ws,
@@ -726,7 +732,7 @@ export function waitInfo(model: RunModel): WaitInfo | null {
     attempt,
     provider: binding?.providerId ?? null,
     task: binding?.externalTaskId ?? null,
-    since: attempt?.dispatchedAt ?? ws.nodeRun?.waitingAt ?? null,
+    since: attempt?.dispatchedAt ?? stepAttempt?.dispatchedAt ?? ws.nodeRun?.waitingAt ?? null,
     deadline: ws.trace && !ws.trace.agentRun.terminatedAt ? ws.trace.agentRun.deadline : null,
     focus,
   };

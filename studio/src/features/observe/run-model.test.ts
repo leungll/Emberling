@@ -189,6 +189,44 @@ describe('where a run opens', () => {
     expect(openingId(m)).toBe('wait:act_2');
   });
 
+  it('reads a waiting service step’s outside task from its own dispatched attempt', () => {
+    const gen = definition([node('gen', 'image_generation', 'Image')], []);
+    const waiting = nodeRun('gen', 'image_generation', {
+      status: 'WAITING_CALLBACK',
+      waitingAt: at(3),
+      completedAt: null,
+      latencyMs: null,
+    });
+    const m = model({
+      definition: gen,
+      snapshot: snapshot('PAUSED', [waiting]),
+      details: {
+        nr_gen: {
+          nodeRun: waiting,
+          attempts: [
+            nodeAttempt(1, { status: 'FAILED' }),
+            nodeAttempt(2, {
+              status: 'DISPATCHED',
+              dispatchedAt: at(2.5),
+              completedAt: null,
+              callbackBinding: {
+                id: 'cb_2',
+                providerId: 'mock-task-provider-v1',
+                externalTaskId: 'task_7',
+              },
+            }),
+          ],
+        },
+      },
+    });
+    expect(waitInfo(m)).toMatchObject({
+      provider: 'mock-task-provider-v1',
+      task: 'task_7',
+      since: at(2.5),
+      focus: 'att_2',
+    });
+  });
+
   it('opens a run without a failure or wait on the run', () => {
     const m = model({
       definition: AGENT_FLOW,
