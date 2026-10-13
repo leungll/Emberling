@@ -16,7 +16,8 @@
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "tsc -b",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "test:ui": "playwright test --config playwright.ui.config.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",

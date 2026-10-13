@@ -1,0 +1,68 @@
+{
+  "nodeRun": {
+    "id": "nr_bdf78726b3f1493a8e9e41ca0f9effa7",
+    "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+    "nodeId": "node_output",
+    "nodeType": "media_output",
+    "status": "SUCCEEDED",
+    "input": {
+      "image": {
+        "uri": "http://mockprovider:9101/v1/images/daf733c5b6701c1b.png",
+        "width": 1024,
+        "source": "EXTERNAL",
+        "mediaType": "image/png"
+      },
+      "caption": "echo: echo: mock:delay:15000"
+    },
+    "output": {
+      "image": {
+        "uri": "http://mockprovider:9101/v1/images/daf733c5b6701c1b.png",
+        "width": 1024,
+        "source": "EXTERNAL",
+        "mediaType": "image/png"
+      },
+      "caption": "echo: echo: mock:delay:15000"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T02:52:03.11208Z",
+    "startedAt": "2026-10-12T02:52:03.143269Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T02:52:03.172881Z",
+    "latencyMs": 29,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_6dd7d22a28cb44a2afddd8109d1b8263",
+      "nodeRunId": "nr_bdf78726b3f1493a8e9e41ca0f9effa7",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "image": {
+          "uri": "http://mockprovider:9101/v1/images/daf733c5b6701c1b.png",
+          "width": 1024,
+          "source": "EXTERNAL",
+          "mediaType": "image/png"
+        },
+        "caption": "echo: echo: mock:delay:15000"
+      },
+      "result": {
+        "image": {
+          "uri": "http://mockprovider:9101/v1/images/daf733c5b6701c1b.png",
+          "width": 1024,
+          "source": "EXTERNAL",
+          "mediaType": "image/png"
+        },
+        "caption": "echo: echo: mock:delay:15000"
+      },
+      "startedAt": "2026-10-12T02:52:03.143269Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T02:52:03.172881Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

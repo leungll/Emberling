@@ -1,0 +1,208 @@
+{
+  "run": {
+    "id": "run_cb70f79573ac4224b7fd6aa6746ae447",
+    "workflowId": "wf_010e04db58d9493fba6c92deb173b5ac",
+    "definitionVersion": 1,
+    "status": "COMPLETED",
+    "input": {
+      "brief": "A lighthouse at dusk, fault demo after accept"
+    },
+    "output": {
+      "image": {
+        "uri": "http://mockprovider:9101/v1/images/daf733c5b6701c1b.png",
+        "width": 1024,
+        "source": "EXTERNAL",
+        "mediaType": "image/png"
+      },
+      "caption": "echo: echo: mock:delay:15000"
+    },
+    "error": null,
+    "lastSeq": 26,
+    "startedAt": "2026-10-12T02:51:46.024682Z",
+    "completedAt": "2026-10-12T02:52:03.172881Z",
+    "tokenUsage": {
+      "inputTokens": 3,
+      "outputTokens": 5,
+      "totalTokens": 8
+    }
+  },
+  "nodeRuns": [
+    {
+      "id": "nr_b910c72f80ca4288a03696bbb2bbc038",
+      "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+      "nodeId": "node_brief",
+      "nodeType": "text_input",
+      "status": "SUCCEEDED",
+      "input": {},
+      "output": {
+        "text": "A lighthouse at dusk, fault demo after accept"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:51:46.024682Z",
+      "startedAt": "2026-10-12T02:51:46.028811Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:51:46.034533Z",
+      "latencyMs": 5,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_8cf4fa6feaab4182a50c629a9bafded8",
+      "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+      "nodeId": "node_reference",
+      "nodeType": "image_input",
+      "status": "SUCCEEDED",
+      "input": {},
+      "output": {
+        "image": null
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:51:46.024682Z",
+      "startedAt": "2026-10-12T02:51:46.045815Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:51:46.050266Z",
+      "latencyMs": 4,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_e13e3a920b2d419bb9bc9447ae782077",
+      "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+      "nodeId": "node_prompt",
+      "nodeType": "prompt_template",
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "A lighthouse at dusk, fault demo after accept"
+      },
+      "output": {
+        "text": "mock:delay:15000"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:51:46.034533Z",
+      "startedAt": "2026-10-12T02:51:46.039785Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:51:46.04328Z",
+      "latencyMs": 3,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_3e65420f3c124e63abc2d644ecf2f505",
+      "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+      "nodeId": "node_rewrite",
+      "nodeType": "text_generation",
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "mock:delay:15000"
+      },
+      "output": {
+        "text": "echo: mock:delay:15000"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:51:46.04328Z",
+      "startedAt": "2026-10-12T02:51:46.063663Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:51:46.066181Z",
+      "latencyMs": 2,
+      "tokenUsage": {
+        "inputTokens": 1,
+        "outputTokens": 2,
+        "totalTokens": 3
+      }
+    },
+    {
+      "id": "nr_9074d601e9ab48c39f4ba950ff93d0de",
+      "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+      "nodeId": "node_image",
+      "nodeType": "image_generation",
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "mock:delay:15000",
+        "reference": null
+      },
+      "output": {
+        "image": {
+          "uri": "http://mockprovider:9101/v1/images/daf733c5b6701c1b.png",
+          "width": 1024,
+          "source": "EXTERNAL",
+          "mediaType": "image/png"
+        }
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:51:46.050266Z",
+      "startedAt": "2026-10-12T02:51:46.055925Z",
+      "waitingAt": "2026-10-12T02:51:46.060497Z",
+      "completedAt": "2026-10-12T02:52:03.11208Z",
+      "latencyMs": 17056,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_7a313b96b3124f6286b3920c574fac1a",
+      "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+      "nodeId": "node_caption",
+      "nodeType": "text_generation",
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "echo: mock:delay:15000"
+      },
+      "output": {
+        "text": "echo: echo: mock:delay:15000"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:51:46.066181Z",
+      "startedAt": "2026-10-12T02:51:46.069142Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:51:46.073141Z",
+      "latencyMs": 3,
+      "tokenUsage": {
+        "inputTokens": 2,
+        "outputTokens": 3,
+        "totalTokens": 5
+      }
+    },
+    {
+      "id": "nr_bdf78726b3f1493a8e9e41ca0f9effa7",
+      "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+      "nodeId": "node_output",
+      "nodeType": "media_output",
+      "status": "SUCCEEDED",
+      "input": {
+        "image": {
+          "uri": "http://mockprovider:9101/v1/images/daf733c5b6701c1b.png",
+          "width": 1024,
+          "source": "EXTERNAL",
+          "mediaType": "image/png"
+        },
+        "caption": "echo: echo: mock:delay:15000"
+      },
+      "output": {
+        "image": {
+          "uri": "http://mockprovider:9101/v1/images/daf733c5b6701c1b.png",
+          "width": 1024,
+          "source": "EXTERNAL",
+          "mediaType": "image/png"
+        },
+        "caption": "echo: echo: mock:delay:15000"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:52:03.11208Z",
+      "startedAt": "2026-10-12T02:52:03.143269Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:52:03.172881Z",
+      "latencyMs": 29,
+      "tokenUsage": null
+    }
+  ],
+  "lastSeq": 26
+}

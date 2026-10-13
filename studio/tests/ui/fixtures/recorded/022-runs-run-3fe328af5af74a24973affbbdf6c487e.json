@@ -1,0 +1,165 @@
+{
+  "run": {
+    "id": "run_3fe328af5af74a24973affbbdf6c487e",
+    "workflowId": "wf_5fbacb46a8c149f286d6121a6cf48268",
+    "definitionVersion": 1,
+    "status": "FAILED",
+    "input": {
+      "brief": "A lighthouse at dusk, fault demo"
+    },
+    "output": null,
+    "error": {
+      "code": "EXECUTOR_ERROR",
+      "message": "image_generation: dispatch: mocktask: dispatch to provider \"mock-task-provider-v1\": send request: Post \"http://mockprovider:9101/v1/tasks\": context deadline exceeded"
+    },
+    "lastSeq": 22,
+    "startedAt": "2026-10-12T03:03:54.505078Z",
+    "completedAt": "2026-10-12T03:04:19.271197Z",
+    "tokenUsage": {
+      "inputTokens": 27,
+      "outputTokens": 29,
+      "totalTokens": 56
+    }
+  },
+  "nodeRuns": [
+    {
+      "id": "nr_c87cd0ef9fac41bcacddf068a049111d",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeId": "node_brief",
+      "nodeType": "text_input",
+      "status": "SUCCEEDED",
+      "input": {},
+      "output": {
+        "text": "A lighthouse at dusk, fault demo"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T03:03:54.505078Z",
+      "startedAt": "2026-10-12T03:03:54.51285Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T03:03:54.516893Z",
+      "latencyMs": 4,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_9c8f8ab8547d49ab86f23bc7bcfe395e",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeId": "node_reference",
+      "nodeType": "image_input",
+      "status": "SUCCEEDED",
+      "input": {},
+      "output": {
+        "image": null
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T03:03:54.505078Z",
+      "startedAt": "2026-10-12T03:03:54.528275Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T03:03:54.534088Z",
+      "latencyMs": 5,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_b5a44ae1c0d8465fabe21dc842c62e69",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeId": "node_prompt",
+      "nodeType": "prompt_template",
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "A lighthouse at dusk, fault demo"
+      },
+      "output": {
+        "text": "Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T03:03:54.516893Z",
+      "startedAt": "2026-10-12T03:03:54.521458Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T03:03:54.525152Z",
+      "latencyMs": 3,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_54ed87cf4e7e49c0b3cf9a3fe7fb8fae",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeId": "node_rewrite",
+      "nodeType": "text_generation",
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+      },
+      "output": {
+        "text": "echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T03:03:54.525152Z",
+      "startedAt": "2026-10-12T03:03:54.536761Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T03:03:54.539634Z",
+      "latencyMs": 2,
+      "tokenUsage": {
+        "inputTokens": 13,
+        "outputTokens": 14,
+        "totalTokens": 27
+      }
+    },
+    {
+      "id": "nr_28da6a0ec83e4c3f80884818cb0d2752",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeId": "node_caption",
+      "nodeType": "text_generation",
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+      },
+      "output": {
+        "text": "echo: echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T03:03:54.539634Z",
+      "startedAt": "2026-10-12T03:03:54.54446Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T03:03:54.546448Z",
+      "latencyMs": 1,
+      "tokenUsage": {
+        "inputTokens": 14,
+        "outputTokens": 15,
+        "totalTokens": 29
+      }
+    },
+    {
+      "id": "nr_54317515a3dc49248d7a78fca5d4f839",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeId": "node_image",
+      "nodeType": "image_generation",
+      "status": "FAILED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo",
+        "reference": null
+      },
+      "output": null,
+      "error": {
+        "code": "EXECUTOR_ERROR",
+        "message": "image_generation: dispatch: mocktask: dispatch to provider \"mock-task-provider-v1\": send request: Post \"http://mockprovider:9101/v1/tasks\": context deadline exceeded"
+      },
+      "attemptCount": 2,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T03:03:54.539634Z",
+      "startedAt": "2026-10-12T03:03:54.547998Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T03:04:19.271197Z",
+      "latencyMs": 24723,
+      "tokenUsage": null
+    }
+  ],
+  "lastSeq": 22
+}

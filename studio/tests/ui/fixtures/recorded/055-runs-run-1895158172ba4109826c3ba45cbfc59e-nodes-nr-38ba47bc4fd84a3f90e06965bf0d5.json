@@ -1,0 +1,64 @@
+{
+  "nodeRun": {
+    "id": "nr_38ba47bc4fd84a3f90e06965bf0d5afa",
+    "runId": "run_1895158172ba4109826c3ba45cbfc59e",
+    "nodeId": "node_output",
+    "nodeType": "media_output",
+    "status": "SUCCEEDED",
+    "input": {
+      "image": {
+        "uri": "http://localhost:9101/v1/assets/img_059ccb419b5e8d25.png",
+        "source": "EXTERNAL",
+        "mediaType": "image/png"
+      },
+      "caption": "{\"accepted\":true,\"notPassed\":[],\"passedCount\":3,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e\"}"
+    },
+    "output": {
+      "image": {
+        "uri": "http://localhost:9101/v1/assets/img_059ccb419b5e8d25.png",
+        "source": "EXTERNAL",
+        "mediaType": "image/png"
+      },
+      "caption": "{\"accepted\":true,\"notPassed\":[],\"passedCount\":3,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e\"}"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T09:13:48.715708Z",
+    "startedAt": "2026-10-12T09:13:48.717753Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T09:13:48.720125Z",
+    "latencyMs": 2,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_f9e8f8115d4845678b47707a39040112",
+      "nodeRunId": "nr_38ba47bc4fd84a3f90e06965bf0d5afa",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "image": {
+          "uri": "http://localhost:9101/v1/assets/img_059ccb419b5e8d25.png",
+          "source": "EXTERNAL",
+          "mediaType": "image/png"
+        },
+        "caption": "{\"accepted\":true,\"notPassed\":[],\"passedCount\":3,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e\"}"
+      },
+      "result": {
+        "image": {
+          "uri": "http://localhost:9101/v1/assets/img_059ccb419b5e8d25.png",
+          "source": "EXTERNAL",
+          "mediaType": "image/png"
+        },
+        "caption": "{\"accepted\":true,\"notPassed\":[],\"passedCount\":3,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e\"}"
+      },
+      "startedAt": "2026-10-12T09:13:48.717753Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T09:13:48.720125Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

@@ -1,0 +1,579 @@
+{
+  "items": [
+    {
+      "id": "evt_89adecdf301448518d741e7a90d3bb65",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": null,
+      "type": "RUN_CREATED",
+      "seq": 1,
+      "timestamp": "2026-10-12T02:52:12.354224Z",
+      "payload": {
+        "input": {
+          "bytes": 745,
+          "sha256": "961fec3be48f4080b0e1d36d7b6b75ae51bedf745ec809125aba2d781fe537da"
+        },
+        "workflowId": "wf_8c67ac3a5fcc482d8ca1bf8bdbdd732b",
+        "definitionVersion": 1
+      }
+    },
+    {
+      "id": "evt_acebb7e384f14498b506ee7bc4757735",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_d8da73d4af12420589bd96c82c7c7b11",
+      "type": "NODE_READY",
+      "seq": 2,
+      "timestamp": "2026-10-12T02:52:12.354224Z",
+      "payload": {
+        "nodeId": "node_brief",
+        "nodeType": "text_input"
+      }
+    },
+    {
+      "id": "evt_94ea09d059d34deabdfb1cde606d8703",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_d8da73d4af12420589bd96c82c7c7b11",
+      "type": "NODE_STARTED",
+      "seq": 3,
+      "timestamp": "2026-10-12T02:52:12.358672Z",
+      "payload": {
+        "input": {
+          "bytes": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_67092f9edbc842a68b38ca4708cd5f4b",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_d8da73d4af12420589bd96c82c7c7b11",
+      "type": "NODE_COMPLETED",
+      "seq": 4,
+      "timestamp": "2026-10-12T02:52:12.36198Z",
+      "payload": {
+        "output": {
+          "bytes": 47,
+          "sha256": "d21d9e48f27431482b5379ca5b7d2632e7ae23f83f21a126102ee934044c3352"
+        },
+        "latencyMs": 3,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_1afc04ab7f1642afb854d3a7110b4f29",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_ac3633f8cc5448758066fe0504768af6",
+      "type": "NODE_READY",
+      "seq": 5,
+      "timestamp": "2026-10-12T02:52:12.36198Z",
+      "payload": {
+        "nodeId": "node_photos",
+        "nodeType": "media_brief"
+      }
+    },
+    {
+      "id": "evt_77358bf79dd447a38609e362f133cc66",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_ac3633f8cc5448758066fe0504768af6",
+      "type": "NODE_STARTED",
+      "seq": 6,
+      "timestamp": "2026-10-12T02:52:12.367143Z",
+      "payload": {
+        "input": {
+          "bytes": 48,
+          "sha256": "cb0c3760a09e79861a2a23b2fa409ae95bcf49ed4ef187dad4e4bfd377da1c76"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_4b16405e55d141658a047c1f7853e490",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_ac3633f8cc5448758066fe0504768af6",
+      "type": "NODE_COMPLETED",
+      "seq": 7,
+      "timestamp": "2026-10-12T02:52:12.370735Z",
+      "payload": {
+        "output": {
+          "bytes": 637,
+          "sha256": "f3f4162a56c8b8714b20cd576a8063eee7151a8582bdced8c8cf6f2e840abac8"
+        },
+        "latencyMs": 3,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_c7770f3e7b094e248deae3adfc5e396f",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "NODE_READY",
+      "seq": 8,
+      "timestamp": "2026-10-12T02:52:12.370735Z",
+      "payload": {
+        "nodeId": "node_agent",
+        "nodeType": "agent"
+      }
+    },
+    {
+      "id": "evt_a7ea3be32f8c4ba6b0f0e363f2ed4556",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "NODE_STARTED",
+      "seq": 9,
+      "timestamp": "2026-10-12T02:52:12.374684Z",
+      "payload": {
+        "input": {
+          "bytes": 638,
+          "sha256": "5c9a4ccb5c1753f78e284bd0596c8333f82af58efd486077be194317100b63de"
+        },
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be"
+      }
+    },
+    {
+      "id": "evt_bb715f55f82c4035ad518d54441b71ae",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_STARTED",
+      "seq": 10,
+      "timestamp": "2026-10-12T02:52:12.374684Z",
+      "payload": {
+        "modelId": "text-model-v1",
+        "deadline": "2026-10-12T02:54:12.374684961Z",
+        "maxTurns": 16,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be"
+      }
+    },
+    {
+      "id": "evt_3f3010630e13408781756d069546cca9",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_READY",
+      "seq": 11,
+      "timestamp": "2026-10-12T02:52:12.374684Z",
+      "payload": {
+        "turnId": "turn_a303ef9c45c946b6ae960e5b709205f6",
+        "turnNo": 1,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "stateVersion": 0,
+        "contextVersion": 0
+      }
+    },
+    {
+      "id": "evt_bed51397b573451c92bd9eb27fffaa39",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_STARTED",
+      "seq": 12,
+      "timestamp": "2026-10-12T02:52:12.379943Z",
+      "payload": {
+        "turnId": "turn_a303ef9c45c946b6ae960e5b709205f6",
+        "turnNo": 1,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "stateVersion": 0,
+        "contextVersion": 0
+      }
+    },
+    {
+      "id": "evt_7b44fabf2658454f906e9b1449d6e136",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_DECISION_COMMITTED",
+      "seq": 13,
+      "timestamp": "2026-10-12T02:52:12.383228Z",
+      "payload": {
+        "kind": "TOOL_CALL",
+        "turnId": "turn_a303ef9c45c946b6ae960e5b709205f6",
+        "actionId": "action_c6cb911dc6a74b72a8d4a4bb926cbe08",
+        "toolName": "generate_image",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be"
+      }
+    },
+    {
+      "id": "evt_68aa6b676be84e15a66131accb0272fd",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_STARTED",
+      "seq": 14,
+      "timestamp": "2026-10-12T02:52:12.387765Z",
+      "payload": {
+        "turnId": "turn_a303ef9c45c946b6ae960e5b709205f6",
+        "actionId": "action_c6cb911dc6a74b72a8d4a4bb926cbe08",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "toolAttemptId": "tool_attempt_85036c1d1d434708aeed957ad5942c89"
+      }
+    },
+    {
+      "id": "evt_4c9e4d692d5d4fd2983e5c5696b8cb88",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_COMPLETED",
+      "seq": 15,
+      "timestamp": "2026-10-12T02:52:12.395305Z",
+      "payload": {
+        "turnId": "turn_a303ef9c45c946b6ae960e5b709205f6",
+        "actionId": "action_c6cb911dc6a74b72a8d4a4bb926cbe08",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "toolAttemptId": "tool_attempt_85036c1d1d434708aeed957ad5942c89",
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_36428496858348ffbdf1af2caf93d8ef",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_READY",
+      "seq": 16,
+      "timestamp": "2026-10-12T02:52:12.395305Z",
+      "payload": {
+        "turnId": "turn_6b8dcc15168d446eb8aff362af8a9ff5",
+        "turnNo": 2,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "stateVersion": 0,
+        "contextVersion": 1
+      }
+    },
+    {
+      "id": "evt_8143dff18bd34e46b6a227daf6727c4d",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_STARTED",
+      "seq": 17,
+      "timestamp": "2026-10-12T02:52:12.399711Z",
+      "payload": {
+        "turnId": "turn_6b8dcc15168d446eb8aff362af8a9ff5",
+        "turnNo": 2,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "stateVersion": 0,
+        "contextVersion": 1
+      }
+    },
+    {
+      "id": "evt_2e395d96cfd24e869a460d34bb7c21e4",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_DECISION_COMMITTED",
+      "seq": 18,
+      "timestamp": "2026-10-12T02:52:12.401217Z",
+      "payload": {
+        "kind": "TOOL_CALL",
+        "turnId": "turn_6b8dcc15168d446eb8aff362af8a9ff5",
+        "actionId": "action_09b04e3a1dfc430da3d433e48673ad8f",
+        "toolName": "review_asset",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be"
+      }
+    },
+    {
+      "id": "evt_cac78027e02b4c7ca0d88a0ad704e19b",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_STARTED",
+      "seq": 19,
+      "timestamp": "2026-10-12T02:52:12.405821Z",
+      "payload": {
+        "turnId": "turn_6b8dcc15168d446eb8aff362af8a9ff5",
+        "actionId": "action_09b04e3a1dfc430da3d433e48673ad8f",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "toolAttemptId": "tool_attempt_be5d67071d914b1b834337322e73cc34"
+      }
+    },
+    {
+      "id": "evt_f16b354418b84b49b612a0c989dfbb23",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_COMPLETED",
+      "seq": 20,
+      "timestamp": "2026-10-12T02:52:12.407985Z",
+      "payload": {
+        "turnId": "turn_6b8dcc15168d446eb8aff362af8a9ff5",
+        "actionId": "action_09b04e3a1dfc430da3d433e48673ad8f",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "toolAttemptId": "tool_attempt_be5d67071d914b1b834337322e73cc34",
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_05355a235fbd4fd384de0b193b39a990",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_READY",
+      "seq": 21,
+      "timestamp": "2026-10-12T02:52:12.407985Z",
+      "payload": {
+        "turnId": "turn_9610cef35b2d40979ec830dc75e7bb6c",
+        "turnNo": 3,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "stateVersion": 0,
+        "contextVersion": 2
+      }
+    },
+    {
+      "id": "evt_40bb554974a84a6293f71375941c7c13",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_STARTED",
+      "seq": 22,
+      "timestamp": "2026-10-12T02:52:12.411442Z",
+      "payload": {
+        "turnId": "turn_9610cef35b2d40979ec830dc75e7bb6c",
+        "turnNo": 3,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "stateVersion": 0,
+        "contextVersion": 2
+      }
+    },
+    {
+      "id": "evt_4fd0331c3da04ccca9a2af90a76086ab",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_DECISION_COMMITTED",
+      "seq": 23,
+      "timestamp": "2026-10-12T02:52:12.412817Z",
+      "payload": {
+        "kind": "TOOL_CALL",
+        "turnId": "turn_9610cef35b2d40979ec830dc75e7bb6c",
+        "actionId": "action_87124519378b48a59093920e09125c9d",
+        "toolName": "generate_image",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be"
+      }
+    },
+    {
+      "id": "evt_db9ccb2f666549229ae4585e0fe05a1f",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_STARTED",
+      "seq": 24,
+      "timestamp": "2026-10-12T02:52:12.41457Z",
+      "payload": {
+        "turnId": "turn_9610cef35b2d40979ec830dc75e7bb6c",
+        "actionId": "action_87124519378b48a59093920e09125c9d",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "toolAttemptId": "tool_attempt_4b31584f9c5c448895419ebb9958ea91"
+      }
+    },
+    {
+      "id": "evt_427e6b12ebe84922a52ebcdb191b87f9",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_COMPLETED",
+      "seq": 25,
+      "timestamp": "2026-10-12T02:52:12.422841Z",
+      "payload": {
+        "turnId": "turn_9610cef35b2d40979ec830dc75e7bb6c",
+        "actionId": "action_87124519378b48a59093920e09125c9d",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "toolAttemptId": "tool_attempt_4b31584f9c5c448895419ebb9958ea91",
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_69b9b2a8965b4712ae84fdd328d1a878",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_READY",
+      "seq": 26,
+      "timestamp": "2026-10-12T02:52:12.422841Z",
+      "payload": {
+        "turnId": "turn_8c3b0703fbdc4b669ebec9c9c0a9eb46",
+        "turnNo": 4,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "stateVersion": 0,
+        "contextVersion": 3
+      }
+    },
+    {
+      "id": "evt_62d80419e93b48b099473a1189b89a77",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_STARTED",
+      "seq": 27,
+      "timestamp": "2026-10-12T02:52:12.426453Z",
+      "payload": {
+        "turnId": "turn_8c3b0703fbdc4b669ebec9c9c0a9eb46",
+        "turnNo": 4,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "stateVersion": 0,
+        "contextVersion": 3
+      }
+    },
+    {
+      "id": "evt_e7fe7188916848259d22cae703bf2396",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_DECISION_COMMITTED",
+      "seq": 28,
+      "timestamp": "2026-10-12T02:52:12.42767Z",
+      "payload": {
+        "kind": "TOOL_CALL",
+        "turnId": "turn_8c3b0703fbdc4b669ebec9c9c0a9eb46",
+        "actionId": "action_68781272cd754af785a1b77c6ad3359c",
+        "toolName": "review_asset",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be"
+      }
+    },
+    {
+      "id": "evt_f65bd3a5504c4b0f961790505c910ce3",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_STARTED",
+      "seq": 29,
+      "timestamp": "2026-10-12T02:52:12.428906Z",
+      "payload": {
+        "turnId": "turn_8c3b0703fbdc4b669ebec9c9c0a9eb46",
+        "actionId": "action_68781272cd754af785a1b77c6ad3359c",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "toolAttemptId": "tool_attempt_8456ce7539d84294836c233a7271742b"
+      }
+    },
+    {
+      "id": "evt_e155caba3571455d9a28ae4ebc10036a",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_COMPLETED",
+      "seq": 30,
+      "timestamp": "2026-10-12T02:52:12.430224Z",
+      "payload": {
+        "turnId": "turn_8c3b0703fbdc4b669ebec9c9c0a9eb46",
+        "actionId": "action_68781272cd754af785a1b77c6ad3359c",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "toolAttemptId": "tool_attempt_8456ce7539d84294836c233a7271742b",
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_196ab6ce83514b84ae97fac76758ae0a",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_READY",
+      "seq": 31,
+      "timestamp": "2026-10-12T02:52:12.430224Z",
+      "payload": {
+        "turnId": "turn_5e01f41730dc428aae7df4e53b0cae04",
+        "turnNo": 5,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "stateVersion": 0,
+        "contextVersion": 4
+      }
+    },
+    {
+      "id": "evt_744cc26fac784deaab5965bbf30c8b61",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_TURN_STARTED",
+      "seq": 32,
+      "timestamp": "2026-10-12T02:52:12.432735Z",
+      "payload": {
+        "turnId": "turn_5e01f41730dc428aae7df4e53b0cae04",
+        "turnNo": 5,
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "claimSource": "IMMEDIATE",
+        "stateVersion": 0,
+        "contextVersion": 4
+      }
+    },
+    {
+      "id": "evt_80e618b813b44c738dd99ddb66ee3f63",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_DECISION_COMMITTED",
+      "seq": 33,
+      "timestamp": "2026-10-12T02:52:12.434172Z",
+      "payload": {
+        "kind": "TOOL_CALL",
+        "turnId": "turn_5e01f41730dc428aae7df4e53b0cae04",
+        "actionId": "action_ae1f87234aec4c4cb0e580c6b38a8d8a",
+        "toolName": "generate_image",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be"
+      }
+    },
+    {
+      "id": "evt_0751e5153416462ca6c9af3a78666e76",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_ACTION_FAILED",
+      "seq": 34,
+      "timestamp": "2026-10-12T02:52:12.436114Z",
+      "payload": {
+        "error": {
+          "code": "GENERATION_LIMIT_REACHED",
+          "details": {
+            "used": 2,
+            "limit": 2
+          },
+          "message": "tool \"generate_image\" would exceed the agent run's generation limit of 2 calls (2 used)"
+        },
+        "turnId": "turn_5e01f41730dc428aae7df4e53b0cae04",
+        "actionId": "action_ae1f87234aec4c4cb0e580c6b38a8d8a",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "failureSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_c8684180295a422eadb1c80bba9317c8",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "AGENT_FAILED",
+      "seq": 35,
+      "timestamp": "2026-10-12T02:52:12.436114Z",
+      "payload": {
+        "error": {
+          "code": "GENERATION_LIMIT_REACHED",
+          "details": {
+            "used": 2,
+            "limit": 2
+          },
+          "message": "tool \"generate_image\" would exceed the agent run's generation limit of 2 calls (2 used)"
+        },
+        "turnId": "turn_5e01f41730dc428aae7df4e53b0cae04",
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be",
+        "termination": "INVALID_ACTION"
+      }
+    },
+    {
+      "id": "evt_18fda9fbeeeb40419d9edfef13b15f2c",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "type": "NODE_FAILED",
+      "seq": 36,
+      "timestamp": "2026-10-12T02:52:12.436114Z",
+      "payload": {
+        "error": {
+          "code": "GENERATION_LIMIT_REACHED",
+          "details": {
+            "used": 2,
+            "limit": 2
+          },
+          "message": "tool \"generate_image\" would exceed the agent run's generation limit of 2 calls (2 used)"
+        },
+        "agentRunId": "ar_b2f7a39ad5274028a745c55aa8e838be"
+      }
+    },
+    {
+      "id": "evt_0e5770f4d79b473cbd83b57a4e1ed306",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeRunId": null,
+      "type": "RUN_FAILED",
+      "seq": 37,
+      "timestamp": "2026-10-12T02:52:12.436114Z",
+      "payload": {
+        "to": "FAILED",
+        "from": "RUNNING",
+        "error": {
+          "code": "GENERATION_LIMIT_REACHED",
+          "details": {
+            "used": 2,
+            "limit": 2
+          },
+          "message": "tool \"generate_image\" would exceed the agent run's generation limit of 2 calls (2 used)"
+        }
+      }
+    }
+  ]
+}

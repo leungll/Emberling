@@ -1,0 +1,44 @@
+{
+  "nodeRun": {
+    "id": "nr_5a2996bec30a4a5ea18e012b6aa7823d",
+    "runId": "run_257c4ee4c84443b68245321a3498dd93",
+    "nodeId": "node_result",
+    "nodeType": "text_output",
+    "status": "SUCCEEDED",
+    "input": {
+      "text": "{\"operationId\":\"op_action_6169a0e7ed0c44ffa63493b6510277b0_1\",\"patchDigest\":\"sha256:59ff5fe6285fa88d9b0584bee75908a591f4ea0a69fb8db5318335aba8810c0a\",\"version\":\"v1\"}"
+    },
+    "output": {
+      "text": "{\"operationId\":\"op_action_6169a0e7ed0c44ffa63493b6510277b0_1\",\"patchDigest\":\"sha256:59ff5fe6285fa88d9b0584bee75908a591f4ea0a69fb8db5318335aba8810c0a\",\"version\":\"v1\"}"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:08:33.981912Z",
+    "startedAt": "2026-10-12T03:08:34.011768Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T03:08:34.032533Z",
+    "latencyMs": 20,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_c9fa457dbee142e6946b0b5781a32a75",
+      "nodeRunId": "nr_5a2996bec30a4a5ea18e012b6aa7823d",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "{\"operationId\":\"op_action_6169a0e7ed0c44ffa63493b6510277b0_1\",\"patchDigest\":\"sha256:59ff5fe6285fa88d9b0584bee75908a591f4ea0a69fb8db5318335aba8810c0a\",\"version\":\"v1\"}"
+      },
+      "result": {
+        "text": "{\"operationId\":\"op_action_6169a0e7ed0c44ffa63493b6510277b0_1\",\"patchDigest\":\"sha256:59ff5fe6285fa88d9b0584bee75908a591f4ea0a69fb8db5318335aba8810c0a\",\"version\":\"v1\"}"
+      },
+      "startedAt": "2026-10-12T03:08:34.011768Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T03:08:34.032533Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

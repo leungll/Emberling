@@ -1,0 +1,40 @@
+{
+  "nodeRun": {
+    "id": "nr_9c8f8ab8547d49ab86f23bc7bcfe395e",
+    "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+    "nodeId": "node_reference",
+    "nodeType": "image_input",
+    "status": "SUCCEEDED",
+    "input": {},
+    "output": {
+      "image": null
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:03:54.505078Z",
+    "startedAt": "2026-10-12T03:03:54.528275Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T03:03:54.534088Z",
+    "latencyMs": 5,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_5d4f1da5623d40a0b744612404d46869",
+      "nodeRunId": "nr_9c8f8ab8547d49ab86f23bc7bcfe395e",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {},
+      "result": {
+        "image": null
+      },
+      "startedAt": "2026-10-12T03:03:54.528275Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T03:03:54.534088Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

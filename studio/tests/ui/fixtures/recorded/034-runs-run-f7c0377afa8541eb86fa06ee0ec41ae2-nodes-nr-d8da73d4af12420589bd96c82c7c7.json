@@ -1,0 +1,40 @@
+{
+  "nodeRun": {
+    "id": "nr_d8da73d4af12420589bd96c82c7c7b11",
+    "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+    "nodeId": "node_brief",
+    "nodeType": "text_input",
+    "status": "SUCCEEDED",
+    "input": {},
+    "output": {
+      "text": "One warm film look for the whole set"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T02:52:12.354224Z",
+    "startedAt": "2026-10-12T02:52:12.358672Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T02:52:12.36198Z",
+    "latencyMs": 3,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_e41969dd1eb44fb4b4093c9fd7907afb",
+      "nodeRunId": "nr_d8da73d4af12420589bd96c82c7c7b11",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {},
+      "result": {
+        "text": "One warm film look for the whole set"
+      },
+      "startedAt": "2026-10-12T02:52:12.358672Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T02:52:12.36198Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

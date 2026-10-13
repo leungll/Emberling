@@ -1,0 +1,277 @@
+{
+  "agentRun": {
+    "id": "ar_b2f7a39ad5274028a745c55aa8e838be",
+    "nodeRunId": "nr_cdb1fb4619be45f19f5880e14ec91435",
+    "termination": "INVALID_ACTION",
+    "currentTurnNo": 5,
+    "currentContextVersion": 4,
+    "currentStateVersion": 0,
+    "deadline": "2026-10-12T02:54:12.374684Z",
+    "terminatedAt": "2026-10-12T02:52:12.436114Z",
+    "error": {
+      "code": "GENERATION_LIMIT_REACHED",
+      "message": "tool \"generate_image\" would exceed the agent run's generation limit of 2 calls (2 used)",
+      "details": {
+        "used": 2,
+        "limit": 2
+      }
+    }
+  },
+  "turns": [
+    {
+      "id": "turn_a303ef9c45c946b6ae960e5b709205f6",
+      "turnNo": 1,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T02:52:12.379943Z",
+      "completedAt": "2026-10-12T02:52:12.383228Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 8,
+        "outputTokens": 0,
+        "totalTokens": 8
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_c6cb911dc6a74b72a8d4a4bb926cbe08",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T02:52:12.387765Z",
+        "completedAt": "2026-10-12T02:52:12.395305Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_85036c1d1d434708aeed957ad5942c89",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T02:52:12.387765Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T02:52:12.395305Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_6b8dcc15168d446eb8aff362af8a9ff5",
+      "turnNo": 2,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T02:52:12.399711Z",
+      "completedAt": "2026-10-12T02:52:12.401217Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 8,
+        "outputTokens": 0,
+        "totalTokens": 8
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_09b04e3a1dfc430da3d433e48673ad8f",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T02:52:12.405821Z",
+        "completedAt": "2026-10-12T02:52:12.407985Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_be5d67071d914b1b834337322e73cc34",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T02:52:12.405821Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T02:52:12.407985Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_9610cef35b2d40979ec830dc75e7bb6c",
+      "turnNo": 3,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T02:52:12.411442Z",
+      "completedAt": "2026-10-12T02:52:12.412817Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 8,
+        "outputTokens": 0,
+        "totalTokens": 8
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_87124519378b48a59093920e09125c9d",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T02:52:12.41457Z",
+        "completedAt": "2026-10-12T02:52:12.422841Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_4b31584f9c5c448895419ebb9958ea91",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T02:52:12.41457Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T02:52:12.422841Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_8c3b0703fbdc4b669ebec9c9c0a9eb46",
+      "turnNo": 4,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T02:52:12.426453Z",
+      "completedAt": "2026-10-12T02:52:12.42767Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 8,
+        "outputTokens": 0,
+        "totalTokens": 8
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_68781272cd754af785a1b77c6ad3359c",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T02:52:12.428906Z",
+        "completedAt": "2026-10-12T02:52:12.430224Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_8456ce7539d84294836c233a7271742b",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T02:52:12.428906Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T02:52:12.430224Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_5e01f41730dc428aae7df4e53b0cae04",
+      "turnNo": 5,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T02:52:12.432735Z",
+      "completedAt": "2026-10-12T02:52:12.434172Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 8,
+        "outputTokens": 0,
+        "totalTokens": 8
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_ae1f87234aec4c4cb0e580c6b38a8d8a",
+        "type": "TOOL_CALL",
+        "status": "FAILED",
+        "startedAt": "2026-10-12T02:52:12.436114Z",
+        "completedAt": "2026-10-12T02:52:12.436114Z",
+        "error": {
+          "code": "GENERATION_LIMIT_REACHED",
+          "message": "tool \"generate_image\" would exceed the agent run's generation limit of 2 calls (2 used)",
+          "details": {
+            "used": 2,
+            "limit": 2
+          }
+        }
+      },
+      "toolAttempts": []
+    }
+  ],
+  "facts": {
+    "items": [
+      {
+        "id": "fact_08eb499649494fe9a369bd64ee88957e",
+        "factType": "image_generated",
+        "subject": "artifact_e74afde80d4031f471bc61fa6a7983c5",
+        "bindings": {
+          "artifact": "{\"artifactId\":\"artifact_e74afde80d4031f471bc61fa6a7983c5\",\"mediaType\":\"image/png\",\"sha256\":\"e74afde80d4031f471bc61fa6a7983c5cf83caa3d5abfd9af1c0fe0cf160e642\",\"sizeBytes\":83}",
+          "imageUrl": "/api/runs/run_f7c0377afa8541eb86fa06ee0ec41ae2/artifacts/artifact_e74afde80d4031f471bc61fa6a7983c5/content",
+          "photoAssetId": "asset_cedc30fa8865486ca3d2451edf437956",
+          "settingsDigest": "sha256:1e73de64bf996da2f60f2f2d895b5e05dfa9f15726f0285e76600b91289faf59"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_85036c1d1d434708aeed957ad5942c89",
+        "createdAt": "2026-10-12T02:52:12.395305Z"
+      },
+      {
+        "id": "fact_e0fa6920dda24f8d849b665bafaa3288",
+        "factType": "asset_reviewed",
+        "subject": "artifact_e74afde80d4031f471bc61fa6a7983c5",
+        "bindings": {
+          "photoAssetId": "asset_cedc30fa8865486ca3d2451edf437956",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": true,
+        "basisFactId": "fact_08eb499649494fe9a369bd64ee88957e",
+        "toolAttemptId": "tool_attempt_be5d67071d914b1b834337322e73cc34",
+        "createdAt": "2026-10-12T02:52:12.407985Z"
+      },
+      {
+        "id": "fact_70a17a57bd6e4e13861771fdf75b0e38",
+        "factType": "image_generated",
+        "subject": "artifact_917f512292189b246c4fda867fbfa73d",
+        "bindings": {
+          "artifact": "{\"artifactId\":\"artifact_917f512292189b246c4fda867fbfa73d\",\"mediaType\":\"image/png\",\"sha256\":\"917f512292189b246c4fda867fbfa73d998c7b3bf8942c1917974c18b8ea8b31\",\"sizeBytes\":83}",
+          "imageUrl": "/api/runs/run_f7c0377afa8541eb86fa06ee0ec41ae2/artifacts/artifact_917f512292189b246c4fda867fbfa73d/content",
+          "photoAssetId": "asset_45e00e1fa8ba4ae9a91e91542343e76e",
+          "settingsDigest": "sha256:1e73de64bf996da2f60f2f2d895b5e05dfa9f15726f0285e76600b91289faf59"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_4b31584f9c5c448895419ebb9958ea91",
+        "createdAt": "2026-10-12T02:52:12.422841Z"
+      },
+      {
+        "id": "fact_6820faf2c8c9416eaf7aa17945a31647",
+        "factType": "asset_reviewed",
+        "subject": "artifact_917f512292189b246c4fda867fbfa73d",
+        "bindings": {
+          "photoAssetId": "asset_45e00e1fa8ba4ae9a91e91542343e76e",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": true,
+        "basisFactId": "fact_70a17a57bd6e4e13861771fdf75b0e38",
+        "toolAttemptId": "tool_attempt_8456ce7539d84294836c233a7271742b",
+        "createdAt": "2026-10-12T02:52:12.430224Z"
+      }
+    ],
+    "truncated": false
+  },
+  "generationBudget": {
+    "maxGenerationCalls": 2,
+    "generationCallsUsed": 2
+  }
+}

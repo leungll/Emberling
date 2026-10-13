@@ -1,0 +1,56 @@
+{
+  "items": [
+    {
+      "id": "image-model-v1",
+      "displayName": "Mock Image Model v1",
+      "description": "Deterministic test fixture that returns synthetic placeholder images from the local mock provider, at no cost.",
+      "capabilities": [
+        "image_generation",
+        "reference_image_generation"
+      ],
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 0.2
+          }
+        }
+      }
+    },
+    {
+      "id": "text-model-v1",
+      "displayName": "Mock Text Model v1",
+      "description": "Deterministic test fixture that replays scripted decisions locally, with no external calls and no cost.",
+      "capabilities": [
+        "text_generation",
+        "structured_decision"
+      ],
+      "configSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "script": {
+            "enum": [
+              "photo-set",
+              "photo-set-limit",
+              "photo-set-skip-review",
+              "software-delivery",
+              "software-delivery-duplicate-callback"
+            ],
+            "type": "string"
+          },
+          "temperature": {
+            "default": 0.2,
+            "maximum": 2,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      }
+    }
+  ]
+}

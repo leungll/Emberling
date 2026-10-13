@@ -1,0 +1,465 @@
+{
+  "items": [
+    {
+      "id": "evt_37c9683a698946bf95fd3fc72e2d6288",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": null,
+      "type": "RUN_CREATED",
+      "seq": 1,
+      "timestamp": "2026-10-12T03:41:16.503541Z",
+      "payload": {
+        "input": {
+          "bytes": 281,
+          "sha256": "85cf091263dd14fd591afb75a2fe07adbaf71c94c1b162ff1d7f88637ebd7a90"
+        },
+        "workflowId": "wf_f219e36bd99c403ba9158961cc29ac07",
+        "definitionVersion": 1
+      }
+    },
+    {
+      "id": "evt_190c1c52a0834bfba4c65f99b4bd5d5a",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_70a478317059423c952bede24ab8adaf",
+      "type": "NODE_READY",
+      "seq": 2,
+      "timestamp": "2026-10-12T03:41:16.503541Z",
+      "payload": {
+        "nodeId": "node_task",
+        "nodeType": "text_input"
+      }
+    },
+    {
+      "id": "evt_39fb8e580f1e4a888e1dcb5436b6ba2e",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_70a478317059423c952bede24ab8adaf",
+      "type": "NODE_STARTED",
+      "seq": 3,
+      "timestamp": "2026-10-12T03:41:16.509367Z",
+      "payload": {
+        "input": {
+          "bytes": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_a0596110cb7b44a3a71dc9e4cb763bf3",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_70a478317059423c952bede24ab8adaf",
+      "type": "NODE_COMPLETED",
+      "seq": 4,
+      "timestamp": "2026-10-12T03:41:16.514633Z",
+      "payload": {
+        "output": {
+          "bytes": 272,
+          "sha256": "16d77404cf1816d808c4a19f4f84557e5f83f95a1e8761b37011d19f763f50ce"
+        },
+        "latencyMs": 5,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_5464e22ebaf142919244d5535027ccdd",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "NODE_READY",
+      "seq": 5,
+      "timestamp": "2026-10-12T03:41:16.514633Z",
+      "payload": {
+        "nodeId": "node_agent",
+        "nodeType": "agent"
+      }
+    },
+    {
+      "id": "evt_b41ce52e71e44acdb90ef2efcd5769de",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "NODE_STARTED",
+      "seq": 6,
+      "timestamp": "2026-10-12T03:41:16.518551Z",
+      "payload": {
+        "input": {
+          "bytes": 273,
+          "sha256": "e2cf115653dde2cf121ffe44c89d2d71f6688a713063ce285cc2841579db08c6"
+        },
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794"
+      }
+    },
+    {
+      "id": "evt_8be43e4d9b0b441c939b2adc7ba1e964",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_STARTED",
+      "seq": 7,
+      "timestamp": "2026-10-12T03:41:16.518551Z",
+      "payload": {
+        "modelId": "text-model-v1",
+        "deadline": "2026-10-12T03:43:16.518551337Z",
+        "maxTurns": 8,
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794"
+      }
+    },
+    {
+      "id": "evt_f41c266ede614b95894e2ec2bdeab719",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_TURN_READY",
+      "seq": 8,
+      "timestamp": "2026-10-12T03:41:16.518551Z",
+      "payload": {
+        "turnId": "turn_839c15a1c9154a11b4a494479366c47d",
+        "turnNo": 1,
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "stateVersion": 0,
+        "contextVersion": 0
+      }
+    },
+    {
+      "id": "evt_63445f75784e4b8091179706eac2b2cf",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_TURN_STARTED",
+      "seq": 9,
+      "timestamp": "2026-10-12T03:41:16.53009Z",
+      "payload": {
+        "turnId": "turn_839c15a1c9154a11b4a494479366c47d",
+        "turnNo": 1,
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "claimSource": "IMMEDIATE",
+        "stateVersion": 0,
+        "contextVersion": 0
+      }
+    },
+    {
+      "id": "evt_d1a3b6a9cc574912bc4f56c7faed59ad",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_DECISION_COMMITTED",
+      "seq": 10,
+      "timestamp": "2026-10-12T03:41:16.534071Z",
+      "payload": {
+        "kind": "TOOL_CALL",
+        "turnId": "turn_839c15a1c9154a11b4a494479366c47d",
+        "actionId": "action_37d7842a349c4030b1aba2997c41da5a",
+        "toolName": "sandbox_test",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794"
+      }
+    },
+    {
+      "id": "evt_3e7d5619203742f690a9e3465a1d5175",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_ACTION_STARTED",
+      "seq": 11,
+      "timestamp": "2026-10-12T03:41:16.540751Z",
+      "payload": {
+        "turnId": "turn_839c15a1c9154a11b4a494479366c47d",
+        "actionId": "action_37d7842a349c4030b1aba2997c41da5a",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "claimSource": "IMMEDIATE",
+        "toolAttemptId": "tool_attempt_c07c264ce8c54abd8640c9962689b230"
+      }
+    },
+    {
+      "id": "evt_260b257e8ed540748054ff4d714780cf",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_ACTION_WAITING",
+      "seq": 12,
+      "timestamp": "2026-10-12T03:41:16.545597Z",
+      "payload": {
+        "turnId": "turn_839c15a1c9154a11b4a494479366c47d",
+        "actionId": "action_37d7842a349c4030b1aba2997c41da5a",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "toolAttemptId": "tool_attempt_c07c264ce8c54abd8640c9962689b230",
+        "callbackBindingId": "binding_2cbdbd0886d64058b1ac4f486511be01"
+      }
+    },
+    {
+      "id": "evt_4ccdc54fc4f1434ab8802384a8ee9b7b",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": null,
+      "type": "RUN_PAUSED",
+      "seq": 13,
+      "timestamp": "2026-10-12T03:41:16.545597Z",
+      "payload": {
+        "to": "PAUSED",
+        "from": "RUNNING"
+      }
+    },
+    {
+      "id": "evt_78f9b182f22e4cbfa27feda73872a5e9",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_ACTION_COMPLETED",
+      "seq": 14,
+      "timestamp": "2026-10-12T03:41:29.643303Z",
+      "payload": {
+        "turnId": "turn_839c15a1c9154a11b4a494479366c47d",
+        "actionId": "action_37d7842a349c4030b1aba2997c41da5a",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "toolAttemptId": "tool_attempt_c07c264ce8c54abd8640c9962689b230",
+        "completionSource": "CALLBACK"
+      }
+    },
+    {
+      "id": "evt_3fce0cc0429d4ba394f24173b8c26492",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_TURN_READY",
+      "seq": 15,
+      "timestamp": "2026-10-12T03:41:29.643303Z",
+      "payload": {
+        "turnId": "turn_465974c505d042c0a604c1c55666947b",
+        "turnNo": 2,
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "stateVersion": 0,
+        "contextVersion": 1
+      }
+    },
+    {
+      "id": "evt_9bbdc02ed81c448a849e537daa6e5371",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": null,
+      "type": "RUN_RESUMED",
+      "seq": 16,
+      "timestamp": "2026-10-12T03:41:29.643303Z",
+      "payload": {
+        "to": "RUNNING",
+        "from": "PAUSED"
+      }
+    },
+    {
+      "id": "evt_5d71c07acd1e4ef082c498c4d69d5b24",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_TURN_STARTED",
+      "seq": 17,
+      "timestamp": "2026-10-12T03:41:29.655843Z",
+      "payload": {
+        "turnId": "turn_465974c505d042c0a604c1c55666947b",
+        "turnNo": 2,
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "claimSource": "IMMEDIATE",
+        "stateVersion": 0,
+        "contextVersion": 1
+      }
+    },
+    {
+      "id": "evt_3e68682065524cdc93e07b7000525795",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_DECISION_COMMITTED",
+      "seq": 18,
+      "timestamp": "2026-10-12T03:41:29.658557Z",
+      "payload": {
+        "kind": "TOOL_CALL",
+        "turnId": "turn_465974c505d042c0a604c1c55666947b",
+        "actionId": "action_2e501812e493412e9fd5c79ebfd5b6e8",
+        "toolName": "deploy",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794"
+      }
+    },
+    {
+      "id": "evt_423cda6b45e54b74ba55a6dbe5e7253f",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_ACTION_STARTED",
+      "seq": 19,
+      "timestamp": "2026-10-12T03:41:29.663049Z",
+      "payload": {
+        "turnId": "turn_465974c505d042c0a604c1c55666947b",
+        "actionId": "action_2e501812e493412e9fd5c79ebfd5b6e8",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "claimSource": "IMMEDIATE",
+        "toolAttemptId": "tool_attempt_c7480fec62304a5c8cb47d74a1dbb283"
+      }
+    },
+    {
+      "id": "evt_584cab59c27b4cdc83589f9fa7f90897",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_ACTION_COMPLETED",
+      "seq": 20,
+      "timestamp": "2026-10-12T03:41:29.668868Z",
+      "payload": {
+        "turnId": "turn_465974c505d042c0a604c1c55666947b",
+        "actionId": "action_2e501812e493412e9fd5c79ebfd5b6e8",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "toolAttemptId": "tool_attempt_c7480fec62304a5c8cb47d74a1dbb283",
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_3e00a0bd85384004a212d851f8a136d7",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_TURN_READY",
+      "seq": 21,
+      "timestamp": "2026-10-12T03:41:29.668868Z",
+      "payload": {
+        "turnId": "turn_019144f4b4654b98af44fe5cc127af43",
+        "turnNo": 3,
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "stateVersion": 0,
+        "contextVersion": 2
+      }
+    },
+    {
+      "id": "evt_b3a0c24b708b42c1a507a785aafed06b",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_TURN_STARTED",
+      "seq": 22,
+      "timestamp": "2026-10-12T03:41:29.671648Z",
+      "payload": {
+        "turnId": "turn_019144f4b4654b98af44fe5cc127af43",
+        "turnNo": 3,
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "claimSource": "IMMEDIATE",
+        "stateVersion": 0,
+        "contextVersion": 2
+      }
+    },
+    {
+      "id": "evt_3b40eaf2c6894acfa63c37f76b58dc6a",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_DECISION_COMMITTED",
+      "seq": 23,
+      "timestamp": "2026-10-12T03:41:29.673504Z",
+      "payload": {
+        "kind": "FINAL",
+        "turnId": "turn_019144f4b4654b98af44fe5cc127af43",
+        "actionId": "action_4228e382b1454da890ece20a06375e6e",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "finalOutput": {
+          "bytes": 179,
+          "sha256": "ae45a6ed789608d7fe1d6f8ba27970217daa1e94ee447bc9f63a14fd4dd77986"
+        }
+      }
+    },
+    {
+      "id": "evt_106a232d790e4ff9b85ef9ea807dbbb8",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_ACTION_STARTED",
+      "seq": 24,
+      "timestamp": "2026-10-12T03:41:29.675228Z",
+      "payload": {
+        "turnId": "turn_019144f4b4654b98af44fe5cc127af43",
+        "actionId": "action_4228e382b1454da890ece20a06375e6e",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "claimSource": "IMMEDIATE"
+      }
+    },
+    {
+      "id": "evt_c9bb0f60cea344e1bd7a8d4743301e04",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_ACTION_COMPLETED",
+      "seq": 25,
+      "timestamp": "2026-10-12T03:41:29.675228Z",
+      "payload": {
+        "turnId": "turn_019144f4b4654b98af44fe5cc127af43",
+        "actionId": "action_4228e382b1454da890ece20a06375e6e",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_e084f0ec9d71475388b8402e26842ad2",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "AGENT_COMPLETED",
+      "seq": 26,
+      "timestamp": "2026-10-12T03:41:29.675228Z",
+      "payload": {
+        "output": {
+          "bytes": 179,
+          "sha256": "ae45a6ed789608d7fe1d6f8ba27970217daa1e94ee447bc9f63a14fd4dd77986"
+        },
+        "turnId": "turn_019144f4b4654b98af44fe5cc127af43",
+        "agentRunId": "ar_7610c32ddb1d43fa886ba1e2e6b06794",
+        "termination": "FINAL_RESPONSE"
+      }
+    },
+    {
+      "id": "evt_720caa7a9aac44fa982c23ab5647eb95",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+      "type": "NODE_COMPLETED",
+      "seq": 27,
+      "timestamp": "2026-10-12T03:41:29.675228Z",
+      "payload": {
+        "output": {
+          "bytes": 188,
+          "sha256": "d6fa639400843766735cf739bdafd23b2aa55f3d8be5d83d6da6b09a55333afd"
+        },
+        "latencyMs": 13156,
+        "tokenUsage": {
+          "inputTokens": 57,
+          "totalTokens": 58,
+          "outputTokens": 1
+        },
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_ea449194cc11421580a1e4b49798cf0d",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_298daaf968114c0ba77c415f23f5a7a5",
+      "type": "NODE_READY",
+      "seq": 28,
+      "timestamp": "2026-10-12T03:41:29.675228Z",
+      "payload": {
+        "nodeId": "node_result",
+        "nodeType": "text_output"
+      }
+    },
+    {
+      "id": "evt_1dcabd103fe544cab08b1afa7b55944c",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_298daaf968114c0ba77c415f23f5a7a5",
+      "type": "NODE_STARTED",
+      "seq": 29,
+      "timestamp": "2026-10-12T03:41:29.67913Z",
+      "payload": {
+        "input": {
+          "bytes": 188,
+          "sha256": "d6fa639400843766735cf739bdafd23b2aa55f3d8be5d83d6da6b09a55333afd"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_4118de60bf6a4a718aceb6d40a7d169d",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": "nr_298daaf968114c0ba77c415f23f5a7a5",
+      "type": "NODE_COMPLETED",
+      "seq": 30,
+      "timestamp": "2026-10-12T03:41:29.681786Z",
+      "payload": {
+        "output": {
+          "bytes": 188,
+          "sha256": "d6fa639400843766735cf739bdafd23b2aa55f3d8be5d83d6da6b09a55333afd"
+        },
+        "latencyMs": 2,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_4d8d5cb6fcd1494fba3a6821f54b62be",
+      "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+      "nodeRunId": null,
+      "type": "RUN_COMPLETED",
+      "seq": 31,
+      "timestamp": "2026-10-12T03:41:29.681786Z",
+      "payload": {
+        "to": "COMPLETED",
+        "from": "RUNNING"
+      }
+    }
+  ]
+}

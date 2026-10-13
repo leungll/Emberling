@@ -1,0 +1,40 @@
+{
+  "nodeRun": {
+    "id": "nr_b44bd67c35b74f9aa0945225dd9e2d6f",
+    "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+    "nodeId": "node_brief",
+    "nodeType": "text_input",
+    "status": "SUCCEEDED",
+    "input": {},
+    "output": {
+      "text": "probe"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-09T04:20:57.273168Z",
+    "startedAt": "2026-10-09T04:20:57.276931Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-09T04:20:57.279967Z",
+    "latencyMs": 3,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_d862a56e34394a7197397d39ec0186cd",
+      "nodeRunId": "nr_b44bd67c35b74f9aa0945225dd9e2d6f",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {},
+      "result": {
+        "text": "probe"
+      },
+      "startedAt": "2026-10-09T04:20:57.276931Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-09T04:20:57.279967Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

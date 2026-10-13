@@ -1,0 +1,89 @@
+{
+  "workflowId": "wf_f40fc0f40b8248be8f6603b1c711d048",
+  "version": 1,
+  "name": "Software Delivery (software-delivery-duplicate-callback)",
+  "description": "An Agent tests a submitted patch in the sandbox and deploys it only when the tests passed",
+  "nodes": [
+    {
+      "id": "node_task",
+      "type": "text_input",
+      "name": "Delivery Task",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "label": "Delivery Task",
+        "inputKey": "task",
+        "required": true
+      }
+    },
+    {
+      "id": "node_agent",
+      "type": "agent",
+      "name": "Delivery Agent",
+      "position": {
+        "x": 200,
+        "y": 0
+      },
+      "config": {
+        "modelId": "text-model-v1",
+        "maxTurns": 8,
+        "timeoutMs": 120000,
+        "modelConfig": {
+          "script": "software-delivery-duplicate-callback",
+          "temperature": 0.2
+        },
+        "allowedTools": [
+          "sandbox_test",
+          "deploy"
+        ],
+        "instructions": "The task is a JSON document {\"baseCommit\",\"patch\",\"target\":{\"service\",\"environment\"}}. Test the patch on the base commit with sandbox_test. Deploy it to the target with deploy only when the tests passed, using the base commit and patch digest the test reported. Finish with {\"operationId\",\"version\",\"patchDigest\"} for the deployment, or, when the tests did not pass, finish with a failure report instead of deploying."
+      }
+    },
+    {
+      "id": "node_result",
+      "type": "text_output",
+      "name": "Deployment Result",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_task_agent",
+      "source": "node_task",
+      "sourceHandle": "text",
+      "target": "node_agent",
+      "targetHandle": "input"
+    },
+    {
+      "id": "edge_agent_result",
+      "source": "node_agent",
+      "sourceHandle": "text",
+      "target": "node_result",
+      "targetHandle": "text"
+    }
+  ],
+  "runInputSchema": {
+    "type": "object",
+    "required": [
+      "task"
+    ],
+    "properties": {
+      "task": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "validation": {
+    "status": "VALID",
+    "validatorVersion": "mvp-v1",
+    "validatedAt": "2026-10-12T03:07:54.181127966Z"
+  },
+  "createdAt": "2026-10-12T03:07:54.181243Z"
+}

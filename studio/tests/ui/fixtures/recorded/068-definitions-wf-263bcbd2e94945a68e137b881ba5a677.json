@@ -1,0 +1,208 @@
+{
+  "workflowId": "wf_263bcbd2e94945a68e137b881ba5a677",
+  "version": 1,
+  "name": "AIGC probe",
+  "description": "Generate an image and a caption from one creative brief",
+  "nodes": [
+    {
+      "id": "node_brief",
+      "type": "text_input",
+      "name": "Creative Brief",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "label": "Creative Brief",
+        "inputKey": "brief",
+        "required": true
+      }
+    },
+    {
+      "id": "node_reference",
+      "type": "image_input",
+      "name": "Reference Image",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "config": {
+        "label": "Reference Image",
+        "inputKey": "reference",
+        "required": false,
+        "maxSizeBytes": 5242880,
+        "acceptedMediaTypes": [
+          "image/png",
+          "image/jpeg",
+          "image/png"
+        ]
+      }
+    },
+    {
+      "id": "node_prompt",
+      "type": "prompt_template",
+      "name": "Prompt Template",
+      "position": {
+        "x": 200,
+        "y": 0
+      },
+      "config": {
+        "template": "Rewrite this brief into an image prompt:\n{{text}}"
+      }
+    },
+    {
+      "id": "node_rewrite",
+      "type": "text_generation",
+      "name": "Prompt Rewrite",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "config": {
+        "modelId": "text-model-v1"
+      }
+    },
+    {
+      "id": "node_image",
+      "type": "image_generation",
+      "name": "Image Generation",
+      "position": {
+        "x": 600,
+        "y": 100
+      },
+      "config": {
+        "width": 1024,
+        "modelId": "image-model-v1"
+      },
+      "executionPolicy": {
+        "timeoutMs": 10000,
+        "maxAttempts": 2,
+        "backoff": "FIXED"
+      }
+    },
+    {
+      "id": "node_caption",
+      "type": "text_generation",
+      "name": "Caption",
+      "position": {
+        "x": 600,
+        "y": -100
+      },
+      "config": {
+        "modelId": "text-model-v1"
+      }
+    },
+    {
+      "id": "node_output",
+      "type": "media_output",
+      "name": "Media Output",
+      "position": {
+        "x": 800,
+        "y": 0
+      },
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_brief_prompt",
+      "source": "node_brief",
+      "sourceHandle": "text",
+      "target": "node_prompt",
+      "targetHandle": "text"
+    },
+    {
+      "id": "edge_prompt_rewrite",
+      "source": "node_prompt",
+      "sourceHandle": "text",
+      "target": "node_rewrite",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "edge_rewrite_image",
+      "source": "node_rewrite",
+      "sourceHandle": "text",
+      "target": "node_image",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "edge_reference_image",
+      "source": "node_reference",
+      "sourceHandle": "image",
+      "target": "node_image",
+      "targetHandle": "reference"
+    },
+    {
+      "id": "edge_rewrite_caption",
+      "source": "node_rewrite",
+      "sourceHandle": "text",
+      "target": "node_caption",
+      "targetHandle": "prompt"
+    },
+    {
+      "id": "edge_image_output",
+      "source": "node_image",
+      "sourceHandle": "image",
+      "target": "node_output",
+      "targetHandle": "image"
+    },
+    {
+      "id": "edge_caption_output",
+      "source": "node_caption",
+      "sourceHandle": "text",
+      "target": "node_output",
+      "targetHandle": "caption"
+    }
+  ],
+  "runInputSchema": {
+    "type": "object",
+    "required": [
+      "brief"
+    ],
+    "properties": {
+      "brief": {
+        "type": "string"
+      },
+      "reference": {
+        "type": "object",
+        "required": [
+          "assetId",
+          "mediaType",
+          "sizeBytes",
+          "sha256"
+        ],
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "minLength": 1
+          },
+          "assetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mediaType": {
+            "enum": [
+              "image/jpeg",
+              "image/png"
+            ],
+            "type": "string",
+            "minLength": 1
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "maximum": 5242880,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "additionalProperties": false
+  },
+  "validation": {
+    "status": "VALID",
+    "validatorVersion": "mvp-v1",
+    "validatedAt": "2026-10-09T04:20:57.198526127Z"
+  },
+  "createdAt": "2026-10-09T04:20:57.198535Z"
+}

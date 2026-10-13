@@ -1,0 +1,44 @@
+{
+  "nodeRun": {
+    "id": "nr_bdb02dd019504510b9eca5969407ba5c",
+    "runId": "run_1895158172ba4109826c3ba45cbfc59e",
+    "nodeId": "node_photos",
+    "nodeType": "media_brief",
+    "status": "SUCCEEDED",
+    "input": {
+      "brief": "A warm clay stop-motion look"
+    },
+    "output": {
+      "text": "{\"brief\":\"A warm clay stop-motion look\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_b46d44a6392f4698b3074b36d9b9380e\",\"sha256\":\"63dfc78f76757f02c93363f90ad28ede29b5dc888aabae8d2d89e1831c82379d\",\"sizeBytes\":9540},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_cb9f23ed521a4fecac597b5cf59e4a80\",\"sha256\":\"1688d9e113fedbd5311ba8e3293e6c33db45d6fcc0a7533d75bb54c292799458\",\"sizeBytes\":7515},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_9d055367b2fe4c61ac0f2ca3c2c89444\",\"sha256\":\"b8d90157ebe27d16da2335ab11fd18c90528b8e6f17ba6aa6641eefa1e2fa141\",\"sizeBytes\":7578}]}"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T09:13:48.426976Z",
+    "startedAt": "2026-10-12T09:13:48.433781Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T09:13:48.43926Z",
+    "latencyMs": 5,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_d3272663769b4646a874911c4216fb72",
+      "nodeRunId": "nr_bdb02dd019504510b9eca5969407ba5c",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "brief": "A warm clay stop-motion look"
+      },
+      "result": {
+        "text": "{\"brief\":\"A warm clay stop-motion look\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_b46d44a6392f4698b3074b36d9b9380e\",\"sha256\":\"63dfc78f76757f02c93363f90ad28ede29b5dc888aabae8d2d89e1831c82379d\",\"sizeBytes\":9540},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_cb9f23ed521a4fecac597b5cf59e4a80\",\"sha256\":\"1688d9e113fedbd5311ba8e3293e6c33db45d6fcc0a7533d75bb54c292799458\",\"sizeBytes\":7515},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_9d055367b2fe4c61ac0f2ca3c2c89444\",\"sha256\":\"b8d90157ebe27d16da2335ab11fd18c90528b8e6f17ba6aa6641eefa1e2fa141\",\"sizeBytes\":7578}]}"
+      },
+      "startedAt": "2026-10-12T09:13:48.433781Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T09:13:48.43926Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

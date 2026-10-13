@@ -1,0 +1,68 @@
+{
+  "nodeRun": {
+    "id": "nr_54317515a3dc49248d7a78fca5d4f839",
+    "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+    "nodeId": "node_image",
+    "nodeType": "image_generation",
+    "status": "FAILED",
+    "input": {
+      "prompt": "echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo",
+      "reference": null
+    },
+    "output": null,
+    "error": {
+      "code": "EXECUTOR_ERROR",
+      "message": "image_generation: dispatch: mocktask: dispatch to provider \"mock-task-provider-v1\": send request: Post \"http://mockprovider:9101/v1/tasks\": context deadline exceeded"
+    },
+    "attemptCount": 2,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:03:54.539634Z",
+    "startedAt": "2026-10-12T03:03:54.547998Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T03:04:19.271197Z",
+    "latencyMs": 24723,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_f1a31ee9643240188bf74f491937efa7",
+      "nodeRunId": "nr_54317515a3dc49248d7a78fca5d4f839",
+      "attemptNo": 1,
+      "status": "FAILED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo",
+        "reference": null
+      },
+      "result": null,
+      "startedAt": "2026-10-12T03:03:54.547998Z",
+      "deadlineAt": "2026-10-12T03:04:04.547998Z",
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T03:04:04.550364Z",
+      "error": {
+        "code": "EXECUTOR_ERROR",
+        "message": "image_generation: dispatch: mocktask: dispatch to provider \"mock-task-provider-v1\": send request: Post \"http://mockprovider:9101/v1/tasks\": context deadline exceeded"
+      },
+      "callbackBinding": null
+    },
+    {
+      "id": "attempt_7a2b8ee9fbd74273937b69708524fac9",
+      "nodeRunId": "nr_54317515a3dc49248d7a78fca5d4f839",
+      "attemptNo": 2,
+      "status": "FAILED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo",
+        "reference": null
+      },
+      "result": null,
+      "startedAt": "2026-10-12T03:04:09.268441Z",
+      "deadlineAt": "2026-10-12T03:04:19.268441Z",
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T03:04:19.271197Z",
+      "error": {
+        "code": "EXECUTOR_ERROR",
+        "message": "image_generation: dispatch: mocktask: dispatch to provider \"mock-task-provider-v1\": send request: Post \"http://mockprovider:9101/v1/tasks\": context deadline exceeded"
+      },
+      "callbackBinding": null
+    }
+  ]
+}

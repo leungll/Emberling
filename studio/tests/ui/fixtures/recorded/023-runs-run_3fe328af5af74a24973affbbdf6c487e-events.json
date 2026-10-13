@@ -1,0 +1,334 @@
+{
+  "items": [
+    {
+      "id": "evt_13d7176e358f4ccf987b4f51f4f786e1",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": null,
+      "type": "RUN_CREATED",
+      "seq": 1,
+      "timestamp": "2026-10-12T03:03:54.505078Z",
+      "payload": {
+        "input": {
+          "bytes": 53,
+          "sha256": "a57dd3bb923ab3ffcc4f5bc385d1453f2374f4452f89a2c1006147fcec7bac2b"
+        },
+        "workflowId": "wf_5fbacb46a8c149f286d6121a6cf48268",
+        "definitionVersion": 1
+      }
+    },
+    {
+      "id": "evt_8ad1063f9a844e448210c5fc5bc014a5",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_c87cd0ef9fac41bcacddf068a049111d",
+      "type": "NODE_READY",
+      "seq": 2,
+      "timestamp": "2026-10-12T03:03:54.505078Z",
+      "payload": {
+        "nodeId": "node_brief",
+        "nodeType": "text_input"
+      }
+    },
+    {
+      "id": "evt_79cad0990fd04b00b4129892a98f5c31",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_9c8f8ab8547d49ab86f23bc7bcfe395e",
+      "type": "NODE_READY",
+      "seq": 3,
+      "timestamp": "2026-10-12T03:03:54.505078Z",
+      "payload": {
+        "nodeId": "node_reference",
+        "nodeType": "image_input"
+      }
+    },
+    {
+      "id": "evt_c02aa26eee9b4c0382298dc886b363a4",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_c87cd0ef9fac41bcacddf068a049111d",
+      "type": "NODE_STARTED",
+      "seq": 4,
+      "timestamp": "2026-10-12T03:03:54.51285Z",
+      "payload": {
+        "input": {
+          "bytes": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_08446c4e01a644bdb54598f4e7c59898",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_c87cd0ef9fac41bcacddf068a049111d",
+      "type": "NODE_COMPLETED",
+      "seq": 5,
+      "timestamp": "2026-10-12T03:03:54.516893Z",
+      "payload": {
+        "output": {
+          "bytes": 43,
+          "sha256": "1d0f7adbe17da10ed78136bd535091165ec0b98e30dbdc2fd34edb36f83d7e1e"
+        },
+        "latencyMs": 4,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_68d0e0d13cbd4267a85e1ad25bdee3b8",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_b5a44ae1c0d8465fabe21dc842c62e69",
+      "type": "NODE_READY",
+      "seq": 6,
+      "timestamp": "2026-10-12T03:03:54.516893Z",
+      "payload": {
+        "nodeId": "node_prompt",
+        "nodeType": "prompt_template"
+      }
+    },
+    {
+      "id": "evt_392cc04ad3174f10be02a888fd254b8e",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_b5a44ae1c0d8465fabe21dc842c62e69",
+      "type": "NODE_STARTED",
+      "seq": 7,
+      "timestamp": "2026-10-12T03:03:54.521458Z",
+      "payload": {
+        "input": {
+          "bytes": 43,
+          "sha256": "1d0f7adbe17da10ed78136bd535091165ec0b98e30dbdc2fd34edb36f83d7e1e"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_06101b4dc3dc47918ed2aec667008b82",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_b5a44ae1c0d8465fabe21dc842c62e69",
+      "type": "NODE_COMPLETED",
+      "seq": 8,
+      "timestamp": "2026-10-12T03:03:54.525152Z",
+      "payload": {
+        "output": {
+          "bytes": 85,
+          "sha256": "1c68ad69328393c3ce12c179d22500b4aa4b278da72407163a4f681b3edcaaef"
+        },
+        "latencyMs": 3,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_ae470cc0940943b7b2896a901024236b",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_54ed87cf4e7e49c0b3cf9a3fe7fb8fae",
+      "type": "NODE_READY",
+      "seq": 9,
+      "timestamp": "2026-10-12T03:03:54.525152Z",
+      "payload": {
+        "nodeId": "node_rewrite",
+        "nodeType": "text_generation"
+      }
+    },
+    {
+      "id": "evt_235428022f99411ab4a48399cfd69f0e",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_9c8f8ab8547d49ab86f23bc7bcfe395e",
+      "type": "NODE_STARTED",
+      "seq": 10,
+      "timestamp": "2026-10-12T03:03:54.528275Z",
+      "payload": {
+        "input": {
+          "bytes": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_4d2295067fa24ea4ade95117b95a6f69",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_9c8f8ab8547d49ab86f23bc7bcfe395e",
+      "type": "NODE_COMPLETED",
+      "seq": 11,
+      "timestamp": "2026-10-12T03:03:54.534088Z",
+      "payload": {
+        "output": {
+          "bytes": 14,
+          "sha256": "06c466547f7f493ff9a79fc9966f7615330430acd2b914bb80ad55e0c1aac8fd"
+        },
+        "latencyMs": 5,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_6321059e42884961beb3029569e96bee",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_54ed87cf4e7e49c0b3cf9a3fe7fb8fae",
+      "type": "NODE_STARTED",
+      "seq": 12,
+      "timestamp": "2026-10-12T03:03:54.536761Z",
+      "payload": {
+        "input": {
+          "bytes": 87,
+          "sha256": "cd854fb407fd804ed574fb652fbce0711a649c45221c6e172fdd5876ccc5f13a"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_517994c08729479da75d365436a4bb21",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_54ed87cf4e7e49c0b3cf9a3fe7fb8fae",
+      "type": "NODE_COMPLETED",
+      "seq": 13,
+      "timestamp": "2026-10-12T03:03:54.539634Z",
+      "payload": {
+        "output": {
+          "bytes": 91,
+          "sha256": "f5fc5b927676be6a45692c719e6dc0d53135e8d1e62d875a7213a7ab51ff5cbf"
+        },
+        "latencyMs": 2,
+        "tokenUsage": {
+          "inputTokens": 13,
+          "totalTokens": 27,
+          "outputTokens": 14
+        },
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_0ed2a074eb9140db83c19edd7957185b",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_28da6a0ec83e4c3f80884818cb0d2752",
+      "type": "NODE_READY",
+      "seq": 14,
+      "timestamp": "2026-10-12T03:03:54.539634Z",
+      "payload": {
+        "nodeId": "node_caption",
+        "nodeType": "text_generation"
+      }
+    },
+    {
+      "id": "evt_27562990f65445dd9c5d8e990ccce885",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_54317515a3dc49248d7a78fca5d4f839",
+      "type": "NODE_READY",
+      "seq": 15,
+      "timestamp": "2026-10-12T03:03:54.539634Z",
+      "payload": {
+        "nodeId": "node_image",
+        "nodeType": "image_generation"
+      }
+    },
+    {
+      "id": "evt_bfaf83a9dcac44798928cbe10beb6fcd",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_28da6a0ec83e4c3f80884818cb0d2752",
+      "type": "NODE_STARTED",
+      "seq": 16,
+      "timestamp": "2026-10-12T03:03:54.54446Z",
+      "payload": {
+        "input": {
+          "bytes": 93,
+          "sha256": "e9ea53a32a386fc99b37bd7a2a3a21696b7e7feddc0b0d436097b9d0aaae9f02"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_5436b695f9bf4b5ab7fce4e4f1f05d1c",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_28da6a0ec83e4c3f80884818cb0d2752",
+      "type": "NODE_COMPLETED",
+      "seq": 17,
+      "timestamp": "2026-10-12T03:03:54.546448Z",
+      "payload": {
+        "output": {
+          "bytes": 97,
+          "sha256": "3e097237db1aff4c5d94a622db49b157df9bc456a12e52d33e5bcb39cf1f43e9"
+        },
+        "latencyMs": 1,
+        "tokenUsage": {
+          "inputTokens": 14,
+          "totalTokens": 29,
+          "outputTokens": 15
+        },
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_3b99bf14a7564416ba31630df28f21ba",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_54317515a3dc49248d7a78fca5d4f839",
+      "type": "NODE_STARTED",
+      "seq": 18,
+      "timestamp": "2026-10-12T03:03:54.547998Z",
+      "payload": {
+        "input": {
+          "bytes": 110,
+          "sha256": "88739dcd8c838eeaa05d2f6975a1f3fb45ed3be5149e18695620e17952be673f"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_75085a28fd04409884b17e732a903507",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_54317515a3dc49248d7a78fca5d4f839",
+      "type": "NODE_RETRYING",
+      "seq": 19,
+      "timestamp": "2026-10-12T03:04:04.550364Z",
+      "payload": {
+        "error": {
+          "code": "EXECUTOR_ERROR",
+          "message": "image_generation: dispatch: mocktask: dispatch to provider \"mock-task-provider-v1\": send request: Post \"http://mockprovider:9101/v1/tasks\": context deadline exceeded"
+        },
+        "attemptNo": 1,
+        "nextAttemptAt": "2026-10-12T03:04:05.550364263Z"
+      }
+    },
+    {
+      "id": "evt_9db9d79cecb34032ab09ccdce2d413a2",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_54317515a3dc49248d7a78fca5d4f839",
+      "type": "NODE_STARTED",
+      "seq": 20,
+      "timestamp": "2026-10-12T03:04:09.268441Z",
+      "payload": {
+        "input": {
+          "bytes": 110,
+          "sha256": "88739dcd8c838eeaa05d2f6975a1f3fb45ed3be5149e18695620e17952be673f"
+        },
+        "attemptNo": 2
+      }
+    },
+    {
+      "id": "evt_0b80f91a1a624d6fa4530218b3df3779",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": "nr_54317515a3dc49248d7a78fca5d4f839",
+      "type": "NODE_FAILED",
+      "seq": 21,
+      "timestamp": "2026-10-12T03:04:19.271197Z",
+      "payload": {
+        "error": {
+          "code": "EXECUTOR_ERROR",
+          "message": "image_generation: dispatch: mocktask: dispatch to provider \"mock-task-provider-v1\": send request: Post \"http://mockprovider:9101/v1/tasks\": context deadline exceeded"
+        },
+        "attemptNo": 2
+      }
+    },
+    {
+      "id": "evt_f53a02a8e85046bf858aeaa8401f39e0",
+      "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+      "nodeRunId": null,
+      "type": "RUN_FAILED",
+      "seq": 22,
+      "timestamp": "2026-10-12T03:04:19.271197Z",
+      "payload": {
+        "to": "FAILED",
+        "from": "RUNNING",
+        "error": {
+          "code": "EXECUTOR_ERROR",
+          "message": "image_generation: dispatch: mocktask: dispatch to provider \"mock-task-provider-v1\": send request: Post \"http://mockprovider:9101/v1/tasks\": context deadline exceeded"
+        }
+      }
+    }
+  ]
+}

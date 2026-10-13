@@ -1,0 +1,541 @@
+{
+  "items": [
+    {
+      "name": "deploy",
+      "description": "Deploy a reviewed patch on a base commit to one service environment",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "minLength": 1
+              },
+              "environment": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "service",
+              "environment"
+            ],
+            "additionalProperties": false
+          },
+          "baseCommit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "patchDigest": {
+            "type": "string",
+            "minLength": 1
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "target",
+          "baseCommit",
+          "patchDigest"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "operationId",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffect": {
+        "kind": "EXTERNAL",
+        "idempotency": "UNKNOWN"
+      },
+      "executionKind": "SYNC",
+      "requires": [],
+      "countsTowardGenerationLimit": false,
+      "usesImageModel": false
+    },
+    {
+      "name": "generate_image",
+      "description": "Generate an image asset from one photo of the Run's photo set and a settings object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "photoAssetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "aspectRatio": {
+                "enum": [
+                  "1:1",
+                  "2:3",
+                  "3:2",
+                  "3:4",
+                  "4:3",
+                  "9:16",
+                  "16:9"
+                ]
+              },
+              "resolution": {
+                "enum": [
+                  "1K"
+                ]
+              },
+              "seed": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647
+              }
+            },
+            "required": [
+              "prompt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "photoAssetId",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "assetRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "imageUrl": {
+            "type": "string",
+            "minLength": 1
+          },
+          "settingsDigest": {
+            "type": "string",
+            "minLength": 1
+          },
+          "artifact": {
+            "type": "object",
+            "properties": {
+              "artifactId": {
+                "type": "string",
+                "pattern": "^artifact_[0-9a-f]{32}$"
+              },
+              "mediaType": {
+                "enum": [
+                  "image/png",
+                  "image/jpeg",
+                  "image/webp"
+                ]
+              },
+              "sizeBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "required": [
+              "artifactId",
+              "mediaType",
+              "sizeBytes",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "assetRef",
+          "imageUrl",
+          "settingsDigest",
+          "artifact"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffect": {
+        "kind": "EXTERNAL",
+        "idempotency": "UNKNOWN"
+      },
+      "executionKind": "SYNC",
+      "produces": {
+        "factType": "image_generated",
+        "subjectPointer": {
+          "source": "RESULT",
+          "pointer": "/assetRef"
+        },
+        "bindArguments": {
+          "imageUrl": {
+            "source": "RESULT",
+            "pointer": "/imageUrl"
+          },
+          "photoAssetId": {
+            "source": "ARGUMENTS",
+            "pointer": "/photoAssetId"
+          },
+          "settingsDigest": {
+            "source": "RESULT",
+            "pointer": "/settingsDigest"
+          }
+        }
+      },
+      "requires": [],
+      "countsTowardGenerationLimit": true,
+      "usesImageModel": true
+    },
+    {
+      "name": "generate_video",
+      "description": "Generate a video from a reviewed image asset through an asynchronous Provider task",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "assetRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "photoAssetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "settings": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "assetRef",
+          "photoAssetId",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "videoUrl": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "videoUrl"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffect": {
+        "kind": "EXTERNAL",
+        "idempotency": "UNKNOWN"
+      },
+      "executionKind": "ASYNC",
+      "requires": [
+        {
+          "factType": "asset_reviewed",
+          "subjectArgument": "/assetRef",
+          "matchBindings": [
+            "photoAssetId"
+          ],
+          "requireVerdict": true
+        }
+      ],
+      "countsTowardGenerationLimit": false,
+      "usesImageModel": false
+    },
+    {
+      "name": "lookup",
+      "description": "Read a deterministic record",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "record": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "record"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "executionKind": "SYNC",
+      "requires": [],
+      "countsTowardGenerationLimit": false,
+      "usesImageModel": false
+    },
+    {
+      "name": "remote_lookup",
+      "description": "Read a deterministic record through an asynchronous Provider task",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "record": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "record"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffect": {
+        "kind": "EXTERNAL",
+        "idempotency": "UNKNOWN"
+      },
+      "executionKind": "ASYNC",
+      "requires": [],
+      "countsTowardGenerationLimit": false,
+      "usesImageModel": false
+    },
+    {
+      "name": "review_asset",
+      "description": "Review a generated image asset against the mock content policy",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "assetRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "photoAssetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mock": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail"
+            ]
+          }
+        },
+        "required": [
+          "assetRef",
+          "photoAssetId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "passed": {
+            "type": "boolean"
+          },
+          "policyVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "passed",
+          "policyVersion",
+          "reasons"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "executionKind": "SYNC",
+      "produces": {
+        "factType": "asset_reviewed",
+        "subjectPointer": {
+          "source": "ARGUMENTS",
+          "pointer": "/assetRef"
+        },
+        "bindArguments": {
+          "photoAssetId": {
+            "source": "ARGUMENTS",
+            "pointer": "/photoAssetId"
+          },
+          "policyVersion": {
+            "source": "RESULT",
+            "pointer": "/policyVersion"
+          }
+        },
+        "verdictPointer": {
+          "source": "RESULT",
+          "pointer": "/passed"
+        },
+        "basisFactType": "image_generated"
+      },
+      "requires": [
+        {
+          "factType": "image_generated",
+          "subjectArgument": "/assetRef",
+          "matchBindings": [
+            "photoAssetId"
+          ]
+        }
+      ],
+      "countsTowardGenerationLimit": false,
+      "usesImageModel": false
+    },
+    {
+      "name": "sandbox_test",
+      "description": "Apply a patch to a base commit and run its tests in an isolated sandbox",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "baseCommit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "patch": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mock": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseCommit",
+          "patch"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "passed": {
+            "type": "boolean"
+          },
+          "baseCommit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "patchDigest": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resultDigest": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "total",
+              "failed"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "passed",
+          "baseCommit",
+          "patchDigest",
+          "resultDigest",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffect": {
+        "kind": "EXTERNAL",
+        "idempotency": "UNKNOWN"
+      },
+      "executionKind": "ASYNC",
+      "produces": {
+        "factType": "patch_tested",
+        "subjectPointer": {
+          "source": "RESULT",
+          "pointer": "/patchDigest"
+        },
+        "bindArguments": {
+          "baseCommit": {
+            "source": "RESULT",
+            "pointer": "/baseCommit"
+          },
+          "resultDigest": {
+            "source": "RESULT",
+            "pointer": "/resultDigest"
+          }
+        },
+        "verdictPointer": {
+          "source": "RESULT",
+          "pointer": "/passed"
+        }
+      },
+      "requires": [],
+      "countsTowardGenerationLimit": false,
+      "usesImageModel": false
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "nodeRun": {
+    "id": "nr_d0691d711db64650b5644bf9803ae96d",
+    "runId": "run_257c4ee4c84443b68245321a3498dd93",
+    "nodeId": "node_task",
+    "nodeType": "text_input",
+    "status": "SUCCEEDED",
+    "input": {},
+    "output": {
+      "text": "{\"baseCommit\":\"fixture-v1\",\"patch\":\"--- a/greet.go\\n+++ b/greet.go\\n@@ -3,5 +3,5 @@ package greet\\n import \\\"fmt\\\"\\n \\n func Greeting(name string) string {\\n-\\treturn fmt.Sprintf(\\\"Hello, %s\\\", name)\\n+\\treturn fmt.Sprintf(\\\"Hello, %s!\\\", name)\\n }\\n\",\"target\":{\"service\":\"checkout\",\"environment\":\"staging\"}}"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:07:54.352572Z",
+    "startedAt": "2026-10-12T03:07:54.384939Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T03:07:54.391488Z",
+    "latencyMs": 6,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_7abf1bf605bf4202a261e70821971a5a",
+      "nodeRunId": "nr_d0691d711db64650b5644bf9803ae96d",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {},
+      "result": {
+        "text": "{\"baseCommit\":\"fixture-v1\",\"patch\":\"--- a/greet.go\\n+++ b/greet.go\\n@@ -3,5 +3,5 @@ package greet\\n import \\\"fmt\\\"\\n \\n func Greeting(name string) string {\\n-\\treturn fmt.Sprintf(\\\"Hello, %s\\\", name)\\n+\\treturn fmt.Sprintf(\\\"Hello, %s!\\\", name)\\n }\\n\",\"target\":{\"service\":\"checkout\",\"environment\":\"staging\"}}"
+      },
+      "startedAt": "2026-10-12T03:07:54.384939Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T03:07:54.391488Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

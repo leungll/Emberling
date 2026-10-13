@@ -1,0 +1,44 @@
+{
+  "nodeRun": {
+    "id": "nr_e13e3a920b2d419bb9bc9447ae782077",
+    "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+    "nodeId": "node_prompt",
+    "nodeType": "prompt_template",
+    "status": "SUCCEEDED",
+    "input": {
+      "text": "A lighthouse at dusk, fault demo after accept"
+    },
+    "output": {
+      "text": "mock:delay:15000"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T02:51:46.034533Z",
+    "startedAt": "2026-10-12T02:51:46.039785Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T02:51:46.04328Z",
+    "latencyMs": 3,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_0df6484dcc7240a4a1edc4e86c9cd16e",
+      "nodeRunId": "nr_e13e3a920b2d419bb9bc9447ae782077",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "A lighthouse at dusk, fault demo after accept"
+      },
+      "result": {
+        "text": "mock:delay:15000"
+      },
+      "startedAt": "2026-10-12T02:51:46.039785Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T02:51:46.04328Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "nodeRun": {
+    "id": "nr_e6584a00c852441788e21204e8314904",
+    "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+    "nodeId": "node_image",
+    "nodeType": "image_generation",
+    "status": "FAILED",
+    "input": {
+      "prompt": "echo: Rewrite this brief into an image prompt:\nprobe",
+      "reference": null
+    },
+    "output": null,
+    "error": {
+      "code": "TIMEOUT",
+      "message": "attempt deadline exceeded"
+    },
+    "attemptCount": 2,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-09T04:20:57.293981Z",
+    "startedAt": "2026-10-09T04:20:57.299881Z",
+    "waitingAt": "2026-10-09T04:21:14.21156Z",
+    "completedAt": "2026-10-09T04:21:29.197675Z",
+    "latencyMs": 31898,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_98e58292184b45ac9b61011a19205323",
+      "nodeRunId": "nr_e6584a00c852441788e21204e8314904",
+      "attemptNo": 1,
+      "status": "FAILED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nprobe",
+        "reference": null
+      },
+      "result": null,
+      "startedAt": "2026-10-09T04:20:57.299881Z",
+      "deadlineAt": "2026-10-09T04:21:07.299881Z",
+      "dispatchedAt": null,
+      "completedAt": "2026-10-09T04:21:09.200256Z",
+      "error": {
+        "code": "TIMEOUT",
+        "message": "attempt deadline exceeded"
+      },
+      "callbackBinding": null
+    },
+    {
+      "id": "attempt_70a5ac5c1bfb4c44bd6deb77623da29c",
+      "nodeRunId": "nr_e6584a00c852441788e21204e8314904",
+      "attemptNo": 2,
+      "status": "FAILED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nprobe",
+        "reference": null
+      },
+      "result": null,
+      "startedAt": "2026-10-09T04:21:14.201079Z",
+      "deadlineAt": "2026-10-09T04:21:24.201079Z",
+      "dispatchedAt": "2026-10-09T04:21:14.21156Z",
+      "completedAt": "2026-10-09T04:21:29.197675Z",
+      "error": {
+        "code": "TIMEOUT",
+        "message": "attempt deadline exceeded"
+      },
+      "callbackBinding": {
+        "id": "binding_0577b74a520b4edab9cc6a821795f864",
+        "providerId": "mock-task-provider-v1",
+        "externalTaskId": "task_bdaf39434063f160",
+        "createdAt": "2026-10-09T04:21:14.21156Z"
+      }
+    }
+  ]
+}

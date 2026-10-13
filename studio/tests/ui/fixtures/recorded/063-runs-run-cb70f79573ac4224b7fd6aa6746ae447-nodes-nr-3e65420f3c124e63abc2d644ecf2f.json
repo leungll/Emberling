@@ -1,0 +1,48 @@
+{
+  "nodeRun": {
+    "id": "nr_3e65420f3c124e63abc2d644ecf2f505",
+    "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+    "nodeId": "node_rewrite",
+    "nodeType": "text_generation",
+    "status": "SUCCEEDED",
+    "input": {
+      "prompt": "mock:delay:15000"
+    },
+    "output": {
+      "text": "echo: mock:delay:15000"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T02:51:46.04328Z",
+    "startedAt": "2026-10-12T02:51:46.063663Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T02:51:46.066181Z",
+    "latencyMs": 2,
+    "tokenUsage": {
+      "inputTokens": 1,
+      "outputTokens": 2,
+      "totalTokens": 3
+    }
+  },
+  "attempts": [
+    {
+      "id": "attempt_80bbba16045d4448b6ebacda34a5e37b",
+      "nodeRunId": "nr_3e65420f3c124e63abc2d644ecf2f505",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "mock:delay:15000"
+      },
+      "result": {
+        "text": "echo: mock:delay:15000"
+      },
+      "startedAt": "2026-10-12T02:51:46.063663Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T02:51:46.066181Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

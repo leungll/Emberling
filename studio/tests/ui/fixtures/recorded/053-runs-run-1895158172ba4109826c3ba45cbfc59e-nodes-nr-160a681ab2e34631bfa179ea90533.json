@@ -1,0 +1,724 @@
+{
+  "agentRun": {
+    "id": "ar_85c701a1ac104d649f11209837ae1e53",
+    "nodeRunId": "nr_160a681ab2e34631bfa179ea905334d2",
+    "termination": "FINAL_RESPONSE",
+    "currentTurnNo": 14,
+    "currentContextVersion": 14,
+    "currentStateVersion": 0,
+    "deadline": "2026-10-12T09:15:48.445532Z",
+    "terminatedAt": "2026-10-12T09:13:48.706029Z",
+    "error": null
+  },
+  "turns": [
+    {
+      "id": "turn_f556f5b0f8b9434da4bbcb9dccd36dde",
+      "turnNo": 1,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.464347Z",
+      "completedAt": "2026-10-12T09:13:48.471174Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_9586d2f4f3944f34a55036f3dbd9b1f6",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.478779Z",
+        "completedAt": "2026-10-12T09:13:48.508562Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_b67988524aac4df09cb173246c48c78e",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.478779Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.508562Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_b5aacbf3371642e8b0f7b105cffb9351",
+      "turnNo": 2,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.520341Z",
+      "completedAt": "2026-10-12T09:13:48.522913Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_2c59622017b34b1d998a52d050fa113f",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.528529Z",
+        "completedAt": "2026-10-12T09:13:48.532417Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_a5bacbd8a7d5474d9324575278d7ee29",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.528529Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.532417Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_ee552eecea1745298ce02d85a1bdf602",
+      "turnNo": 3,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.53764Z",
+      "completedAt": "2026-10-12T09:13:48.540229Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_d1bf5133d3304187aa925df6225e39ee",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.543386Z",
+        "completedAt": "2026-10-12T09:13:48.554702Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_270deac4eb654d5a9952104e51f73907",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.543386Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.554702Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_95b1d74cb99445b28b4e2a0e29a09f82",
+      "turnNo": 4,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.559206Z",
+      "completedAt": "2026-10-12T09:13:48.560695Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_52cf67ad234f4837a5c01e2806b26e20",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.562929Z",
+        "completedAt": "2026-10-12T09:13:48.566485Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_6e52f682baa845d39a920c457f2e79b7",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.562929Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.566485Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_5843d0fb499046fcacdbcc52dd3c1bd3",
+      "turnNo": 5,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.572358Z",
+      "completedAt": "2026-10-12T09:13:48.574215Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_32efcf2cae2d4e918f7d21613762800a",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.57769Z",
+        "completedAt": "2026-10-12T09:13:48.585136Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_298cfd7fdba4476e8f9fc4d61bf1760b",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.57769Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.585136Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_13b6d45dd0f141d28d1373e0d96e7f8f",
+      "turnNo": 6,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.589364Z",
+      "completedAt": "2026-10-12T09:13:48.59096Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_d185dc14e1794a63b919b74822c389bc",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.593126Z",
+        "completedAt": "2026-10-12T09:13:48.595907Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_49a39c19272144ce89ee4356eabd6d38",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.593126Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.595907Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_adcd48844cb34041bcc8e935d7df2efa",
+      "turnNo": 7,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.599036Z",
+      "completedAt": "2026-10-12T09:13:48.600221Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_96b5de22358e43a1bba82b06d52a06be",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.602323Z",
+        "completedAt": "2026-10-12T09:13:48.610618Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_59fec8ad0ec6481082a7e9180fde8e03",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.602323Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.610618Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_00417242b0d3483ea54f3f2d66779fd1",
+      "turnNo": 8,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.619883Z",
+      "completedAt": "2026-10-12T09:13:48.621423Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_e4704ef24d0b43989c536899eaabbeb8",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.624117Z",
+        "completedAt": "2026-10-12T09:13:48.626328Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_f6cb67f3eff34f7d85c705a7adceb901",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.624117Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.626328Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_e810fc4214634819bf88c032ec31b5d1",
+      "turnNo": 9,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.629513Z",
+      "completedAt": "2026-10-12T09:13:48.630684Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_49e9d0dea61f4edbbcf3348c10227ba4",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.632477Z",
+        "completedAt": "2026-10-12T09:13:48.638166Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_2f1b967e61c74afe9d56e3be30a8e187",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.632477Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.638166Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_f24db42fb91f4d74b28a134a69a1e595",
+      "turnNo": 10,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.641139Z",
+      "completedAt": "2026-10-12T09:13:48.642956Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_2318f25e8dc641c1af56d2f9da156365",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.645049Z",
+        "completedAt": "2026-10-12T09:13:48.646834Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_792d581914ee461795eacfc23a4473c6",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.645049Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.646834Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_b156e3d6e6da44d897ea787c3fd02491",
+      "turnNo": 11,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.65079Z",
+      "completedAt": "2026-10-12T09:13:48.652618Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_db251a2389754c2687095f451b6a3fa2",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.654361Z",
+        "completedAt": "2026-10-12T09:13:48.662023Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_8dbe3484fb6943b9ad0717d775dffcdd",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.654361Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.662023Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_b810aae08bd94f3b822179045c557888",
+      "turnNo": 12,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.668145Z",
+      "completedAt": "2026-10-12T09:13:48.66964Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_d0d7ba9727eb430faf5fc4d6744edc53",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.671506Z",
+        "completedAt": "2026-10-12T09:13:48.673511Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_5182bac1bc5b47ea807f8d989b0fa29c",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T09:13:48.671506Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T09:13:48.673511Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_50171a902515479fbd6505c60da7e87e",
+      "turnNo": 13,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.677392Z",
+      "completedAt": "2026-10-12T09:13:48.678754Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 0,
+        "totalTokens": 5
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_video",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_5b4f9dd52b7c47d8b53f50ddee6b0ccf",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.680461Z",
+        "completedAt": "2026-10-12T09:13:48.697892Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_0db5483f0b8b4ca9abcb5b819e0e7eb6",
+          "toolName": "generate_video",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": {
+            "id": "binding_fb35ba800d6f405db6d5a153183136f6",
+            "providerId": "mock-task-provider-v1",
+            "externalTaskId": "task_56128fae5f53e3b3"
+          },
+          "startedAt": "2026-10-12T09:13:48.680461Z",
+          "dispatchedAt": "2026-10-12T09:13:48.684679Z",
+          "completedAt": "2026-10-12T09:13:48.697892Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_4db498d7db7d47ebbdc2a08609fca771",
+      "turnNo": 14,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T09:13:48.701764Z",
+      "completedAt": "2026-10-12T09:13:48.703461Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5,
+        "outputTokens": 1,
+        "totalTokens": 6
+      },
+      "decision": {
+        "kind": "FINAL",
+        "tool": null,
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_b4dfbb7a0c3b4ebeae9275f55462eafd",
+        "type": "FINAL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T09:13:48.706029Z",
+        "completedAt": "2026-10-12T09:13:48.706029Z",
+        "error": null
+      },
+      "toolAttempts": []
+    }
+  ],
+  "facts": {
+    "items": [
+      {
+        "id": "fact_b38afd4f9c7643ffb1e9d5e2f368706f",
+        "factType": "image_generated",
+        "subject": "img_ba628cb93b932654",
+        "bindings": {
+          "imageUrl": "http://localhost:9101/v1/assets/img_ba628cb93b932654.png",
+          "photoAssetId": "asset_b46d44a6392f4698b3074b36d9b9380e",
+          "settingsDigest": "sha256:1e73de64bf996da2f60f2f2d895b5e05dfa9f15726f0285e76600b91289faf59"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_b67988524aac4df09cb173246c48c78e",
+        "createdAt": "2026-10-12T09:13:48.508562Z"
+      },
+      {
+        "id": "fact_c96de3b5833749b385849c638bd3766d",
+        "factType": "asset_reviewed",
+        "subject": "img_ba628cb93b932654",
+        "bindings": {
+          "photoAssetId": "asset_b46d44a6392f4698b3074b36d9b9380e",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": true,
+        "basisFactId": "fact_b38afd4f9c7643ffb1e9d5e2f368706f",
+        "toolAttemptId": "tool_attempt_a5bacbd8a7d5474d9324575278d7ee29",
+        "createdAt": "2026-10-12T09:13:48.532417Z"
+      },
+      {
+        "id": "fact_002c7914749a4a79bb8d7f09244d5092",
+        "factType": "image_generated",
+        "subject": "img_2f05bcc39ab4908b",
+        "bindings": {
+          "imageUrl": "http://localhost:9101/v1/assets/img_2f05bcc39ab4908b.png",
+          "photoAssetId": "asset_cb9f23ed521a4fecac597b5cf59e4a80",
+          "settingsDigest": "sha256:1e73de64bf996da2f60f2f2d895b5e05dfa9f15726f0285e76600b91289faf59"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_270deac4eb654d5a9952104e51f73907",
+        "createdAt": "2026-10-12T09:13:48.554702Z"
+      },
+      {
+        "id": "fact_3a40df5f53e84c7a8fb445512f64b40d",
+        "factType": "asset_reviewed",
+        "subject": "img_2f05bcc39ab4908b",
+        "bindings": {
+          "photoAssetId": "asset_cb9f23ed521a4fecac597b5cf59e4a80",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": false,
+        "basisFactId": "fact_002c7914749a4a79bb8d7f09244d5092",
+        "toolAttemptId": "tool_attempt_6e52f682baa845d39a920c457f2e79b7",
+        "createdAt": "2026-10-12T09:13:48.566485Z"
+      },
+      {
+        "id": "fact_16495cba2f424b2f8d3d1f5a7b69caac",
+        "factType": "image_generated",
+        "subject": "img_9504ab3f657c9df1",
+        "bindings": {
+          "imageUrl": "http://localhost:9101/v1/assets/img_9504ab3f657c9df1.png",
+          "photoAssetId": "asset_9d055367b2fe4c61ac0f2ca3c2c89444",
+          "settingsDigest": "sha256:1e73de64bf996da2f60f2f2d895b5e05dfa9f15726f0285e76600b91289faf59"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_298cfd7fdba4476e8f9fc4d61bf1760b",
+        "createdAt": "2026-10-12T09:13:48.585136Z"
+      },
+      {
+        "id": "fact_c9af2471cdd84f68805b42d44d02928c",
+        "factType": "asset_reviewed",
+        "subject": "img_9504ab3f657c9df1",
+        "bindings": {
+          "photoAssetId": "asset_9d055367b2fe4c61ac0f2ca3c2c89444",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": false,
+        "basisFactId": "fact_16495cba2f424b2f8d3d1f5a7b69caac",
+        "toolAttemptId": "tool_attempt_49a39c19272144ce89ee4356eabd6d38",
+        "createdAt": "2026-10-12T09:13:48.595907Z"
+      },
+      {
+        "id": "fact_6ed9b1e0ce644583940c8d0a12aa2f78",
+        "factType": "image_generated",
+        "subject": "img_059ccb419b5e8d25",
+        "bindings": {
+          "imageUrl": "http://localhost:9101/v1/assets/img_059ccb419b5e8d25.png",
+          "photoAssetId": "asset_b46d44a6392f4698b3074b36d9b9380e",
+          "settingsDigest": "sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_59fec8ad0ec6481082a7e9180fde8e03",
+        "createdAt": "2026-10-12T09:13:48.610618Z"
+      },
+      {
+        "id": "fact_159b70a7665543b4bcaafdde9e0a5306",
+        "factType": "asset_reviewed",
+        "subject": "img_059ccb419b5e8d25",
+        "bindings": {
+          "photoAssetId": "asset_b46d44a6392f4698b3074b36d9b9380e",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": true,
+        "basisFactId": "fact_6ed9b1e0ce644583940c8d0a12aa2f78",
+        "toolAttemptId": "tool_attempt_f6cb67f3eff34f7d85c705a7adceb901",
+        "createdAt": "2026-10-12T09:13:48.626328Z"
+      },
+      {
+        "id": "fact_9498c7396a2143aabfddd6d66c7243fa",
+        "factType": "image_generated",
+        "subject": "img_0e32f10e86abc740",
+        "bindings": {
+          "imageUrl": "http://localhost:9101/v1/assets/img_0e32f10e86abc740.png",
+          "photoAssetId": "asset_cb9f23ed521a4fecac597b5cf59e4a80",
+          "settingsDigest": "sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_2f1b967e61c74afe9d56e3be30a8e187",
+        "createdAt": "2026-10-12T09:13:48.638166Z"
+      },
+      {
+        "id": "fact_31b8608dc5254afca21e2505b517ca33",
+        "factType": "asset_reviewed",
+        "subject": "img_0e32f10e86abc740",
+        "bindings": {
+          "photoAssetId": "asset_cb9f23ed521a4fecac597b5cf59e4a80",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": true,
+        "basisFactId": "fact_9498c7396a2143aabfddd6d66c7243fa",
+        "toolAttemptId": "tool_attempt_792d581914ee461795eacfc23a4473c6",
+        "createdAt": "2026-10-12T09:13:48.646834Z"
+      },
+      {
+        "id": "fact_56ba50cdb2384152b84a29bd9fa39ae5",
+        "factType": "image_generated",
+        "subject": "img_2073b2ad08a82b9a",
+        "bindings": {
+          "imageUrl": "http://localhost:9101/v1/assets/img_2073b2ad08a82b9a.png",
+          "photoAssetId": "asset_9d055367b2fe4c61ac0f2ca3c2c89444",
+          "settingsDigest": "sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_8dbe3484fb6943b9ad0717d775dffcdd",
+        "createdAt": "2026-10-12T09:13:48.662023Z"
+      },
+      {
+        "id": "fact_d7fd0314a2014313bc15743d631edafb",
+        "factType": "asset_reviewed",
+        "subject": "img_2073b2ad08a82b9a",
+        "bindings": {
+          "photoAssetId": "asset_9d055367b2fe4c61ac0f2ca3c2c89444",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": true,
+        "basisFactId": "fact_56ba50cdb2384152b84a29bd9fa39ae5",
+        "toolAttemptId": "tool_attempt_5182bac1bc5b47ea807f8d989b0fa29c",
+        "createdAt": "2026-10-12T09:13:48.673511Z"
+      }
+    ],
+    "truncated": false
+  },
+  "generationBudget": {
+    "maxGenerationCalls": 12,
+    "generationCallsUsed": 6
+  }
+}

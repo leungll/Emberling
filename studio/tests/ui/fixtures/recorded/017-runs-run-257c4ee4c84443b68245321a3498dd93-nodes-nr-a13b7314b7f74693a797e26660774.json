@@ -1,0 +1,29 @@
+{
+  "nodeRun": {
+    "id": "nr_a13b7314b7f74693a797e266607747e8",
+    "runId": "run_257c4ee4c84443b68245321a3498dd93",
+    "nodeId": "node_agent",
+    "nodeType": "agent",
+    "status": "SUCCEEDED",
+    "input": {
+      "input": "{\"baseCommit\":\"fixture-v1\",\"patch\":\"--- a/greet.go\\n+++ b/greet.go\\n@@ -3,5 +3,5 @@ package greet\\n import \\\"fmt\\\"\\n \\n func Greeting(name string) string {\\n-\\treturn fmt.Sprintf(\\\"Hello, %s\\\", name)\\n+\\treturn fmt.Sprintf(\\\"Hello, %s!\\\", name)\\n }\\n\",\"target\":{\"service\":\"checkout\",\"environment\":\"staging\"}}"
+    },
+    "output": {
+      "text": "{\"operationId\":\"op_action_6169a0e7ed0c44ffa63493b6510277b0_1\",\"patchDigest\":\"sha256:59ff5fe6285fa88d9b0584bee75908a591f4ea0a69fb8db5318335aba8810c0a\",\"version\":\"v1\"}"
+    },
+    "error": null,
+    "attemptCount": 0,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:07:54.391488Z",
+    "startedAt": "2026-10-12T03:07:54.398012Z",
+    "waitingAt": "2026-10-12T03:07:54.489087Z",
+    "completedAt": "2026-10-12T03:08:33.981912Z",
+    "latencyMs": 39583,
+    "tokenUsage": {
+      "inputTokens": 69,
+      "outputTokens": 1,
+      "totalTokens": 70
+    }
+  },
+  "attempts": []
+}

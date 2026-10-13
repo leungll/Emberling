@@ -1,0 +1,165 @@
+{
+  "run": {
+    "id": "run_ff4ff4ff590f4f5199bf2165387a7168",
+    "workflowId": "wf_263bcbd2e94945a68e137b881ba5a677",
+    "definitionVersion": 1,
+    "status": "FAILED",
+    "input": {
+      "brief": "probe"
+    },
+    "output": null,
+    "error": {
+      "code": "TIMEOUT",
+      "message": "attempt deadline exceeded"
+    },
+    "lastSeq": 24,
+    "startedAt": "2026-10-09T04:20:57.273168Z",
+    "completedAt": "2026-10-09T04:21:29.197675Z",
+    "tokenUsage": {
+      "inputTokens": 17,
+      "outputTokens": 19,
+      "totalTokens": 36
+    }
+  },
+  "nodeRuns": [
+    {
+      "id": "nr_b44bd67c35b74f9aa0945225dd9e2d6f",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeId": "node_brief",
+      "nodeType": "text_input",
+      "status": "SUCCEEDED",
+      "input": {},
+      "output": {
+        "text": "probe"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-09T04:20:57.273168Z",
+      "startedAt": "2026-10-09T04:20:57.276931Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-09T04:20:57.279967Z",
+      "latencyMs": 3,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_cbe7a9cbfe83408b9db9ea0b6777b312",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeId": "node_reference",
+      "nodeType": "image_input",
+      "status": "SUCCEEDED",
+      "input": {},
+      "output": {
+        "image": null
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-09T04:20:57.273168Z",
+      "startedAt": "2026-10-09T04:20:57.287761Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-09T04:20:57.289818Z",
+      "latencyMs": 2,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_cb95f70b717f40708dd002002f52b117",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeId": "node_prompt",
+      "nodeType": "prompt_template",
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "probe"
+      },
+      "output": {
+        "text": "Rewrite this brief into an image prompt:\nprobe"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-09T04:20:57.279967Z",
+      "startedAt": "2026-10-09T04:20:57.282345Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-09T04:20:57.285498Z",
+      "latencyMs": 3,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_91b842469a2b45f0bc1d0c1bb2bf539b",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeId": "node_rewrite",
+      "nodeType": "text_generation",
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "Rewrite this brief into an image prompt:\nprobe"
+      },
+      "output": {
+        "text": "echo: Rewrite this brief into an image prompt:\nprobe"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-09T04:20:57.285498Z",
+      "startedAt": "2026-10-09T04:20:57.291564Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-09T04:20:57.293981Z",
+      "latencyMs": 2,
+      "tokenUsage": {
+        "inputTokens": 8,
+        "outputTokens": 9,
+        "totalTokens": 17
+      }
+    },
+    {
+      "id": "nr_739644f3e124460fadf2d4b052ed93c4",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeId": "node_caption",
+      "nodeType": "text_generation",
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nprobe"
+      },
+      "output": {
+        "text": "echo: echo: Rewrite this brief into an image prompt:\nprobe"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-09T04:20:57.293981Z",
+      "startedAt": "2026-10-09T04:20:57.296476Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-09T04:20:57.298222Z",
+      "latencyMs": 1,
+      "tokenUsage": {
+        "inputTokens": 9,
+        "outputTokens": 10,
+        "totalTokens": 19
+      }
+    },
+    {
+      "id": "nr_e6584a00c852441788e21204e8314904",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeId": "node_image",
+      "nodeType": "image_generation",
+      "status": "FAILED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nprobe",
+        "reference": null
+      },
+      "output": null,
+      "error": {
+        "code": "TIMEOUT",
+        "message": "attempt deadline exceeded"
+      },
+      "attemptCount": 2,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-09T04:20:57.293981Z",
+      "startedAt": "2026-10-09T04:20:57.299881Z",
+      "waitingAt": "2026-10-09T04:21:14.21156Z",
+      "completedAt": "2026-10-09T04:21:29.197675Z",
+      "latencyMs": 31898,
+      "tokenUsage": null
+    }
+  ],
+  "lastSeq": 24
+}
