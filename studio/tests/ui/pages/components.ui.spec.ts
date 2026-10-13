@@ -76,7 +76,8 @@ const states: ReviewState[] = [
     ready,
     act: async (page) => {
       await page.getByRole('button', { name: 'Toast with action' }).click();
-      await expect(page.getByText('Step deleted.')).toBeVisible();
+      // Radix also announces the text through a short-lived hidden copy; wait on the toast.
+      await expect(page.getByRole('listitem').filter({ hasText: 'Step deleted.' })).toBeVisible();
     },
   },
 ];
