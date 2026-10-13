@@ -106,7 +106,8 @@ export async function review(page: Page, testInfo: TestInfo, state: ReviewState)
       selector: request,
       detail: 'request without a fixture',
     })),
-    ...consoleErrors.map((text) => ({
+    // A state that asks for a failing response skips the console line the browser logs for it.
+    ...(state.skip?.includes('console') ? [] : consoleErrors).map((text) => ({
       check: 'console' as const,
       selector: 'console',
       detail: text.slice(0, 200),

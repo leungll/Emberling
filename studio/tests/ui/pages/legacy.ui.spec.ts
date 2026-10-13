@@ -11,7 +11,7 @@ import { review, type ReviewState } from '../support/review';
 const states: ReviewState[] = [
   {
     name: 'legacy-definitions',
-    url: '/',
+    url: '/workflows',
     mode: 'report',
     ready: async (page) => {
       await expect(page.getByRole('table')).toBeVisible();
@@ -19,7 +19,7 @@ const states: ReviewState[] = [
   },
   {
     name: 'legacy-editor',
-    url: `/studio/${data.completed.workflowId}`,
+    url: `/workflows/${data.completed.workflowId}`,
     mode: 'report',
     ready: async (page) => {
       await expect(page.locator('.react-flow__node').first()).toBeVisible();
@@ -27,7 +27,7 @@ const states: ReviewState[] = [
   },
   {
     name: 'legacy-observe-failed',
-    url: `/runs/${data.failed.runId}`,
+    url: `/workflows/${data.failed.workflowId}/runs/${data.failed.runId}`,
     mode: 'report',
     ready: async (page) => {
       await expect(page.locator('.react-flow__node').first()).toBeVisible();
