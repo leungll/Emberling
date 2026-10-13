@@ -185,7 +185,7 @@ export function EditPage() {
   // without ever reacting to the query string again — later URL changes (including the
   // param-clearing effect right below) cannot flip it back.
   const [runDialogOpen, setRunDialogOpen] = useState(() => searchParams.get('run') === '1');
-  const [runError, setRunError] = useState<string | null>(null);
+  const [runError, setRunError] = useState<unknown>(null);
   // Bumped on every Undo/Redo so the Properties form remounts from the restored config
   // (a field such as the JSON editor keeps its own text state while mounted).
   const [historyRevision, setHistoryRevision] = useState(0);
@@ -195,6 +195,7 @@ export function EditPage() {
   // Save needs a version to save over, or a new draft to create; while an existing
   // Definition is loading or failed to load there is neither.
   const canSave = isNewDraft || definition !== null;
+  const runLabels = useMemo(() => runInputLabels(definition?.nodes), [definition]);
 
   const blocker = useUnsavedGuard(
     () => useStudioStore.getState().hasUnsavedChanges,
@@ -631,7 +632,7 @@ export function EditPage() {
           ),
         );
       } catch (error) {
-        setRunError(describeError(error, 'Could not create run'));
+        setRunError(error);
       } finally {
         setBusy(false);
       }
@@ -826,13 +827,21 @@ export function EditPage() {
         <RunInputDialog
           open={runDialogOpen}
           onClose={() => setRunDialogOpen(false)}
-          workflowId={workflowId}
           workflowName={definition.name}
           definitionVersion={definition.version}
           runInputSchema={definition.runInputSchema}
-          inputLabels={runInputLabels(definition.nodes)}
+          inputLabels={runLabels}
+          lastRun={
+            recentRun
+              ? {
+                  runId: recentRun.run.id,
+                  startedAt: recentRun.run.startedAt,
+                  input: recentRun.run.input,
+                }
+              : undefined
+          }
           submitting={busy}
-          errorMessage={runError}
+          submitError={runError}
           onSubmit={(input) => void handleCreateRun(input)}
         />
       ) : null}

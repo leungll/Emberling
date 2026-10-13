@@ -61,9 +61,9 @@ test('Observe reconnects after a Backend restart and shows the resumed Run compl
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Prompt').fill('mock:delay:20000');
-  await dialog.getByRole('button', { name: 'Create run' }).click();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
 
   await page.waitForURL(/\/runs\//);
   const runId = /\/runs\/([^/?#]+)/.exec(page.url())?.[1];

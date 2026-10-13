@@ -11,7 +11,7 @@ import { RunSummaryCard, RunSummaryCompact } from './RunSummaryCard';
 import { WorkflowStepper } from './WorkflowStepper';
 import { useBoundDefinition } from './boundDefinition';
 import { observeRun, type ObservedRun } from './runObserver';
-import { ApiRequestError, createRun, getDefinitionVersion } from '@/api/client';
+import { ApiRequestError, createRun, getDefinition, getDefinitionVersion } from '@/api/client';
 import type { Definition, JsonObject, RunEvent } from '@/api/types';
 import { ListShell } from '@/components/shell/ListShell';
 import { NotFoundView } from '@/components/shell/NotFoundView';
@@ -25,12 +25,6 @@ import { useDocumentTitle } from '@/lib/use-document-title';
 import { runInputLabels } from '@/features/run-input/runInputLabels';
 import { RunInputDialog } from '@/features/run-input/RunInputDialog';
 import { useStudioStore } from '@/stores/studio-store';
-
-function describeError(error: unknown, fallback: string): string {
-  if (error instanceof ApiRequestError) return `${error.code}: ${error.message}`;
-  if (error instanceof Error) return `${fallback}: ${error.message}`;
-  return fallback;
-}
 
 /** Registered Node Type of a MANAGED_AGENT NodeRun, which gets the Agent layout. */
 const AGENT_NODE_TYPE = 'agent';
@@ -83,7 +77,9 @@ export function ObservePage() {
   const [runAgainOpen, setRunAgainOpen] = useState(false);
   const [runAgainDefinition, setRunAgainDefinition] = useState<Definition | undefined>(undefined);
   const [runAgainSubmitting, setRunAgainSubmitting] = useState(false);
-  const [runAgainError, setRunAgainError] = useState<string | null>(null);
+  const [runAgainError, setRunAgainError] = useState<unknown>(null);
+  const [runAgainLoadFailed, setRunAgainLoadFailed] = useState(false);
+  const [runAgainLatest, setRunAgainLatest] = useState<number | undefined>(undefined);
 
   // The Run's own bound version, read once for the Canvas, node names and Agent Tools.
   const bound = useBoundDefinition(
@@ -117,6 +113,10 @@ export function ObservePage() {
   }, [snapshotWorkflowId, workflowId, runId, search, hash, navigate]);
 
   const workflowName = bound.definition?.name;
+  const runAgainLabels = useMemo(
+    () => runInputLabels(runAgainDefinition?.nodes),
+    [runAgainDefinition],
+  );
   useDocumentTitle(
     workflowName ? copy.pageTitles.run(workflowName, shortCode(runId)) : copy.nav.runs,
   );
@@ -137,14 +137,21 @@ export function ObservePage() {
   const onRunAgain = useCallback(() => {
     if (!snapshot) return;
     setRunAgainError(null);
+    setRunAgainLoadFailed(false);
     setRunAgainOpen(true);
     setRunAgainDefinition(undefined);
+    setRunAgainLatest(undefined);
     // The version is frozen and immutable, so this fetch is safe to key off it alone.
     getDefinitionVersion(snapshot.run.workflowId, snapshot.run.definitionVersion)
       .then((definition) => setRunAgainDefinition(definition))
-      .catch((error: unknown) => {
-        setRunAgainError(describeError(error, 'Could not load the run input schema'));
+      .catch(() => {
+        setRunAgainLoadFailed(true);
       });
+    // The latest version only says whether Run again uses an older one; without it the
+    // dialog simply doesn't say so.
+    getDefinition(snapshot.run.workflowId)
+      .then((latest) => setRunAgainLatest(latest.version))
+      .catch(() => undefined);
   }, [snapshot]);
 
   const onRunAgainSubmit = useCallback(
@@ -167,7 +174,7 @@ export function ObservePage() {
           );
         })
         .catch((error: unknown) => {
-          setRunAgainError(describeError(error, 'Could not create run'));
+          setRunAgainError(error);
         })
         .finally(() => setRunAgainSubmitting(false));
     },
@@ -362,15 +369,21 @@ export function ObservePage() {
       <RunInputDialog
         open={runAgainOpen}
         onClose={() => setRunAgainOpen(false)}
-        workflowId={snapshot.run.workflowId}
-        workflowName={runAgainDefinition?.name}
+        workflowName={runAgainDefinition?.name ?? workflowName}
         definitionVersion={snapshot.run.definitionVersion}
         runInputSchema={runAgainDefinition?.runInputSchema}
-        // The bound version's Input node labels name the fields; the keys are unchanged.
-        inputLabels={runInputLabels(runAgainDefinition?.nodes)}
-        initialInput={snapshot.run.input}
+        // The bound version's Input step labels name the fields; the keys are unchanged.
+        inputLabels={runAgainLabels}
+        loading={!runAgainDefinition && !runAgainLoadFailed}
+        loadFailed={runAgainLoadFailed}
+        source={{
+          runId: snapshot.run.id,
+          startedAt: snapshot.run.startedAt,
+          input: snapshot.run.input,
+        }}
+        latestVersion={runAgainLatest}
         submitting={runAgainSubmitting}
-        errorMessage={runAgainError}
+        submitError={runAgainError}
         onSubmit={onRunAgainSubmit}
       />
     </div>

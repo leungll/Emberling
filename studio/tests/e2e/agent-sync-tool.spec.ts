@@ -28,9 +28,9 @@ test('Agent with a synchronous Tool runs the Tool on Turn 1, answers FINAL on Tu
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Question').fill('mock:tool-call:lookup:{"key":"ember"}');
-  await dialog.getByRole('button', { name: 'Create run' }).click();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
 
   await page.waitForURL(/\/runs\//);
 

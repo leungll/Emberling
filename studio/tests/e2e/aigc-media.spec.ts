@@ -31,9 +31,9 @@ test('AIGC Media Generation waits for an external callback, then completes with 
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Prompt').fill('mock:delay:2000');
-  await dialog.getByRole('button', { name: 'Create run' }).click();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
 
   await page.waitForURL(/\/runs\//);
 

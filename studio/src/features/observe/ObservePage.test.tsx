@@ -211,6 +211,9 @@ describe('ObservePage — Run Again', () => {
       if (url === '/api/definitions/wf_123/versions/3') {
         return Promise.resolve(jsonResponse(200, OLD_DEFINITION_VERSION));
       }
+      if (url === '/api/definitions/wf_123') {
+        return Promise.resolve(jsonResponse(200, { ...OLD_DEFINITION_VERSION, version: 5 }));
+      }
       if (url === '/api/runs') {
         return Promise.resolve(
           jsonResponse(200, {
@@ -243,7 +246,7 @@ describe('ObservePage — Run Again', () => {
 
     // The dialog opens bound to the old version and prefilled with the old input.
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Version 3')).toBeInTheDocument();
+    expect(within(dialog).getByText('Workflow version 3')).toBeInTheDocument();
     const promptField = await within(dialog).findByLabelText<HTMLInputElement>('Prompt', {
       exact: false,
     });
@@ -251,7 +254,12 @@ describe('ObservePage — Run Again', () => {
     // The field is named by the bound version's Input node label.
     expect(within(dialog).getByRole('textbox', { name: /Campaign Prompt/ })).toBe(promptField);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create run' }));
+    // The latest version is newer, so the dialog says this run uses the older one.
+    expect(
+      await within(dialog).findByText(/^Runs version 3 again with the input of run /),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start run' }));
 
     // The submitted body reuses the historical Run's own workflowId and definitionVersion,
     // never a newer one, and carries the (possibly edited) input through untouched.

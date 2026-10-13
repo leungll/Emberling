@@ -25,7 +25,7 @@ test('Document Processing completes synchronously and shows its output', async (
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
 
   // The Run Input Dialog's field label is the Text Input node's configured `label`
@@ -33,7 +33,7 @@ test('Document Processing completes synchronously and shows its output', async (
   // runInputLabels from the Definition's Input nodes, and the key stays the submitted field
   // name. Item 2: the actual input is written to the Run, never to the Definition.
   await dialog.getByLabel('Document').fill('Emberling keeps every execution fact in PostgreSQL.');
-  await dialog.getByRole('button', { name: 'Create run' }).click();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
 
   // Item 4: Run creation switches Studio from edit to observe mode.
   await page.waitForURL(/\/runs\//);

@@ -35,7 +35,7 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Prompt').fill('a small ember creature');
   // The field is named by the Image Input node's configured `label`; its accept list is
   // the node's `acceptedMediaTypes`, which the Backend re-validates on upload.
@@ -47,7 +47,9 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   ).setFiles({ name: 'reference.png', mimeType: 'image/png', buffer: ONE_PIXEL_PNG });
 
   // Once uploaded, the field shows the file name and a human size, never the Asset ID.
-  await expect(referenceField.getByText('reference.png, 0.1 KB')).toBeVisible({ timeout: 10_000 });
+  await expect(referenceField.getByText(/^reference\.png, \d+ B$/)).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(referenceField.getByRole('button', { name: 'Replace reference.png' })).toBeVisible();
   await expect(referenceField).not.toContainText('asset_');
 
@@ -56,7 +58,7 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   const createRun = page.waitForRequest(
     (request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs',
   );
-  await dialog.getByRole('button', { name: 'Create run' }).click();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
   const body = (await createRun).postDataJSON() as {
     input: { reference: { assetId: string; sizeBytes: number } };
   };
@@ -107,7 +109,7 @@ test('Photo set upload starts the Photo Effect Template and Run Again keeps the 
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Creative Brief').fill('a clay stop-motion look');
   // The Media Brief step declares no label, so the field is named by the step's name.
   const photoSetField = dialog.getByRole('group', { name: 'Photo Set' });
@@ -124,20 +126,25 @@ test('Photo set upload starts the Photo Effect Template and Run Again keeps the 
     })),
   );
 
-  const thumbnails = dialog.getByRole('img', { name: /^Image \d$/ });
+  // Images uploaded in the dialog are named by their file name.
+  const thumbnails = dialog.getByRole('img', { name: /^photo-\d\.png$/ });
   await expect(thumbnails).toHaveCount(3, { timeout: 10_000 });
   await expect(dialog.getByText('3 photos added. Add up to 12.')).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Remove photo-2.png' })).toBeVisible();
-  // Each thumbnail's title is the Backend-assigned assetId of that upload.
-  const titlesOf = (images: typeof thumbnails) =>
-    images.evaluateAll((imgs) => imgs.map((img) => img.getAttribute('title') ?? ''));
-  const assetIds = await titlesOf(thumbnails);
+  // Each thumbnail shows the Backend-assigned Asset's own content; the ID is never shown.
+  const assetIdsOf = (images: typeof thumbnails) =>
+    images.evaluateAll((imgs) =>
+      imgs.map(
+        (img) => /\/assets\/([^/]+)\/content$/.exec(img.getAttribute('src') ?? '')?.[1] ?? '',
+      ),
+    );
+  const assetIds = await assetIdsOf(thumbnails);
   expect(new Set(assetIds).size).toBe(3);
 
   const createRun = page.waitForRequest(
     (request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs',
   );
-  await dialog.getByRole('button', { name: 'Create run' }).click();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
   const body = (await createRun).postDataJSON() as {
     input: { brief: string; photos: { assetId: string; mediaType: string }[] };
   };
@@ -150,8 +157,9 @@ test('Photo set upload starts the Photo Effect Template and Run Again keeps the 
   await expect(photoNode).toContainText('Succeeded', { timeout: 30_000 });
 
   await page.getByRole('button', { name: 'Run Again' }).click();
-  const again = page.getByRole('dialog', { name: 'Run workflow' });
-  const prefilled = again.getByRole('img', { name: /^Image \d$/ });
+  const again = page.getByRole('dialog');
+  // Run again names the earlier run's photos by position; they are the same Assets.
+  const prefilled = again.getByRole('img', { name: /from the earlier run$/ });
   await expect(prefilled).toHaveCount(3);
-  expect(await titlesOf(prefilled)).toEqual(assetIds);
+  expect(await assetIdsOf(prefilled)).toEqual(assetIds);
 });

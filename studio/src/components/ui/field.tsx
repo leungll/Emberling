@@ -43,12 +43,18 @@ interface FieldProps {
   error?: string | null;
   /** Something at the right of the label row, such as a Fields | JSON switch. */
   aside?: ReactNode;
-  /** Renders the control with the ids it must carry. */
-  children: (control: {
-    id: string;
-    'aria-describedby': string | undefined;
-    'aria-invalid': boolean | undefined;
-  }) => ReactNode;
+  /**
+   * Renders the control with the ids it must carry. A control that is a group rather than
+   * one element is named by the label's id, passed apart so it never spreads onto an element.
+   */
+  children: (
+    control: {
+      id: string;
+      'aria-describedby': string | undefined;
+      'aria-invalid': boolean | undefined;
+    },
+    label: { labelId: string },
+  ) => ReactNode;
   className?: string;
 }
 
@@ -70,7 +76,7 @@ export function Field({
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       <div className="flex items-baseline gap-2">
-        <label htmlFor={id} className="text-sm font-medium text-fg-secondary">
+        <label id={`${id}-label`} htmlFor={id} className="text-sm font-medium text-fg-secondary">
           {label}
           {optional ? (
             <>
@@ -89,11 +95,14 @@ export function Field({
         </label>
         {aside ? <div className="ml-auto">{aside}</div> : null}
       </div>
-      {children({
-        id,
-        'aria-describedby': describedBy || undefined,
-        'aria-invalid': error ? true : undefined,
-      })}
+      {children(
+        {
+          id,
+          'aria-describedby': describedBy || undefined,
+          'aria-invalid': error ? true : undefined,
+        },
+        { labelId: `${id}-label` },
+      )}
       {hint ? (
         <p id={hintId} className="m-0 text-sm text-fg-muted">
           {hint}

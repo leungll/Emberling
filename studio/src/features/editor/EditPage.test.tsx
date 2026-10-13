@@ -91,7 +91,7 @@ describe('EditPage — Run via query param', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('AIGC Media Generation');
-    expect(dialog).toHaveTextContent('Version 4');
+    expect(dialog).toHaveTextContent('Workflow version 4');
 
     // The param is a one-shot trigger and must not linger in the address bar. The probe div
     // is present from the very first render, so `findByTestId` alone would resolve on that

@@ -35,7 +35,7 @@ test('Agent with an asynchronous Tool pauses at the Agent NodeRun, then resumes 
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  const dialog = page.getByRole('dialog');
   // The Tool call argument's own "key" is, in turn, `remote_lookup`'s own directive syntax
   // (`backend/internal/tools/remotelookup/tool.go`'s `buildRequest`): a bare key dispatches
   // and resolves near-instantly, too fast for this test to reliably observe WAITING_CALLBACK
@@ -44,7 +44,7 @@ test('Agent with an asynchronous Tool pauses at the Agent NodeRun, then resumes 
   await dialog
     .getByLabel('Question')
     .fill('mock:tool-call:remote_lookup:{"key":"mock:delay:2000"}');
-  await dialog.getByRole('button', { name: 'Create run' }).click();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
 
   await page.waitForURL(/\/runs\//);
 

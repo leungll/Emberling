@@ -501,6 +501,7 @@ export const en = {
   runDialog: {
     cancel: 'Cancel',
     start: 'Start run',
+    startKey: '⌘ ↵',
     close: 'Close',
     version: (v: number) => `Workflow version ${v}`,
     fields: 'Fields',
@@ -513,7 +514,57 @@ export const en = {
     summary: (n: number) => `Fix ${plural(n, 'field')} to start the run.`,
     fixJson: 'Fix the JSON to show it as fields.',
     isRequired: (label: string) => `${label} is required.`,
+    isNumber: (label: string) => `${label} must be a number.`,
     jsonAt: (line: number, col: number, msg: string) => `Line ${line}, column ${col}: ${msg}`,
+    jsonEnds: 'the JSON ends before it is complete',
+    starting: 'Starting…',
+    waitUpload: 'Wait for the upload to finish.',
+    loadingForm: 'Loading the run form…',
+    untitled: 'Untitled workflow',
+    useLast: 'Use last run’s input',
+    useLastTip: (code: string, when: string) =>
+      `Fills the form with the input of run ${code} from ${when}.`,
+    again: (code: string, when: string) => `Starts with the input of run ${code} from ${when}.`,
+    againOlder: (v: number, code: string, when: string) =>
+      `Runs version ${v} again with the input of run ${code} from ${when}. Changes saved after that run aren’t included.`,
+    image: {
+      choose: 'Choose image',
+      drop: 'or drop it here',
+      replace: 'Replace',
+      remove: 'Remove',
+      earlier: 'Image from the earlier run',
+      missing: 'Add an image to start the run.',
+      replaceNamed: (name: string) => `Replace ${name}`,
+      removeNamed: (name: string) => `Remove ${name}`,
+    },
+    photos: {
+      add: 'Add photos',
+      drop: 'or drop them here',
+      earlier: (n: number) => `Photo ${n} from the earlier run`,
+      word: (n: number) => plural(n, 'photo'),
+      atLimit: (n: number) => `${plural(n, 'photo')} added. That’s the limit.`,
+      addAtLeast: (min: number) => `Add at least ${plural(min, 'photo')}.`,
+      addUpTo: (max: number) => `Add up to ${plural(max, 'photo')}.`,
+      none: 'No photos added.',
+      shortOf: (n: number, min: number) => `${plural(n, 'photo')} added. Add at least ${min}.`,
+      upTo: (n: number, max: number) => `${plural(n, 'photo')} added. Add up to ${max}.`,
+      added: (n: number) => `${plural(n, 'photo')} added.`,
+      shortfall: (min: number) => `Add at least ${plural(min, 'photo')} to start the run.`,
+    },
+    hint: (types: string, max: string) =>
+      types && max ? `${types}, up to ${max}` : types || (max ? `Up to ${max}` : ''),
+    dropHint: (drop: string, hint: string) => (hint ? `${drop} (${hint})` : drop),
+    uploading: (name: string) => `Uploading ${name}…`,
+    uploadFailed: (name: string) => `Couldn’t upload ${name}. Try again.`,
+    uploadRejected: (name: string, reason: string) => `Couldn’t upload ${name}: ${reason}.`,
+    badType: (name: string, types: string) => `${name} isn’t a supported image. Use ${types}.`,
+    tooBig: (name: string, max: string) => `${name} is larger than ${max}.`,
+    tooMany: (max: number) => `You can add up to ${plural(max, 'photo')}.`,
+    sizeOf: (name: string, size: string) => `${name}, ${size}`,
+    or: (names: readonly string[]) =>
+      names.length < 2
+        ? names.join('')
+        : `${names.slice(0, -1).join(', ')} or ${names.at(-1) ?? ''}`,
   },
 
   gallery: {
