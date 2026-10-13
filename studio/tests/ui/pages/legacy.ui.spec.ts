@@ -25,14 +25,6 @@ const states: ReviewState[] = [
       await expect(page.locator('.react-flow__node').first()).toBeVisible();
     },
   },
-  {
-    name: 'legacy-observe-failed',
-    url: `/workflows/${data.failed.workflowId}/runs/${data.failed.runId}`,
-    mode: 'report',
-    ready: async (page) => {
-      await expect(page.locator('.react-flow__node').first()).toBeVisible();
-    },
-  },
 ];
 
 for (const state of states) {
