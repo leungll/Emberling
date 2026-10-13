@@ -34,14 +34,23 @@ function Identity({
   eyebrow,
   title,
   purpose,
+  action,
 }: {
   icon?: ReactNode;
   eyebrow?: string;
   title: ReactNode;
   purpose?: string;
+  /** Sits at the right of the identity when there is no toolbar row above it. */
+  action?: ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-3 px-5 pt-1 pb-4">
+    <div
+      className={
+        action
+          ? 'flex items-start gap-3 pt-3 pr-3 pb-4 pl-5'
+          : 'flex items-start gap-3 px-5 pt-1 pb-4'
+      }
+    >
       {icon ? (
         <span className="mt-1 flex size-control-md shrink-0 items-center justify-center rounded-lg bg-surface-inset text-fg-secondary">
           {icon}
@@ -52,6 +61,7 @@ function Identity({
         {title}
         {purpose ? <p className="m-0 mt-1 text-sm text-fg-secondary">{purpose}</p> : null}
       </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }
@@ -223,8 +233,8 @@ export function SidePanel({
   } else {
     top = (
       <>
-        <div className="flex min-h-header items-center justify-end px-3">{hide}</div>
         <Identity
+          action={hide}
           icon={<Workflow aria-hidden="true" className="size-icon-md" />}
           eyebrow={t.workflowEyebrow}
           title={
