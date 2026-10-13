@@ -71,6 +71,28 @@ const featureImportBlocks = FEATURES.map((feature) => {
   };
 });
 
+// Style rules: colours, sizes, spacing, radii, shadows and layers come only from the design
+// tokens in src/index.css, through the utilities its theme generates. Layout dimensions that
+// are not tokens (a column width, a grid template) go in a `style` prop.
+const STYLE_RULE_MESSAGE = {
+  arbitrary:
+    'Use a token utility from src/index.css instead of an arbitrary Tailwind value; put a non-token layout dimension in a style prop.',
+  colour: 'Colours come from the tokens in src/index.css (for example var(--fg) or text-fg).',
+  palette: 'The default Tailwind palette is not available; use a token colour utility.',
+  layer: 'Use a layer utility (z-sticky, z-dialog, ...) or z-local, not a numeric z-index.',
+  dots: "Do not join facts with ' · '; label each fact instead.",
+};
+const ARBITRARY = String.raw`/-\[[^\]\s]+\](?!\S*:)|(^|\s)\[[a-z-]+:[^\]]*\]/`;
+const COLOUR = String.raw`/#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?([0-9a-fA-F]{2})?\b|\b(rgba?|hsla?|oklch)\(/`;
+const PALETTE = String.raw`/\b(text|bg|border|ring|fill|stroke|from|to|via|outline|divide|decoration|shadow|accent|caret|placeholder)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black|white|taupe|mauve|mist|olive)\b/`;
+const NUMERIC_LAYER = String.raw`/(^|[\s:])-?z-\d+\b/`;
+const DOTS = String.raw`/ \u00b7 /`;
+const styleSelectors = (pattern, message) => [
+  { selector: `Literal[value=${pattern}]`, message },
+  { selector: `TemplateElement[value.raw=${pattern}]`, message },
+  { selector: `JSXText[value=${pattern}]`, message },
+];
+
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'tests/ui/report'] },
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
@@ -202,6 +224,20 @@ export default tseslint.config(
             RELATIVE_FEATURE_OR_APP_IMPORT,
           ],
         },
+      ],
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: TEST_FILES,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...styleSelectors(ARBITRARY, STYLE_RULE_MESSAGE.arbitrary),
+        ...styleSelectors(COLOUR, STYLE_RULE_MESSAGE.colour),
+        ...styleSelectors(PALETTE, STYLE_RULE_MESSAGE.palette),
+        ...styleSelectors(NUMERIC_LAYER, STYLE_RULE_MESSAGE.layer),
+        ...styleSelectors(DOTS, STYLE_RULE_MESSAGE.dots),
       ],
     },
   },
