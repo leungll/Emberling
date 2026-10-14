@@ -1,7 +1,8 @@
 // Package openaimodel is a registry.ModelProvider for an OpenAI-compatible Chat
 // Completions endpoint. One Generate call is one POST to <base URL>/chat/completions that
-// asks for strict structured output in the Decision form, and the answer is normalised
-// into a registry.ModelResponse.
+// asks for strict structured output in the Decision form, whose output member follows the
+// request's final output Schema, and the answer is normalised into a
+// registry.ModelResponse.
 //
 // The Adapter never retries, never writes Runtime state, never emits an Event and never
 // selects a replacement model: any answer it cannot normalise is returned as an *Error and
@@ -90,7 +91,8 @@ var (
 	_ slog.LogValuer         = (*Provider)(nil)
 )
 
-// New validates cfg and derives the strict Decision form once.
+// New validates cfg and derives the strict Decision envelope once; each request adds only
+// its own output member.
 func New(cfg Config) (*Provider, error) {
 	var missing []string
 	if strings.TrimSpace(cfg.ModelID) == "" {
@@ -183,6 +185,9 @@ type chatResponse struct {
 			Refusal *string `json:"refusal"`
 		} `json:"message"`
 		FinishReason *string `json:"finish_reason"`
+		// NativeFinishReason is the upstream's own stop reason, which OpenRouter reports
+		// beside its normalised finish_reason.
+		NativeFinishReason *string `json:"native_finish_reason"`
 	} `json:"choices"`
 	Usage *struct {
 		PromptTokens     *int `json:"prompt_tokens"`
@@ -259,8 +264,14 @@ func (p *Provider) normalise(status int, raw []byte) (registry.ModelResponse, er
 		return registry.ModelResponse{}, p.fail(status, "response has no choices", nil)
 	}
 	choice := answer.Choices[0]
-	if choice.Message.Refusal != nil && *choice.Message.Refusal != "" {
+	// The stop reason is checked before content is parsed. A refused or truncated answer
+	// may not match the strict form at all, and reporting it as a schema mismatch would
+	// hide why the model stopped; truncated content is never parsed.
+	if refused(choice.Message.Refusal, choice.FinishReason, choice.NativeFinishReason) {
 		return registry.ModelResponse{}, p.fail(status, "model refused to answer", nil)
+	}
+	if choice.FinishReason != nil && *choice.FinishReason == finishLength {
+		return registry.ModelResponse{}, p.fail(status, "response truncated at the output token limit", nil)
 	}
 	if choice.Message.Content == nil {
 		return registry.ModelResponse{}, p.fail(status, "response message has no content", nil)
@@ -289,6 +300,29 @@ func (p *Provider) normalise(status int, raw []byte) (registry.ModelResponse, er
 		summary.FinishReason = &reason
 	}
 	return registry.ModelResponse{Decision: decision, ResponseSummary: summary, TokenUsage: usage}, nil
+}
+
+// Stop reasons that end a call without a usable answer. finish_reason is the
+// OpenAI-compatible value, to which OpenRouter normalises every upstream's stop reason:
+// "length" is the output token limit (an Anthropic upstream's max_tokens) and
+// "content_filter" is a refusal. Some compatible services pass a refusal through as
+// "refusal", which is also an Anthropic upstream's native stop reason.
+const (
+	finishLength        = "length"
+	finishContentFilter = "content_filter"
+	finishRefusal       = "refusal"
+)
+
+// refused reports whether the model declined to answer: a non-empty refusal message, or a
+// normalised or native stop reason that means a refusal.
+func refused(refusal, finishReason, nativeFinishReason *string) bool {
+	if refusal != nil && *refusal != "" {
+		return true
+	}
+	if finishReason != nil && (*finishReason == finishContentFilter || *finishReason == finishRefusal) {
+		return true
+	}
+	return nativeFinishReason != nil && *nativeFinishReason == finishRefusal
 }
 
 // tokenUsage maps the Provider's usage. No usage is nil, never a zeroed value; a missing

@@ -16,11 +16,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
+	"github.com/leungll/Emberling/backend/internal/adapters/openaimodel"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/store"
@@ -168,11 +174,19 @@ const agentFrozenRequestOutputSchema = `{"type":"string"}`
 // `{}`, so State can carry a non-trivial value the request must reproduce exactly.
 const agentFrozenRequestStateSchema = `{"type":"object","additionalProperties":true}`
 
+// agentFrozenRequestObjectOutputSchema is an object-form outputSchema inside the strict
+// output subset, and agentFrozenRequestNewerObjectOutputSchema the different one a later
+// Definition version declares while the Run is in flight.
+const (
+	agentFrozenRequestObjectOutputSchema      = `{"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"],"additionalProperties":false}`
+	agentFrozenRequestNewerObjectOutputSchema = `{"type":"object","properties":{"verdict":{"type":"boolean"}},"required":["verdict"],"additionalProperties":false}`
+)
+
 // agentFrozenRequestDefinition is agentLoopDefinition with every value the ModelRequest
 // contract names frozen to something distinguishable: two allowed Tools in an order that
 // is neither alphabetical nor the Registry's registration order, an explicit modelConfig,
-// and both Schemas.
-func agentFrozenRequestDefinition(workflowID string) domain.Definition {
+// and both Schemas, the output Schema being outputSchema.
+func agentFrozenRequestDefinition(workflowID, outputSchema string) domain.Definition {
 	def := agentLoopDefinition(workflowID)
 	config := `{
 		"instructions": "` + agentInstructions + `",
@@ -180,7 +194,7 @@ func agentFrozenRequestDefinition(workflowID string) domain.Definition {
 		"modelConfig": ` + agentFrozenRequestModelConfig + `,
 		"allowedTools": ["` + agentSecondToolName + `", "` + lookup.ToolName + `"],
 		"stateSchema": ` + agentFrozenRequestStateSchema + `,
-		"outputSchema": ` + agentFrozenRequestOutputSchema + `,
+		"outputSchema": ` + outputSchema + `,
 		"maxTurns": ` + strconv.Itoa(agentMaxTurns) + `,
 		"timeoutMs": ` + strconv.Itoa(agentTimeoutMs) + `
 	}`
@@ -204,6 +218,76 @@ func agentFrozenRequestDefinition(workflowID string) domain.Definition {
 // that request was built from; comparing against pointers a later Turn had already moved
 // would prove nothing.
 func TestAgentTurn_ModelRequest_MatchesFrozenInstructionsToolsSchemaAndVersions(t *testing.T) {
+	agentFrozenModelRequest(t, "wf-agent-frozen-model-request", agentFrozenRequestOutputSchema, nil)
+}
+
+// TestAgentTurn_ModelRequest_ObjectFormCarriesFrozenOutputSchema is the same row for an
+// object-form Agent: after the Run is created, a newer Definition version declares a
+// different object Schema. The next Turn's request still carries the Schema frozen on the
+// Agent Run, and the OpenAI-compatible Adapter turns exactly that Schema, made nullable,
+// into the strict output member it sends -- never the newer version's.
+func TestAgentTurn_ModelRequest_ObjectFormCarriesFrozenOutputSchema(t *testing.T) {
+	const workflowID = "wf-agent-frozen-object-output"
+	next := agentFrozenModelRequest(t, workflowID, agentFrozenRequestObjectOutputSchema, func(h *agentHarness) {
+		newer := agentFrozenRequestDefinition(workflowID, agentFrozenRequestNewerObjectOutputSchema)
+		newer.Version = 2
+		h.saveDefinition(newer)
+	})
+
+	member := openAIOutputMember(t, next)
+	var want map[string]any
+	if err := json.Unmarshal([]byte(agentFrozenRequestObjectOutputSchema), &want); err != nil {
+		t.Fatal(err)
+	}
+	want["type"] = []any{"object", "null"}
+	if diff := cmp.Diff(any(want), member); diff != "" {
+		t.Errorf("strict output member sent upstream mismatch (-want frozen Schema +got):\n%s", diff)
+	}
+}
+
+// openAIOutputMember sends request through the OpenAI-compatible Adapter to an httptest
+// stand-in and returns the output member of the strict Decision schema it sent.
+func openAIOutputMember(t *testing.T, request registry.ModelRequest) any {
+	t.Helper()
+	var sent []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sent, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"chatcmpl-frozen","choices":[{"message":{"content":"{\"kind\":\"FINAL\",\"tool\":null,\"arguments\":null,\"output\":{\"answer\":\"Paris\"},\"statePatch\":null}"},"finish_reason":"stop"}]}`)
+	}))
+	t.Cleanup(server.Close)
+	provider, err := openaimodel.New(openaimodel.Config{
+		ModelID: "frozen-request.1", DisplayName: "Frozen request", BaseURL: server.URL,
+		APIKey: "sk-frozen-request-test", Model: "upstream-model", HTTPClient: server.Client(),
+		DecisionSchema: registry.DecisionSchema(),
+	})
+	if err != nil {
+		t.Fatalf("openaimodel.New() error = %v", err)
+	}
+	if _, err := provider.Generate(context.Background(), request); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	var body struct {
+		ResponseFormat struct {
+			JSONSchema struct {
+				Schema struct {
+					Properties map[string]any `json:"properties"`
+				} `json:"schema"`
+			} `json:"json_schema"`
+		} `json:"response_format"`
+	}
+	if err := json.Unmarshal(sent, &body); err != nil {
+		t.Fatalf("request body is not JSON: %v", err)
+	}
+	return body.ResponseFormat.JSONSchema.Schema.Properties["output"]
+}
+
+// agentFrozenModelRequest runs one Tool round and the next Turn of the frozen-request
+// fixture with outputSchema, checks that the next Turn's ModelRequest carries only frozen
+// values, and returns that request. afterCreate, when set, runs once the Run exists and
+// before any Turn executes.
+func agentFrozenModelRequest(t *testing.T, workflowID, outputSchema string, afterCreate func(*agentHarness)) registry.ModelRequest {
+	t.Helper()
 	lookupTool := &agentRecordingTool{delegate: lookup.Executor{}}
 	vaultTool := &agentRecordingTool{delegate: lookup.Executor{}}
 	stop := &agentStopNotifier{}
@@ -217,8 +301,11 @@ func TestAgentTurn_ModelRequest_MatchesFrozenInstructionsToolsSchemaAndVersions(
 		ToolArguments: json.RawMessage(agentToolArguments),
 		StatePatch:    json.RawMessage(`{"seen":["k1"]}`),
 	})
-	def := h.saveDefinition(agentFrozenRequestDefinition("wf-agent-frozen-model-request"))
+	def := h.saveDefinition(agentFrozenRequestDefinition(workflowID, outputSchema))
 	run := h.createRun(def.WorkflowID, def.Version, `{"question":"`+agentQuestion+`"}`)
+	if afterCreate != nil {
+		afterCreate(h)
+	}
 	outcome := h.claimAgentNode(run.ID)
 
 	stopCtx, cancel := context.WithCancel(h.ctx)
@@ -297,7 +384,7 @@ func TestAgentTurn_ModelRequest_MatchesFrozenInstructionsToolsSchemaAndVersions(
 	assertSameJSON(t, "request modelConfig", agentRun.ModelConfig, next.ModelConfig)
 	assertSameJSON(t, "request modelConfig", json.RawMessage(agentFrozenRequestModelConfig), next.ModelConfig)
 	assertSameJSON(t, "request finalOutputSchema", agentRun.OutputSchema, next.FinalOutputSchema)
-	assertSameJSON(t, "request finalOutputSchema", json.RawMessage(agentFrozenRequestOutputSchema), next.FinalOutputSchema)
+	assertSameJSON(t, "request finalOutputSchema", json.RawMessage(outputSchema), next.FinalOutputSchema)
 
 	// Tool specs follow the frozen allowlist order, which is deliberately the reverse of
 	// the order the two Tools were registered in, and are built from registered Metadata.
@@ -328,6 +415,7 @@ func TestAgentTurn_ModelRequest_MatchesFrozenInstructionsToolsSchemaAndVersions(
 	if lookupTool.count() != 1 {
 		t.Errorf("%s was called %d times, want 1", lookup.ToolName, lookupTool.count())
 	}
+	return next
 }
 
 // agentSamePointer compares two optional message fields by value.

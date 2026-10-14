@@ -14,6 +14,7 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/adapters/openrouterimage"
 	"github.com/leungll/Emberling/backend/internal/registry"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 )
 
 // The live demo Definition is run by hand against a deployment that registers real
@@ -74,13 +75,14 @@ type liveDemoGraph struct {
 }
 
 type liveDemoAgentConfig struct {
-	Instructions       string   `json:"instructions"`
-	ModelID            string   `json:"modelId"`
-	ImageModelID       string   `json:"imageModelId"`
-	AllowedTools       []string `json:"allowedTools"`
-	MaxTurns           int      `json:"maxTurns"`
-	MaxGenerationCalls int      `json:"maxGenerationCalls"`
-	TimeoutMs          int      `json:"timeoutMs"`
+	Instructions       string          `json:"instructions"`
+	ModelID            string          `json:"modelId"`
+	ImageModelID       string          `json:"imageModelId"`
+	AllowedTools       []string        `json:"allowedTools"`
+	MaxTurns           int             `json:"maxTurns"`
+	MaxGenerationCalls int             `json:"maxGenerationCalls"`
+	TimeoutMs          int             `json:"timeoutMs"`
+	OutputSchema       json.RawMessage `json:"outputSchema"`
 }
 
 func decodeLiveDemoGraph(t *testing.T, raw []byte) (liveDemoGraph, liveDemoAgentConfig) {
@@ -142,6 +144,7 @@ func TestLiveDemoDefinition_RealModelsRegistered_ValidatesAndSaves(t *testing.T)
 	if strings.Contains(strings.ToLower(agent.Instructions), "mock") {
 		t.Errorf("live instructions mention mock controls: %q", agent.Instructions)
 	}
+	assertLiveDemoObjectOutput(t, agent)
 
 	fixture, err := os.ReadFile("../fixtures/definitions/photo_effect_template.json")
 	if err != nil {
@@ -191,6 +194,32 @@ func TestLiveDemoDefinition_MockOnlyBackend_RejectedWithoutSubstitution(t *testi
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("validation errors mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// assertLiveDemoObjectOutput checks that the saved live Agent declares its FINAL answer as
+// an object-form outputSchema, so the decision model is asked for the delivery object
+// itself: the Runtime accepts that object and hands media_result its canonical JSON text,
+// and rejects the same object encoded as a JSON string. The instructions must not ask for
+// that encoding either.
+func assertLiveDemoObjectOutput(t *testing.T, agent liveDemoAgentConfig) {
+	t.Helper()
+	var root struct {
+		Type any `json:"type"`
+	}
+	if err := json.Unmarshal(agent.OutputSchema, &root); err != nil || root.Type != "object" {
+		t.Fatalf("saved outputSchema = %s, want an object-form Schema", agent.OutputSchema)
+	}
+	answer := json.RawMessage(`{"examples":[{"photoAssetId":"ast_1","assetRef":"art_1"}],"settingsDigest":"sha256:1"}`)
+	if err := runtime.ValidateFinalOutput(answer, agent.OutputSchema); err != nil {
+		t.Errorf("ValidateFinalOutput(delivery object) = %v, want accepted", err)
+	}
+	encoded, _ := json.Marshal(string(answer))
+	if _, ok := runtime.AsInvalidActionError(runtime.ValidateFinalOutput(encoded, agent.OutputSchema)); !ok {
+		t.Errorf("ValidateFinalOutput(delivery object as a JSON string) accepted, want an invalid action")
+	}
+	if strings.Contains(agent.Instructions, "JSON string") {
+		t.Errorf("live instructions still ask for the answer as a JSON string: %q", agent.Instructions)
 	}
 }
 

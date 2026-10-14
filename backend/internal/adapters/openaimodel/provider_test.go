@@ -154,7 +154,7 @@ func TestProvider_Generate_ToolCallAnswer_ReturnsDecisionAndUsage(t *testing.T) 
 }
 
 func TestProvider_Generate_FinalAnswer_ReturnsDecodedOutput(t *testing.T) {
-	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"Paris\"","statePatch":null}`
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"Paris","statePatch":null}`
 	server, _ := fakeProvider(t, http.StatusOK, completion(t, content, `{"prompt_tokens":7,"completion_tokens":3}`))
 	provider := newProvider(t, server.URL, server.Client())
 
@@ -172,7 +172,7 @@ func TestProvider_Generate_FinalAnswer_ReturnsDecodedOutput(t *testing.T) {
 }
 
 func TestProvider_Generate_NoUsage_ReturnsNilTokenUsage(t *testing.T) {
-	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"ok","statePatch":null}`
 	server, _ := fakeProvider(t, http.StatusOK, completion(t, content, ""))
 	provider := newProvider(t, server.URL, server.Client())
 
@@ -205,7 +205,7 @@ func TestProvider_Generate_IncompleteToolCall_LeavesShapeCheckToRuntime(t *testi
 }
 
 func TestProvider_Generate_RequestBody_UsesStrictDecisionFormat(t *testing.T) {
-	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"Paris\"","statePatch":null}`
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"Paris","statePatch":null}`
 	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
 	provider := newProvider(t, server.URL, server.Client())
 
@@ -259,7 +259,7 @@ func TestProvider_Generate_RequestBody_UsesStrictDecisionFormat(t *testing.T) {
 	    "kind": {"type": "string", "enum": ["TOOL_CALL", "FINAL"]},
 	    "tool": {"type": ["string", "null"]},
 	    "arguments": {"type": ["string", "null"], "description": "JSON-encoded value, or null when it does not apply"},
-	    "output": {"type": ["string", "null"], "description": "JSON-encoded value, or null when it does not apply"},
+	    "output": {"type": ["string", "null"]},
 	    "statePatch": {"type": ["string", "null"], "description": "JSON-encoded value, or null when it does not apply"}
 	  },
 	  "required": ["kind", "arguments", "output", "statePatch", "tool"]
@@ -302,7 +302,7 @@ func TestProvider_Generate_RequestBody_UsesStrictDecisionFormat(t *testing.T) {
 }
 
 func TestProvider_Generate_RequestNeverCarriesAPIKeyInBody(t *testing.T) {
-	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"ok","statePatch":null}`
 	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
 	provider := newProvider(t, server.URL, server.Client())
 
@@ -427,7 +427,7 @@ func TestProvider_Generate_ClientTimeout_IsNotReportedAsCallerDeadline(t *testin
 }
 
 func TestProvider_Generate_UnnormalisableAnswer_ReturnsModelError(t *testing.T) {
-	valid := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	valid := `{"kind":"FINAL","tool":null,"arguments":null,"output":"ok","statePatch":null}`
 	for _, tc := range []struct {
 		name string
 		body string
@@ -437,10 +437,10 @@ func TestProvider_Generate_UnnormalisableAnswer_ReturnsModelError(t *testing.T) 
 		{"content null", `{"choices":[{"message":{"content":null}}]}`},
 		{"refusal", `{"choices":[{"message":{"content":null,"refusal":"I cannot help with that."}}]}`},
 		{"content not JSON", completion(t, "Sure! Here is the answer.", "")},
-		{"content missing a member", completion(t, `{"kind":"FINAL","output":"\"ok\""}`, "")},
+		{"content missing a member", completion(t, `{"kind":"FINAL","output":"ok"}`, "")},
 		{"content with unknown kind", completion(t, `{"kind":"MAYBE","tool":null,"arguments":null,"output":null,"statePatch":null}`, "")},
-		{"content with extra member", completion(t, `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null,"why":"x"}`, "")},
-		{"encoded member not JSON", completion(t, `{"kind":"FINAL","tool":null,"arguments":null,"output":"Paris","statePatch":null}`, "")},
+		{"content with extra member", completion(t, `{"kind":"FINAL","tool":null,"arguments":null,"output":"ok","statePatch":null,"why":"x"}`, "")},
+		{"encoded member not JSON", completion(t, `{"kind":"TOOL_CALL","tool":"lookup","arguments":"Paris","output":null,"statePatch":null}`, "")},
 		{"arguments not a string", completion(t, `{"kind":"TOOL_CALL","tool":"lookup","arguments":{"key":"x"},"output":null,"statePatch":null}`, "")},
 		{"negative usage", completion(t, valid, `{"prompt_tokens":-1,"completion_tokens":3,"total_tokens":2}`)},
 		{"inconsistent total", completion(t, valid, `{"prompt_tokens":1,"completion_tokens":3,"total_tokens":9}`)},
@@ -629,7 +629,7 @@ func TestProvider_Models_ServesConfiguredDescription(t *testing.T) {
 // model: two instances behind the same endpoint each send only the upstream model name
 // they were constructed with.
 func TestProvider_Generate_EachInstanceSendsOwnUpstreamModel(t *testing.T) {
-	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"ok","statePatch":null}`
 	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
 	for _, tc := range []struct{ id, upstream string }{
 		{"alpha-1", "vendor/alpha-1"},
@@ -710,7 +710,7 @@ func topLevelMembers(t *testing.T, body []byte) map[string]json.RawMessage {
 // field the switch adds, provider.require_parameters, and nothing else such as
 // allow_fallbacks or order: routing and fallback stay outside the Adapter.
 func TestProvider_Generate_OpenRouterSwitchOn_SendsOnlyRequireParameters(t *testing.T) {
-	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"ok","statePatch":null}`
 	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
 	provider := newOpenRouterProvider(t, server.URL, server.Client(), true)
 
@@ -733,7 +733,7 @@ func TestProvider_Generate_OpenRouterSwitchOn_SendsOnlyRequireParameters(t *test
 // TestProvider_Generate_OpenRouterSwitchOff_SendsNoProviderMember keeps the request free
 // of every Provider-specific field when the switch is off.
 func TestProvider_Generate_OpenRouterSwitchOff_SendsNoProviderMember(t *testing.T) {
-	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"\"ok\"","statePatch":null}`
+	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"ok","statePatch":null}`
 	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
 	provider := newOpenRouterProvider(t, server.URL, server.Client(), false)
 

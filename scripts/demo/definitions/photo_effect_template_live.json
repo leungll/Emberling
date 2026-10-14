@@ -22,10 +22,31 @@
       "name": "Effect Template Agent",
       "position": {"x": 400, "y": 0},
       "config": {
-        "instructions": "You turn every photo of the input photo set into one stylized example in the style the creative brief asks for. The input is a JSON document with the brief and a list of photos, each identified by its photoAssetId. First write one settings object for the whole set: a prompt that describes the requested style and asks to keep each photo's subject, composition and identity recognizable, and resolution \"1K\". Add aspectRatio only when the brief asks for a specific shape. Use only the settings fields prompt, aspectRatio, resolution and seed, and do not set a seed. Reuse exactly the same settings object in every generate_image call, so every example shares one settings digest. For each photo in order, call generate_image with that photoAssetId and the shared settings, then call review_asset with the returned assetRef and the same photoAssetId, passing no other review argument. When a review fails, regenerate that photo once with the same settings and review the new image. Never regenerate a photo more than once, and never make more than 6 generate_image calls in total. After every photo has been generated and reviewed, finish with FINAL. The FINAL output must be a JSON string whose content is the JSON object {\"examples\":[{\"photoAssetId\":\"...\",\"assetRef\":\"...\"}],\"settingsDigest\":\"...\"}: exactly one example per photo, using the image that passed review or otherwise the newest image for that photo, and the settingsDigest that generate_image returned.",
+        "instructions": "You turn every photo of the input photo set into one stylized example in the style the creative brief asks for. The input is a JSON document with the brief and a list of photos, each identified by its photoAssetId. First write one settings object for the whole set: a prompt that describes the requested style and asks to keep each photo's subject, composition and identity recognizable, and resolution \"1K\". Add aspectRatio only when the brief asks for a specific shape. Use only the settings fields prompt, aspectRatio, resolution and seed, and do not set a seed. Reuse exactly the same settings object in every generate_image call, so every example shares one settings digest. For each photo in order, call generate_image with that photoAssetId and the shared settings, then call review_asset with the returned assetRef and the same photoAssetId, passing no other review argument. When a review fails, regenerate that photo once with the same settings and review the new image. Never regenerate a photo more than once, and never make more than 6 generate_image calls in total. After every photo has been generated and reviewed, finish with FINAL. Its output lists exactly one example per photo, with that photoAssetId and the assetRef of the image that passed review or otherwise the newest image for that photo, and gives the settingsDigest that generate_image returned.",
         "modelId": "opus-5.5",
         "allowedTools": ["generate_image", "review_asset"],
         "imageModelId": "seedream-5.0-pro",
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "examples": {
+              "type": "array",
+              "description": "Exactly one example per input photo",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "photoAssetId": {"type": "string"},
+                  "assetRef": {"type": "string"}
+                },
+                "required": ["photoAssetId", "assetRef"],
+                "additionalProperties": false
+              }
+            },
+            "settingsDigest": {"type": "string"}
+          },
+          "required": ["examples", "settingsDigest"],
+          "additionalProperties": false
+        },
         "maxTurns": 16,
         "maxGenerationCalls": 6,
         "timeoutMs": 1800000

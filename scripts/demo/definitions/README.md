@@ -25,6 +25,27 @@ The Agent node selects:
 | `maxGenerationCalls` | `6` | Room for three photos with one regeneration each |
 | `maxTurns` | `16` | One generation and one review per call, plus the final answer |
 
+The Agent also declares an object-form `outputSchema`: its final answer is an object with
+`examples`, one `{photoAssetId, assetRef}` pair per photo, and the shared
+`settingsDigest`. The decision model is asked for that object directly through strict
+structured output, and the Backend validates it against the Schema before the Agent
+succeeds. The media result check then receives the object's canonical JSON text. An
+answer of the wrong shape fails the Agent as `INVALID_ACTION` instead of reaching the
+media result check, and the rejected answer stays visible in the Agent Trace.
+
+An object-form `outputSchema` must stay inside the strict output subset: every object
+lists all of its properties in `required` and sets `additionalProperties` to `false`; the
+only keywords are `type`, `properties`, `items`, `required`, `enum`, `description`,
+`title` and `additionalProperties`; an optional value is a type union with `"null"`; the
+Schema is at most five levels deep, with at most 100 properties in all and 16 KiB. Range
+and length keywords such as `minLength`, `maximum` or `pattern` are rejected when the
+Definition is saved.
+
+Versions of this Definition saved before it declared an `outputSchema` asked the model to
+write the answer as a JSON string that contains the JSON object. Save the current file as
+a new version rather than rerunning an older one: the model is no longer asked to encode
+its answer, so an older version's instructions contradict the request it receives.
+
 Model IDs are resolved exactly as written. If the Backend has no model registered under
 one of these IDs, saving the Definition fails with `MODEL_NOT_FOUND`; no other model is
 substituted. To use another registered image model, such as `gpt-image-2.5`, change
