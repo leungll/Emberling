@@ -211,7 +211,11 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
   };
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 || (e.target as HTMLElement).closest('[data-gid], [data-zoom]')) return;
+    const target = e.target as HTMLElement;
+    // A card's lightbox is portalled out of the graph but its events still bubble here
+    // through React; capturing the pointer for them would swallow the lightbox's clicks.
+    if (!e.currentTarget.contains(target)) return;
+    if (e.button !== 0 || target.closest('[data-gid], [data-zoom]')) return;
     drag.current = { x: e.clientX, y: e.clientY, tx: shown.tx, ty: shown.ty };
     setPanning(true);
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -345,8 +349,8 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
                   onFocus={() => {
                     setFocusId(step.node.id);
                   }}
-                  onClick={() => {
-                    onSelect(step.node.id);
+                  onClick={(e) => {
+                    if (e.currentTarget.contains(e.target as Node)) onSelect(step.node.id);
                   }}
                   style={{
                     left: p.x,

@@ -70,6 +70,35 @@ const states: ReviewState[] = [
     noTabWalk: true,
   },
   {
+    name: 'run-media-lightbox-close',
+    url: runPath(photoRun, '?el=node_result&tab=output'),
+    mode: 'block',
+    overrides: photoRunOverrides(),
+    ready: graphReady,
+    act: async (page) => {
+      const box = page.getByRole('dialog');
+      const agent = card(page, 'node_agent');
+      // The lightbox sits inside the card and the pannable graph in the React tree, but
+      // clicks in it neither pan the graph nor select the card.
+      await agent.getByRole('button', { name: /^Open/ }).nth(1).click();
+      await expect(box).toContainText('2 of 3');
+      await page.mouse.click(8, 8);
+      await expect(box).toBeVisible();
+      await box.getByRole('button', { name: 'Close' }).click();
+      await expect(box).toBeHidden();
+      await expect(agent).toHaveAttribute('aria-selected', 'false');
+      await card(page, 'node_result').getByRole('button', { name: /^Open/ }).click();
+      await expect(box).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(box).toBeHidden();
+      await details(page, /Media Result/, 'Output');
+      await page.getByRole('tabpanel').getByRole('button', { name: /^Open/ }).first().click();
+      await box.getByRole('button', { name: 'Close' }).click();
+      await expect(box).toBeHidden();
+      await expect(agent).toHaveAttribute('aria-selected', 'false');
+    },
+  },
+  {
     name: 'run-media-step-output',
     url: runPath(photoRun, '?el=node_result&tab=output'),
     mode: 'block',
