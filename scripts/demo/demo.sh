@@ -35,7 +35,11 @@
 #                                       no Event.
 #                 Each photo and delivery variant is followed by the invariant report as well.
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
-#   demo.sh down  stop the stack and remove the request-record volumes of the Mock
+#                 EMBERLING_DEMO_STUDIO=1 also builds and starts Studio, prints a Studio link
+#                 to every Run and pauses for Enter at the moments worth watching; the
+#                 stack and Studio keep running afterwards. EMBERLING_DEMO_PAUSE=0 keeps
+#                 Studio and the links but skips the pauses.
+#   demo.sh down  stop the stack, Studio included, and remove the request-record volumes of the Mock
 #                 Provider, the mock production service and the sandbox runner, so the next
 #                 demo starts from empty records. The PostgreSQL and asset
 #                 volumes are kept: they also hold the developer's own `make dev` data.
@@ -51,6 +55,13 @@ run)
   compose build --quiet mockprovider mockproduction sandboxrunner backend
   log "starting postgres, mockprovider, mockproduction, sandboxrunner and backend"
   compose up -d --wait postgres mockprovider mockproduction sandboxrunner backend
+  if studio_mode; then
+    log "building and starting studio (EMBERLING_DEMO_STUDIO=1)"
+    compose build --quiet studio
+    compose up -d --wait studio
+    wait_until "Studio at $STUDIO_URL" 120 studio_ready
+    printf 'Studio: %s\n' "$STUDIO_URL"
+  fi
 
   case "${EMBERLING_DEMO_VARIANT:-all}" in
   all)
@@ -70,7 +81,9 @@ run)
   verdict() { if [[ "$1" -eq 0 ]]; then echo PASS; else echo "FAIL (exit $1)"; fi; }
   summary=""
   overall=0
+  remaining=${#variants[@]}
   for variant in "${variants[@]}"; do
+    remaining=$((remaining - 1))
     story=""
     case "$variant" in
     held-before-accept) script=fault-kill.sh ;;
@@ -117,9 +130,15 @@ run)
     if [[ "$script_status" -ne 0 || "$invariant_status" -ne 0 || "$ledger_status" -ne 0 ]]; then
       overall=1
     fi
+    if ((remaining > 0)); then
+      demo_pause "variant $variant checked, run $run_id is $run_status; next: the next variant (the finished Run stays in Studio)"
+    fi
   done
 
   printf '\n==== demo summary ====\n%s' "$summary"
+  if studio_mode; then
+    printf '\nThe stack and Studio (%s) keep running; stop them with: make demo-down\n' "$STUDIO_URL"
+  fi
   [[ "$overall" -eq 0 ]]
   ;;
 down)
