@@ -23,11 +23,16 @@ async function openAndReturn(page: Page, url: string, leave: RegExp) {
   const key = await opened.getAttribute('data-row');
   await opened.locator('[data-row-primary]').click();
   await expect(page).toHaveURL(leave);
+  // The address changes before the list unmounts; going back that early returns to a list
+  // that never left, with the clicked link still focused by the pointer.
+  await expect(rows).toHaveCount(0);
   await page.goBack();
 
   const returned = page.locator(`tbody tr[data-row="${key}"]`);
-  // Focus on the opened row shows the return was restored; the tint may already be gone.
-  await expect(returned.locator('[data-row-primary]')).toBeFocused();
+  // Quiet focus on the opened row shows the return was restored; the tint may be gone.
+  const primary = returned.locator('[data-row-primary]');
+  await expect(primary).toBeFocused();
+  await expect(primary).toHaveAttribute('data-quiet-focus', '');
   // Away from every row, so hover does not shade one.
   await page.mouse.move(0, 0);
   await expect(returned).not.toHaveAttribute('data-returned', { timeout: 5_000 });

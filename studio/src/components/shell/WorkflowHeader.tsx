@@ -206,7 +206,7 @@ export function WorkflowHeader({
 
       <div
         data-part="right"
-        className="flex min-w-0 items-center justify-end gap-2 in-data-[fit=inline]:ml-auto in-data-[fit=inline]:shrink-0 in-data-[fit=stack]:ml-auto in-data-[fit=wrap]:ml-auto in-data-[fit=wrap]:shrink-0"
+        className="flex min-w-0 items-center justify-end gap-2 in-data-[fit=inline]:grow in-data-[fit=inline]:shrink-0 in-data-[fit=stack]:grow in-data-[fit=wrap]:grow in-data-[fit=wrap]:shrink-0"
       >
         {actions}
         {actions ? <HeaderSeparator /> : null}

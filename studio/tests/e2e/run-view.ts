@@ -45,3 +45,26 @@ export async function listedSeqs(grid: Locator): Promise<number[]> {
     .locator('[data-seq]')
     .evaluateAll((rows) => rows.map((row) => Number(row.getAttribute('data-seq'))));
 }
+
+/**
+ * An image in the details: its thumbnail and its full-size view in the lightbox both load
+ * from `src` (when given) and decode to a real size. The lightbox is left open.
+ */
+export async function expectImageShown(
+  page: Page,
+  title: string,
+  src?: string | RegExp,
+): Promise<void> {
+  const loaded = async (img: Locator) => {
+    await expect(img).toBeVisible({ timeout: 10_000 });
+    if (src) await expect(img).toHaveAttribute('src', src);
+    await expect(img).toHaveJSProperty('complete', true);
+    expect(await img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  };
+  const thumb = details(page).getByRole('button', {
+    name: new RegExp(`^Open preview: ${escaped(title)}\\b`),
+  });
+  await loaded(thumb.locator('img'));
+  await thumb.click();
+  await loaded(page.getByRole('dialog', { name: title }).getByRole('img', { name: title }));
+}

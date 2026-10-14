@@ -58,6 +58,8 @@ const PLACEHOLDER_PNG = Buffer.from(
   'base64',
 );
 
+const MOCK_IMAGE_HOST = 'http://localhost:9101/v1/assets/**';
+
 export function errorBody(code: string, message: string): unknown {
   return { error: { code, message } };
 }
@@ -95,6 +97,11 @@ async function fulfil(route: Route, reply: Reply): Promise<void> {
 
 export async function serveFixtures(page: Page, overrides: Overrides = {}): Promise<FixtureServer> {
   const server: FixtureServer = { unexpected: [] };
+  // Recorded outputs link images on the mock image provider of the stack they were recorded
+  // from; those answer with the same small picture.
+  await page.route(MOCK_IMAGE_HOST, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'image/png', body: PLACEHOLDER_PNG });
+  });
   await page.route(
     (url) => url.pathname.startsWith('/api/') || url.pathname === '/ready',
     async (route) => {
@@ -114,8 +121,12 @@ export async function serveFixtures(page: Page, overrides: Overrides = {}): Prom
         await route.fulfill({ status: 204, body: '' });
         return;
       }
-      // Image content is not recorded: every asset answers with the same small picture.
-      if (method === 'GET' && /^\/api\/assets\/[^/]+\/content$/.test(key)) {
+      // Image content is not recorded: every asset and run artifact answers with the same
+      // small picture.
+      if (
+        method === 'GET' &&
+        /^\/api\/(assets\/[^/]+|runs\/[^/]+\/artifacts\/[^/]+)\/content$/.test(key)
+      ) {
         await route.fulfill({ status: 200, contentType: 'image/png', body: PLACEHOLDER_PNG });
         return;
       }

@@ -169,6 +169,32 @@ export const en = {
     keys: (n: number) => plural(n, 'key'),
   },
 
+  media: {
+    kind: {
+      ASSET: 'Uploaded image',
+      ARTIFACT: 'Generated image',
+      EXTERNAL: 'Linked image',
+    },
+    open: (what: string) => `Open preview: ${what}`,
+    more: (n: number) => `Show ${String(n)} more`,
+    unavailable: 'Preview unavailable',
+    unavailableBody: 'The image could not be loaded.',
+    previous: 'Previous image',
+    next: 'Next image',
+    position: (i: number, n: number) => `${String(i)} of ${String(n)}`,
+    imageOf: (title: string, i: number, n: number) =>
+      `${title}, image ${String(i)} of ${String(n)}`,
+    type: 'Type',
+    size: 'Size',
+    reference: 'Reference',
+    referenceLabel: 'image reference',
+    assetId: 'Asset ID',
+    artifactId: 'Artifact ID',
+    assetIdLabel: 'asset ID',
+    artifactIdLabel: 'artifact ID',
+    json: 'JSON',
+  },
+
   lists: {
     options: 'Options',
     noMatches: 'No matches.',

@@ -45,7 +45,11 @@ export interface GraphLayout {
   height: number;
 }
 
-export function graphLayout(def: Pick<Definition, 'nodes' | 'edges'>): GraphLayout {
+/** `heightOf` gives each full card's height; cards are as tall as their content needs. */
+export function graphLayout(
+  def: Pick<Definition, 'nodes' | 'edges'>,
+  heightOf: (id: string) => number = () => CARD_H,
+): GraphLayout {
   const depth = new Map(def.nodes.map((n) => [n.id, 0]));
   // Longest path: one relaxation pass per step settles every depth.
   for (const _ of def.nodes) {
@@ -61,7 +65,9 @@ export function graphLayout(def: Pick<Definition, 'nodes' | 'edges'>): GraphLayo
     (cols[d] ??= []).push(n);
   }
   const dense = cols.filter(Boolean);
-  const heights = dense.map((c) => c.length * CARD_H + (c.length - 1) * GAP_Y);
+  const heights = dense.map(
+    (c) => c.reduce((sum, n) => sum + heightOf(n.id), 0) + (c.length - 1) * GAP_Y,
+  );
   const maxH = Math.max(0, ...heights);
   const pos = new Map<string, CardPos>();
   dense.forEach((c, ci) => {
@@ -69,7 +75,7 @@ export function graphLayout(def: Pick<Definition, 'nodes' | 'edges'>): GraphLayo
     let y = (maxH - (heights[ci] ?? 0)) / 2;
     c.forEach((n, ri) => {
       pos.set(n.id, { col: ci, row: ri, x: ci * (CARD_W + GAP_X), y: Math.round(y) });
-      y += CARD_H + GAP_Y;
+      y += heightOf(n.id) + GAP_Y;
     });
   });
   return {

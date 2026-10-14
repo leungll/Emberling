@@ -2,7 +2,7 @@ import { useRef, useState, type SyntheticEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Field, TextArea, TextInput } from '@/components/ui/field';
+import { Field, GrowArea, TextInput } from '@/components/ui/field';
 import { useCopy } from '@/lib/copy';
 
 interface NewWorkflowDialogProps {
@@ -10,13 +10,6 @@ interface NewWorkflowDialogProps {
   onClose: () => void;
   /** Called with the trimmed name (never empty) and description. */
   onCreate: (name: string, description: string) => void;
-}
-
-/** Fits a textarea to its content, so the description grows as it is typed. */
-function fitHeight(el: HTMLTextAreaElement | null): void {
-  if (!el) return;
-  el.style.height = 'auto';
-  el.style.height = `${String(el.scrollHeight + el.offsetHeight - el.clientHeight)}px`;
 }
 
 /**
@@ -100,13 +93,12 @@ export function NewWorkflowDialog({ open, onClose, onCreate }: NewWorkflowDialog
         </Field>
         <Field label={d.description} optional>
           {(p) => (
-            <TextArea
+            <GrowArea
               {...p}
               rows={2}
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value);
-                fitHeight(e.target);
               }}
               className="min-h-16 resize-none"
             />

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
-import { details, runStatus, stepCard } from './run-view';
+import { details, expectImageShown, runStatus, stepCard } from './run-view';
 
 // The smallest valid PNG (1x1, RGBA): enough for the Backend to accept it as `image/png`
 // and for the browser to decode the preview to a non-zero natural size.
@@ -76,13 +76,12 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   await expect(stepCard(page, 'Reference')).toHaveAccessibleName(/, Succeeded,/);
   await stepCard(page, 'Reference').click();
   await details(page).getByRole('tab', { name: 'Output' }).click();
-  await expect(details(page).getByText(assetId)).toBeVisible();
-  const preview = details(page).getByRole('img', { name: 'Preview: Uploaded image' });
-  await expect(preview).toBeVisible({ timeout: 10_000 });
-  await expect(preview).toHaveAttribute('src', `/api/assets/${assetId}/content`);
-  await expect(preview).toHaveJSProperty('complete', true);
-  const naturalWidth = await preview.evaluate((img) => (img as HTMLImageElement).naturalWidth);
-  expect(naturalWidth).toBeGreaterThan(0);
+  // The image is captioned with the Asset's short code; the full ID is its tooltip.
+  const figure = details(page).getByRole('figure').filter({ hasText: 'Uploaded image' });
+  const code = assetId.slice(assetId.lastIndexOf('_') + 1).slice(0, 8);
+  await figure.getByText(code, { exact: true }).hover();
+  await expect(page.getByRole('tooltip', { name: assetId })).toBeVisible();
+  await expectImageShown(page, 'Uploaded image', `/api/assets/${assetId}/content`);
 });
 
 /**

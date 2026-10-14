@@ -1,10 +1,12 @@
 import { Activity, ChevronRight, X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 
-import { MediaPreview } from './MediaPreview';
 import { ElementOverview } from './ElementOverview';
 import { RunOffset } from './RunFacts';
 import { TurnsTab } from './TurnsTab';
+import { CallResultView, ValueView } from './ValueView';
+import { callSaved } from './card-info';
+import { imageLabel, mediaItems, savedImageOf } from './run-media';
 import { Words } from './Words';
 import type { DetailContext } from './detail-context';
 import { crumbLabel, kindOf, tabsFor, type DetailTab } from './detail-tabs';
@@ -13,6 +15,7 @@ import { ancestors, attemptWord, type TraceElement } from './run-model';
 import type { JsonValue } from '@/api/types';
 import { IdChip } from '@/components/id/IdChip';
 import { JsonViewer } from '@/components/json/JsonViewer';
+import { ThumbSet } from '@/components/media/Thumbs';
 import { StateBlock } from '@/components/state/StateBlock';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { IconButton } from '@/components/ui/button';
@@ -145,6 +148,14 @@ function IoTab({
     default:
       break;
   }
+  const saved = gap && !input ? callSaved(ctx.model, el) : null;
+  if (saved) {
+    return (
+      <Pad>
+        <CallResultView ctx={ctx} saved={saved} />
+      </Pad>
+    );
+  }
   if (gap) {
     return (
       <Pad>
@@ -169,8 +180,7 @@ function IoTab({
   }
   return (
     <Pad>
-      <MediaPreview value={value} runId={run.id} />
-      <JsonViewer value={value} root={root} />
+      <ValueView ctx={ctx} value={value ?? null} root={root} storageKey={`${el.kind}-${which}`} />
     </Pad>
   );
 }
@@ -295,12 +305,17 @@ function FactsTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
           const label =
             (copy.factLabel as Record<string, string | undefined>)[fact.factType] ??
             fact.factType.replace(/_/g, ' ');
+          const img = savedImageOf(ctx.model, fact);
           return (
             <li
               key={fact.id}
-              className="flex min-h-row-dense flex-wrap items-center gap-2 px-2 text-sm text-fg"
+              className="flex min-h-row-dense flex-wrap items-center gap-2 px-2 py-1 text-sm text-fg"
             >
-              <span className="min-w-0">{label}</span>
+              {img ? <ThumbSet items={mediaItems(ctx.model, [img])} /> : null}
+              <span className="flex min-w-0 flex-col">
+                <span>{label}</span>
+                {img ? <span className="text-fg-muted">{imageLabel(ctx.model, img)}</span> : null}
+              </span>
               {fact.verdict === true ? (
                 <span className="text-st-succeeded-fg">{f.passed}</span>
               ) : fact.verdict === false ? (
@@ -309,7 +324,9 @@ function FactsTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
                 <span className="text-fg-muted">{f.noVerdict}</span>
               )}
               <span className="flex-1" />
-              <IdChip id={fact.subject} kind={f.subject} label={f.subject.toLowerCase()} />
+              {img ? null : (
+                <IdChip id={fact.subject} kind={f.subject} label={f.subject.toLowerCase()} />
+              )}
               {t?.actionId ? (
                 <button
                   type="button"

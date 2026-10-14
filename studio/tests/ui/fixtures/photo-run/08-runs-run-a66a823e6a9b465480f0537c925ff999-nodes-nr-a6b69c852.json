@@ -1,0 +1,81 @@
+{
+  "nodeRun": {
+    "id": "nr_a6b69c852ac64450b6348b31c7e1e0bf",
+    "runId": "run_a66a823e6a9b465480f0537c925ff999",
+    "nodeId": "node_output",
+    "nodeType": "media_output",
+    "status": "SUCCEEDED",
+    "input": {
+      "image": {
+        "source": "ARTIFACT",
+        "artifact": {
+          "sha256": "a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201",
+          "mediaType": "image/jpeg",
+          "sizeBytes": 193122,
+          "artifactId": "artifact_a09efbd58fef361792747db896e5a04f"
+        }
+      },
+      "caption": "{\"accepted\":true,\"notPassed\":[\"asset_1163e40e4d624c0fbed64bbaf782a349\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+    },
+    "output": {
+      "image": {
+        "source": "ARTIFACT",
+        "artifact": {
+          "sha256": "a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201",
+          "mediaType": "image/jpeg",
+          "sizeBytes": 193122,
+          "artifactId": "artifact_a09efbd58fef361792747db896e5a04f"
+        }
+      },
+      "caption": "{\"accepted\":true,\"notPassed\":[\"asset_1163e40e4d624c0fbed64bbaf782a349\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-13T10:56:35.003325-07:00",
+    "startedAt": "2026-10-13T10:56:35.013157-07:00",
+    "waitingAt": null,
+    "completedAt": "2026-10-13T10:56:35.021127-07:00",
+    "latencyMs": 7,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_f1b66cd3bd224d73adc725f832c3f1e7",
+      "nodeRunId": "nr_a6b69c852ac64450b6348b31c7e1e0bf",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "image": {
+          "source": "ARTIFACT",
+          "artifact": {
+            "sha256": "a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201",
+            "mediaType": "image/jpeg",
+            "sizeBytes": 193122,
+            "artifactId": "artifact_a09efbd58fef361792747db896e5a04f"
+          }
+        },
+        "caption": "{\"accepted\":true,\"notPassed\":[\"asset_1163e40e4d624c0fbed64bbaf782a349\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+      },
+      "result": {
+        "image": {
+          "source": "ARTIFACT",
+          "artifact": {
+            "sha256": "a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201",
+            "mediaType": "image/jpeg",
+            "sizeBytes": 193122,
+            "artifactId": "artifact_a09efbd58fef361792747db896e5a04f"
+          }
+        },
+        "caption": "{\"accepted\":true,\"notPassed\":[\"asset_1163e40e4d624c0fbed64bbaf782a349\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+      },
+      "startedAt": "2026-10-13T10:56:35.013157-07:00",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-13T10:56:35.021127-07:00",
+      "error": null,
+      "uncertain": null,
+      "callbackBinding": null
+    }
+  ]
+}

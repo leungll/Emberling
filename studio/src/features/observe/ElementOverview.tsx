@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router';
 
 import { FailCard, SelectLink, WaitCard } from './Diagnosis';
 import { ElementTime, RunOffset, Tokens } from './RunFacts';
+import { StepImages, ValueView } from './ValueView';
 import { ToolName, Words } from './Words';
 import type { DetailContext } from './detail-context';
 import { editHref, notRetried } from './run-diagnosis';
@@ -228,6 +229,11 @@ function RunOverview({ ctx }: { ctx: DetailContext }) {
         <WaitCard wait={ctx.wait} model={model} tools={ctx.tools} onSelect={ctx.onSelect} />
       ) : null}
       {run.status === 'COMPLETED' ? <Lead>{d.completed}</Lead> : null}
+      {run.status === 'COMPLETED' && run.output !== null ? (
+        <Section title={d.result}>
+          <ValueView ctx={ctx} value={run.output} root="output" storageKey="run-result" />
+        </Section>
+      ) : null}
       <Section>
         <FactList
           compact
@@ -442,6 +448,7 @@ function StepOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
       <Section>
         <StepFacts el={el} ctx={ctx} />
       </Section>
+      <StepImages ctx={ctx} step={step} />
       {!step.trace && attemptEls.length > 1 ? (
         <Section title={f.attempts} count={attemptEls.length}>
           <ElementList items={attemptEls} ctx={ctx} label={(a) => a.label} />

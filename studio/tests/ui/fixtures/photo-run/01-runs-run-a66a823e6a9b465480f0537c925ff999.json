@@ -1,0 +1,195 @@
+{
+  "run": {
+    "id": "run_a66a823e6a9b465480f0537c925ff999",
+    "workflowId": "wf_54299dcafe204f17927294032ed6b746",
+    "definitionVersion": 1,
+    "status": "COMPLETED",
+    "input": {
+      "brief": "Boxed collectible figure. Turn the person or pet in each photo into a small collectible figure standing inside a clear plastic blister pack, mounted on a printed card backing, with one small prop related to the subject beside the figure in the pack. Keep the subject recognizable: for people keep the face, hair and glasses; for pets keep the fur color and markings. Glossy molded-plastic finish, clean product-photo lighting on a plain backdrop. No brands, logos, text, known characters or artist styles.",
+      "photos": [
+        {
+          "sha256": "2f91e5976506cee592057df8a72e9651047e6e638f83edd354dbf8bacbb383c2",
+          "assetId": "asset_1163e40e4d624c0fbed64bbaf782a349",
+          "mediaType": "image/jpeg",
+          "sizeBytes": 1566606
+        },
+        {
+          "sha256": "540ca23b38bede6437c46833b7e3241a124f55491fa34a8f826d82323c57ec53",
+          "assetId": "asset_33551a30dfeb4fb7960909e5c680b4be",
+          "mediaType": "image/jpeg",
+          "sizeBytes": 576582
+        },
+        {
+          "sha256": "ca72df444047c85401efe21658d0d90612067da365b53cef53986b644dc2f440",
+          "assetId": "asset_2141b4e978c9458f874c7ec6dbd8daea",
+          "mediaType": "image/jpeg",
+          "sizeBytes": 265870
+        }
+      ]
+    },
+    "output": {
+      "image": {
+        "source": "ARTIFACT",
+        "artifact": {
+          "sha256": "a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201",
+          "mediaType": "image/jpeg",
+          "sizeBytes": 193122,
+          "artifactId": "artifact_a09efbd58fef361792747db896e5a04f"
+        }
+      },
+      "caption": "{\"accepted\":true,\"notPassed\":[\"asset_1163e40e4d624c0fbed64bbaf782a349\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+    },
+    "error": null,
+    "lastSeq": 71,
+    "startedAt": "2026-10-13T10:48:42.339588-07:00",
+    "completedAt": "2026-10-13T10:56:35.021127-07:00",
+    "tokenUsage": {
+      "inputTokens": 45384,
+      "outputTokens": 2877,
+      "totalTokens": 48261
+    }
+  },
+  "nodeRuns": [
+    {
+      "id": "nr_a3161eb6a5364d6285ca90cfa331d874",
+      "runId": "run_a66a823e6a9b465480f0537c925ff999",
+      "nodeId": "node_brief",
+      "nodeType": "text_input",
+      "status": "SUCCEEDED",
+      "input": {},
+      "output": {
+        "text": "Boxed collectible figure. Turn the person or pet in each photo into a small collectible figure standing inside a clear plastic blister pack, mounted on a printed card backing, with one small prop related to the subject beside the figure in the pack. Keep the subject recognizable: for people keep the face, hair and glasses; for pets keep the fur color and markings. Glossy molded-plastic finish, clean product-photo lighting on a plain backdrop. No brands, logos, text, known characters or artist styles."
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-13T10:48:42.339588-07:00",
+      "startedAt": "2026-10-13T10:48:42.362754-07:00",
+      "waitingAt": null,
+      "completedAt": "2026-10-13T10:48:42.382575-07:00",
+      "latencyMs": 19,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_5a608357ac1a4a179981436c3f9ebe01",
+      "runId": "run_a66a823e6a9b465480f0537c925ff999",
+      "nodeId": "node_photos",
+      "nodeType": "media_brief",
+      "status": "SUCCEEDED",
+      "input": {
+        "brief": "Boxed collectible figure. Turn the person or pet in each photo into a small collectible figure standing inside a clear plastic blister pack, mounted on a printed card backing, with one small prop related to the subject beside the figure in the pack. Keep the subject recognizable: for people keep the face, hair and glasses; for pets keep the fur color and markings. Glossy molded-plastic finish, clean product-photo lighting on a plain backdrop. No brands, logos, text, known characters or artist styles."
+      },
+      "output": {
+        "text": "{\"brief\":\"Boxed collectible figure. Turn the person or pet in each photo into a small collectible figure standing inside a clear plastic blister pack, mounted on a printed card backing, with one small prop related to the subject beside the figure in the pack. Keep the subject recognizable: for people keep the face, hair and glasses; for pets keep the fur color and markings. Glossy molded-plastic finish, clean product-photo lighting on a plain backdrop. No brands, logos, text, known characters or artist styles.\",\"photos\":[{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_1163e40e4d624c0fbed64bbaf782a349\",\"sha256\":\"2f91e5976506cee592057df8a72e9651047e6e638f83edd354dbf8bacbb383c2\",\"sizeBytes\":1566606},{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_33551a30dfeb4fb7960909e5c680b4be\",\"sha256\":\"540ca23b38bede6437c46833b7e3241a124f55491fa34a8f826d82323c57ec53\",\"sizeBytes\":576582},{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_2141b4e978c9458f874c7ec6dbd8daea\",\"sha256\":\"ca72df444047c85401efe21658d0d90612067da365b53cef53986b644dc2f440\",\"sizeBytes\":265870}]}"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-13T10:48:42.382575-07:00",
+      "startedAt": "2026-10-13T10:48:42.410733-07:00",
+      "waitingAt": null,
+      "completedAt": "2026-10-13T10:48:42.424168-07:00",
+      "latencyMs": 13,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_13145d77060840b7a2e4df386b5fdef2",
+      "runId": "run_a66a823e6a9b465480f0537c925ff999",
+      "nodeId": "node_agent",
+      "nodeType": "agent",
+      "status": "SUCCEEDED",
+      "input": {
+        "input": "{\"brief\":\"Boxed collectible figure. Turn the person or pet in each photo into a small collectible figure standing inside a clear plastic blister pack, mounted on a printed card backing, with one small prop related to the subject beside the figure in the pack. Keep the subject recognizable: for people keep the face, hair and glasses; for pets keep the fur color and markings. Glossy molded-plastic finish, clean product-photo lighting on a plain backdrop. No brands, logos, text, known characters or artist styles.\",\"photos\":[{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_1163e40e4d624c0fbed64bbaf782a349\",\"sha256\":\"2f91e5976506cee592057df8a72e9651047e6e638f83edd354dbf8bacbb383c2\",\"sizeBytes\":1566606},{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_33551a30dfeb4fb7960909e5c680b4be\",\"sha256\":\"540ca23b38bede6437c46833b7e3241a124f55491fa34a8f826d82323c57ec53\",\"sizeBytes\":576582},{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_2141b4e978c9458f874c7ec6dbd8daea\",\"sha256\":\"ca72df444047c85401efe21658d0d90612067da365b53cef53986b644dc2f440\",\"sizeBytes\":265870}]}"
+      },
+      "output": {
+        "text": "{\"examples\":[{\"photoAssetId\":\"asset_1163e40e4d624c0fbed64bbaf782a349\",\"assetRef\":\"artifact_a09efbd58fef361792747db896e5a04f\"},{\"photoAssetId\":\"asset_33551a30dfeb4fb7960909e5c680b4be\",\"assetRef\":\"artifact_2bafb85f8945b42083a3d0afba07d752\"},{\"photoAssetId\":\"asset_2141b4e978c9458f874c7ec6dbd8daea\",\"assetRef\":\"artifact_057235642ebba33207e13d6dd79caf96\"}],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+      },
+      "error": null,
+      "attemptCount": 0,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-13T10:48:42.424168-07:00",
+      "startedAt": "2026-10-13T10:48:42.443177-07:00",
+      "waitingAt": null,
+      "completedAt": "2026-10-13T10:56:34.971994-07:00",
+      "latencyMs": 472528,
+      "tokenUsage": {
+        "inputTokens": 45384,
+        "outputTokens": 2877,
+        "totalTokens": 48261
+      }
+    },
+    {
+      "id": "nr_ce6ef096a90441f48e65eabe481a3c3f",
+      "runId": "run_a66a823e6a9b465480f0537c925ff999",
+      "nodeId": "node_result",
+      "nodeType": "media_result",
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "{\"examples\":[{\"photoAssetId\":\"asset_1163e40e4d624c0fbed64bbaf782a349\",\"assetRef\":\"artifact_a09efbd58fef361792747db896e5a04f\"},{\"photoAssetId\":\"asset_33551a30dfeb4fb7960909e5c680b4be\",\"assetRef\":\"artifact_2bafb85f8945b42083a3d0afba07d752\"},{\"photoAssetId\":\"asset_2141b4e978c9458f874c7ec6dbd8daea\",\"assetRef\":\"artifact_057235642ebba33207e13d6dd79caf96\"}],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}",
+        "brief": "{\"brief\":\"Boxed collectible figure. Turn the person or pet in each photo into a small collectible figure standing inside a clear plastic blister pack, mounted on a printed card backing, with one small prop related to the subject beside the figure in the pack. Keep the subject recognizable: for people keep the face, hair and glasses; for pets keep the fur color and markings. Glossy molded-plastic finish, clean product-photo lighting on a plain backdrop. No brands, logos, text, known characters or artist styles.\",\"photos\":[{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_1163e40e4d624c0fbed64bbaf782a349\",\"sha256\":\"2f91e5976506cee592057df8a72e9651047e6e638f83edd354dbf8bacbb383c2\",\"sizeBytes\":1566606},{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_33551a30dfeb4fb7960909e5c680b4be\",\"sha256\":\"540ca23b38bede6437c46833b7e3241a124f55491fa34a8f826d82323c57ec53\",\"sizeBytes\":576582},{\"mediaType\":\"image/jpeg\",\"photoAssetId\":\"asset_2141b4e978c9458f874c7ec6dbd8daea\",\"sha256\":\"ca72df444047c85401efe21658d0d90612067da365b53cef53986b644dc2f440\",\"sizeBytes\":265870}]}"
+      },
+      "output": {
+        "image": {
+          "source": "ARTIFACT",
+          "artifact": {
+            "sha256": "a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201",
+            "mediaType": "image/jpeg",
+            "sizeBytes": 193122,
+            "artifactId": "artifact_a09efbd58fef361792747db896e5a04f"
+          }
+        },
+        "caption": "{\"accepted\":true,\"notPassed\":[\"asset_1163e40e4d624c0fbed64bbaf782a349\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-13T10:56:34.971994-07:00",
+      "startedAt": "2026-10-13T10:56:34.991059-07:00",
+      "waitingAt": null,
+      "completedAt": "2026-10-13T10:56:35.003325-07:00",
+      "latencyMs": 12,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_a6b69c852ac64450b6348b31c7e1e0bf",
+      "runId": "run_a66a823e6a9b465480f0537c925ff999",
+      "nodeId": "node_output",
+      "nodeType": "media_output",
+      "status": "SUCCEEDED",
+      "input": {
+        "image": {
+          "source": "ARTIFACT",
+          "artifact": {
+            "sha256": "a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201",
+            "mediaType": "image/jpeg",
+            "sizeBytes": 193122,
+            "artifactId": "artifact_a09efbd58fef361792747db896e5a04f"
+          }
+        },
+        "caption": "{\"accepted\":true,\"notPassed\":[\"asset_1163e40e4d624c0fbed64bbaf782a349\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+      },
+      "output": {
+        "image": {
+          "source": "ARTIFACT",
+          "artifact": {
+            "sha256": "a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201",
+            "mediaType": "image/jpeg",
+            "sizeBytes": 193122,
+            "artifactId": "artifact_a09efbd58fef361792747db896e5a04f"
+          }
+        },
+        "caption": "{\"accepted\":true,\"notPassed\":[\"asset_1163e40e4d624c0fbed64bbaf782a349\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4\"}"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-13T10:56:35.003325-07:00",
+      "startedAt": "2026-10-13T10:56:35.013157-07:00",
+      "waitingAt": null,
+      "completedAt": "2026-10-13T10:56:35.021127-07:00",
+      "latencyMs": 7,
+      "tokenUsage": null
+    }
+  ],
+  "lastSeq": 71
+}

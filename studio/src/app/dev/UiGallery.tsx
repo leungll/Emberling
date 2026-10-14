@@ -106,7 +106,7 @@ export function UiGallery() {
               Run
             </Button>
             <Button variant="secondary">Run again</Button>
-            <Button variant="ghost">Resume live</Button>
+            <Button variant="ghost">Follow latest step</Button>
             <Button variant="danger">
               <Trash2 aria-hidden="true" />
               Delete
