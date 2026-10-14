@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import { Gallery, ThumbSet } from './Thumbs';
@@ -32,6 +33,15 @@ describe('ThumbSet', () => {
       'src',
       '/c/b',
     );
+  });
+
+  it('closes a set of several with one Escape', async () => {
+    const user = userEvent.setup();
+    render(<ThumbSet items={[item('a', '/c/a', 'Photo 1'), item('b', '/c/b', 'Photo 2')]} />);
+    await user.click(screen.getByRole('button', { name: 'Open preview: Photo 1, PNG, 2 KB' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('1 of 2');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('loads nothing for an image no route serves, and says so in the lightbox', () => {

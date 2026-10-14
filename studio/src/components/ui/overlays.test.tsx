@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { Button } from './button';
+import { Button, IconButton } from './button';
 import { Dialog } from './dialog';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from './menu';
 import { Toaster } from './toast';
@@ -74,6 +74,55 @@ describe('Dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Open' }));
     await user.keyboard('{Control>}{Enter}{/Control}');
     expect(submit).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Dialog initial focus on an icon button', () => {
+  function IconHarness() {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          Open
+        </button>
+        <Dialog open={open} onClose={() => setOpen(false)} title="Image">
+          <IconButton label="Next image" data-dialog-primary>
+            →
+          </IconButton>
+        </Dialog>
+      </>
+    );
+  }
+
+  it('shows no tooltip for the focus it sets, so one Escape closes it', async () => {
+    const user = userEvent.setup();
+    render(<IconHarness />);
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    expect(screen.getByRole('button', { name: 'Next image' })).toHaveFocus();
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('opened from the keyboard, still shows no tooltip for the focus it sets', async () => {
+    const user = userEvent.setup();
+    render(<IconHarness />);
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Next image' })).toHaveFocus();
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows the tooltip when Tab moves onto the button', async () => {
+    const user = userEvent.setup();
+    render(<IconHarness />);
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Next image' })).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Next image');
   });
 });
 

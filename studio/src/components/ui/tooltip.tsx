@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
-/** Hover opens a tooltip after 400 ms; keyboard focus opens it at once. */
+/** Hover opens a tooltip after 400 ms; keyboard navigation onto the trigger opens it at once. */
 export const TOOLTIP_DELAY_MS = 400;
 
 interface TooltipProps {
@@ -15,6 +15,40 @@ interface TooltipProps {
   side?: 'top' | 'right' | 'bottom' | 'left';
   align?: 'start' | 'center' | 'end';
   className?: string;
+}
+
+/** Keys whose default action or roving-focus handler moves focus. */
+const NAVIGATION_KEYS = new Set([
+  'Tab',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+]);
+
+// Focus counts as the viewer's keyboard focus only while a navigation key is down. Focus set
+// in code, such as a dialog's initial focus or focus returned after Enter or Escape, opens no
+// tooltip: an open tooltip would take the next Escape meant for the dialog.
+let navigating = false;
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      navigating = NAVIGATION_KEYS.has(e.key);
+    },
+    true,
+  );
+  for (const type of ['keyup', 'pointerdown'] as const) {
+    document.addEventListener(
+      type,
+      () => {
+        navigating = false;
+      },
+      true,
+    );
+  }
 }
 
 const surface =
@@ -35,7 +69,15 @@ export function Tooltip({
   return (
     <RTooltip.Provider delayDuration={TOOLTIP_DELAY_MS}>
       <RTooltip.Root>
-        <RTooltip.Trigger asChild>{children}</RTooltip.Trigger>
+        <RTooltip.Trigger
+          asChild
+          onFocus={(e) => {
+            // Radix skips its own open-on-focus when this handler prevents the default.
+            if (!navigating) e.preventDefault();
+          }}
+        >
+          {children}
+        </RTooltip.Trigger>
         <RTooltip.Portal>
           <RTooltip.Content
             side={side}
