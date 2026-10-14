@@ -11,7 +11,7 @@ import (
 )
 
 func TestAgentTraceResponse_NoFactsAndNoLimit_RendersEmptyLedgerAndNullLimit(t *testing.T) {
-	body, err := json.Marshal(toAgentTraceResponse(service.AgentTrace{}))
+	body, err := json.Marshal(toAgentTraceResponse(service.AgentTrace{}, defaultTraceMaxFieldBytes))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestAgentTraceResponse_FactWithoutBindings_RendersEmptyObjectInUTC(t *testi
 		Budget: service.AgentGenerationBudget{MaxGenerationCalls: &limit, Used: 1},
 	}
 
-	body, err := json.Marshal(toAgentTraceResponse(trace))
+	body, err := json.Marshal(toAgentTraceResponse(trace, defaultTraceMaxFieldBytes))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

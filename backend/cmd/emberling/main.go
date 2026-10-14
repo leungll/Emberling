@@ -288,6 +288,7 @@ func run(logger *slog.Logger) error {
 		Logger:                  logger,
 		CallbackMaxPayloadBytes: cfg.PendingCallback.MaxPayloadBytes,
 		AssetMaxUploadBytes:     int64(cfg.AssetStorage.MaxUploadBytes),
+		TraceMaxFieldBytes:      cfg.Projection.MaxFieldBytes,
 	})
 
 	httpServer := &http.Server{Addr: cfg.HTTP.Addr, Handler: router, ReadHeaderTimeout: readHeaderTimeout}

@@ -25,6 +25,10 @@ const defaultPollInterval = 3 * time.Second
 // bounding memory for a single request.
 const maxRequestBodyBytes = 1 << 20
 
+// defaultTraceMaxFieldBytes is the Trace field bound used when Deps leaves it unset; it
+// equals the value the deployment configuration ships with.
+const defaultTraceMaxFieldBytes = 8192
+
 // Deps carries every collaborator the HTTP layer needs. It holds the four services by
 // pointer, never a store or runtime type directly.
 type Deps struct {
@@ -69,6 +73,11 @@ type Deps struct {
 	// it streams, which is what turns an oversized upload into a 413 without ever storing
 	// the content.
 	AssetMaxUploadBytes int64
+
+	// TraceMaxFieldBytes bounds each Tool-call member the Agent Trace projects
+	// (config.Projection.MaxFieldBytes in cmd/emberling). A member over it is withheld and
+	// named, never cut; the persisted value is untouched.
+	TraceMaxFieldBytes int
 }
 
 func (d Deps) withDefaults() Deps {
@@ -89,6 +98,9 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.AssetMaxUploadBytes <= 0 {
 		d.AssetMaxUploadBytes = maxRequestBodyBytes
+	}
+	if d.TraceMaxFieldBytes <= 0 {
+		d.TraceMaxFieldBytes = defaultTraceMaxFieldBytes
 	}
 	return d
 }
