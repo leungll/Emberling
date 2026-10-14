@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -164,6 +165,9 @@ func (s *QueryService) NodeRunDetail(ctx context.Context, runID, nodeRunID strin
 // Execution State the Runtime recovers from.
 type AgentTrace struct {
 	AgentRun domain.AgentRun
+	// RunInput is the owning Run's immutable input, read in the same transaction, so the
+	// projection can place a Tool call's photo within the Run's recorded photo set.
+	RunInput json.RawMessage
 	Turns    []AgentTraceTurn
 	// Facts is the Agent Run's execution fact ledger and Budget its generation budget,
 	// both read in the same transaction as the Turns.
@@ -205,6 +209,10 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		}
 		if nodeRun.RunID != runID {
 			return domain.ErrNotFound
+		}
+		run, err := tx.Runs().Get(ctx, runID)
+		if err != nil {
+			return err
 		}
 		// The Agent Run row is the persisted fact that this NodeRun is a MANAGED_AGENT
 		// one that has started; a NodeRun of any other Node Type has none, and neither
@@ -282,7 +290,7 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		if err != nil {
 			return err
 		}
-		trace = AgentTrace{AgentRun: agentRun, Turns: rounds, Facts: facts, Budget: budget}
+		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget}
 		return nil
 	})
 	if err != nil {

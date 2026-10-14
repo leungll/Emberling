@@ -585,6 +585,50 @@ export interface ToolAttemptTrace {
   dispatchedAt: string | null;
   completedAt: string | null;
   error: ExecutionError | null;
+  /** `generate_image` only: the photo the call works on, from its arguments. */
+  photo?: ToolPhotoTrace;
+  /** `sandbox_test` only, once the Attempt `SUCCEEDED`: the runner's verdict and counts. */
+  test?: ToolTestTrace;
+  /** `deploy` only: the target from its arguments, the version once it `SUCCEEDED`. */
+  deployment?: ToolDeploymentTrace;
+  /** `generate_video` only, once the Attempt `SUCCEEDED` and the URL is credential-free. */
+  video?: ToolVideoTrace;
+  /** Members left out of this Attempt's projection, and why. */
+  withheld?: WithheldToolField[];
+}
+
+/**
+ * A photo by Asset ID. `position` (1-based) and `count` place it in the Run input's photo
+ * set; both are absent when the set does not determine a single position.
+ */
+export interface ToolPhotoTrace {
+  photoAssetId: string;
+  position?: number;
+  count?: number;
+}
+
+export interface ToolTestTrace {
+  passed: boolean;
+  summary: { total: number; failed: number };
+}
+
+export interface ToolDeploymentTrace {
+  target?: { service: string; environment: string };
+  version?: string;
+}
+
+export interface ToolVideoTrace {
+  videoUrl: string;
+}
+
+/**
+ * A projected member the Backend did not return. `TOO_LARGE`: over the Trace field bound,
+ * never cut. `UNSAFE_URL`: a URL with userinfo, query or fragment, which could carry a
+ * credential. `field` is a dotted path such as `video.videoUrl`.
+ */
+export interface WithheldToolField {
+  field: string;
+  reason: 'TOO_LARGE' | 'UNSAFE_URL';
 }
 
 /** One Turn with its Decision, Action and Tool Attempts, as persisted. */

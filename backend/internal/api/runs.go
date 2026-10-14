@@ -186,7 +186,8 @@ func (d Deps) getNodeRunDetail(w http.ResponseWriter, r *http.Request) {
 // response, a Decision's arguments, output and response summary, and a Tool Attempt's
 // input and result are all execution payloads, and the Tool Attempt's callback token hash
 // is a Secret: none of them is a field here, so no future change to a domain
-// struct can leak one through this response.
+// struct can leak one through this response. The only Tool input and result members
+// shown are the named, type-checked ones agent_trace_tool_view.go selects.
 
 // agentTraceResponse is the whole projection: the Agent Run, its Turns in persisted
 // order, the execution facts it recorded, and its generation budget.
@@ -295,6 +296,16 @@ type toolAttemptDTO struct {
 	DispatchedAt    *time.Time               `json:"dispatchedAt"`
 	CompletedAt     *time.Time               `json:"completedAt"`
 	Error           *domain.ExecutionError   `json:"error"`
+
+	// The keys below are the Tool-call facts of agent_trace_tool_view.go. Each is present
+	// only for the Tool it describes and only once the facts it shows are committed;
+	// Withheld names a member left out because it exceeded the field bound or could carry
+	// a credential.
+	Photo      *toolPhotoDTO      `json:"photo,omitempty"`
+	Test       *toolTestDTO       `json:"test,omitempty"`
+	Deployment *toolDeploymentDTO `json:"deployment,omitempty"`
+	Video      *toolVideoDTO      `json:"video,omitempty"`
+	Withheld   []withheldFieldDTO `json:"withheld,omitempty"`
 }
 
 // agentCallbackBindingDTO is the Tool Attempt's Binding summary: the same three
@@ -318,13 +329,20 @@ func (d Deps) getAgentTrace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, d.Logger, err, codeNodeRunNotFound)
 		return
 	}
-	writeJSON(w, http.StatusOK, toAgentTraceResponse(trace))
+	writeJSON(w, http.StatusOK, toAgentTraceResponse(trace, d.TraceMaxFieldBytes))
 }
 
-func toAgentTraceResponse(trace service.AgentTrace) agentTraceResponse {
+func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTraceResponse {
+	projector := newToolViewProjector(trace.RunInput, maxFieldBytes)
 	turns := make([]agentTraceTurnDTO, len(trace.Turns))
 	for i, round := range trace.Turns {
 		turns[i] = toAgentTraceTurnDTO(round)
+		for j, attempt := range round.ToolAttempts {
+			view := projector.project(attempt)
+			projected := &turns[i].ToolAttempts[j]
+			projected.Photo, projected.Test, projected.Deployment, projected.Video, projected.Withheld =
+				view.Photo, view.Test, view.Deployment, view.Video, view.Withheld
+		}
 	}
 	return agentTraceResponse{
 		AgentRun: agentRunDTO{
