@@ -23,10 +23,11 @@ const (
 const decisionFormatName = "agent_decision"
 
 // responseGuide tells the model how to fill the strict Decision form. The member names
-// match the derived strict schema, which rejects any other member.
+// match the derived strict schema, which rejects any other member. arguments and
+// statePatch stay JSON-encoded strings; output is the answer itself.
 const responseGuide = `Reply with exactly one JSON object that matches the response schema. Every member is required; use null for a member that does not apply.
 - To call one tool: set "kind" to "TOOL_CALL", "tool" to the tool name, and "arguments" to a JSON-encoded string of an object that satisfies that tool's input schema. Set "output" to null.
-- To finish: set "kind" to "FINAL" and "output" to a JSON-encoded string of a value that satisfies the final output schema (a plain text answer is encoded as a JSON string, for example "\"done\""). Set "tool" and "arguments" to null.
+- To finish: set "kind" to "FINAL" and "output" to a value that satisfies the final output schema. Write a text answer as plain text, without JSON-encoding it. Set "tool" and "arguments" to null.
 - "statePatch" is null, or a JSON-encoded string of a JSON Merge Patch object applied to the current state.`
 
 type chatRequest struct {
@@ -111,6 +112,11 @@ func (p *Provider) buildChatRequest(request registry.ModelRequest) (chatRequest,
 		}
 	}
 
+	schema, err := p.decision.schemaFor(request.FinalOutputSchema)
+	if err != nil {
+		return chatRequest{}, err
+	}
+
 	var routing *providerRouting
 	if p.requireParameters {
 		routing = &providerRouting{RequireParameters: true}
@@ -124,7 +130,7 @@ func (p *Provider) buildChatRequest(request registry.ModelRequest) (chatRequest,
 			JSONSchema: jsonSchema{
 				Name:   decisionFormatName,
 				Strict: true,
-				Schema: p.decision.schema,
+				Schema: schema,
 			},
 		},
 		Temperature: config.Temperature,

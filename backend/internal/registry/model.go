@@ -58,6 +58,12 @@ type ModelToolSpec struct {
 // ModelRequest is the complete call contract between the Runtime and an Adapter. It holds
 // only values already frozen for this Turn: an Adapter may not re-read a newer Definition
 // or supply Tools of its own.
+//
+// FinalOutputSchema is the Schema a FINAL output must satisfy: an Agent's frozen
+// outputSchema, or Text Generation's string Schema. A Schema whose root type is "object"
+// asks for the FINAL output as that JSON object; any other Schema, or none, asks for plain
+// text. A structured-decision model returns output in that form directly, never as a JSON
+// encoding of it.
 type ModelRequest struct {
 	ModelID           string
 	Instructions      string

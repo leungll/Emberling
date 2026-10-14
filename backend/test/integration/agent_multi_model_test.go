@@ -27,7 +27,8 @@ import (
 const multiModelAPIKey = "sk-multi-model-test"
 
 // upstreamDecision is one scripted answer in the strict Decision form the Adapter asks
-// for: arguments and output are JSON-encoded strings, or null.
+// for: arguments is a JSON-encoded string, output is the plain answer text of a text-form
+// Agent, and either is null when it does not apply.
 type upstreamDecision struct {
 	Kind       string  `json:"kind"`
 	Tool       *string `json:"tool"`
@@ -215,8 +216,8 @@ func TestAgentRun_TwoNodesDifferentModels_EachTurnUsesFrozenModelID(t *testing.T
 		betaID, betaUpstream   = "beta-2.0", "vendor/beta-upstream"
 	)
 	upstream := newMultiModelUpstream(t, map[string][]upstreamDecision{
-		alphaUpstream: {upstreamToolCall(lookup.ToolName, `{"key":"ada"}`), upstreamFinal(`"alpha answer"`)},
-		betaUpstream:  {upstreamFinal(`"beta answer"`)},
+		alphaUpstream: {upstreamToolCall(lookup.ToolName, `{"key":"ada"}`), upstreamFinal("alpha answer")},
+		betaUpstream:  {upstreamFinal("beta answer")},
 	})
 	alpha := newUpstreamModel(t, upstream, alphaID, alphaUpstream)
 	beta := newUpstreamModel(t, upstream, betaID, betaUpstream)
@@ -290,8 +291,8 @@ func TestAgentTurn_ModelRemovedAfterRunCreated_FailsModelErrorRetainsTrace(t *te
 		keptID, keptUpstream       = "kept-1.0", "vendor/kept-upstream"
 	)
 	upstream := newMultiModelUpstream(t, map[string][]upstreamDecision{
-		removedUpstream: {upstreamToolCall(lookup.ToolName, `{"key":"ada"}`), upstreamFinal(`"must never be produced"`)},
-		keptUpstream:    {upstreamFinal(`"must never be produced"`)},
+		removedUpstream: {upstreamToolCall(lookup.ToolName, `{"key":"ada"}`), upstreamFinal("must never be produced")},
+		keptUpstream:    {upstreamFinal("must never be produced")},
 	})
 	first := newAgentHarness(t, agentHarnessOptions{ModelProviders: []registry.ModelProvider{
 		newUpstreamModel(t, upstream, removedID, removedUpstream),
