@@ -301,7 +301,7 @@ func TestProvider_Generate_SoftwareDeliveryTrajectories_TestThenDeployThenFinal(
 func TestTrajectories_EmbeddedFixtures_LoadAndAppearInTextModelConfigSchema(t *testing.T) {
 	names := TrajectoryNames()
 	for _, want := range []string{
-		"photo-set", "photo-set-limit", "photo-set-skip-review",
+		"photo-set", "photo-set-limit", "photo-set-object", "photo-set-skip-review",
 		"software-delivery", "software-delivery-duplicate-callback",
 	} {
 		if !slices.Contains(names, want) {

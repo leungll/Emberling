@@ -253,6 +253,78 @@ func TestValidateFinalOutput_Rejection_NeverQuotesOutput(t *testing.T) {
 	}
 }
 
+func TestValidateFinalOutput_ObjectFormObject_Accepted(t *testing.T) {
+	output := `{"settingsDigest":"sha256:abc","examples":[{"photoAssetId":"asset_1","assetRef":"art_1"}]}`
+	if err := ValidateFinalOutput(json.RawMessage(output), json.RawMessage(photoSetFinalSchema)); err != nil {
+		t.Fatalf("ValidateFinalOutput() error = %v, want an object satisfying the Schema accepted", err)
+	}
+}
+
+func TestValidateFinalOutput_ObjectFormString_InvalidActionNamesDecodedType(t *testing.T) {
+	for _, output := range []string{
+		`"done"`,
+		`"{\"examples\":[],\"settingsDigest\":\"sha256:abc\"}"`,
+	} {
+		t.Run(output, func(t *testing.T) {
+			msg := finalOutputMessage(t, output, photoSetFinalSchema)
+			const want = "INVALID_ACTION: final output: decoded to a JSON string, but the frozen OutputSchema requires a JSON object"
+			if msg != want {
+				t.Errorf("message = %q, want %q", msg, want)
+			}
+		})
+	}
+}
+
+func TestValidateFinalOutput_ObjectFormInnerShapeMismatch_InvalidAction(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		output   string
+		location string
+	}{
+		{"missing member", `{"examples":[{"photoAssetId":"asset_1"}],"settingsDigest":"d"}`,
+			"/properties/examples/items/required"},
+		{"wrong type", `{"examples":[{"photoAssetId":"asset_1","assetRef":7}],"settingsDigest":"d"}`,
+			"/properties/examples/items/properties/assetRef/type"},
+		{"extra member", `{"examples":[],"settingsDigest":"d","note":"chosen"}`,
+			"/additionalProperties"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := finalOutputMessage(t, tc.output, photoSetFinalSchema)
+			if !strings.Contains(msg, "decoded to a JSON object, but the frozen OutputSchema rejects it at "+tc.location) {
+				t.Errorf("message = %q, want the decoded type and the failing Schema location %s", msg, tc.location)
+			}
+		})
+	}
+}
+
+func TestValidateFinalOutput_ObjectFormNoOutput_InvalidActionNamesExpectedForm(t *testing.T) {
+	msg := finalOutputMessage(t, "  ", photoSetFinalSchema)
+	if !strings.Contains(msg, "this Agent's output must be a JSON object satisfying its frozen OutputSchema") {
+		t.Errorf("message = %q, want it to name the object form", msg)
+	}
+}
+
+func TestValidateFinalOutput_TextFormObject_InvalidActionNamesDecodedType(t *testing.T) {
+	msg := finalOutputMessage(t, `{"examples":[],"settingsDigest":"d"}`, "")
+	const want = "INVALID_ACTION: final output: decoded to a JSON object; this Agent's output must be a JSON string"
+	if msg != want {
+		t.Errorf("message = %q, want %q", msg, want)
+	}
+}
+
+func TestValidateFinalOutput_ObjectFormRejection_NeverQuotesOutput(t *testing.T) {
+	const marker = "model-chosen-marker"
+	for _, output := range []string{
+		`"` + marker + `"`,
+		`{"examples":[{"photoAssetId":"` + marker + `","assetRef":1}],"settingsDigest":"` + marker + `"}`,
+		`{"examples":[],"settingsDigest":"d","` + marker + `":"` + marker + `"}`,
+	} {
+		if msg := finalOutputMessage(t, output, photoSetFinalSchema); strings.Contains(msg, marker) {
+			t.Errorf("message = %q, want no text taken from the model's output", msg)
+		}
+	}
+}
+
 func TestParseModelDecision_ChecksOnlyTheBasicShape(t *testing.T) {
 	// The model result transaction confirms the envelope shape only. A Tool
 	// outside the allowlist and arguments the Tool InputSchema rejects must still commit

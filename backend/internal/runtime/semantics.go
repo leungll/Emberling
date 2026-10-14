@@ -19,8 +19,9 @@ import (
 // catalog.ValidateSemantics: the ManagedAgentBinding a real agent Node Type resolves to
 // has no Executor and registers a no-op ValidateSemantics (registry.NodeRegistry), so the
 // fixed Agent config shape's own invariants (maxTurns/timeoutMs bounds, Schema
-// compilability, stateSchema accepting {}, outputSchema accepting a string) are enforced
-// here directly, inside pure runtime, rather than through the Registry seam.
+// compilability, stateSchema accepting {}, outputSchema taking the text or the object
+// output form) are enforced here directly, inside pure runtime, rather than through the
+// Registry seam.
 func validateSemantics(ctx context.Context, def domain.Definition, catalog NodeCatalog) []ValidationError {
 	var errs []ValidationError
 	for _, node := range def.Nodes {

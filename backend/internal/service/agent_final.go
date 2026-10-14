@@ -355,12 +355,11 @@ func (s *ExecutionService) succeedAgentNodeRun(
 // output port. Which port that is comes from the registered Metadata, not a constant this
 // package restates (CLAUDE.md "Extensions and external calls").
 //
-// The port's registered DataType is `text`, and no design document says how a structured
-// output (one validated against a frozen Output Schema that is not a string) reaches it.
-// The decision here is to publish it as its canonical JSON text, so the port always holds
-// the value its registered DataType promises and the complete answer still reaches the
-// downstream node. The Agent's own structured value stays authoritative in the Decision
-// and in the Final Context Version.
+// The port's registered DataType is `text`. A text-form answer is published as the text
+// itself; an object-form answer is published as the canonical JSON text runtime derives
+// from the committed Decision, so immediate advancement and the Reconciler write
+// byte-identical port values. The structured value itself stays authoritative in the
+// Decision and in the Final Context Version; no second copy of it is stored.
 func (s *ExecutionService) agentNodeOutput(nodeType string, output json.RawMessage) (json.RawMessage, error) {
 	reg, ok := s.deps.Nodes.Get(nodeType)
 	if !ok {
@@ -371,17 +370,12 @@ func (s *ExecutionService) agentNodeOutput(nodeType string, output json.RawMessa
 			nodeType, len(reg.Metadata.Outputs))
 	}
 
-	value := output
-	var text string
-	if err := json.Unmarshal(output, &text); err != nil {
-		encoded, err := json.Marshal(string(output))
-		if err != nil {
-			return nil, fmt.Errorf("execution: encode agent output for node type %q: %w", nodeType, err)
-		}
-		value = encoded
+	text, err := runtime.FinalOutputText(output)
+	if err != nil {
+		return nil, fmt.Errorf("execution: agent output for node type %q: %w", nodeType, err)
 	}
 
-	outputBytes, err := json.Marshal(map[string]json.RawMessage{reg.Metadata.Outputs[0].Name: value})
+	outputBytes, err := json.Marshal(map[string]string{reg.Metadata.Outputs[0].Name: text})
 	if err != nil {
 		return nil, fmt.Errorf("execution: encode agent node output for node type %q: %w", nodeType, err)
 	}

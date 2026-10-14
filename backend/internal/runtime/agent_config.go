@@ -31,6 +31,9 @@ type AgentNodeConfig struct {
 	// with. Whether it resolves, declares the right capability and is required by the
 	// allowlist is decided in service, which holds the Registries.
 	ImageModelID string `json:"imageModelId,omitempty"`
+	// OutputForm is the form outputSchema gives the FINAL output. It is derived by
+	// ParseAgentNodeConfig and is not part of the saved config.
+	OutputForm AgentOutputForm `json:"-"`
 }
 
 // AgentConfigError is one `agent` Node config violation found by ParseAgentNodeConfig.
@@ -61,9 +64,10 @@ func (e *AgentConfigError) Error() string {
 //     JSON Schema document.
 //   - stateSchema, when present, accepts `{}` -- an Agent Run's State Version 0
 //     ("State Version 0 = {}").
-//   - outputSchema, when present, accepts a JSON string instance -- the Agent's single
-//     `text` output port has no other MVP shape (an Agent's OutputSchema must accept
-//     string in the MVP).
+//   - outputSchema, when present, has one of the two output forms: the text form accepts
+//     the string "", and the object form declares the root type "object" and stays
+//     inside the strict output subset. Absent, the Agent has the text form. Either way
+//     the FINAL output reaches the Agent's single `text` port.
 //
 // It does not resolve modelId against the Model Registry or allowedTools against the Tool
 // Registry: runtime is pure and holds no Registry access (CLAUDE.md "Package boundaries");
@@ -109,11 +113,13 @@ func ParseAgentNodeConfig(raw json.RawMessage) (AgentNodeConfig, error) {
 		}
 	}
 
+	cfg.OutputForm = AgentOutputText
 	if len(bytes.TrimSpace(cfg.OutputSchema)) > 0 {
-		probe, _ := json.Marshal("")
-		if err := validateAgainstSchema(cfg.OutputSchema, probe); err != nil {
-			return AgentNodeConfig{}, &AgentConfigError{Field: "outputSchema", Message: "outputSchema must accept a string output value: " + err.Error()}
+		form, err := classifyAgentOutputSchema(cfg.OutputSchema)
+		if err != nil {
+			return AgentNodeConfig{}, err
 		}
+		cfg.OutputForm = form
 	}
 
 	return cfg, nil

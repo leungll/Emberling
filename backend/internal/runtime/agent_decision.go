@@ -112,9 +112,12 @@ func ValidateToolCall(decision domain.AgentDecision, allowlist []string, tool do
 }
 
 // ValidateFinalOutput is the execution-time check of a committed FINAL Decision's output
-// against the Agent Run's frozen OutputSchema. An absent
-// OutputSchema means the MVP default: the Agent's single output port is `text`, so the
-// output must be a JSON string (an Agent's OutputSchema must accept string in the MVP).
+// against the Agent Run's frozen OutputSchema, in the form that Schema declares. An absent
+// OutputSchema is the text form without a Schema: the output must be a JSON string. A
+// Schema whose root type is "object" is the object form: the output must be a JSON object
+// satisfying it. Any other frozen Schema is the text form and the output must satisfy it.
+// The form is read from the frozen Schema itself, because the text form can never declare
+// the root type "object": its Schema has to accept the string "".
 //
 // A violation is an *InvalidActionError: the Final Action fails as INVALID_ACTION, without
 // a new State Version and without a second model call. Its message names the form the
@@ -124,8 +127,12 @@ func ValidateToolCall(decision domain.AgentDecision, allowlist []string, tool do
 // model wrote, because that is unbounded model content.
 func ValidateFinalOutput(output json.RawMessage, outputSchema json.RawMessage) error {
 	outputSchema = presentJSON(outputSchema)
+	objectForm := frozenOutputForm(outputSchema) == AgentOutputObject
 	expected := "this Agent's output must be a JSON string"
-	if len(outputSchema) > 0 {
+	switch {
+	case objectForm:
+		expected = "this Agent's output must be a JSON object satisfying its frozen OutputSchema"
+	case len(outputSchema) > 0:
 		expected = "this Agent's output must satisfy its frozen OutputSchema"
 	}
 
@@ -144,6 +151,9 @@ func ValidateFinalOutput(output json.RawMessage, outputSchema json.RawMessage) e
 		}
 		return nil
 	}
+	if objectForm && decoded != jsonTypeObject {
+		return finalOutputError(fmt.Sprintf("decoded to %s, but the frozen OutputSchema requires %s", decoded, jsonTypeObject))
+	}
 
 	err := validateAgainstSchema(outputSchema, output)
 	if err == nil {
@@ -156,6 +166,21 @@ func ValidateFinalOutput(output json.RawMessage, outputSchema json.RawMessage) e
 		return finalOutputError(fmt.Sprintf("decoded to %s, but the frozen OutputSchema is not usable", decoded))
 	}
 	return finalOutputError(fmt.Sprintf("decoded to %s, but %s", decoded, describeSchemaViolation(violation)))
+}
+
+// frozenOutputForm reads the output form of an outputSchema frozen on an Agent Run. The
+// Schema already passed ParseAgentNodeConfig, so its root type alone decides the form.
+func frozenOutputForm(outputSchema json.RawMessage) AgentOutputForm {
+	var root struct {
+		Type json.RawMessage `json:"type"`
+	}
+	if len(outputSchema) == 0 || json.Unmarshal(outputSchema, &root) != nil {
+		return AgentOutputText
+	}
+	if bytes.Equal(bytes.TrimSpace(root.Type), []byte(`"object"`)) {
+		return AgentOutputObject
+	}
+	return AgentOutputText
 }
 
 func finalOutputError(message string) *InvalidActionError {
