@@ -3,10 +3,13 @@ package runtime
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
@@ -114,25 +117,163 @@ func ValidateToolCall(decision domain.AgentDecision, allowlist []string, tool do
 // output must be a JSON string (an Agent's OutputSchema must accept string in the MVP).
 //
 // A violation is an *InvalidActionError: the Final Action fails as INVALID_ACTION, without
-// a new State Version and without a second model call.
+// a new State Version and without a second model call. Its message names the form the
+// Agent's output must take and the JSON type the output actually decoded to, and for a
+// Schema violation the failing keyword locations inside the frozen OutputSchema. It never
+// repeats the output itself: no value, member name or validator text taken from what the
+// model wrote, because that is unbounded model content.
 func ValidateFinalOutput(output json.RawMessage, outputSchema json.RawMessage) error {
-	output = presentJSON(output)
-	if len(output) == 0 {
-		return &InvalidActionError{Subject: "final output", Message: "FINAL decision carries no output"}
+	outputSchema = presentJSON(outputSchema)
+	expected := "this Agent's output must be a JSON string"
+	if len(outputSchema) > 0 {
+		expected = "this Agent's output must satisfy its frozen OutputSchema"
 	}
 
-	if len(presentJSON(outputSchema)) == 0 {
-		var text string
-		if err := json.Unmarshal(output, &text); err != nil {
-			return &InvalidActionError{Subject: "final output", Message: "without an OutputSchema the Agent output must be a JSON string"}
+	output = presentJSON(output)
+	if len(output) == 0 {
+		return finalOutputError("FINAL decision carries no output; " + expected)
+	}
+	decoded, ok := decodedJSONType(output)
+	if !ok {
+		return finalOutputError("FINAL output is not valid JSON; " + expected)
+	}
+
+	if len(outputSchema) == 0 {
+		if decoded != jsonTypeString {
+			return finalOutputError(fmt.Sprintf("decoded to %s; %s", decoded, expected))
 		}
 		return nil
 	}
 
-	if err := validateAgainstSchema(outputSchema, output); err != nil {
-		return &InvalidActionError{Subject: "final output", Message: "output does not satisfy the frozen OutputSchema", Err: err}
+	err := validateAgainstSchema(outputSchema, output)
+	if err == nil {
+		return nil
 	}
-	return nil
+	var violation *jsonschema.ValidationError
+	if !errors.As(err, &violation) {
+		// The frozen Schema itself cannot be compiled. Its compiler text is not carried:
+		// the Definition author fixes the Schema, not the model.
+		return finalOutputError(fmt.Sprintf("decoded to %s, but the frozen OutputSchema is not usable", decoded))
+	}
+	return finalOutputError(fmt.Sprintf("decoded to %s, but %s", decoded, describeSchemaViolation(violation)))
+}
+
+func finalOutputError(message string) *InvalidActionError {
+	return &InvalidActionError{Subject: "final output", Message: message}
+}
+
+// The JSON types a FINAL output can decode to, phrased for an INVALID_ACTION message.
+const (
+	jsonTypeObject  = "a JSON object"
+	jsonTypeArray   = "a JSON array"
+	jsonTypeString  = "a JSON string"
+	jsonTypeNumber  = "a JSON number"
+	jsonTypeBoolean = "a JSON boolean"
+	jsonTypeNull    = "JSON null"
+)
+
+// decodedJSONType reports which JSON type one complete value decodes to. Only the first
+// significant byte is inspected once the value is known to be valid JSON.
+func decodedJSONType(raw json.RawMessage) (string, bool) {
+	if !json.Valid(raw) {
+		return "", false
+	}
+	switch bytes.TrimSpace(raw)[0] {
+	case '{':
+		return jsonTypeObject, true
+	case '[':
+		return jsonTypeArray, true
+	case '"':
+		return jsonTypeString, true
+	case 't', 'f':
+		return jsonTypeBoolean, true
+	case 'n':
+		return jsonTypeNull, true
+	default:
+		return jsonTypeNumber, true
+	}
+}
+
+// schemaTypeName phrases one JSON Schema `type` name like the decoded types above.
+func schemaTypeName(schemaType string) (string, bool) {
+	switch schemaType {
+	case "object":
+		return jsonTypeObject, true
+	case "array":
+		return jsonTypeArray, true
+	case "string":
+		return jsonTypeString, true
+	case "number":
+		return jsonTypeNumber, true
+	case "integer":
+		return "a JSON integer", true
+	case "boolean":
+		return jsonTypeBoolean, true
+	case "null":
+		return jsonTypeNull, true
+	default:
+		return "", false
+	}
+}
+
+// maxReportedSchemaLocations bounds how many failing keyword locations one message lists.
+const maxReportedSchemaLocations = 3
+
+// describeSchemaViolation states why the frozen OutputSchema rejected the output. A wrong
+// type at the root is named as the type the Schema requires. Any other violation is named
+// by its keyword locations inside the Schema, which come from the Definition author and
+// never from the model, unlike the validator's own text, which can quote the instance.
+func describeSchemaViolation(violation *jsonschema.ValidationError) string {
+	leaves := schemaViolationLeaves(violation, nil)
+	for _, leaf := range leaves {
+		if wrongType, ok := leaf.ErrorKind.(*kind.Type); ok && len(leaf.InstanceLocation) == 0 {
+			wants := make([]string, 0, len(wrongType.Want))
+			for _, want := range wrongType.Want {
+				if name, known := schemaTypeName(want); known {
+					wants = append(wants, name)
+				}
+			}
+			if len(wants) > 0 {
+				return "the frozen OutputSchema requires " + strings.Join(wants, " or ")
+			}
+		}
+	}
+
+	locations := make([]string, 0, len(leaves))
+	for _, leaf := range leaves {
+		location := leaf.SchemaURL
+		if i := strings.IndexByte(location, '#'); i >= 0 {
+			location = location[i+1:]
+		}
+		for _, keyword := range leaf.ErrorKind.KeywordPath() {
+			location += "/" + keyword
+		}
+		if location == "" {
+			location = "/"
+		}
+		if !slices.Contains(locations, location) {
+			locations = append(locations, location)
+		}
+	}
+	if len(locations) == 0 {
+		return "the frozen OutputSchema rejects it"
+	}
+	if len(locations) > maxReportedSchemaLocations {
+		return fmt.Sprintf("the frozen OutputSchema rejects it at %s and %d more",
+			strings.Join(locations[:maxReportedSchemaLocations], ", "), len(locations)-maxReportedSchemaLocations)
+	}
+	return "the frozen OutputSchema rejects it at " + strings.Join(locations, ", ")
+}
+
+// schemaViolationLeaves collects the innermost violations, the ones naming a keyword.
+func schemaViolationLeaves(violation *jsonschema.ValidationError, leaves []*jsonschema.ValidationError) []*jsonschema.ValidationError {
+	if len(violation.Causes) == 0 {
+		return append(leaves, violation)
+	}
+	for _, cause := range violation.Causes {
+		leaves = schemaViolationLeaves(cause, leaves)
+	}
+	return leaves
 }
 
 // ValidateToolResult checks the result of one real Tool call against that Tool's

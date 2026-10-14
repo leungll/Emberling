@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
@@ -151,6 +152,104 @@ func TestValidateFinalOutput_SchemaViolation_Fails(t *testing.T) {
 	}
 	if _, ok := AsInvalidActionError(err); !ok {
 		t.Fatalf("ValidateFinalOutput() error = %v, want an *InvalidActionError", err)
+	}
+}
+
+// finalOutputMessage returns the INVALID_ACTION text ValidateFinalOutput reports, failing
+// the test when the output is accepted or the error is not an *InvalidActionError.
+func finalOutputMessage(t *testing.T, output, schema string) string {
+	t.Helper()
+	var rawSchema json.RawMessage
+	if schema != "" {
+		rawSchema = json.RawMessage(schema)
+	}
+	err := ValidateFinalOutput(json.RawMessage(output), rawSchema)
+	if err == nil {
+		t.Fatalf("ValidateFinalOutput(%s, %s) error = nil, want INVALID_ACTION", output, schema)
+	}
+	if _, ok := AsInvalidActionError(err); !ok {
+		t.Fatalf("ValidateFinalOutput() error = %v, want an *InvalidActionError", err)
+	}
+	return err.Error()
+}
+
+func TestValidateFinalOutput_NoSchemaNonString_InvalidActionNamesDecodedType(t *testing.T) {
+	for _, tc := range []struct {
+		output  string
+		decoded string
+	}{
+		{`{"answer":"42"}`, "decoded to a JSON object"},
+		{`["a","b"]`, "decoded to a JSON array"},
+		{`42`, "decoded to a JSON number"},
+		{`true`, "decoded to a JSON boolean"},
+		{`null`, "decoded to JSON null"},
+	} {
+		t.Run(tc.output, func(t *testing.T) {
+			msg := finalOutputMessage(t, tc.output, "")
+			if !strings.Contains(msg, tc.decoded) {
+				t.Errorf("message = %q, want it to say the output %s", msg, tc.decoded)
+			}
+			if !strings.Contains(msg, "this Agent's output must be a JSON string") {
+				t.Errorf("message = %q, want it to name the expected form: a JSON string", msg)
+			}
+		})
+	}
+}
+
+func TestValidateFinalOutput_NoOutput_InvalidActionNamesExpectedForm(t *testing.T) {
+	msg := finalOutputMessage(t, "  ", "")
+	if !strings.Contains(msg, "carries no output") || !strings.Contains(msg, "this Agent's output must be a JSON string") {
+		t.Errorf("message = %q, want it to say the output is missing and must be a JSON string", msg)
+	}
+}
+
+func TestValidateFinalOutput_SchemaRootTypeMismatch_InvalidActionNamesBothTypes(t *testing.T) {
+	msg := finalOutputMessage(t, `{"answer":"42"}`, `{"type":"string"}`)
+	if !strings.Contains(msg, "decoded to a JSON object") {
+		t.Errorf("message = %q, want it to name the decoded type: a JSON object", msg)
+	}
+	if !strings.Contains(msg, "the frozen OutputSchema requires a JSON string") {
+		t.Errorf("message = %q, want it to name the type the frozen OutputSchema requires", msg)
+	}
+}
+
+func TestValidateFinalOutput_SchemaKeywordViolation_InvalidActionNamesSchemaLocation(t *testing.T) {
+	msg := finalOutputMessage(t, `"no"`, `{"type":"string","minLength":3}`)
+	if !strings.Contains(msg, "decoded to a JSON string") {
+		t.Errorf("message = %q, want it to name the decoded type: a JSON string", msg)
+	}
+	if !strings.Contains(msg, "frozen OutputSchema rejects it at /minLength") {
+		t.Errorf("message = %q, want it to name the failing OutputSchema keyword location", msg)
+	}
+}
+
+func TestValidateFinalOutput_ManySchemaViolations_InvalidActionMessageIsBounded(t *testing.T) {
+	schema := `{"type":["string","object"],"properties":{` +
+		`"a":{"type":"integer"},"b":{"type":"integer"},"c":{"type":"integer"},` +
+		`"d":{"type":"integer"},"e":{"type":"integer"}}}`
+	msg := finalOutputMessage(t, `{"a":"x","b":"x","c":"x","d":"x","e":"x"}`, schema)
+	if !strings.Contains(msg, "and 2 more") {
+		t.Errorf("message = %q, want at most three locations followed by the count of the rest", msg)
+	}
+}
+
+func TestValidateFinalOutput_Rejection_NeverQuotesOutput(t *testing.T) {
+	const marker = "model-chosen-marker"
+	for _, tc := range []struct {
+		name   string
+		output string
+		schema string
+	}{
+		{"object without schema", `{"` + marker + `":"` + marker + `"}`, ""},
+		{"enum violation", `"` + marker + `"`, `{"type":"string","enum":["","approved"]}`},
+		{"unexpected member", `{"` + marker + `":1}`, `{"type":["string","object"],"additionalProperties":false}`},
+		{"constant violation", `"` + marker + `"`, `{"type":"string","const":""}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if msg := finalOutputMessage(t, tc.output, tc.schema); strings.Contains(msg, marker) {
+				t.Errorf("message = %q, want no text taken from the model's output", msg)
+			}
+		})
 	}
 }
 
