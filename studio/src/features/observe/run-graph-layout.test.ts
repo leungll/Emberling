@@ -4,6 +4,7 @@ import {
   CARD_H,
   CARD_W,
   GAP_X,
+  GAP_Y,
   edgePath,
   fitView,
   graphLayout,
@@ -40,6 +41,15 @@ describe('graphLayout', () => {
     expect(layout.pos.get('c')).toMatchObject({ col: 1, row: 1 });
     expect(layout.pos.get('d')).toMatchObject({ col: 2, x: 2 * (CARD_W + GAP_X) });
     expect(layout.pos.get('a')?.y).toBe((layout.height - CARD_H) / 2);
+  });
+
+  it('stacks cards by the height each one needs, so taller cards never overlap', () => {
+    const tall = graphLayout(def, (id) => (id === 'b' ? 200 : CARD_H));
+    const b = tall.pos.get('b');
+    const c = tall.pos.get('c');
+    expect(b && c && c.y - b.y).toBe(200 + GAP_Y);
+    expect(tall.height).toBe(200 + GAP_Y + CARD_H);
+    expect(tall.pos.get('a')?.y).toBe(Math.round((tall.height - CARD_H) / 2));
   });
 
   it('routes a link that skips a column around the steps in its way', () => {

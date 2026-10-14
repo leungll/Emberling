@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router';
 
 import { FailCard, SelectLink, WaitCard } from './Diagnosis';
 import { ElementTime, RunOffset, Tokens } from './RunFacts';
-import { ValueView } from './ValueView';
+import { StepImages, ValueView } from './ValueView';
 import { ToolName, Words } from './Words';
 import type { DetailContext } from './detail-context';
 import { editHref, notRetried } from './run-diagnosis';
@@ -448,6 +448,7 @@ function StepOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
       <Section>
         <StepFacts el={el} ctx={ctx} />
       </Section>
+      <StepImages ctx={ctx} step={step} />
       {!step.trace && attemptEls.length > 1 ? (
         <Section title={f.attempts} count={attemptEls.length}>
           <ElementList items={attemptEls} ctx={ctx} label={(a) => a.label} />

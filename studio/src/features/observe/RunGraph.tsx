@@ -1,15 +1,18 @@
 import { Maximize, Minus, Plus } from 'lucide-react';
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
   type PointerEvent,
-  type ReactNode,
 } from 'react';
 
+import { cardInfo, type CardInfo } from './card-info';
 import { ElementTime } from './RunFacts';
+import { mediaItems } from './run-media';
+import { Words } from './Words';
 import { stepIcon } from '@/components/step/step-icons';
 import {
   CARD_H,
@@ -30,9 +33,10 @@ import {
 import { stepElementOf, type RunModel, type Step } from './run-model';
 import { statusInfo } from '@/components/status/status-info';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
+import { ThumbSet } from '@/components/media/Thumbs';
 import { IconButton } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
-import { copy as words, useCopy } from '@/lib/copy';
+import { useCopy } from '@/lib/copy';
 import { duration } from '@/lib/time';
 import { cn } from '@/lib/utils';
 
@@ -52,54 +56,69 @@ interface ViewState extends View {
   user: boolean;
 }
 
-/** The words under a card's name: why it failed, that it waits, or its turns and time. */
-function CardMeta({ model, step }: { model: RunModel; step: Step }): ReactNode {
-  const t = words.runs.trace;
+/** The plain words of a card after its status: the activity line, the turn and the time. */
+function metaText(info: CardInfo, step: Step): string {
   const nr = step.nodeRun;
-  if (!nr) return step.statusKey === 'NONE_RUN_FAILED' ? t.didNotRun : t.notStarted;
-  if (nr.status === 'FAILED') {
-    const code = nr.error?.code;
-    const entry = code
-      ? (words.errors as Record<string, { short: string } | undefined>)[code]
-      : undefined;
-    return entry?.short ?? words.runs.events.summary.failed;
-  }
-  if (nr.status === 'WAITING_CALLBACK') return t.waitStatus.live;
-  const el = model.byId.get(step.node.id);
-  const turns = step.trace ? words.runs.graph.turns(step.trace.turns.length) : '';
-  return (
-    <>
-      {turns}
-      {turns && el ? ', ' : null}
-      {el ? <ElementTime model={model} el={el} /> : null}
-    </>
-  );
+  const parts = [info.line.text];
+  if (info.turn) parts.push(info.turn);
+  if (nr?.latencyMs !== null && nr?.latencyMs !== undefined) parts.push(duration(nr.latencyMs));
+  return parts.join(', ');
 }
 
-/** Plain words of the card meta, for the card's accessible name. */
-function metaText(step: Step): string {
-  const t = words.runs.trace;
-  const nr = step.nodeRun;
-  if (!nr) return step.statusKey === 'NONE_RUN_FAILED' ? t.didNotRun : t.notStarted;
-  if (nr.status === 'FAILED') {
-    const code = nr.error?.code;
-    const entry = code
-      ? (words.errors as Record<string, { short: string } | undefined>)[code]
-      : undefined;
-    return entry?.short ?? words.runs.events.summary.failed;
-  }
-  if (nr.status === 'WAITING_CALLBACK') return t.waitStatus.live;
-  const parts: string[] = [];
-  if (step.trace) parts.push(words.runs.graph.turns(step.trace.turns.length));
-  if (nr.latencyMs !== null) parts.push(duration(nr.latencyMs));
-  return parts.join(', ');
+/**
+ * A full card's body: the activity line (a text preview clamped to two lines, its full
+ * text in the tooltip and the step's Output tab), the muted turn and time, then up to four
+ * thumbnails with the rest behind "+N".
+ */
+function CardBody({ model, step, info }: { model: RunModel; step: Step; info: CardInfo }) {
+  const el = model.byId.get(step.node.id);
+  const text = (
+    <span
+      data-ui-exempt={
+        info.clamp ? 'overflow:text-preview-full-text-in-tooltip-and-output' : undefined
+      }
+      className={cn(
+        'pl-8 text-sm wrap-anywhere',
+        info.idle ? 'text-fg-muted' : info.clamp ? 'line-clamp-2 text-fg-secondary' : 'text-fg',
+      )}
+    >
+      <Words text={info.line.text} tools={info.line.tools} />
+    </span>
+  );
+  const time = el && step.nodeRun ? <ElementTime model={model} el={el} /> : null;
+  return (
+    <>
+      {info.full ? <Tooltip content={info.full}>{text}</Tooltip> : text}
+      {info.turn || time ? (
+        <span className="pl-8 text-sm text-fg-muted">
+          {info.turn}
+          {info.turn && time ? ', ' : null}
+          {time}
+        </span>
+      ) : null}
+      {info.refs.length ? (
+        <ThumbSet
+          items={mediaItems(model, info.refs)}
+          max={4}
+          label={info.refsLabel ?? undefined}
+          tabbable={false}
+          className="pl-8"
+        />
+      ) : null}
+    </>
+  );
 }
 
 export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
   const copy = useCopy();
   const g = copy.runs.graph;
   const def = model.definition;
-  const layout = useMemo(() => graphLayout(def), [def]);
+  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
+  const layout = useMemo(() => graphLayout(def, (id) => heights.get(id) ?? CARD_H), [def, heights]);
+  const infos = useMemo(
+    () => new Map(model.steps.map((s) => [s.node.id, cardInfo(model, s)])),
+    [model],
+  );
   const viewport = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<ViewState>({ z: 1, tx: 0, ty: 0, user: false });
@@ -123,14 +142,41 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
   const shown: View = view.user || !size.w ? view : fitView(layout, size.w, size.h);
   const level = zoomLevel(shown.z);
   const lod = level === 'full' ? 0 : lodCardHeight(shown.z);
-  const heightOf = () => (lod ? lod : CARD_H);
+  const heightOf = (id: string) => (lod ? lod : (heights.get(id) ?? CARD_H));
+
+  // Full cards are as tall as their content: measure them before paint, and again whenever
+  // one changes size (a font arriving, a line that rewraps), and lay the columns out anew.
+  useLayoutEffect(() => {
+    const root = viewport.current;
+    if (lod || !root) return;
+    const cards = Array.from(root.querySelectorAll<HTMLElement>('[data-gid]'));
+    const measure = () => {
+      setHeights((prev) => {
+        let changed = prev.size !== cards.length;
+        const next = new Map<string, number>();
+        for (const c of cards) {
+          const id = c.dataset.gid ?? '';
+          const h = c.offsetHeight;
+          next.set(id, h);
+          if (prev.get(id) !== h) changed = true;
+        }
+        return changed ? next : prev;
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    for (const c of cards) ro.observe(c);
+    return () => {
+      ro.disconnect();
+    };
+  });
 
   // Keep the selected step in view: pan the least distance that shows its card.
   const stepId = stepElementOf(model.byId.get(selectedId))?.id ?? null;
   if (stepId !== revealed && size.w) {
     setRevealed(stepId);
     const p = stepId ? layout.pos.get(stepId) : undefined;
-    const next = p ? revealCard(shown, p, heightOf(), size.w, size.h) : null;
+    const next = p && stepId ? revealCard(shown, p, heightOf(stepId), size.w, size.h) : null;
     if (next) setView({ ...next, user: true });
   }
 
@@ -186,7 +232,7 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
   const focusCard = (id: string) => {
     setFocusId(id);
     const p = layout.pos.get(id);
-    const next = p ? revealCard(shown, p, heightOf(), size.w, size.h) : null;
+    const next = p ? revealCard(shown, p, heightOf(id), size.w, size.h) : null;
     if (next) setView({ ...next, user: true });
     viewport.current
       ?.querySelector<HTMLElement>(`[data-gid="${CSS.escape(id)}"]`)
@@ -286,7 +332,8 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
               const info = statusInfo({ kind: 'step', value: step.statusKey });
               const sel = selectedId === step.node.id;
               const within = !sel && stepId === step.node.id;
-              const meta = metaText(step);
+              const activity = infos.get(step.node.id) ?? cardInfo(model, step);
+              const meta = metaText(activity, step);
               const Icon = stepIcon(step.node.type);
               const card = (
                 <div
@@ -376,11 +423,7 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
                       />
                     </span>
                   </span>
-                  {lod ? null : (
-                    <span className="pl-8 text-sm text-fg-secondary">
-                      <CardMeta model={model} step={step} />
-                    </span>
-                  )}
+                  {lod ? null : <CardBody model={model} step={step} info={activity} />}
                 </div>
               );
               return lod ? (

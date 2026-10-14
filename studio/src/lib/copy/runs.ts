@@ -175,10 +175,57 @@ export const runs = {
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     fit: 'Fit view',
-    turns: (n: number) => plural(n, 'turn'),
     cardLabel: (name: string, status: string, meta: string) =>
       meta ? `${name}, ${status}, ${meta}` : `${name}, ${status}`,
     loadFailed: 'Couldn’t load the workflow version this run used.',
+  },
+
+  /** A run graph card's activity line: what the step is doing now, or what it produced. */
+  card: {
+    notStarted: 'Not started',
+    didNotRun: 'Did not run',
+    queued: 'Queued',
+    running: 'Running',
+    runningAs: {
+      image_generation: 'Generating an image',
+      text_generation: 'Generating text',
+      media_result: 'Checking the results',
+    } as Record<string, string>,
+    deciding: 'Deciding the next step',
+    calling: (tool: string) => `Calling ${tool}`,
+    passingAnswer: 'Passing on its answer',
+    waitingToReport: (who: string, tool: string) => `Waiting for ${who} to report ${tool}`,
+    waitingToReportBack: (who: string) => `Waiting for ${who} to report back`,
+    usedAllCalls: (n: number) => `Used all ${plural(n, 'generation call')}`,
+    blockedNeedsReview: (tool: string) =>
+      `Blocked from calling ${tool}: it needs a passed review first`,
+    blockedRequirement: (tool: string) => `Blocked from calling ${tool}: a requirement wasn’t met`,
+    outOfTimeWhile: (tool: string) => `Ran out of time while ${tool} was running`,
+    failed: 'Failed',
+    answeredWith: (n: number) => `Answered with ${plural(n, 'image')}`,
+    finishedWithAnswer: 'Finished with an answer',
+    generatedImage: 'Generated an image',
+    generatedImageFor: (n: number) => `Generated an image for photo ${String(n)}`,
+    passedReview: 'Passed review',
+    didNotPassReview: 'Did not pass review',
+    ofPhoto: (verdict: string, n: number) => `${verdict} (photo ${String(n)})`,
+    testsPassed: 'Tests passed',
+    testsFailed: 'Tests failed',
+    noText: 'No text',
+    jsonWith: (keys: readonly string[]) => `JSON with ${listNames(keys)}`,
+    photos: (n: number) => plural(n, 'photo'),
+    passedOf: (passed: number, total: number) =>
+      `${String(passed)} of ${plural(total, 'photo')} passed review`,
+    resultReady: 'Result ready',
+    finalImage: 'Final image',
+    withFormat: (word: string, format: string) => (format ? `${word}, ${format}` : word),
+    noImageGiven: 'No image given',
+    noImage: 'No image',
+    succeeded: 'Succeeded',
+    turn: (n: number) => `Turn ${String(n)}`,
+    finishedInTurn: (n: number) => `Finished in turn ${String(n)}`,
+    imagesSoFar: 'Images so far',
+    imagesBeforeFailure: 'Images it made before it failed',
   },
 
   media: {
@@ -191,6 +238,9 @@ export const runs = {
     passedOf: (n: number) => `of ${plural(n, 'photo')}`,
     policy: 'Policy',
     didNotPass: 'Did not pass',
+    savedResults: 'Saved results',
+    callResult: (what: string) => `${what}.`,
+    callResultGap: 'The full result isn’t in the trace yet; these are the results the call saved.',
   },
 
   logs: {

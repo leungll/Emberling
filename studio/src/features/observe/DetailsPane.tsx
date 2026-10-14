@@ -4,7 +4,8 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { ElementOverview } from './ElementOverview';
 import { RunOffset } from './RunFacts';
 import { TurnsTab } from './TurnsTab';
-import { ValueView } from './ValueView';
+import { CallResultView, ValueView } from './ValueView';
+import { callSaved } from './card-info';
 import { imageLabel, mediaItems, savedImageOf } from './run-media';
 import { Words } from './Words';
 import type { DetailContext } from './detail-context';
@@ -146,6 +147,14 @@ function IoTab({
       break;
     default:
       break;
+  }
+  const saved = gap && !input ? callSaved(ctx.model, el) : null;
+  if (saved) {
+    return (
+      <Pad>
+        <CallResultView ctx={ctx} saved={saved} />
+      </Pad>
+    );
   }
   if (gap) {
     return (

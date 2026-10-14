@@ -1,6 +1,6 @@
 /**
- * Images in a run: any thumbnail opens the one lightbox, and the details show a value's
- * images before its JSON.
+ * Images in a run: the run graph's cards say what each step did and show its images, any
+ * thumbnail opens the one lightbox, and the details show images before their JSON.
  */
 import { expect, test, type Page } from '@playwright/test';
 
@@ -28,6 +28,23 @@ async function details(page: Page, rowName: RegExp, tab: string) {
 }
 
 const states: ReviewState[] = [
+  {
+    name: 'run-media-cards',
+    url: runPath(photoRun),
+    mode: 'block',
+    overrides: photoRunOverrides(),
+    ready: async (page) => {
+      await graphReady(page);
+      await expect(card(page, 'node_brief')).toContainText('Boxed collectible figure.');
+      await expect(card(page, 'node_photos')).toContainText('3 photos');
+      await expect(card(page, 'node_photos').getByRole('button', { name: /^Open/ })).toHaveCount(3);
+      await expect(card(page, 'node_agent')).toContainText('Answered with 3 images');
+      await expect(card(page, 'node_agent')).toContainText('Finished in turn 9');
+      await expect(card(page, 'node_result')).toContainText('2 of 3 photos passed review');
+      await expect(card(page, 'node_output')).toContainText('Final image, JPEG');
+      await expect(card(page, 'node_output').getByRole('button', { name: /^Open/ })).toHaveCount(1);
+    },
+  },
   {
     name: 'run-media-lightbox',
     url: runPath(photoRun, '?tab=input'),
