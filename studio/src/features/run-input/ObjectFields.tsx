@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { humanKey, setAtPath } from './run-form';
 import type { JsonValue } from '@/api/types';
-import { TextArea, TextInput } from '@/components/ui/field';
+import { GrowArea, TextInput } from '@/components/ui/field';
 
 interface ObjectFieldsProps {
   /** Prefix for the sub-field ids, unique within the dialog. */
@@ -54,16 +54,16 @@ export function ObjectFields({ idPrefix, value, onChange, disabled }: ObjectFiel
             {humanKey(k)}
           </label>
           {isLongText(v) ? (
-            <TextArea
+            <GrowArea
               id={id}
               spellCheck={false}
               disabled={disabled}
-              rows={Math.min(12, v.split('\n').length + 1)}
+              rows={2}
               value={v}
               onChange={(e) => {
                 set(e.target.value);
               }}
-              className="resize-y font-mono text-sm whitespace-pre"
+              className="font-mono text-sm"
             />
           ) : typeof v === 'string' ? (
             <TextInput

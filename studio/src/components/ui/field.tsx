@@ -47,12 +47,13 @@ export function GrowArea(
   const { max = MAX_GROW, className, ref: outer, ...rest } = props;
   const inner = useRef<HTMLTextAreaElement>(null);
   const ref = outer ?? inner;
+  // A hidden area measures nothing, so it is measured again when it is shown.
   useLayoutEffect(() => {
     const ta = ref.current;
     if (!ta) return;
     ta.style.height = 'auto';
     ta.style.height = `${String(Math.min(ta.scrollHeight + 2, max))}px`;
-  }, [props.value, max, ref]);
+  }, [props.value, props.hidden, max, ref]);
   return <TextArea ref={ref} {...rest} className={cn('resize-y', className)} />;
 }
 

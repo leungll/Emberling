@@ -19,7 +19,7 @@ import { StateBlock } from '@/components/state/StateBlock';
 import { Callout } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Field, TextArea, TextInput } from '@/components/ui/field';
+import { Field, GrowArea, TextInput } from '@/components/ui/field';
 import { Kbd } from '@/components/ui/kbd';
 import { Segmented } from '@/components/ui/segmented';
 import { useCopy } from '@/lib/copy';
@@ -261,10 +261,10 @@ export function RunInputDialog({
             }}
           />
         ) : null}
-        <TextArea
+        <GrowArea
           {...c}
           hidden={showFields}
-          rows={f.kind === 'json' || obj ? Math.min(12, text.split('\n').length + 1) : 2}
+          rows={4}
           spellCheck={f.kind === 'text' && !obj}
           aria-required={f.required || undefined}
           value={text}
@@ -274,7 +274,7 @@ export function RunInputDialog({
           onBlur={() => {
             onBlur(f);
           }}
-          className={f.kind === 'json' || obj ? 'resize-y font-mono text-sm' : 'resize-y'}
+          className={f.kind === 'json' || obj ? 'font-mono text-sm' : undefined}
         />
       </>
     );
