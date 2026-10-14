@@ -199,6 +199,10 @@ type testEnvOptions struct {
 	ExtraNodeRegistrations []registry.NodeRegistration
 	ExtraToolRegistrations []registry.ToolRegistration
 
+	// TraceMaxFieldBytes overrides api.Deps.TraceMaxFieldBytes when > 0, so a test can
+	// push a Tool-call member over the Trace field bound without a large Tool result.
+	TraceMaxFieldBytes int
+
 	// ImageModels are real image models served through the OpenRouter Images API
 	// Adapter. Each is registered in the Model Registry, and generate_image calls it for
 	// its Model ID through the same bridge the Backend process uses, reading the source
@@ -451,6 +455,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		Logger:                  opts.Logger,
 		CallbackMaxPayloadBytes: callbackMaxPayloadBytes,
 		AssetMaxUploadBytes:     assetMaxUploadBytes,
+		TraceMaxFieldBytes:      opts.TraceMaxFieldBytes,
 	})
 
 	server := httptest.NewServer(router)
