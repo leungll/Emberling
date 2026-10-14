@@ -4,8 +4,10 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 
+import { data } from '../support/data';
 import { photoRun, photoRunOverrides } from '../support/photo-run';
 import { review, type ReviewState } from '../support/review';
+import { partwayRun, runList, withRuns } from '../support/runs';
 
 const runPath = (run: { workflowId: string; runId: string }, search = '') =>
   `/workflows/${run.workflowId}/runs/${run.runId}${search}`;
@@ -26,6 +28,9 @@ async function details(page: Page, rowName: RegExp, tab: string) {
   }
   await expect(selected).toBeVisible();
 }
+
+/** The photo set run as it stood while its agent was generating an image. */
+const generating = partwayRun(data.photos.runId, 24, 'running', 2);
 
 const states: ReviewState[] = [
   {
@@ -95,6 +100,23 @@ const states: ReviewState[] = [
       await expect(panel.getByRole('button', { name: /^Open/ })).toHaveCount(3);
       await expect(panel).toContainText('Photo 1');
       await expect(panel).toContainText('Photo 3');
+    },
+  },
+  {
+    name: 'run-media-generating',
+    url: runPath(generating),
+    mode: 'block',
+    overrides: { '/api/runs': runList(withRuns([generating.item])), ...generating.overrides },
+    ready: async (page) => {
+      await expect(page.getByRole('treegrid')).toBeVisible();
+      await expect(card(page, 'node_agent')).toContainText('Calling generate_image');
+      await expect(card(page, 'node_agent')).toContainText('Turn 3');
+      await expect(card(page, 'node_result')).toContainText('Not started');
+    },
+    act: async (page) => {
+      // Selecting an earlier step stops following; the header offers to follow again.
+      await card(page, 'node_photos').click();
+      await expect(page.getByRole('button', { name: 'Follow latest step' })).toBeVisible();
     },
   },
 ];

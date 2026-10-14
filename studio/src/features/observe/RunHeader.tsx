@@ -101,9 +101,9 @@ export function RunHeader({
       </div>
       <span className="flex-1" />
       {live && !following && connection === 'live' ? (
-        <Button variant="ghost" size="sm" tooltip={v.resumeLiveTip} onClick={onResumeLive}>
+        <Button variant="ghost" size="sm" tooltip={v.followLatestTip} onClick={onResumeLive}>
           <Play aria-hidden="true" className="size-icon-sm" />
-          {v.resumeLive}
+          {v.followLatest}
         </Button>
       ) : null}
       {live ? (
