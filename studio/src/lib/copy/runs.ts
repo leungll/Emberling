@@ -217,7 +217,7 @@ export const runs = {
     testsFailed: 'Tests failed',
     testsPassedOf: (total: number) => `Tests passed (${String(total)})`,
     testsPassedWithFailures: (failed: number, total: number) =>
-      `Tests passed (${String(failed)} of ${String(total)} failed)`,
+      `Tests passed, ${String(failed)} of ${String(total)} failed`,
     testsFailedOf: (failed: number, total: number) =>
       `Tests failed (${String(failed)} of ${String(total)})`,
     target: (service: string, environment: string) => `${service} in ${environment}`,
