@@ -1,0 +1,40 @@
+{
+  "nodeRun": {
+    "id": "nr_5330ab8d8e2948adb75622421875caec",
+    "runId": "run_1895158172ba4109826c3ba45cbfc59e",
+    "nodeId": "node_brief",
+    "nodeType": "text_input",
+    "status": "SUCCEEDED",
+    "input": {},
+    "output": {
+      "text": "A warm clay stop-motion look"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T09:13:48.408269Z",
+    "startedAt": "2026-10-12T09:13:48.419138Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T09:13:48.426976Z",
+    "latencyMs": 7,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_19b592b01f9e488c96bed27061131845",
+      "nodeRunId": "nr_5330ab8d8e2948adb75622421875caec",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {},
+      "result": {
+        "text": "A warm clay stop-motion look"
+      },
+      "startedAt": "2026-10-12T09:13:48.419138Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T09:13:48.426976Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

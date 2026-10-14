@@ -101,6 +101,26 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return parsed as T;
 }
 
+// --- Readiness --------------------------------------------------------------
+
+/** Whether the Backend answers: ready (200), still starting (503), or not reachable at all. */
+export type Readiness = 'ready' | 'starting' | 'unreachable';
+
+/**
+ * Reads the Backend's readiness probe, which lives beside /api rather than under it. Any
+ * other status, or a request that fails, means Studio cannot rely on the Backend.
+ */
+export async function getReadiness(signal?: AbortSignal): Promise<Readiness> {
+  try {
+    const response = await fetch('/ready', signal ? { signal } : undefined);
+    if (response.ok) return 'ready';
+    return response.status === 503 ? 'starting' : 'unreachable';
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return 'unreachable';
+  }
+}
+
 // --- Definition -------------------------------------------------------------
 
 export function listDefinitions(signal?: AbortSignal): Promise<DefinitionListItem[]> {

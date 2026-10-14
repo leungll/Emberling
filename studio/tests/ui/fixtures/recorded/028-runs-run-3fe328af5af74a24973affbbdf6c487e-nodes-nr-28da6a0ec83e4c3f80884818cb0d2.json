@@ -1,0 +1,48 @@
+{
+  "nodeRun": {
+    "id": "nr_28da6a0ec83e4c3f80884818cb0d2752",
+    "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+    "nodeId": "node_caption",
+    "nodeType": "text_generation",
+    "status": "SUCCEEDED",
+    "input": {
+      "prompt": "echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+    },
+    "output": {
+      "text": "echo: echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:03:54.539634Z",
+    "startedAt": "2026-10-12T03:03:54.54446Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T03:03:54.546448Z",
+    "latencyMs": 1,
+    "tokenUsage": {
+      "inputTokens": 14,
+      "outputTokens": 15,
+      "totalTokens": 29
+    }
+  },
+  "attempts": [
+    {
+      "id": "attempt_bbba351e1078429fab45998e09be3e4f",
+      "nodeRunId": "nr_28da6a0ec83e4c3f80884818cb0d2752",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+      },
+      "result": {
+        "text": "echo: echo: Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+      },
+      "startedAt": "2026-10-12T03:03:54.54446Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T03:03:54.546448Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

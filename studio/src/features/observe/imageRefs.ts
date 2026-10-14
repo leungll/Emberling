@@ -1,11 +1,9 @@
-import { createContext } from 'react';
-
 import { API_BASE } from '@/api/client';
-import type { ExecutionFactTrace, ImageRef, ImageSource } from '@/api/types';
+import type { ImageRef, ImageSource } from '@/api/types';
 
 const IMAGE_SOURCES: readonly ImageSource[] = ['ASSET', 'ARTIFACT', 'EXTERNAL'];
 
-/** Mirrors `backend/internal/domain/imageref.go`'s `Source` discriminant. */
+/** An image reference, told apart by its `source` discriminant. */
 export function isImageRefValue(value: unknown): value is ImageRef {
   return (
     typeof value === 'object' &&
@@ -16,14 +14,16 @@ export function isImageRefValue(value: unknown): value is ImageRef {
 }
 
 /**
- * Finds ImageRef-shaped values at the top level or one property deep. NodeRun input/output
- * is a raw `NodeOutput.Ports` map keyed by port name (e.g. `{ image: <ImageRef> }`), so one
- * level of nesting is enough; this does not walk arbitrary JSON depth looking for a match.
+ * Finds ImageRef-shaped values at the top level or one port deep, singly or as a list. NodeRun
+ * input and output are maps keyed by port name (`{ image: <ImageRef> }`, `{ photos: [...] }`),
+ * so one level is enough; arbitrary JSON depth is never searched for a match.
  */
 export function collectImageRefs(value: unknown): ImageRef[] {
   if (isImageRefValue(value)) return [value];
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    return Object.values(value).filter(isImageRefValue);
+    return Object.values(value).flatMap((v: unknown) =>
+      isImageRefValue(v) ? [v] : Array.isArray(v) ? v.filter(isImageRefValue) : [],
+    );
   }
   return [];
 }
@@ -62,12 +62,6 @@ const ARTIFACT_ID = /^artifact_[0-9a-f]{32}$/;
 const ARTIFACT_IMAGE_MEDIA_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
 
 /**
- * The Run that ImagePreviews below it belong to. An ARTIFACT is served only through the
- * route of the Run that produced it, so without a Run there is no preview.
- */
-export const PreviewRunContext = createContext<string | null>(null);
-
-/**
  * The Run-scoped route that serves an ARTIFACT's verified content, or null. Only a
  * well-formed artifact id with an image media type is previewed; anything else is shown
  * as reference text, never resolved through a guessed URL.
@@ -80,33 +74,4 @@ export function artifactPreviewUri(image: ImageRef, runId: string | null): strin
   }
   if (!ARTIFACT_IMAGE_MEDIA_TYPES.includes(artifact.mediaType)) return null;
   return `${API_BASE}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifact.artifactId)}/content`;
-}
-
-/**
- * The ARTIFACT image a Tool result saved, read from the execution fact that result
- * recorded: its `artifact` binding is the canonical JSON of the ArtifactRef. The binding is
- * used only when it decodes to a complete reference that names the fact's own subject, so
- * a fact about one asset never previews another.
- */
-export function factArtifactImage(fact: ExecutionFactTrace): ImageRef | null {
-  const raw = fact.bindings.artifact;
-  if (typeof raw !== 'string') return null;
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) return null;
-  const { artifactId, mediaType, sizeBytes, sha256 } = decoded as Record<string, unknown>;
-  if (
-    typeof artifactId !== 'string' ||
-    typeof mediaType !== 'string' ||
-    typeof sizeBytes !== 'number' ||
-    typeof sha256 !== 'string' ||
-    artifactId !== fact.subject
-  ) {
-    return null;
-  }
-  return { source: 'ARTIFACT', artifact: { artifactId, mediaType, sizeBytes, sha256 } };
 }

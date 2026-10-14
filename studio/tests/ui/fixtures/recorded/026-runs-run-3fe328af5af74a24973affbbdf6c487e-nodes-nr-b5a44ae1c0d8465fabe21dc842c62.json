@@ -1,0 +1,44 @@
+{
+  "nodeRun": {
+    "id": "nr_b5a44ae1c0d8465fabe21dc842c62e69",
+    "runId": "run_3fe328af5af74a24973affbbdf6c487e",
+    "nodeId": "node_prompt",
+    "nodeType": "prompt_template",
+    "status": "SUCCEEDED",
+    "input": {
+      "text": "A lighthouse at dusk, fault demo"
+    },
+    "output": {
+      "text": "Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:03:54.516893Z",
+    "startedAt": "2026-10-12T03:03:54.521458Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T03:03:54.525152Z",
+    "latencyMs": 3,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_8faaee8eab2b451a8fefde542970d36c",
+      "nodeRunId": "nr_b5a44ae1c0d8465fabe21dc842c62e69",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "A lighthouse at dusk, fault demo"
+      },
+      "result": {
+        "text": "Rewrite this brief into an image prompt:\nA lighthouse at dusk, fault demo"
+      },
+      "startedAt": "2026-10-12T03:03:54.521458Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T03:03:54.525152Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

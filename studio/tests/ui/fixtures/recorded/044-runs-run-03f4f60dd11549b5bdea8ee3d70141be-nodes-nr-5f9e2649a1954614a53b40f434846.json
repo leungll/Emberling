@@ -1,0 +1,35 @@
+{
+  "nodeRun": {
+    "id": "nr_5f9e2649a1954614a53b40f434846de2",
+    "runId": "run_03f4f60dd11549b5bdea8ee3d70141be",
+    "nodeId": "node_agent",
+    "nodeType": "agent",
+    "status": "FAILED",
+    "input": {
+      "input": "{\"brief\":\"One warm film look for the whole set\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_aa1b5ff26b7a4bbd855620b7c9bcfa3b\",\"sha256\":\"99365a7dc7df1c56a9a8b303aff6142bcbd6681f2e8e9ebd1522c87216139f57\",\"sizeBytes\":37},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_93b3e57c8c2e447eaad1aa87ca147016\",\"sha256\":\"b62159f0f07183563875e25024a49ed79fbc8c8a5e9638b0ebce5830479b3a75\",\"sizeBytes\":36},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_8dbf8dc9c2b24991be2cd2c554d5f15e\",\"sha256\":\"544b5d5357b09770d1a8b652bc9529ad8547f737c19a74234b002f71f506d9a0\",\"sizeBytes\":37}]}"
+    },
+    "output": null,
+    "error": {
+      "code": "PRECONDITION_UNMET",
+      "message": "required fact \"asset_reviewed\" is not satisfied: NO_FACT",
+      "details": {
+        "reason": "NO_FACT",
+        "subject": "artifact_df23243ac4500ec7fe1f170f61355fdf",
+        "factType": "asset_reviewed"
+      }
+    },
+    "attemptCount": 0,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T02:52:09.16439Z",
+    "startedAt": "2026-10-12T02:52:09.167175Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T02:52:09.18509Z",
+    "latencyMs": 18,
+    "tokenUsage": {
+      "inputTokens": 16,
+      "outputTokens": 0,
+      "totalTokens": 16
+    }
+  },
+  "attempts": []
+}

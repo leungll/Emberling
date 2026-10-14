@@ -25,7 +25,7 @@ GOLANGCI_LINT         := $(TOOLS_BIN)/golangci-lint
 BACKEND := backend
 STUDIO  := studio
 
-.PHONY: bootstrap dev test test-integration test-e2e lint check check-fast \
+.PHONY: bootstrap dev test test-integration test-e2e test-ui lint check check-fast \
         check-go-version check-node-version fmt-check lint-go lint-studio install-golangci-lint check-doc-refs \
         check-migrations migrations-checksum check-file-size test-engineering studio-build whitespace-check
 
@@ -138,6 +138,16 @@ test-e2e:
 
 ## lint: formatting check, golangci-lint (which includes go vet) and Studio lint.
 lint: fmt-check lint-go lint-studio
+
+## test-ui: Studio UI review against recorded Backend responses at 1000 and 1440 px: token,
+## truncation, focus, copy and accessibility checks, with screenshots in
+## studio/tests/ui/report. Needs the Playwright Chromium download, so it is not part of check.
+test-ui:
+	@if [ -d $(STUDIO) ]; then \
+		cd $(STUDIO) && pnpm test:ui; \
+	else \
+		echo "studio: not present, skipped"; \
+	fi
 
 lint-studio:
 	@if [ -d $(STUDIO) ]; then \

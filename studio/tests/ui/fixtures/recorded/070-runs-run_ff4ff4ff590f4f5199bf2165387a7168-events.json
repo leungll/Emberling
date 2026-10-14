@@ -1,0 +1,358 @@
+{
+  "items": [
+    {
+      "id": "evt_c43a319d0e564f0b87cd3257816634a6",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": null,
+      "type": "RUN_CREATED",
+      "seq": 1,
+      "timestamp": "2026-10-09T04:20:57.273168Z",
+      "payload": {
+        "input": {
+          "bytes": 26,
+          "sha256": "71686c4888a6318d4bbea7211ff8f5f98b5418f1f51c19cfe2c418b645ad516c"
+        },
+        "workflowId": "wf_263bcbd2e94945a68e137b881ba5a677",
+        "definitionVersion": 1
+      }
+    },
+    {
+      "id": "evt_eeb0479ef23b4625beacc45e1e590fbc",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_b44bd67c35b74f9aa0945225dd9e2d6f",
+      "type": "NODE_READY",
+      "seq": 2,
+      "timestamp": "2026-10-09T04:20:57.273168Z",
+      "payload": {
+        "nodeId": "node_brief",
+        "nodeType": "text_input"
+      }
+    },
+    {
+      "id": "evt_e103e379e3b848159354e793ee942cbf",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_cbe7a9cbfe83408b9db9ea0b6777b312",
+      "type": "NODE_READY",
+      "seq": 3,
+      "timestamp": "2026-10-09T04:20:57.273168Z",
+      "payload": {
+        "nodeId": "node_reference",
+        "nodeType": "image_input"
+      }
+    },
+    {
+      "id": "evt_ec3b1290a2e442f1ab7bc5eb58299aa0",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_b44bd67c35b74f9aa0945225dd9e2d6f",
+      "type": "NODE_STARTED",
+      "seq": 4,
+      "timestamp": "2026-10-09T04:20:57.276931Z",
+      "payload": {
+        "input": {
+          "bytes": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_fbc5766d2dbb435d8133f538844e8eaa",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_b44bd67c35b74f9aa0945225dd9e2d6f",
+      "type": "NODE_COMPLETED",
+      "seq": 5,
+      "timestamp": "2026-10-09T04:20:57.279967Z",
+      "payload": {
+        "output": {
+          "bytes": 16,
+          "sha256": "36812e37300d47cd35ca73a05f59806376b0db2d6837f9fc24d2b0a46e06cafc"
+        },
+        "latencyMs": 3,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_2326246577794fdf97bb2f885913254e",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_cb95f70b717f40708dd002002f52b117",
+      "type": "NODE_READY",
+      "seq": 6,
+      "timestamp": "2026-10-09T04:20:57.279967Z",
+      "payload": {
+        "nodeId": "node_prompt",
+        "nodeType": "prompt_template"
+      }
+    },
+    {
+      "id": "evt_974961f51351467c9556a2407ae78b6d",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_cb95f70b717f40708dd002002f52b117",
+      "type": "NODE_STARTED",
+      "seq": 7,
+      "timestamp": "2026-10-09T04:20:57.282345Z",
+      "payload": {
+        "input": {
+          "bytes": 16,
+          "sha256": "36812e37300d47cd35ca73a05f59806376b0db2d6837f9fc24d2b0a46e06cafc"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_bd8750558d164dd8be1d1a08acfaa0e3",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_cb95f70b717f40708dd002002f52b117",
+      "type": "NODE_COMPLETED",
+      "seq": 8,
+      "timestamp": "2026-10-09T04:20:57.285498Z",
+      "payload": {
+        "output": {
+          "bytes": 58,
+          "sha256": "d2a4b32791aef7404459947fc1b9f5f2ca2fb2ac167ef29df12ec32ecaae1a40"
+        },
+        "latencyMs": 3,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_d7b03ff2c5e94e48a87fc7864ada3c5c",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_91b842469a2b45f0bc1d0c1bb2bf539b",
+      "type": "NODE_READY",
+      "seq": 9,
+      "timestamp": "2026-10-09T04:20:57.285498Z",
+      "payload": {
+        "nodeId": "node_rewrite",
+        "nodeType": "text_generation"
+      }
+    },
+    {
+      "id": "evt_d69ec37efc1e457a883da4db95b2af65",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_cbe7a9cbfe83408b9db9ea0b6777b312",
+      "type": "NODE_STARTED",
+      "seq": 10,
+      "timestamp": "2026-10-09T04:20:57.287761Z",
+      "payload": {
+        "input": {
+          "bytes": 2,
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_37e68873e99849f5b79fc82a601b15a6",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_cbe7a9cbfe83408b9db9ea0b6777b312",
+      "type": "NODE_COMPLETED",
+      "seq": 11,
+      "timestamp": "2026-10-09T04:20:57.289818Z",
+      "payload": {
+        "output": {
+          "bytes": 14,
+          "sha256": "06c466547f7f493ff9a79fc9966f7615330430acd2b914bb80ad55e0c1aac8fd"
+        },
+        "latencyMs": 2,
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_ac71ad45bf0c4aeebedddda3f0baa6da",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_91b842469a2b45f0bc1d0c1bb2bf539b",
+      "type": "NODE_STARTED",
+      "seq": 12,
+      "timestamp": "2026-10-09T04:20:57.291564Z",
+      "payload": {
+        "input": {
+          "bytes": 60,
+          "sha256": "621aa63f061657cc3e34553feb7851a68a887d2bb53ce7f4a9dcdef68bb9644a"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_dc99b5af18714c238e9c0ff197c69acf",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_91b842469a2b45f0bc1d0c1bb2bf539b",
+      "type": "NODE_COMPLETED",
+      "seq": 13,
+      "timestamp": "2026-10-09T04:20:57.293981Z",
+      "payload": {
+        "output": {
+          "bytes": 64,
+          "sha256": "649712a021ec614472f73ac09cc54889f8fc0ade38fdda3dde1160635295f886"
+        },
+        "latencyMs": 2,
+        "tokenUsage": {
+          "inputTokens": 8,
+          "totalTokens": 17,
+          "outputTokens": 9
+        },
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_3cd242152c8f412597e6028a6b02b179",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_739644f3e124460fadf2d4b052ed93c4",
+      "type": "NODE_READY",
+      "seq": 14,
+      "timestamp": "2026-10-09T04:20:57.293981Z",
+      "payload": {
+        "nodeId": "node_caption",
+        "nodeType": "text_generation"
+      }
+    },
+    {
+      "id": "evt_1ecc36753ff34f60bfa6889ee227fcd8",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_e6584a00c852441788e21204e8314904",
+      "type": "NODE_READY",
+      "seq": 15,
+      "timestamp": "2026-10-09T04:20:57.293981Z",
+      "payload": {
+        "nodeId": "node_image",
+        "nodeType": "image_generation"
+      }
+    },
+    {
+      "id": "evt_d013786d1e6a4a0cbc9c22d787ba8636",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_739644f3e124460fadf2d4b052ed93c4",
+      "type": "NODE_STARTED",
+      "seq": 16,
+      "timestamp": "2026-10-09T04:20:57.296476Z",
+      "payload": {
+        "input": {
+          "bytes": 66,
+          "sha256": "39fb13dcf44d3069ff8f2603f3614da2ca0b0024f6815df23c4a1e85ec2ed5d8"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_d488361796044ef7b42c054b0df93e0b",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_739644f3e124460fadf2d4b052ed93c4",
+      "type": "NODE_COMPLETED",
+      "seq": 17,
+      "timestamp": "2026-10-09T04:20:57.298222Z",
+      "payload": {
+        "output": {
+          "bytes": 70,
+          "sha256": "9790568c4cfd1dee346cc65236ebb12f0bfe7515a4a9e14c713e5f1872cdae5c"
+        },
+        "latencyMs": 1,
+        "tokenUsage": {
+          "inputTokens": 9,
+          "totalTokens": 19,
+          "outputTokens": 10
+        },
+        "completionSource": "SYNC_EXECUTION"
+      }
+    },
+    {
+      "id": "evt_7f0939dc3603498798d3babf3def0eb4",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_e6584a00c852441788e21204e8314904",
+      "type": "NODE_STARTED",
+      "seq": 18,
+      "timestamp": "2026-10-09T04:20:57.299881Z",
+      "payload": {
+        "input": {
+          "bytes": 83,
+          "sha256": "2e662c9118b871b2e404db82dc90d4b6928c36ea6f4cacf3227ac4e382f2c50e"
+        },
+        "attemptNo": 1
+      }
+    },
+    {
+      "id": "evt_2f3805f14ce9469e9612c6e13cced6bc",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_e6584a00c852441788e21204e8314904",
+      "type": "NODE_RETRYING",
+      "seq": 19,
+      "timestamp": "2026-10-09T04:21:09.200256Z",
+      "payload": {
+        "error": {
+          "code": "TIMEOUT",
+          "message": "attempt deadline exceeded"
+        },
+        "attemptNo": 1,
+        "nextAttemptAt": "2026-10-09T04:21:10.200256591Z"
+      }
+    },
+    {
+      "id": "evt_aeed8bbf047c4a56b39cef3b526ab403",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_e6584a00c852441788e21204e8314904",
+      "type": "NODE_STARTED",
+      "seq": 20,
+      "timestamp": "2026-10-09T04:21:14.201079Z",
+      "payload": {
+        "input": {
+          "bytes": 83,
+          "sha256": "2e662c9118b871b2e404db82dc90d4b6928c36ea6f4cacf3227ac4e382f2c50e"
+        },
+        "attemptNo": 2
+      }
+    },
+    {
+      "id": "evt_1f3f7cb001444ad3ba153a9ed6d967fa",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_e6584a00c852441788e21204e8314904",
+      "type": "NODE_DISPATCHED",
+      "seq": 21,
+      "timestamp": "2026-10-09T04:21:14.21156Z",
+      "payload": {
+        "attemptNo": 2,
+        "callbackBindingId": "binding_0577b74a520b4edab9cc6a821795f864"
+      }
+    },
+    {
+      "id": "evt_263ac84b75194fe299719f805cc57e82",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": null,
+      "type": "RUN_PAUSED",
+      "seq": 22,
+      "timestamp": "2026-10-09T04:21:14.21156Z",
+      "payload": {
+        "to": "PAUSED",
+        "from": "RUNNING"
+      }
+    },
+    {
+      "id": "evt_f498e59c97bd417eb40ac4915f89f7aa",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": "nr_e6584a00c852441788e21204e8314904",
+      "type": "NODE_FAILED",
+      "seq": 23,
+      "timestamp": "2026-10-09T04:21:29.197675Z",
+      "payload": {
+        "error": {
+          "code": "TIMEOUT",
+          "message": "attempt deadline exceeded"
+        },
+        "attemptNo": 2
+      }
+    },
+    {
+      "id": "evt_ff03fdb3bf824414abac151128a86d4c",
+      "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+      "nodeRunId": null,
+      "type": "RUN_FAILED",
+      "seq": 24,
+      "timestamp": "2026-10-09T04:21:29.197675Z",
+      "payload": {
+        "to": "FAILED",
+        "from": "PAUSED",
+        "error": {
+          "code": "TIMEOUT",
+          "message": "attempt deadline exceeded"
+        }
+      }
+    }
+  ]
+}

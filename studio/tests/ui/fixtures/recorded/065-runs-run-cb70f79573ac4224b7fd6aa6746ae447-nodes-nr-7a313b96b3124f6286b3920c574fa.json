@@ -1,0 +1,48 @@
+{
+  "nodeRun": {
+    "id": "nr_7a313b96b3124f6286b3920c574fac1a",
+    "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+    "nodeId": "node_caption",
+    "nodeType": "text_generation",
+    "status": "SUCCEEDED",
+    "input": {
+      "prompt": "echo: mock:delay:15000"
+    },
+    "output": {
+      "text": "echo: echo: mock:delay:15000"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T02:51:46.066181Z",
+    "startedAt": "2026-10-12T02:51:46.069142Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T02:51:46.073141Z",
+    "latencyMs": 3,
+    "tokenUsage": {
+      "inputTokens": 2,
+      "outputTokens": 3,
+      "totalTokens": 5
+    }
+  },
+  "attempts": [
+    {
+      "id": "attempt_05e4dd1885cd4b228625f549ce8b90ab",
+      "nodeRunId": "nr_7a313b96b3124f6286b3920c574fac1a",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "echo: mock:delay:15000"
+      },
+      "result": {
+        "text": "echo: echo: mock:delay:15000"
+      },
+      "startedAt": "2026-10-12T02:51:46.069142Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T02:51:46.073141Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

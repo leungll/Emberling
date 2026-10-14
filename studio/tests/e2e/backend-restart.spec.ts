@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import {
   buildBackendBinary,
@@ -9,6 +9,7 @@ import {
   type BackendProcess,
 } from './backend-process';
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
+import { eventList, listedSeqs, runStatus, stepCard } from './run-view';
 import { BACKEND_URL } from './stack';
 
 /**
@@ -27,12 +28,6 @@ import { BACKEND_URL } from './stack';
  */
 
 const STREAM_PATH = /\/api\/runs\/[^/]+\/events\?/;
-
-/** `seq` of every Event Timeline entry, in rendered order (EventTimeline.tsx's "seq N"). */
-async function renderedSeqs(page: Page): Promise<number[]> {
-  const names = await page.getByRole('button', { name: /· seq \d+/ }).allInnerTexts();
-  return names.map((text) => Number(/· seq (\d+)/.exec(text)?.[1]));
-}
 
 let binary: string;
 let restarted: BackendProcess | null = null;
@@ -55,27 +50,27 @@ test('Observe reconnects after a Backend restart and shows the resumed Run compl
   ) as GeneratedDefinitions;
   const { workflowId } = generated.aigcMedia;
 
-  await page.goto(`/studio/${workflowId}`);
+  await page.goto(`/workflows/${workflowId}`);
 
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  const dialog = page.getByRole('dialog', { name: 'Run workflow' });
+  const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Prompt').fill('mock:delay:20000');
-  await dialog.getByRole('button', { name: 'Create run' }).click();
+  await dialog.getByRole('button', { name: 'Start run' }).click();
 
   await page.waitForURL(/\/runs\//);
   const runId = /\/runs\/([^/?#]+)/.exec(page.url())?.[1];
   expect(runId).toBeTruthy();
 
-  const status = page.getByTestId('run-status');
-  await expect(status).toHaveText('Waiting for external result', { timeout: 15_000 });
-  const imageNodeButton = page.getByRole('button', { name: /node_image/ });
-  await expect(imageNodeButton).toContainText('Waiting for callback');
+  const status = runStatus(page);
+  await expect(status).toHaveText('Waiting', { timeout: 15_000 });
+  await expect(stepCard(page, 'Image')).toHaveAccessibleName(/, Waiting for reply,/);
 
-  // The stream is open at this point; the Timeline shows the Events committed so far.
-  const seqsBeforeRestart = await renderedSeqs(page);
+  // The stream is open at this point; the Events view lists the Events committed so far.
+  const events = await eventList(page);
+  const seqsBeforeRestart = await listedSeqs(events);
   expect(seqsBeforeRestart.length).toBeGreaterThan(0);
 
   // --- restart: same database, new process. The page is left exactly as it is.
@@ -96,14 +91,12 @@ test('Observe reconnects after a Backend restart and shows the resumed Run compl
   // Item 11: after the restart the page still observes the original Run, which the
   // Provider's callback resumes on the new process, through to COMPLETED.
   await expect(status).toHaveText('Completed', { timeout: 45_000 });
-  // The Run Rail lists only RUNNING / WAITING NodeRuns, so the finished node is read from
-  // the read-only Canvas.
-  await expect(page.locator('.react-flow__node[data-id="node_image"]')).toContainText('Succeeded');
+  await expect(stepCard(page, 'Image')).toHaveAccessibleName(/, Succeeded,/);
 
-  // No Event is missing, out of order or applied twice.
-  // The Timeline is contiguous from seq 1 and matches the Backend's committed history.
-  await expect(page.getByRole('button', { name: /Run completed/ })).toHaveCount(1);
-  const seqsAfterRestart = await renderedSeqs(page);
+  // No Event is missing, out of order or applied twice: the list is contiguous from seq 1
+  // and matches the Backend's committed history.
+  await expect(events.getByRole('row', { name: /Run completed/ })).toHaveCount(1);
+  const seqsAfterRestart = await listedSeqs(events);
   expect(seqsAfterRestart.length).toBeGreaterThan(seqsBeforeRestart.length);
   expect(seqsAfterRestart).toEqual(seqsAfterRestart.map((_, index) => index + 1));
 

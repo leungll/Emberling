@@ -1,0 +1,121 @@
+{
+  "agentRun": {
+    "id": "ar_6f080297dde7434db3445ef3550ae400",
+    "nodeRunId": "nr_5f9e2649a1954614a53b40f434846de2",
+    "termination": "INVALID_ACTION",
+    "currentTurnNo": 2,
+    "currentContextVersion": 1,
+    "currentStateVersion": 0,
+    "deadline": "2026-10-12T02:54:09.167175Z",
+    "terminatedAt": "2026-10-12T02:52:09.18509Z",
+    "error": {
+      "code": "PRECONDITION_UNMET",
+      "message": "required fact \"asset_reviewed\" is not satisfied: NO_FACT",
+      "details": {
+        "reason": "NO_FACT",
+        "subject": "artifact_df23243ac4500ec7fe1f170f61355fdf",
+        "factType": "asset_reviewed"
+      }
+    }
+  },
+  "turns": [
+    {
+      "id": "turn_6a71bf1b6f2b40caa50e51e25b45b325",
+      "turnNo": 1,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T02:52:09.170492Z",
+      "completedAt": "2026-10-12T02:52:09.171904Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 8,
+        "outputTokens": 0,
+        "totalTokens": 8
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_5624a631e10e444da5d195d90fff94c4",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T02:52:09.174253Z",
+        "completedAt": "2026-10-12T02:52:09.178662Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_040f15732f984f6bba17b9da4bf50925",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T02:52:09.174253Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T02:52:09.178662Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_b453e780a521419592a93860f9058052",
+      "turnNo": 2,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T02:52:09.182296Z",
+      "completedAt": "2026-10-12T02:52:09.183504Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 8,
+        "outputTokens": 0,
+        "totalTokens": 8
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_video",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_151d77ded3d14b3b90bf56f446ef1c69",
+        "type": "TOOL_CALL",
+        "status": "FAILED",
+        "startedAt": "2026-10-12T02:52:09.18509Z",
+        "completedAt": "2026-10-12T02:52:09.18509Z",
+        "error": {
+          "code": "PRECONDITION_UNMET",
+          "message": "required fact \"asset_reviewed\" is not satisfied: NO_FACT",
+          "details": {
+            "reason": "NO_FACT",
+            "subject": "artifact_df23243ac4500ec7fe1f170f61355fdf",
+            "factType": "asset_reviewed"
+          }
+        }
+      },
+      "toolAttempts": []
+    }
+  ],
+  "facts": {
+    "items": [
+      {
+        "id": "fact_c1c55abd69124b9b85531cee8f3e9482",
+        "factType": "image_generated",
+        "subject": "artifact_df23243ac4500ec7fe1f170f61355fdf",
+        "bindings": {
+          "artifact": "{\"artifactId\":\"artifact_df23243ac4500ec7fe1f170f61355fdf\",\"mediaType\":\"image/png\",\"sha256\":\"df23243ac4500ec7fe1f170f61355fdf8333e2ecb9ec40126fe83e209cf37d02\",\"sizeBytes\":83}",
+          "imageUrl": "/api/runs/run_03f4f60dd11549b5bdea8ee3d70141be/artifacts/artifact_df23243ac4500ec7fe1f170f61355fdf/content",
+          "photoAssetId": "asset_aa1b5ff26b7a4bbd855620b7c9bcfa3b",
+          "settingsDigest": "sha256:1e73de64bf996da2f60f2f2d895b5e05dfa9f15726f0285e76600b91289faf59"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_040f15732f984f6bba17b9da4bf50925",
+        "createdAt": "2026-10-12T02:52:09.178662Z"
+      }
+    ],
+    "truncated": false
+  },
+  "generationBudget": {
+    "maxGenerationCalls": 12,
+    "generationCallsUsed": 1
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "nodeRun": {
+    "id": "nr_739644f3e124460fadf2d4b052ed93c4",
+    "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+    "nodeId": "node_caption",
+    "nodeType": "text_generation",
+    "status": "SUCCEEDED",
+    "input": {
+      "prompt": "echo: Rewrite this brief into an image prompt:\nprobe"
+    },
+    "output": {
+      "text": "echo: echo: Rewrite this brief into an image prompt:\nprobe"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-09T04:20:57.293981Z",
+    "startedAt": "2026-10-09T04:20:57.296476Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-09T04:20:57.298222Z",
+    "latencyMs": 1,
+    "tokenUsage": {
+      "inputTokens": 9,
+      "outputTokens": 10,
+      "totalTokens": 19
+    }
+  },
+  "attempts": [
+    {
+      "id": "attempt_591230fc7f78407c9af42df077230e31",
+      "nodeRunId": "nr_739644f3e124460fadf2d4b052ed93c4",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "prompt": "echo: Rewrite this brief into an image prompt:\nprobe"
+      },
+      "result": {
+        "text": "echo: echo: Rewrite this brief into an image prompt:\nprobe"
+      },
+      "startedAt": "2026-10-09T04:20:57.296476Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-09T04:20:57.298222Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

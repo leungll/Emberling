@@ -1,0 +1,29 @@
+{
+  "nodeRun": {
+    "id": "nr_097d02c9e7a547d2b51b2fe852e8204a",
+    "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+    "nodeId": "node_agent",
+    "nodeType": "agent",
+    "status": "SUCCEEDED",
+    "input": {
+      "input": "{\"baseCommit\":\"fixture-v1\",\"patch\":\"--- a/greet.go\\n+++ b/greet.go\\n@@ -5 +5 @@\\n-// Greeting returns the greeting for name.\\n+// Greeting returns the friendly greeting for name.\\n\",\"target\":{\"service\":\"checkout\",\"environment\":\"staging\"}}"
+    },
+    "output": {
+      "text": "{\"operationId\":\"op_action_2e501812e493412e9fd5c79ebfd5b6e8_1\",\"patchDigest\":\"sha256:51d0c2f4ed2a36226869b642abd543e4d179588c3cf3de12c932136106db6c28\",\"version\":\"v2\"}"
+    },
+    "error": null,
+    "attemptCount": 0,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:41:16.514633Z",
+    "startedAt": "2026-10-12T03:41:16.518551Z",
+    "waitingAt": "2026-10-12T03:41:16.545597Z",
+    "completedAt": "2026-10-12T03:41:29.675228Z",
+    "latencyMs": 13156,
+    "tokenUsage": {
+      "inputTokens": 57,
+      "outputTokens": 1,
+      "totalTokens": 58
+    }
+  },
+  "attempts": []
+}

@@ -1,0 +1,40 @@
+{
+  "nodeRun": {
+    "id": "nr_b910c72f80ca4288a03696bbb2bbc038",
+    "runId": "run_cb70f79573ac4224b7fd6aa6746ae447",
+    "nodeId": "node_brief",
+    "nodeType": "text_input",
+    "status": "SUCCEEDED",
+    "input": {},
+    "output": {
+      "text": "A lighthouse at dusk, fault demo after accept"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T02:51:46.024682Z",
+    "startedAt": "2026-10-12T02:51:46.028811Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T02:51:46.034533Z",
+    "latencyMs": 5,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_9edfadc5a611453c9c922fb82ff9a27a",
+      "nodeRunId": "nr_b910c72f80ca4288a03696bbb2bbc038",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {},
+      "result": {
+        "text": "A lighthouse at dusk, fault demo after accept"
+      },
+      "startedAt": "2026-10-12T02:51:46.028811Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T02:51:46.034533Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

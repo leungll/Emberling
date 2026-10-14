@@ -1,0 +1,146 @@
+{
+  "agentRun": {
+    "id": "ar_7767311a824a4011981b20c41f69dde3",
+    "nodeRunId": "nr_a13b7314b7f74693a797e266607747e8",
+    "termination": "FINAL_RESPONSE",
+    "currentTurnNo": 3,
+    "currentContextVersion": 3,
+    "currentStateVersion": 0,
+    "deadline": "2026-10-12T03:09:54.398012Z",
+    "terminatedAt": "2026-10-12T03:08:33.981912Z",
+    "error": null
+  },
+  "turns": [
+    {
+      "id": "turn_1184729a9b5041cea4ddb3a002865c10",
+      "turnNo": 1,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T03:07:54.424854Z",
+      "completedAt": "2026-10-12T03:07:54.460116Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 23,
+        "outputTokens": 0,
+        "totalTokens": 23
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "sandbox_test",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_ec2aebd716c04292858b05b75b28a615",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T03:07:54.479517Z",
+        "completedAt": "2026-10-12T03:08:33.933138Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_b52e87bec7284a94990261486c7459ea",
+          "toolName": "sandbox_test",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": {
+            "id": "binding_9020a08090804775acb6331311c9758b",
+            "providerId": "sandboxrunner",
+            "externalTaskId": "test_ccefcd809b1cb8fe"
+          },
+          "startedAt": "2026-10-12T03:07:54.479517Z",
+          "dispatchedAt": "2026-10-12T03:07:54.489087Z",
+          "completedAt": "2026-10-12T03:08:33.933138Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_761848f09de94664ac82692ba95071c0",
+      "turnNo": 2,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T03:08:33.945115Z",
+      "completedAt": "2026-10-12T03:08:33.950022Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 23,
+        "outputTokens": 0,
+        "totalTokens": 23
+      },
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "deploy",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_6169a0e7ed0c44ffa63493b6510277b0",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T03:08:33.955267Z",
+        "completedAt": "2026-10-12T03:08:33.965043Z",
+        "error": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_227500616c1148c7bc4a47857f77cba1",
+          "toolName": "deploy",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-12T03:08:33.955267Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-12T03:08:33.965043Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_cadf6842d3d741b9ba3de4afa6a4f134",
+      "turnNo": 3,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-12T03:08:33.973906Z",
+      "completedAt": "2026-10-12T03:08:33.976416Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 23,
+        "outputTokens": 1,
+        "totalTokens": 24
+      },
+      "decision": {
+        "kind": "FINAL",
+        "tool": null,
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_dfb2d0b055d44344bdbbaa04500c3fe2",
+        "type": "FINAL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-12T03:08:33.981912Z",
+        "completedAt": "2026-10-12T03:08:33.981912Z",
+        "error": null
+      },
+      "toolAttempts": []
+    }
+  ],
+  "facts": {
+    "items": [
+      {
+        "id": "fact_620bf7eb5730467da3534d6e51365463",
+        "factType": "patch_tested",
+        "subject": "sha256:59ff5fe6285fa88d9b0584bee75908a591f4ea0a69fb8db5318335aba8810c0a",
+        "bindings": {
+          "baseCommit": "fixture-v1",
+          "resultDigest": "sha256:04212dcb9fbaaf4691ec7394a459ca442ce33580649b26be6f7ec885527b8600"
+        },
+        "verdict": true,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_b52e87bec7284a94990261486c7459ea",
+        "createdAt": "2026-10-12T03:08:33.933138Z"
+      }
+    ],
+    "truncated": false
+  },
+  "generationBudget": {
+    "maxGenerationCalls": null,
+    "generationCallsUsed": 0
+  }
+}

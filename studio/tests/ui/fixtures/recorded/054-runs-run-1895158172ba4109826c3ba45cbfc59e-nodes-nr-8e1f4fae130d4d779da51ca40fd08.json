@@ -1,0 +1,56 @@
+{
+  "nodeRun": {
+    "id": "nr_8e1f4fae130d4d779da51ca40fd0805c",
+    "runId": "run_1895158172ba4109826c3ba45cbfc59e",
+    "nodeId": "node_result",
+    "nodeType": "media_result",
+    "status": "SUCCEEDED",
+    "input": {
+      "text": "{\"examples\":[{\"assetRef\":\"img_059ccb419b5e8d25\",\"photoAssetId\":\"asset_b46d44a6392f4698b3074b36d9b9380e\"},{\"assetRef\":\"img_0e32f10e86abc740\",\"photoAssetId\":\"asset_cb9f23ed521a4fecac597b5cf59e4a80\"},{\"assetRef\":\"img_2073b2ad08a82b9a\",\"photoAssetId\":\"asset_9d055367b2fe4c61ac0f2ca3c2c89444\"}],\"settingsDigest\":\"sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e\"}",
+      "brief": "{\"brief\":\"A warm clay stop-motion look\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_b46d44a6392f4698b3074b36d9b9380e\",\"sha256\":\"63dfc78f76757f02c93363f90ad28ede29b5dc888aabae8d2d89e1831c82379d\",\"sizeBytes\":9540},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_cb9f23ed521a4fecac597b5cf59e4a80\",\"sha256\":\"1688d9e113fedbd5311ba8e3293e6c33db45d6fcc0a7533d75bb54c292799458\",\"sizeBytes\":7515},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_9d055367b2fe4c61ac0f2ca3c2c89444\",\"sha256\":\"b8d90157ebe27d16da2335ab11fd18c90528b8e6f17ba6aa6641eefa1e2fa141\",\"sizeBytes\":7578}]}"
+    },
+    "output": {
+      "image": {
+        "uri": "http://localhost:9101/v1/assets/img_059ccb419b5e8d25.png",
+        "source": "EXTERNAL",
+        "mediaType": "image/png"
+      },
+      "caption": "{\"accepted\":true,\"notPassed\":[],\"passedCount\":3,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e\"}"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T09:13:48.706029Z",
+    "startedAt": "2026-10-12T09:13:48.711495Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T09:13:48.715708Z",
+    "latencyMs": 4,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_d7a7b51707594970ac61a4df2d663048",
+      "nodeRunId": "nr_8e1f4fae130d4d779da51ca40fd0805c",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "{\"examples\":[{\"assetRef\":\"img_059ccb419b5e8d25\",\"photoAssetId\":\"asset_b46d44a6392f4698b3074b36d9b9380e\"},{\"assetRef\":\"img_0e32f10e86abc740\",\"photoAssetId\":\"asset_cb9f23ed521a4fecac597b5cf59e4a80\"},{\"assetRef\":\"img_2073b2ad08a82b9a\",\"photoAssetId\":\"asset_9d055367b2fe4c61ac0f2ca3c2c89444\"}],\"settingsDigest\":\"sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e\"}",
+        "brief": "{\"brief\":\"A warm clay stop-motion look\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_b46d44a6392f4698b3074b36d9b9380e\",\"sha256\":\"63dfc78f76757f02c93363f90ad28ede29b5dc888aabae8d2d89e1831c82379d\",\"sizeBytes\":9540},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_cb9f23ed521a4fecac597b5cf59e4a80\",\"sha256\":\"1688d9e113fedbd5311ba8e3293e6c33db45d6fcc0a7533d75bb54c292799458\",\"sizeBytes\":7515},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_9d055367b2fe4c61ac0f2ca3c2c89444\",\"sha256\":\"b8d90157ebe27d16da2335ab11fd18c90528b8e6f17ba6aa6641eefa1e2fa141\",\"sizeBytes\":7578}]}"
+      },
+      "result": {
+        "image": {
+          "uri": "http://localhost:9101/v1/assets/img_059ccb419b5e8d25.png",
+          "source": "EXTERNAL",
+          "mediaType": "image/png"
+        },
+        "caption": "{\"accepted\":true,\"notPassed\":[],\"passedCount\":3,\"photoCount\":3,\"policyVersion\":\"mock-review-policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:0f3b49d8023149a4de3aa65bb05b19ab275b2499b58b4d6151f34e421f33d98e\"}"
+      },
+      "startedAt": "2026-10-12T09:13:48.711495Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T09:13:48.715708Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

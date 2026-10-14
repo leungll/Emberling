@@ -1,0 +1,124 @@
+{
+  "run": {
+    "id": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+    "workflowId": "wf_8c67ac3a5fcc482d8ca1bf8bdbdd732b",
+    "definitionVersion": 1,
+    "status": "FAILED",
+    "input": {
+      "brief": "One warm film look for the whole set",
+      "photos": [
+        {
+          "sha256": "f9e8ab05a43001b0cbe1a3a72ebbb756571be65aed2be75d68c4f474e7eb77bf",
+          "assetId": "asset_cedc30fa8865486ca3d2451edf437956",
+          "mediaType": "image/png",
+          "sizeBytes": 38
+        },
+        {
+          "sha256": "ba59a865aedad20c122381b5cfe7a581e4b3a6f741c700bc028723d6a938e59e",
+          "assetId": "asset_45e00e1fa8ba4ae9a91e91542343e76e",
+          "mediaType": "image/png",
+          "sizeBytes": 36
+        },
+        {
+          "sha256": "7cf4fc5cf7f1fca1fbba03ad864daf4592eb3e8fc4810834dc0c5ce640578cdb",
+          "assetId": "asset_1825ca2e2eaf411188aab7c419997467",
+          "mediaType": "image/png",
+          "sizeBytes": 38
+        }
+      ]
+    },
+    "output": null,
+    "error": {
+      "code": "GENERATION_LIMIT_REACHED",
+      "message": "tool \"generate_image\" would exceed the agent run's generation limit of 2 calls (2 used)",
+      "details": {
+        "used": 2,
+        "limit": 2
+      }
+    },
+    "lastSeq": 37,
+    "startedAt": "2026-10-12T02:52:12.354224Z",
+    "completedAt": "2026-10-12T02:52:12.436114Z",
+    "tokenUsage": {
+      "inputTokens": 40,
+      "outputTokens": 0,
+      "totalTokens": 40
+    }
+  },
+  "nodeRuns": [
+    {
+      "id": "nr_d8da73d4af12420589bd96c82c7c7b11",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeId": "node_brief",
+      "nodeType": "text_input",
+      "status": "SUCCEEDED",
+      "input": {},
+      "output": {
+        "text": "One warm film look for the whole set"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:52:12.354224Z",
+      "startedAt": "2026-10-12T02:52:12.358672Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:52:12.36198Z",
+      "latencyMs": 3,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_ac3633f8cc5448758066fe0504768af6",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeId": "node_photos",
+      "nodeType": "media_brief",
+      "status": "SUCCEEDED",
+      "input": {
+        "brief": "One warm film look for the whole set"
+      },
+      "output": {
+        "text": "{\"brief\":\"One warm film look for the whole set\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_cedc30fa8865486ca3d2451edf437956\",\"sha256\":\"f9e8ab05a43001b0cbe1a3a72ebbb756571be65aed2be75d68c4f474e7eb77bf\",\"sizeBytes\":38},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_45e00e1fa8ba4ae9a91e91542343e76e\",\"sha256\":\"ba59a865aedad20c122381b5cfe7a581e4b3a6f741c700bc028723d6a938e59e\",\"sizeBytes\":36},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_1825ca2e2eaf411188aab7c419997467\",\"sha256\":\"7cf4fc5cf7f1fca1fbba03ad864daf4592eb3e8fc4810834dc0c5ce640578cdb\",\"sizeBytes\":38}]}"
+      },
+      "error": null,
+      "attemptCount": 1,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:52:12.36198Z",
+      "startedAt": "2026-10-12T02:52:12.367143Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:52:12.370735Z",
+      "latencyMs": 3,
+      "tokenUsage": null
+    },
+    {
+      "id": "nr_cdb1fb4619be45f19f5880e14ec91435",
+      "runId": "run_f7c0377afa8541eb86fa06ee0ec41ae2",
+      "nodeId": "node_agent",
+      "nodeType": "agent",
+      "status": "FAILED",
+      "input": {
+        "input": "{\"brief\":\"One warm film look for the whole set\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_cedc30fa8865486ca3d2451edf437956\",\"sha256\":\"f9e8ab05a43001b0cbe1a3a72ebbb756571be65aed2be75d68c4f474e7eb77bf\",\"sizeBytes\":38},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_45e00e1fa8ba4ae9a91e91542343e76e\",\"sha256\":\"ba59a865aedad20c122381b5cfe7a581e4b3a6f741c700bc028723d6a938e59e\",\"sizeBytes\":36},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_1825ca2e2eaf411188aab7c419997467\",\"sha256\":\"7cf4fc5cf7f1fca1fbba03ad864daf4592eb3e8fc4810834dc0c5ce640578cdb\",\"sizeBytes\":38}]}"
+      },
+      "output": null,
+      "error": {
+        "code": "GENERATION_LIMIT_REACHED",
+        "message": "tool \"generate_image\" would exceed the agent run's generation limit of 2 calls (2 used)",
+        "details": {
+          "used": 2,
+          "limit": 2
+        }
+      },
+      "attemptCount": 0,
+      "nextAttemptAt": null,
+      "readyAt": "2026-10-12T02:52:12.370735Z",
+      "startedAt": "2026-10-12T02:52:12.374684Z",
+      "waitingAt": null,
+      "completedAt": "2026-10-12T02:52:12.436114Z",
+      "latencyMs": 61,
+      "tokenUsage": {
+        "inputTokens": 40,
+        "outputTokens": 0,
+        "totalTokens": 40
+      }
+    }
+  ],
+  "lastSeq": 37
+}

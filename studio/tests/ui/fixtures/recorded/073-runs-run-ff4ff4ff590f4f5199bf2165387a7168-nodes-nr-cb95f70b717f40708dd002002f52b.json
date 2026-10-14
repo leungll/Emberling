@@ -1,0 +1,44 @@
+{
+  "nodeRun": {
+    "id": "nr_cb95f70b717f40708dd002002f52b117",
+    "runId": "run_ff4ff4ff590f4f5199bf2165387a7168",
+    "nodeId": "node_prompt",
+    "nodeType": "prompt_template",
+    "status": "SUCCEEDED",
+    "input": {
+      "text": "probe"
+    },
+    "output": {
+      "text": "Rewrite this brief into an image prompt:\nprobe"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-09T04:20:57.279967Z",
+    "startedAt": "2026-10-09T04:20:57.282345Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-09T04:20:57.285498Z",
+    "latencyMs": 3,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_66ceee74b82745d0aff98950b495327d",
+      "nodeRunId": "nr_cb95f70b717f40708dd002002f52b117",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "text": "probe"
+      },
+      "result": {
+        "text": "Rewrite this brief into an image prompt:\nprobe"
+      },
+      "startedAt": "2026-10-09T04:20:57.282345Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-09T04:20:57.285498Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

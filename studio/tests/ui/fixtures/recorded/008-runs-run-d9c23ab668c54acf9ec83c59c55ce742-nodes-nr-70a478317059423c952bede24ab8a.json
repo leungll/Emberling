@@ -1,0 +1,40 @@
+{
+  "nodeRun": {
+    "id": "nr_70a478317059423c952bede24ab8adaf",
+    "runId": "run_d9c23ab668c54acf9ec83c59c55ce742",
+    "nodeId": "node_task",
+    "nodeType": "text_input",
+    "status": "SUCCEEDED",
+    "input": {},
+    "output": {
+      "text": "{\"baseCommit\":\"fixture-v1\",\"patch\":\"--- a/greet.go\\n+++ b/greet.go\\n@@ -5 +5 @@\\n-// Greeting returns the greeting for name.\\n+// Greeting returns the friendly greeting for name.\\n\",\"target\":{\"service\":\"checkout\",\"environment\":\"staging\"}}"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T03:41:16.503541Z",
+    "startedAt": "2026-10-12T03:41:16.509367Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T03:41:16.514633Z",
+    "latencyMs": 5,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_b98eb0dec87d4bcb80e92ea50c529cd9",
+      "nodeRunId": "nr_70a478317059423c952bede24ab8adaf",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {},
+      "result": {
+        "text": "{\"baseCommit\":\"fixture-v1\",\"patch\":\"--- a/greet.go\\n+++ b/greet.go\\n@@ -5 +5 @@\\n-// Greeting returns the greeting for name.\\n+// Greeting returns the friendly greeting for name.\\n\",\"target\":{\"service\":\"checkout\",\"environment\":\"staging\"}}"
+      },
+      "startedAt": "2026-10-12T03:41:16.509367Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T03:41:16.514633Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

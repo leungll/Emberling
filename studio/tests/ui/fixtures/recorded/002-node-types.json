@@ -1,0 +1,639 @@
+{
+  "items": [
+    {
+      "type": "agent",
+      "displayName": "Agent",
+      "category": "Agent",
+      "executionKind": "MANAGED_AGENT",
+      "inputs": [
+        {
+          "name": "input",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "instructions": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Decision model"
+          },
+          "modelConfig": {
+            "type": "object"
+          },
+          "allowedTools": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "contextSchema": {
+            "type": "object"
+          },
+          "stateSchema": {
+            "type": "object"
+          },
+          "outputSchema": {
+            "type": "object"
+          },
+          "maxTurns": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "maxGenerationCalls": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "imageModelId": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Image model"
+          }
+        },
+        "required": [
+          "modelId",
+          "maxTurns",
+          "timeoutMs"
+        ],
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": [
+          {
+            "path": "modelId",
+            "order": 10,
+            "group": "MODEL",
+            "widget": "MODEL_SELECTOR",
+            "capability": "structured_decision"
+          },
+          {
+            "path": "imageModelId",
+            "order": 15,
+            "group": "MODEL",
+            "widget": "MODEL_SELECTOR",
+            "capability": "reference_image_generation"
+          },
+          {
+            "path": "instructions",
+            "order": 20,
+            "group": "BASIC",
+            "widget": "TEXTAREA"
+          },
+          {
+            "path": "allowedTools",
+            "order": 30,
+            "group": "BASIC",
+            "widget": "TOOL_SELECTOR"
+          },
+          {
+            "path": "maxTurns",
+            "order": 40,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "timeoutMs",
+            "order": 50,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "maxGenerationCalls",
+            "order": 55,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "modelConfig",
+            "order": 60,
+            "group": "MODEL_PARAMETERS",
+            "widget": "DEFAULT"
+          }
+        ]
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "factInputs": []
+    },
+    {
+      "type": "image_generation",
+      "displayName": "Image Generation",
+      "category": "Prompt & Model",
+      "executionKind": "ASYNC",
+      "inputs": [
+        {
+          "name": "prompt",
+          "dataType": "text",
+          "required": true
+        },
+        {
+          "name": "reference",
+          "dataType": "image",
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "dataType": "image",
+          "required": true
+        }
+      ],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "modelId": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 256
+          }
+        },
+        "required": [
+          "modelId",
+          "width"
+        ]
+      },
+      "uiSchema": {
+        "fields": [
+          {
+            "path": "modelId",
+            "order": 10,
+            "group": "MODEL",
+            "widget": "MODEL_SELECTOR",
+            "capability": "image_generation"
+          },
+          {
+            "path": "width",
+            "order": 20,
+            "group": "MODEL_PARAMETERS",
+            "widget": "DEFAULT"
+          }
+        ]
+      },
+      "sideEffect": {
+        "kind": "EXTERNAL",
+        "idempotency": "KEYED"
+      },
+      "poll": {
+        "intervalMs": 2000,
+        "maxPolls": 30
+      },
+      "factInputs": []
+    },
+    {
+      "type": "image_input",
+      "displayName": "Image Input",
+      "category": "Input",
+      "executionKind": "SYNC",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "image",
+          "dataType": "image",
+          "required": true
+        }
+      ],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "inputKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "acceptedMediaTypes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "maxSizeBytes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "inputKey",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": [
+          {
+            "path": "inputKey",
+            "order": 10,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "label",
+            "order": 20,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "required",
+            "order": 30,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "acceptedMediaTypes",
+            "order": 40,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "maxSizeBytes",
+            "order": 50,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          }
+        ]
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "factInputs": []
+    },
+    {
+      "type": "media_brief",
+      "displayName": "Media Brief",
+      "category": "Input",
+      "executionKind": "SYNC",
+      "inputs": [
+        {
+          "name": "brief",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "inputKey": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "inputKey"
+        ],
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": [
+          {
+            "path": "inputKey",
+            "order": 10,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          }
+        ]
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "factInputs": []
+    },
+    {
+      "type": "media_output",
+      "displayName": "Media Output",
+      "category": "Output",
+      "executionKind": "SYNC",
+      "inputs": [
+        {
+          "name": "image",
+          "dataType": "image",
+          "required": true
+        },
+        {
+          "name": "caption",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "outputs": [],
+      "configSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": []
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "factInputs": []
+    },
+    {
+      "type": "media_result",
+      "displayName": "Media Result",
+      "category": "Output",
+      "executionKind": "SYNC",
+      "inputs": [
+        {
+          "name": "text",
+          "dataType": "text",
+          "required": true
+        },
+        {
+          "name": "brief",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "dataType": "image",
+          "required": true
+        },
+        {
+          "name": "caption",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "configSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": []
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "factInputs": [
+        "image_generated",
+        "asset_reviewed"
+      ]
+    },
+    {
+      "type": "prompt_template",
+      "displayName": "Prompt Template",
+      "category": "Prompt & Model",
+      "executionKind": "SYNC",
+      "inputs": [
+        {
+          "name": "text",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "template": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "template"
+        ],
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": [
+          {
+            "path": "template",
+            "order": 10,
+            "group": "BASIC",
+            "widget": "PROMPT_EDITOR"
+          }
+        ]
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "factInputs": []
+    },
+    {
+      "type": "text_generation",
+      "displayName": "Text Generation",
+      "category": "Prompt & Model",
+      "executionKind": "SYNC",
+      "inputs": [
+        {
+          "name": "prompt",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "modelId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modelConfig": {
+            "type": "object",
+            "default": {}
+          },
+          "systemPrompt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "modelId"
+        ],
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": [
+          {
+            "path": "modelId",
+            "order": 10,
+            "group": "MODEL",
+            "widget": "MODEL_SELECTOR",
+            "capability": "text_generation"
+          },
+          {
+            "path": "modelConfig",
+            "order": 20,
+            "group": "MODEL_PARAMETERS",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "systemPrompt",
+            "order": 30,
+            "group": "BASIC",
+            "widget": "TEXTAREA"
+          }
+        ]
+      },
+      "sideEffect": {
+        "kind": "EXTERNAL",
+        "idempotency": "UNKNOWN"
+      },
+      "factInputs": []
+    },
+    {
+      "type": "text_input",
+      "displayName": "Text Input",
+      "category": "Input",
+      "executionKind": "SYNC",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "text",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "inputKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "minLength": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxLength": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "inputKey",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": [
+          {
+            "path": "inputKey",
+            "order": 10,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "label",
+            "order": 20,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "required",
+            "order": 30,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "minLength",
+            "order": 40,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          },
+          {
+            "path": "maxLength",
+            "order": 50,
+            "group": "BASIC",
+            "widget": "DEFAULT"
+          }
+        ]
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "factInputs": []
+    },
+    {
+      "type": "text_output",
+      "displayName": "Text Output",
+      "category": "Output",
+      "executionKind": "SYNC",
+      "inputs": [
+        {
+          "name": "text",
+          "dataType": "text",
+          "required": true
+        }
+      ],
+      "outputs": [],
+      "configSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "uiSchema": {
+        "fields": []
+      },
+      "sideEffect": {
+        "kind": "NONE",
+        "idempotency": "SAFE"
+      },
+      "factInputs": []
+    }
+  ]
+}

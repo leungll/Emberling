@@ -1,0 +1,44 @@
+{
+  "nodeRun": {
+    "id": "nr_d27eaba594a4437082fee56d121fcd37",
+    "runId": "run_03f4f60dd11549b5bdea8ee3d70141be",
+    "nodeId": "node_photos",
+    "nodeType": "media_brief",
+    "status": "SUCCEEDED",
+    "input": {
+      "brief": "One warm film look for the whole set"
+    },
+    "output": {
+      "text": "{\"brief\":\"One warm film look for the whole set\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_aa1b5ff26b7a4bbd855620b7c9bcfa3b\",\"sha256\":\"99365a7dc7df1c56a9a8b303aff6142bcbd6681f2e8e9ebd1522c87216139f57\",\"sizeBytes\":37},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_93b3e57c8c2e447eaad1aa87ca147016\",\"sha256\":\"b62159f0f07183563875e25024a49ed79fbc8c8a5e9638b0ebce5830479b3a75\",\"sizeBytes\":36},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_8dbf8dc9c2b24991be2cd2c554d5f15e\",\"sha256\":\"544b5d5357b09770d1a8b652bc9529ad8547f737c19a74234b002f71f506d9a0\",\"sizeBytes\":37}]}"
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-12T02:52:09.160307Z",
+    "startedAt": "2026-10-12T02:52:09.162257Z",
+    "waitingAt": null,
+    "completedAt": "2026-10-12T02:52:09.16439Z",
+    "latencyMs": 2,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_9925d1acd4844d839e6f87ba88da16df",
+      "nodeRunId": "nr_d27eaba594a4437082fee56d121fcd37",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {
+        "brief": "One warm film look for the whole set"
+      },
+      "result": {
+        "text": "{\"brief\":\"One warm film look for the whole set\",\"photos\":[{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_aa1b5ff26b7a4bbd855620b7c9bcfa3b\",\"sha256\":\"99365a7dc7df1c56a9a8b303aff6142bcbd6681f2e8e9ebd1522c87216139f57\",\"sizeBytes\":37},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_93b3e57c8c2e447eaad1aa87ca147016\",\"sha256\":\"b62159f0f07183563875e25024a49ed79fbc8c8a5e9638b0ebce5830479b3a75\",\"sizeBytes\":36},{\"mediaType\":\"image/png\",\"photoAssetId\":\"asset_8dbf8dc9c2b24991be2cd2c554d5f15e\",\"sha256\":\"544b5d5357b09770d1a8b652bc9529ad8547f737c19a74234b002f71f506d9a0\",\"sizeBytes\":37}]}"
+      },
+      "startedAt": "2026-10-12T02:52:09.162257Z",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-12T02:52:09.16439Z",
+      "error": null,
+      "callbackBinding": null
+    }
+  ]
+}

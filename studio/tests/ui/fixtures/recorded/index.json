@@ -1,0 +1,317 @@
+{
+  "recordedAt": "2026-10-13T08:06:42.429Z",
+  "paths": {
+    "/ready": {
+      "file": "",
+      "status": 200
+    },
+    "/api/definitions": {
+      "file": "001-definitions.json",
+      "status": 200
+    },
+    "/api/node-types": {
+      "file": "002-node-types.json",
+      "status": 200
+    },
+    "/api/models": {
+      "file": "003-models.json",
+      "status": 200
+    },
+    "/api/tools": {
+      "file": "004-tools.json",
+      "status": 200
+    },
+    "/api/definitions/wf_f219e36bd99c403ba9158961cc29ac07": {
+      "file": "005-definitions-wf-f219e36bd99c403ba9158961cc29ac07.json",
+      "status": 200
+    },
+    "/api/runs/run_d9c23ab668c54acf9ec83c59c55ce742": {
+      "file": "006-runs-run-d9c23ab668c54acf9ec83c59c55ce742.json",
+      "status": 200
+    },
+    "/api/runs/run_d9c23ab668c54acf9ec83c59c55ce742/events": {
+      "file": "007-runs-run_d9c23ab668c54acf9ec83c59c55ce742-events.json",
+      "status": 200
+    },
+    "/api/runs/run_d9c23ab668c54acf9ec83c59c55ce742/nodes/nr_70a478317059423c952bede24ab8adaf": {
+      "file": "008-runs-run-d9c23ab668c54acf9ec83c59c55ce742-nodes-nr-70a478317059423c952bede24ab8a.json",
+      "status": 200
+    },
+    "/api/runs/run_d9c23ab668c54acf9ec83c59c55ce742/nodes/nr_097d02c9e7a547d2b51b2fe852e8204a": {
+      "file": "009-runs-run-d9c23ab668c54acf9ec83c59c55ce742-nodes-nr-097d02c9e7a547d2b51b2fe852e82.json",
+      "status": 200
+    },
+    "/api/runs/run_d9c23ab668c54acf9ec83c59c55ce742/nodes/nr_097d02c9e7a547d2b51b2fe852e8204a/agent": {
+      "file": "010-runs-run-d9c23ab668c54acf9ec83c59c55ce742-nodes-nr-097d02c9e7a547d2b51b2fe852e82.json",
+      "status": 200
+    },
+    "/api/runs/run_d9c23ab668c54acf9ec83c59c55ce742/nodes/nr_298daaf968114c0ba77c415f23f5a7a5": {
+      "file": "011-runs-run-d9c23ab668c54acf9ec83c59c55ce742-nodes-nr-298daaf968114c0ba77c415f23f5a.json",
+      "status": 200
+    },
+    "/api/definitions/wf_f219e36bd99c403ba9158961cc29ac07/versions/1": {
+      "file": "012-definitions-wf-f219e36bd99c403ba9158961cc29ac07-versions-1.json",
+      "status": 200
+    },
+    "/api/definitions/wf_f40fc0f40b8248be8f6603b1c711d048": {
+      "file": "013-definitions-wf-f40fc0f40b8248be8f6603b1c711d048.json",
+      "status": 200
+    },
+    "/api/runs/run_257c4ee4c84443b68245321a3498dd93": {
+      "file": "014-runs-run-257c4ee4c84443b68245321a3498dd93.json",
+      "status": 200
+    },
+    "/api/runs/run_257c4ee4c84443b68245321a3498dd93/events": {
+      "file": "015-runs-run_257c4ee4c84443b68245321a3498dd93-events.json",
+      "status": 200
+    },
+    "/api/runs/run_257c4ee4c84443b68245321a3498dd93/nodes/nr_d0691d711db64650b5644bf9803ae96d": {
+      "file": "016-runs-run-257c4ee4c84443b68245321a3498dd93-nodes-nr-d0691d711db64650b5644bf9803ae.json",
+      "status": 200
+    },
+    "/api/runs/run_257c4ee4c84443b68245321a3498dd93/nodes/nr_a13b7314b7f74693a797e266607747e8": {
+      "file": "017-runs-run-257c4ee4c84443b68245321a3498dd93-nodes-nr-a13b7314b7f74693a797e26660774.json",
+      "status": 200
+    },
+    "/api/runs/run_257c4ee4c84443b68245321a3498dd93/nodes/nr_a13b7314b7f74693a797e266607747e8/agent": {
+      "file": "018-runs-run-257c4ee4c84443b68245321a3498dd93-nodes-nr-a13b7314b7f74693a797e26660774.json",
+      "status": 200
+    },
+    "/api/runs/run_257c4ee4c84443b68245321a3498dd93/nodes/nr_5a2996bec30a4a5ea18e012b6aa7823d": {
+      "file": "019-runs-run-257c4ee4c84443b68245321a3498dd93-nodes-nr-5a2996bec30a4a5ea18e012b6aa78.json",
+      "status": 200
+    },
+    "/api/definitions/wf_f40fc0f40b8248be8f6603b1c711d048/versions/1": {
+      "file": "020-definitions-wf-f40fc0f40b8248be8f6603b1c711d048-versions-1.json",
+      "status": 200
+    },
+    "/api/definitions/wf_5fbacb46a8c149f286d6121a6cf48268": {
+      "file": "021-definitions-wf-5fbacb46a8c149f286d6121a6cf48268.json",
+      "status": 200
+    },
+    "/api/runs/run_3fe328af5af74a24973affbbdf6c487e": {
+      "file": "022-runs-run-3fe328af5af74a24973affbbdf6c487e.json",
+      "status": 200
+    },
+    "/api/runs/run_3fe328af5af74a24973affbbdf6c487e/events": {
+      "file": "023-runs-run_3fe328af5af74a24973affbbdf6c487e-events.json",
+      "status": 200
+    },
+    "/api/runs/run_3fe328af5af74a24973affbbdf6c487e/nodes/nr_c87cd0ef9fac41bcacddf068a049111d": {
+      "file": "024-runs-run-3fe328af5af74a24973affbbdf6c487e-nodes-nr-c87cd0ef9fac41bcacddf068a0491.json",
+      "status": 200
+    },
+    "/api/runs/run_3fe328af5af74a24973affbbdf6c487e/nodes/nr_9c8f8ab8547d49ab86f23bc7bcfe395e": {
+      "file": "025-runs-run-3fe328af5af74a24973affbbdf6c487e-nodes-nr-9c8f8ab8547d49ab86f23bc7bcfe3.json",
+      "status": 200
+    },
+    "/api/runs/run_3fe328af5af74a24973affbbdf6c487e/nodes/nr_b5a44ae1c0d8465fabe21dc842c62e69": {
+      "file": "026-runs-run-3fe328af5af74a24973affbbdf6c487e-nodes-nr-b5a44ae1c0d8465fabe21dc842c62.json",
+      "status": 200
+    },
+    "/api/runs/run_3fe328af5af74a24973affbbdf6c487e/nodes/nr_54ed87cf4e7e49c0b3cf9a3fe7fb8fae": {
+      "file": "027-runs-run-3fe328af5af74a24973affbbdf6c487e-nodes-nr-54ed87cf4e7e49c0b3cf9a3fe7fb8.json",
+      "status": 200
+    },
+    "/api/runs/run_3fe328af5af74a24973affbbdf6c487e/nodes/nr_28da6a0ec83e4c3f80884818cb0d2752": {
+      "file": "028-runs-run-3fe328af5af74a24973affbbdf6c487e-nodes-nr-28da6a0ec83e4c3f80884818cb0d2.json",
+      "status": 200
+    },
+    "/api/runs/run_3fe328af5af74a24973affbbdf6c487e/nodes/nr_54317515a3dc49248d7a78fca5d4f839": {
+      "file": "029-runs-run-3fe328af5af74a24973affbbdf6c487e-nodes-nr-54317515a3dc49248d7a78fca5d4f.json",
+      "status": 200
+    },
+    "/api/definitions/wf_5fbacb46a8c149f286d6121a6cf48268/versions/1": {
+      "file": "030-definitions-wf-5fbacb46a8c149f286d6121a6cf48268-versions-1.json",
+      "status": 200
+    },
+    "/api/definitions/wf_8c67ac3a5fcc482d8ca1bf8bdbdd732b": {
+      "file": "031-definitions-wf-8c67ac3a5fcc482d8ca1bf8bdbdd732b.json",
+      "status": 200
+    },
+    "/api/runs/run_f7c0377afa8541eb86fa06ee0ec41ae2": {
+      "file": "032-runs-run-f7c0377afa8541eb86fa06ee0ec41ae2.json",
+      "status": 200
+    },
+    "/api/runs/run_f7c0377afa8541eb86fa06ee0ec41ae2/events": {
+      "file": "033-runs-run_f7c0377afa8541eb86fa06ee0ec41ae2-events.json",
+      "status": 200
+    },
+    "/api/runs/run_f7c0377afa8541eb86fa06ee0ec41ae2/nodes/nr_d8da73d4af12420589bd96c82c7c7b11": {
+      "file": "034-runs-run-f7c0377afa8541eb86fa06ee0ec41ae2-nodes-nr-d8da73d4af12420589bd96c82c7c7.json",
+      "status": 200
+    },
+    "/api/runs/run_f7c0377afa8541eb86fa06ee0ec41ae2/nodes/nr_ac3633f8cc5448758066fe0504768af6": {
+      "file": "035-runs-run-f7c0377afa8541eb86fa06ee0ec41ae2-nodes-nr-ac3633f8cc5448758066fe0504768.json",
+      "status": 200
+    },
+    "/api/runs/run_f7c0377afa8541eb86fa06ee0ec41ae2/nodes/nr_cdb1fb4619be45f19f5880e14ec91435": {
+      "file": "036-runs-run-f7c0377afa8541eb86fa06ee0ec41ae2-nodes-nr-cdb1fb4619be45f19f5880e14ec91.json",
+      "status": 200
+    },
+    "/api/runs/run_f7c0377afa8541eb86fa06ee0ec41ae2/nodes/nr_cdb1fb4619be45f19f5880e14ec91435/agent": {
+      "file": "037-runs-run-f7c0377afa8541eb86fa06ee0ec41ae2-nodes-nr-cdb1fb4619be45f19f5880e14ec91.json",
+      "status": 200
+    },
+    "/api/definitions/wf_8c67ac3a5fcc482d8ca1bf8bdbdd732b/versions/1": {
+      "file": "038-definitions-wf-8c67ac3a5fcc482d8ca1bf8bdbdd732b-versions-1.json",
+      "status": 200
+    },
+    "/api/definitions/wf_8f09b5b26edb4e8b9d518dd3b6fcb9f8": {
+      "file": "039-definitions-wf-8f09b5b26edb4e8b9d518dd3b6fcb9f8.json",
+      "status": 200
+    },
+    "/api/runs/run_03f4f60dd11549b5bdea8ee3d70141be": {
+      "file": "040-runs-run-03f4f60dd11549b5bdea8ee3d70141be.json",
+      "status": 200
+    },
+    "/api/runs/run_03f4f60dd11549b5bdea8ee3d70141be/events": {
+      "file": "041-runs-run_03f4f60dd11549b5bdea8ee3d70141be-events.json",
+      "status": 200
+    },
+    "/api/runs/run_03f4f60dd11549b5bdea8ee3d70141be/nodes/nr_5c8f66f21b8045159009f990e3321a57": {
+      "file": "042-runs-run-03f4f60dd11549b5bdea8ee3d70141be-nodes-nr-5c8f66f21b8045159009f990e3321.json",
+      "status": 200
+    },
+    "/api/runs/run_03f4f60dd11549b5bdea8ee3d70141be/nodes/nr_d27eaba594a4437082fee56d121fcd37": {
+      "file": "043-runs-run-03f4f60dd11549b5bdea8ee3d70141be-nodes-nr-d27eaba594a4437082fee56d121fc.json",
+      "status": 200
+    },
+    "/api/runs/run_03f4f60dd11549b5bdea8ee3d70141be/nodes/nr_5f9e2649a1954614a53b40f434846de2": {
+      "file": "044-runs-run-03f4f60dd11549b5bdea8ee3d70141be-nodes-nr-5f9e2649a1954614a53b40f434846.json",
+      "status": 200
+    },
+    "/api/runs/run_03f4f60dd11549b5bdea8ee3d70141be/nodes/nr_5f9e2649a1954614a53b40f434846de2/agent": {
+      "file": "045-runs-run-03f4f60dd11549b5bdea8ee3d70141be-nodes-nr-5f9e2649a1954614a53b40f434846.json",
+      "status": 200
+    },
+    "/api/definitions/wf_8f09b5b26edb4e8b9d518dd3b6fcb9f8/versions/1": {
+      "file": "046-definitions-wf-8f09b5b26edb4e8b9d518dd3b6fcb9f8-versions-1.json",
+      "status": 200
+    },
+    "/api/definitions/wf_21c74b07436f46a6a0384d13c80c6b5f": {
+      "file": "047-definitions-wf-21c74b07436f46a6a0384d13c80c6b5f.json",
+      "status": 200
+    },
+    "/api/runs/run_1895158172ba4109826c3ba45cbfc59e": {
+      "file": "048-runs-run-1895158172ba4109826c3ba45cbfc59e.json",
+      "status": 200
+    },
+    "/api/runs/run_1895158172ba4109826c3ba45cbfc59e/events": {
+      "file": "049-runs-run_1895158172ba4109826c3ba45cbfc59e-events.json",
+      "status": 200
+    },
+    "/api/runs/run_1895158172ba4109826c3ba45cbfc59e/nodes/nr_5330ab8d8e2948adb75622421875caec": {
+      "file": "050-runs-run-1895158172ba4109826c3ba45cbfc59e-nodes-nr-5330ab8d8e2948adb75622421875c.json",
+      "status": 200
+    },
+    "/api/runs/run_1895158172ba4109826c3ba45cbfc59e/nodes/nr_bdb02dd019504510b9eca5969407ba5c": {
+      "file": "051-runs-run-1895158172ba4109826c3ba45cbfc59e-nodes-nr-bdb02dd019504510b9eca5969407b.json",
+      "status": 200
+    },
+    "/api/runs/run_1895158172ba4109826c3ba45cbfc59e/nodes/nr_160a681ab2e34631bfa179ea905334d2": {
+      "file": "052-runs-run-1895158172ba4109826c3ba45cbfc59e-nodes-nr-160a681ab2e34631bfa179ea90533.json",
+      "status": 200
+    },
+    "/api/runs/run_1895158172ba4109826c3ba45cbfc59e/nodes/nr_160a681ab2e34631bfa179ea905334d2/agent": {
+      "file": "053-runs-run-1895158172ba4109826c3ba45cbfc59e-nodes-nr-160a681ab2e34631bfa179ea90533.json",
+      "status": 200
+    },
+    "/api/runs/run_1895158172ba4109826c3ba45cbfc59e/nodes/nr_8e1f4fae130d4d779da51ca40fd0805c": {
+      "file": "054-runs-run-1895158172ba4109826c3ba45cbfc59e-nodes-nr-8e1f4fae130d4d779da51ca40fd08.json",
+      "status": 200
+    },
+    "/api/runs/run_1895158172ba4109826c3ba45cbfc59e/nodes/nr_38ba47bc4fd84a3f90e06965bf0d5afa": {
+      "file": "055-runs-run-1895158172ba4109826c3ba45cbfc59e-nodes-nr-38ba47bc4fd84a3f90e06965bf0d5.json",
+      "status": 200
+    },
+    "/api/definitions/wf_21c74b07436f46a6a0384d13c80c6b5f/versions/1": {
+      "file": "056-definitions-wf-21c74b07436f46a6a0384d13c80c6b5f-versions-1.json",
+      "status": 200
+    },
+    "/api/definitions/wf_010e04db58d9493fba6c92deb173b5ac": {
+      "file": "057-definitions-wf-010e04db58d9493fba6c92deb173b5ac.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447": {
+      "file": "058-runs-run-cb70f79573ac4224b7fd6aa6746ae447.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447/events": {
+      "file": "059-runs-run_cb70f79573ac4224b7fd6aa6746ae447-events.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447/nodes/nr_b910c72f80ca4288a03696bbb2bbc038": {
+      "file": "060-runs-run-cb70f79573ac4224b7fd6aa6746ae447-nodes-nr-b910c72f80ca4288a03696bbb2bbc.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447/nodes/nr_8cf4fa6feaab4182a50c629a9bafded8": {
+      "file": "061-runs-run-cb70f79573ac4224b7fd6aa6746ae447-nodes-nr-8cf4fa6feaab4182a50c629a9bafd.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447/nodes/nr_e13e3a920b2d419bb9bc9447ae782077": {
+      "file": "062-runs-run-cb70f79573ac4224b7fd6aa6746ae447-nodes-nr-e13e3a920b2d419bb9bc9447ae782.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447/nodes/nr_3e65420f3c124e63abc2d644ecf2f505": {
+      "file": "063-runs-run-cb70f79573ac4224b7fd6aa6746ae447-nodes-nr-3e65420f3c124e63abc2d644ecf2f.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447/nodes/nr_9074d601e9ab48c39f4ba950ff93d0de": {
+      "file": "064-runs-run-cb70f79573ac4224b7fd6aa6746ae447-nodes-nr-9074d601e9ab48c39f4ba950ff93d.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447/nodes/nr_7a313b96b3124f6286b3920c574fac1a": {
+      "file": "065-runs-run-cb70f79573ac4224b7fd6aa6746ae447-nodes-nr-7a313b96b3124f6286b3920c574fa.json",
+      "status": 200
+    },
+    "/api/runs/run_cb70f79573ac4224b7fd6aa6746ae447/nodes/nr_bdf78726b3f1493a8e9e41ca0f9effa7": {
+      "file": "066-runs-run-cb70f79573ac4224b7fd6aa6746ae447-nodes-nr-bdf78726b3f1493a8e9e41ca0f9ef.json",
+      "status": 200
+    },
+    "/api/definitions/wf_010e04db58d9493fba6c92deb173b5ac/versions/1": {
+      "file": "067-definitions-wf-010e04db58d9493fba6c92deb173b5ac-versions-1.json",
+      "status": 200
+    },
+    "/api/definitions/wf_263bcbd2e94945a68e137b881ba5a677": {
+      "file": "068-definitions-wf-263bcbd2e94945a68e137b881ba5a677.json",
+      "status": 200
+    },
+    "/api/runs/run_ff4ff4ff590f4f5199bf2165387a7168": {
+      "file": "069-runs-run-ff4ff4ff590f4f5199bf2165387a7168.json",
+      "status": 200
+    },
+    "/api/runs/run_ff4ff4ff590f4f5199bf2165387a7168/events": {
+      "file": "070-runs-run_ff4ff4ff590f4f5199bf2165387a7168-events.json",
+      "status": 200
+    },
+    "/api/runs/run_ff4ff4ff590f4f5199bf2165387a7168/nodes/nr_b44bd67c35b74f9aa0945225dd9e2d6f": {
+      "file": "071-runs-run-ff4ff4ff590f4f5199bf2165387a7168-nodes-nr-b44bd67c35b74f9aa0945225dd9e2.json",
+      "status": 200
+    },
+    "/api/runs/run_ff4ff4ff590f4f5199bf2165387a7168/nodes/nr_cbe7a9cbfe83408b9db9ea0b6777b312": {
+      "file": "072-runs-run-ff4ff4ff590f4f5199bf2165387a7168-nodes-nr-cbe7a9cbfe83408b9db9ea0b6777b.json",
+      "status": 200
+    },
+    "/api/runs/run_ff4ff4ff590f4f5199bf2165387a7168/nodes/nr_cb95f70b717f40708dd002002f52b117": {
+      "file": "073-runs-run-ff4ff4ff590f4f5199bf2165387a7168-nodes-nr-cb95f70b717f40708dd002002f52b.json",
+      "status": 200
+    },
+    "/api/runs/run_ff4ff4ff590f4f5199bf2165387a7168/nodes/nr_91b842469a2b45f0bc1d0c1bb2bf539b": {
+      "file": "074-runs-run-ff4ff4ff590f4f5199bf2165387a7168-nodes-nr-91b842469a2b45f0bc1d0c1bb2bf5.json",
+      "status": 200
+    },
+    "/api/runs/run_ff4ff4ff590f4f5199bf2165387a7168/nodes/nr_739644f3e124460fadf2d4b052ed93c4": {
+      "file": "075-runs-run-ff4ff4ff590f4f5199bf2165387a7168-nodes-nr-739644f3e124460fadf2d4b052ed9.json",
+      "status": 200
+    },
+    "/api/runs/run_ff4ff4ff590f4f5199bf2165387a7168/nodes/nr_e6584a00c852441788e21204e8314904": {
+      "file": "076-runs-run-ff4ff4ff590f4f5199bf2165387a7168-nodes-nr-e6584a00c852441788e21204e8314.json",
+      "status": 200
+    },
+    "/api/definitions/wf_263bcbd2e94945a68e137b881ba5a677/versions/1": {
+      "file": "077-definitions-wf-263bcbd2e94945a68e137b881ba5a677-versions-1.json",
+      "status": 200
+    }
+  }
+}

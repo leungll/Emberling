@@ -8,6 +8,7 @@ import {
   agentSyncLookup,
   aigcMedia,
   documentProcessing,
+  photoSet,
   referenceImage,
   type CreateDefinitionRequest,
 } from './fixtures';
@@ -42,6 +43,7 @@ export interface GeneratedDefinitions {
   agentLookup: { workflowId: string; version: number };
   agentSyncLookup: { workflowId: string; version: number };
   referenceImage: { workflowId: string; version: number };
+  photoSet: { workflowId: string; version: number };
 }
 
 // The Backend is the sole authority for Definitions (CLAUDE.md: Studio owns no Runtime
@@ -74,12 +76,14 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     agentLookupDefinition,
     agentSyncLookupDefinition,
     referenceImageDefinition,
+    photoSetDefinition,
   ] = await Promise.all([
     createDefinition(documentProcessing),
     createDefinition(aigcMedia),
     createDefinition(agentLookup),
     createDefinition(agentSyncLookup),
     createDefinition(referenceImage),
+    createDefinition(photoSet),
   ]);
 
   const generated: GeneratedDefinitions = {
@@ -100,6 +104,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       workflowId: referenceImageDefinition.workflowId,
       version: referenceImageDefinition.version,
     },
+    photoSet: { workflowId: photoSetDefinition.workflowId, version: photoSetDefinition.version },
   };
 
   await mkdir(path.dirname(GENERATED_DEFINITIONS_PATH), { recursive: true });

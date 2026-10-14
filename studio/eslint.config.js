@@ -15,15 +15,11 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // so a shared piece either moves to src/components or src/lib, or is added here deliberately. A feature
 // directory missing from this map gets an empty allowlist.
 const FEATURE_IMPORT_ALLOWLIST = {
-  definitions: [],
   editor: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
-  observe: [
-    'editor/WorkflowCanvas',
-    'editor/RegisteredNode',
-    'run-input/RunInputDialog',
-    'run-input/runInputLabels',
-  ],
+  observe: ['run-input/RunInputDialog', 'run-input/runInputLabels', 'runs/StartRunDialog'],
   'run-input': [],
+  runs: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
+  workflows: ['run-input/RunInputDialog', 'run-input/runInputLabels'],
 };
 
 const FEATURES = readdirSync(new URL('./src/features', import.meta.url), { withFileTypes: true })
@@ -71,8 +67,61 @@ const featureImportBlocks = FEATURES.map((feature) => {
   };
 });
 
+// Style rules: colours, sizes, spacing, radii, shadows and layers come only from the design
+// tokens in src/index.css, through the utilities its theme generates. Layout dimensions that
+// are not tokens (a column width, a grid template) go in a `style` prop.
+const STYLE_RULE_MESSAGE = {
+  arbitrary:
+    'Use a token utility from src/index.css instead of an arbitrary Tailwind value; put a non-token layout dimension in a style prop.',
+  colour: 'Colours come from the tokens in src/index.css (for example var(--fg) or text-fg).',
+  palette: 'The default Tailwind palette is not available; use a token colour utility.',
+  layer: 'Use a layer utility (z-sticky, z-dialog, ...) or z-local, not a numeric z-index.',
+  dots: "Do not join facts with ' · '; label each fact instead.",
+};
+const ARBITRARY = String.raw`/-\[[^\]\s]+\](?!\S*:)|(^|\s)\[[a-z-]+:[^\]]*\]/`;
+const COLOUR = String.raw`/#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?([0-9a-fA-F]{2})?\b|\b(rgba?|hsla?|oklch)\(/`;
+const PALETTE = String.raw`/\b(text|bg|border|ring|fill|stroke|from|to|via|outline|divide|decoration|shadow|accent|caret|placeholder)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black|white|taupe|mauve|mist|olive)\b/`;
+const NUMERIC_LAYER = String.raw`/(^|[\s:])-?z-\d+\b/`;
+const DOTS = String.raw`/ \u00b7 /`;
+const styleSelectors = (pattern, message) => [
+  { selector: `Literal[value=${pattern}]`, message },
+  { selector: `TemplateElement[value.raw=${pattern}]`, message },
+  { selector: `JSXText[value=${pattern}]`, message },
+];
+
+const styleRules = [
+  ...styleSelectors(ARBITRARY, STYLE_RULE_MESSAGE.arbitrary),
+  ...styleSelectors(COLOUR, STYLE_RULE_MESSAGE.colour),
+  ...styleSelectors(PALETTE, STYLE_RULE_MESSAGE.palette),
+  ...styleSelectors(NUMERIC_LAYER, STYLE_RULE_MESSAGE.layer),
+  ...styleSelectors(DOTS, STYLE_RULE_MESSAGE.dots),
+];
+
+// Copy rules: every user-facing word in the pages, the shared components and the app shell
+// comes from the copy module (src/lib/copy), so a word is changed in one table and a second
+// language can be added as one more table.
+const COPY_RULE_MESSAGE =
+  'Put user-facing text in the copy module (src/lib/copy) and read it with useCopy().';
+const copyRules = [
+  { selector: 'JSXText[value=/[A-Za-z]/]', message: COPY_RULE_MESSAGE },
+  {
+    selector:
+      'JSXAttribute[name.name=/^(aria-label|title|placeholder|alt)$/] > Literal[value=/[A-Za-z]/]',
+    message: COPY_RULE_MESSAGE,
+  },
+];
+const COPY_FILES = ['src/components/**/*.tsx', 'src/app/**/*.tsx', 'src/features/**/*.tsx'];
+const COPY_EXEMPT = ['src/components/ui/**', 'src/app/dev/**'];
+
+// Overlay roles come only from the overlay primitives, so every dialog and menu shares one
+// keyboard and focus behaviour.
+const overlayRoleRule = {
+  selector: 'JSXAttribute[name.name="role"] > Literal[value=/^(dialog|alertdialog|menu)$/]',
+  message: 'Build dialogs and menus from src/components/ui (Dialog, Menu, Popover).',
+};
+
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results'] },
+  { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results', 'tests/ui/report'] },
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
   {
     files: ['**/*.{ts,tsx}'],
@@ -204,6 +253,23 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  // Each file receives one `no-restricted-syntax` list: a later block replaces, not merges,
+  // the options of an earlier one, so the copy block repeats the style rules.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: TEST_FILES,
+    rules: { 'no-restricted-syntax': ['error', ...styleRules] },
+  },
+  {
+    files: ['src/features/**/*.tsx'],
+    ignores: TEST_FILES,
+    rules: { 'no-restricted-syntax': ['error', ...styleRules, overlayRoleRule] },
+  },
+  {
+    files: COPY_FILES,
+    ignores: [...TEST_FILES, ...COPY_EXEMPT],
+    rules: { 'no-restricted-syntax': ['error', ...styleRules, ...copyRules, overlayRoleRule] },
   },
   ...featureImportBlocks,
 );
