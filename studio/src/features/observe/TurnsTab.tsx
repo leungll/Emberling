@@ -16,8 +16,10 @@ import { ElementTime, RunOffset, Tokens } from './RunFacts';
 import { ToolName, Words } from './Words';
 import type { DetailContext } from './detail-context';
 import { notRetried } from './run-diagnosis';
-import { attemptWord, toolSequence, type TraceElement } from './run-model';
+import { factImage, imageLabel, mediaItems, savedImageOf } from './run-media';
+import { attemptWord, toolSequence, type RunModel, type TraceElement } from './run-model';
 import type { ExecutionFactTrace } from '@/api/types';
+import { ThumbSet } from '@/components/media/Thumbs';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { copy as words, useCopy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
@@ -104,17 +106,37 @@ function Line({
   );
 }
 
-function Saved({ facts }: { facts: readonly ExecutionFactTrace[] | undefined }) {
+function Saved({
+  facts,
+  model,
+}: {
+  facts: readonly ExecutionFactTrace[] | undefined;
+  model: RunModel;
+}) {
   const copy = useCopy();
   const t = copy.runs.details.turnsTab;
   if (!facts?.length) return null;
   return (
     <>
-      {facts.map((f) => (
-        <Line key={f.id} icon={FileCheck}>
-          {t.saved(`${factLabel(f.factType)}${t.verdict(f.verdict)}`)}
-        </Line>
-      ))}
+      {facts.map((f) => {
+        const img = savedImageOf(model, f);
+        return (
+          <Line key={f.id} icon={FileCheck}>
+            {t.saved(`${factLabel(f.factType)}${t.verdict(f.verdict)}`)}
+            {img ? (
+              <>
+                {' '}
+                <span className="text-fg-muted">{imageLabel(model, img)}</span>
+                <ThumbSet
+                  items={mediaItems(model, [img])}
+                  size="sm"
+                  className="ml-2 inline-flex align-middle"
+                />
+              </>
+            ) : null}
+          </Line>
+        );
+      })}
     </>
   );
 }
@@ -263,7 +285,7 @@ function TurnBlock({
                     {w.label}
                   </Item>
                 ) : null}
-                <Saved facts={byAttempt.get(x.id)} />
+                <Saved facts={byAttempt.get(x.id)} model={ctx.model} />
               </div>
             );
           })}
@@ -320,6 +342,14 @@ function GroupBlock({
               }
             }
           }
+          const images = mine.flatMap((turn) =>
+            turn.toolAttempts.flatMap((x) =>
+              (byAttempt.get(x.id) ?? []).flatMap((f) => {
+                const img = factImage(f);
+                return img ? [img] : [];
+              }),
+            ),
+          );
           const target = mine[0]?.action?.id;
           return (
             <div key={`${tool}-${String(i)}`} className="contents">
@@ -332,7 +362,7 @@ function GroupBlock({
                   </span>
                 </Item>
               ) : null}
-              {saved.size ? (
+              {saved.size || images.length ? (
                 <div className="flex flex-col pl-6">
                   {[...saved].map(([k, n]) => (
                     <Line key={k} icon={FileCheck}>
@@ -342,6 +372,13 @@ function GroupBlock({
                       ) : null}
                     </Line>
                   ))}
+                  {images.length ? (
+                    <ThumbSet
+                      items={mediaItems(ctx.model, images)}
+                      size="sm"
+                      className="px-2 py-1"
+                    />
+                  ) : null}
                 </div>
               ) : null}
             </div>

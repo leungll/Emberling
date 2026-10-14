@@ -1,0 +1,41 @@
+{
+  "nodeRun": {
+    "id": "nr_a3161eb6a5364d6285ca90cfa331d874",
+    "runId": "run_a66a823e6a9b465480f0537c925ff999",
+    "nodeId": "node_brief",
+    "nodeType": "text_input",
+    "status": "SUCCEEDED",
+    "input": {},
+    "output": {
+      "text": "Boxed collectible figure. Turn the person or pet in each photo into a small collectible figure standing inside a clear plastic blister pack, mounted on a printed card backing, with one small prop related to the subject beside the figure in the pack. Keep the subject recognizable: for people keep the face, hair and glasses; for pets keep the fur color and markings. Glossy molded-plastic finish, clean product-photo lighting on a plain backdrop. No brands, logos, text, known characters or artist styles."
+    },
+    "error": null,
+    "attemptCount": 1,
+    "nextAttemptAt": null,
+    "readyAt": "2026-10-13T10:48:42.339588-07:00",
+    "startedAt": "2026-10-13T10:48:42.362754-07:00",
+    "waitingAt": null,
+    "completedAt": "2026-10-13T10:48:42.382575-07:00",
+    "latencyMs": 19,
+    "tokenUsage": null
+  },
+  "attempts": [
+    {
+      "id": "attempt_66044b027eed4bc3a58d91c5dbae34ba",
+      "nodeRunId": "nr_a3161eb6a5364d6285ca90cfa331d874",
+      "attemptNo": 1,
+      "status": "SUCCEEDED",
+      "input": {},
+      "result": {
+        "text": "Boxed collectible figure. Turn the person or pet in each photo into a small collectible figure standing inside a clear plastic blister pack, mounted on a printed card backing, with one small prop related to the subject beside the figure in the pack. Keep the subject recognizable: for people keep the face, hair and glasses; for pets keep the fur color and markings. Glossy molded-plastic finish, clean product-photo lighting on a plain backdrop. No brands, logos, text, known characters or artist styles."
+      },
+      "startedAt": "2026-10-13T10:48:42.362754-07:00",
+      "deadlineAt": null,
+      "dispatchedAt": null,
+      "completedAt": "2026-10-13T10:48:42.382575-07:00",
+      "error": null,
+      "uncertain": null,
+      "callbackBinding": null
+    }
+  ]
+}

@@ -1,0 +1,511 @@
+{
+  "agentRun": {
+    "id": "ar_9d69b4c7b7bf456fbbe8a71297a383b1",
+    "nodeRunId": "nr_13145d77060840b7a2e4df386b5fdef2",
+    "termination": "FINAL_RESPONSE",
+    "currentTurnNo": 9,
+    "currentContextVersion": 9,
+    "currentStateVersion": 7,
+    "deadline": "2026-10-13T18:18:42.443177Z",
+    "terminatedAt": "2026-10-13T17:56:34.971994Z",
+    "error": null
+  },
+  "turns": [
+    {
+      "id": "turn_1b9f7acee55940deacc06c16dd8c077c",
+      "turnNo": 1,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:48:42.464639Z",
+      "completedAt": "2026-10-13T17:48:50.517502Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 2487,
+        "outputTokens": 308,
+        "totalTokens": 2795
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_d19d86e9a64c4560bd0b3e239533baba",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:48:50.533759Z",
+        "completedAt": "2026-10-13T17:50:43.02048Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_618eaea649704f0089083eb90aa0b140",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-13T17:48:50.533759Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-13T17:50:43.02048Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_33efdf2610ad40e1876a8faf3c989acb",
+      "turnNo": 2,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:50:43.042856Z",
+      "completedAt": "2026-10-13T17:50:46.474054Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 3359,
+        "outputTokens": 125,
+        "totalTokens": 3484
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": false
+      },
+      "action": {
+        "id": "action_7ea6cb240dd24e77b4633ed2749d7e15",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:50:46.49198Z",
+        "completedAt": "2026-10-13T17:50:46.507683Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_ecddb7c087e5446b9a17061fb078dced",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-13T17:50:46.49198Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-13T17:50:46.507683Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_820f50241cc04a02901f7d0eef175108",
+      "turnNo": 3,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:50:46.527894Z",
+      "completedAt": "2026-10-13T17:50:54.239281Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 3638,
+        "outputTokens": 449,
+        "totalTokens": 4087
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": true
+      },
+      "action": {
+        "id": "action_ed283771e2ff4520a503ece37a1395e0",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:50:54.257415Z",
+        "completedAt": "2026-10-13T17:52:38.125119Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_dd457486f0034502a24502753ce0d537",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-13T17:50:54.257415Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-13T17:52:38.125119Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_63a08eb9c35d4868aef0d92ce745304f",
+      "turnNo": 4,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:52:38.14942Z",
+      "completedAt": "2026-10-13T17:52:43.412054Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 4608,
+        "outputTokens": 269,
+        "totalTokens": 4877
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": true
+      },
+      "action": {
+        "id": "action_e59877635c104135b93b654eae69999b",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:52:43.429331Z",
+        "completedAt": "2026-10-13T17:52:43.441428Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_a4cd8af1c1ba4a439fe8d279b9e3af86",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-13T17:52:43.429331Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-13T17:52:43.441428Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_d950e5bf6d314974a9b73842ea2afb86",
+      "turnNo": 5,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:52:43.458425Z",
+      "completedAt": "2026-10-13T17:52:50.082232Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 4900,
+        "outputTokens": 402,
+        "totalTokens": 5302
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": true
+      },
+      "action": {
+        "id": "action_583a4c87665841a2bc2f4a5eb03ee079",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:52:50.096241Z",
+        "completedAt": "2026-10-13T17:54:37.859105Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_7e1325e7991c47d2afb308d812021365",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-13T17:52:50.096241Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-13T17:54:37.859105Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_e5a354ea177240c3af458c1069ee02eb",
+      "turnNo": 6,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:54:37.880405Z",
+      "completedAt": "2026-10-13T17:54:43.254559Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 5814,
+        "outputTokens": 264,
+        "totalTokens": 6078
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": true
+      },
+      "action": {
+        "id": "action_9f5cefd6a8514bef9a371abfa2aac0bc",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:54:43.271948Z",
+        "completedAt": "2026-10-13T17:54:43.283022Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_ba436f0d80d44ea1b330af6ec1d5db57",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-13T17:54:43.271948Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-13T17:54:43.283022Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_2bff17e60f5d4527b7f1cd5fb2770bd1",
+      "turnNo": 7,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:54:43.300272Z",
+      "completedAt": "2026-10-13T17:54:49.241364Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 6168,
+        "outputTokens": 360,
+        "totalTokens": 6528
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "generate_image",
+        "hasStatePatch": true
+      },
+      "action": {
+        "id": "action_3e74a644a90b4f19ad2e9a8a90e56e63",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:54:49.261816Z",
+        "completedAt": "2026-10-13T17:56:23.010714Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_13dfd0d6570f4144b1b5fe5e66f965d9",
+          "toolName": "generate_image",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-13T17:54:49.261816Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-13T17:56:23.010714Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_54464154a7ae46ec8817a2b65358d910",
+      "turnNo": 8,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:56:23.027158Z",
+      "completedAt": "2026-10-13T17:56:28.282492Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 7031,
+        "outputTokens": 276,
+        "totalTokens": 7307
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "TOOL_CALL",
+        "tool": "review_asset",
+        "hasStatePatch": true
+      },
+      "action": {
+        "id": "action_aa3513b616ed4a08a0207d0b91484c9f",
+        "type": "TOOL_CALL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:56:28.306163Z",
+        "completedAt": "2026-10-13T17:56:28.318767Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": [
+        {
+          "id": "tool_attempt_7fd1199d7c9d42198419c9452cad43ea",
+          "toolName": "review_asset",
+          "attemptNo": 1,
+          "status": "SUCCEEDED",
+          "callbackBinding": null,
+          "startedAt": "2026-10-13T17:56:28.306163Z",
+          "dispatchedAt": null,
+          "completedAt": "2026-10-13T17:56:28.318767Z",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "turn_13ad89636c214882949a08d403ff90b9",
+      "turnNo": 9,
+      "status": "COMPLETED",
+      "startedAt": "2026-10-13T17:56:28.342459Z",
+      "completedAt": "2026-10-13T17:56:34.95651Z",
+      "error": null,
+      "usage": {
+        "inputTokens": 7379,
+        "outputTokens": 424,
+        "totalTokens": 7803
+      },
+      "claimSource": "IMMEDIATE",
+      "decision": {
+        "kind": "FINAL",
+        "tool": null,
+        "hasStatePatch": true
+      },
+      "action": {
+        "id": "action_b357439fb9f940ac80c432e842856d3c",
+        "type": "FINAL",
+        "status": "SUCCEEDED",
+        "startedAt": "2026-10-13T17:56:34.971994Z",
+        "completedAt": "2026-10-13T17:56:34.971994Z",
+        "error": null,
+        "claimSource": "IMMEDIATE",
+        "completionSource": "SYNC_EXECUTION",
+        "failureSource": null
+      },
+      "toolAttempts": []
+    }
+  ],
+  "facts": {
+    "items": [
+      {
+        "id": "fact_f4b8c2d2286649669f0cc1977550bbe8",
+        "factType": "image_generated",
+        "subject": "artifact_a6672c9a8a259bbda16fd35e206dd9ed",
+        "bindings": {
+          "artifact": "{\"artifactId\":\"artifact_a6672c9a8a259bbda16fd35e206dd9ed\",\"mediaType\":\"image/jpeg\",\"sha256\":\"a6672c9a8a259bbda16fd35e206dd9ed948533c2173bcf830680659c64d04729\",\"sizeBytes\":221437}",
+          "imageUrl": "/api/runs/run_a66a823e6a9b465480f0537c925ff999/artifacts/artifact_a6672c9a8a259bbda16fd35e206dd9ed/content",
+          "photoAssetId": "asset_1163e40e4d624c0fbed64bbaf782a349",
+          "settingsDigest": "sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_618eaea649704f0089083eb90aa0b140",
+        "createdAt": "2026-10-13T17:50:43.02048Z"
+      },
+      {
+        "id": "fact_fc8d87b0cd534c1cb74ce8f35ed726b0",
+        "factType": "asset_reviewed",
+        "subject": "artifact_a6672c9a8a259bbda16fd35e206dd9ed",
+        "bindings": {
+          "photoAssetId": "asset_1163e40e4d624c0fbed64bbaf782a349",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": false,
+        "basisFactId": "fact_f4b8c2d2286649669f0cc1977550bbe8",
+        "toolAttemptId": "tool_attempt_ecddb7c087e5446b9a17061fb078dced",
+        "createdAt": "2026-10-13T17:50:46.507683Z"
+      },
+      {
+        "id": "fact_e273af9397eb405aaf90954fab9e0b95",
+        "factType": "image_generated",
+        "subject": "artifact_a09efbd58fef361792747db896e5a04f",
+        "bindings": {
+          "artifact": "{\"artifactId\":\"artifact_a09efbd58fef361792747db896e5a04f\",\"mediaType\":\"image/jpeg\",\"sha256\":\"a09efbd58fef361792747db896e5a04ff1e3eb65c3dbd994ecf327a0543a8201\",\"sizeBytes\":193122}",
+          "imageUrl": "/api/runs/run_a66a823e6a9b465480f0537c925ff999/artifacts/artifact_a09efbd58fef361792747db896e5a04f/content",
+          "photoAssetId": "asset_1163e40e4d624c0fbed64bbaf782a349",
+          "settingsDigest": "sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_dd457486f0034502a24502753ce0d537",
+        "createdAt": "2026-10-13T17:52:38.125119Z"
+      },
+      {
+        "id": "fact_71ffe5f6be24495bb6361db026305664",
+        "factType": "asset_reviewed",
+        "subject": "artifact_a09efbd58fef361792747db896e5a04f",
+        "bindings": {
+          "photoAssetId": "asset_1163e40e4d624c0fbed64bbaf782a349",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": false,
+        "basisFactId": "fact_e273af9397eb405aaf90954fab9e0b95",
+        "toolAttemptId": "tool_attempt_a4cd8af1c1ba4a439fe8d279b9e3af86",
+        "createdAt": "2026-10-13T17:52:43.441428Z"
+      },
+      {
+        "id": "fact_98b1de6c860340eab7426e9f8f28fd65",
+        "factType": "image_generated",
+        "subject": "artifact_2bafb85f8945b42083a3d0afba07d752",
+        "bindings": {
+          "artifact": "{\"artifactId\":\"artifact_2bafb85f8945b42083a3d0afba07d752\",\"mediaType\":\"image/jpeg\",\"sha256\":\"2bafb85f8945b42083a3d0afba07d75257ebab0c8df0e256e09e29a60dbd34f7\",\"sizeBytes\":194398}",
+          "imageUrl": "/api/runs/run_a66a823e6a9b465480f0537c925ff999/artifacts/artifact_2bafb85f8945b42083a3d0afba07d752/content",
+          "photoAssetId": "asset_33551a30dfeb4fb7960909e5c680b4be",
+          "settingsDigest": "sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_7e1325e7991c47d2afb308d812021365",
+        "createdAt": "2026-10-13T17:54:37.859105Z"
+      },
+      {
+        "id": "fact_5ed62f40068a4a0f98ac4d1424d10700",
+        "factType": "asset_reviewed",
+        "subject": "artifact_2bafb85f8945b42083a3d0afba07d752",
+        "bindings": {
+          "photoAssetId": "asset_33551a30dfeb4fb7960909e5c680b4be",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": true,
+        "basisFactId": "fact_98b1de6c860340eab7426e9f8f28fd65",
+        "toolAttemptId": "tool_attempt_ba436f0d80d44ea1b330af6ec1d5db57",
+        "createdAt": "2026-10-13T17:54:43.283022Z"
+      },
+      {
+        "id": "fact_49b2db35915148a9927d4348779f2fc2",
+        "factType": "image_generated",
+        "subject": "artifact_057235642ebba33207e13d6dd79caf96",
+        "bindings": {
+          "artifact": "{\"artifactId\":\"artifact_057235642ebba33207e13d6dd79caf96\",\"mediaType\":\"image/jpeg\",\"sha256\":\"057235642ebba33207e13d6dd79caf96ce3cf46086ed0d1ea824657b3e1d7e7e\",\"sizeBytes\":218628}",
+          "imageUrl": "/api/runs/run_a66a823e6a9b465480f0537c925ff999/artifacts/artifact_057235642ebba33207e13d6dd79caf96/content",
+          "photoAssetId": "asset_2141b4e978c9458f874c7ec6dbd8daea",
+          "settingsDigest": "sha256:d5e43fa7100ebb8de4cd6561ed3076362b76bede83dec279394787e0f05641f4"
+        },
+        "verdict": null,
+        "basisFactId": null,
+        "toolAttemptId": "tool_attempt_13dfd0d6570f4144b1b5fe5e66f965d9",
+        "createdAt": "2026-10-13T17:56:23.010714Z"
+      },
+      {
+        "id": "fact_15705213133a4fb885eec04f81a3f549",
+        "factType": "asset_reviewed",
+        "subject": "artifact_057235642ebba33207e13d6dd79caf96",
+        "bindings": {
+          "photoAssetId": "asset_2141b4e978c9458f874c7ec6dbd8daea",
+          "policyVersion": "mock-review-policy-v1"
+        },
+        "verdict": true,
+        "basisFactId": "fact_49b2db35915148a9927d4348779f2fc2",
+        "toolAttemptId": "tool_attempt_7fd1199d7c9d42198419c9452cad43ea",
+        "createdAt": "2026-10-13T17:56:28.318767Z"
+      }
+    ],
+    "truncated": false
+  },
+  "generationBudget": {
+    "maxGenerationCalls": 6,
+    "generationCallsUsed": 4
+  }
+}
