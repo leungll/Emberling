@@ -312,12 +312,14 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
               const d = edgePath(layout, e.source, e.target, heightOf, shown.z);
               if (!d) return null;
               const dim = !model.byNode.get(e.target)?.nodeRun;
+              // A link to a step that has not run is dashed, never fainter: the faint
+              // border token all but vanishes on the striped canvas.
               return (
                 <path
                   key={e.id}
                   d={d}
                   fill="none"
-                  stroke={dim ? 'var(--border)' : 'var(--border-control)'}
+                  stroke="var(--border-control)"
                   strokeWidth={lod ? 1.5 / shown.z : 1.5}
                   strokeDasharray={dim ? '4 4' : undefined}
                 />
@@ -366,7 +368,9 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
                       ? 'border-accent bg-surface-raised'
                       : within
                         ? 'border-accent'
-                        : 'border-border',
+                        : step.nodeRun
+                          ? 'border-border'
+                          : 'border-border-control',
                   )}
                 >
                   {sel ? (

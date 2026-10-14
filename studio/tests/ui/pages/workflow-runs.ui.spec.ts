@@ -26,6 +26,42 @@ const runReady = async (page: Page) => {
   await expect(page.getByRole('listbox', { name: /runs/i })).toBeVisible();
 };
 
+/**
+ * Contrast against the canvas of the graph's taken links, and of its dashed links and card
+ * outlines for steps that did not run.
+ */
+const graphContrast = (page: Page) =>
+  page.evaluate(() => {
+    const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+    const lum = (c: string) => {
+      const [r = 0, g = 0, b = 0] = rgb(c).map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const canvas = document.querySelector('[data-ui-canvas]');
+    const bg = lum(canvas ? getComputedStyle(canvas).backgroundColor : 'rgb(255,255,255)');
+    const ratio = (c: string) => {
+      const l = lum(c);
+      return (Math.max(l, bg) + 0.05) / (Math.min(l, bg) + 0.05);
+    };
+    const paths = Array.from(
+      document.querySelectorAll<SVGPathElement>('[data-ui-canvas] svg path'),
+    );
+    const dashed = (p: SVGPathElement) => getComputedStyle(p).strokeDasharray !== 'none';
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-gid]')).filter(
+      (c) => getComputedStyle(c).borderTopStyle === 'dashed',
+    );
+    return {
+      taken: Math.min(
+        ...paths.filter((p) => !dashed(p)).map((p) => ratio(getComputedStyle(p).stroke)),
+      ),
+      notRunLinks: paths.filter(dashed).map((p) => ratio(getComputedStyle(p).stroke)),
+      notRunCards: cards.map((c) => ratio(getComputedStyle(c).borderTopColor)),
+    };
+  });
+
 const states: ReviewState[] = [
   {
     name: 'workflow-runs-completed',
@@ -49,6 +85,14 @@ const states: ReviewState[] = [
     ready: async (page) => {
       await runReady(page);
       await expect(page.getByRole('alert')).toContainText('reached its generation limit');
+      // Steps that did not run keep links and outlines as visible as taken ones; only the
+      // dash tells them apart.
+      const c = await graphContrast(page);
+      expect(c.notRunLinks.length).toBeGreaterThan(0);
+      expect(c.notRunCards.length).toBeGreaterThan(0);
+      for (const r of [...c.notRunLinks, ...c.notRunCards]) {
+        expect(r).toBeGreaterThanOrEqual(c.taken);
+      }
     },
   },
   {
