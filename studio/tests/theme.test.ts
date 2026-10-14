@@ -129,3 +129,38 @@ describe('token theme', () => {
     expect(undefinedReads).toEqual([]);
   });
 });
+
+/** A light-mode token's hex value, from the `:root` block of src/index.css. */
+function token(name: string): string {
+  const m = new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})\\b`).exec(themeCss);
+  if (!m?.[1]) throw new Error(`no hex value for ${name}`);
+  return m[1];
+}
+
+/** WCAG 2 contrast ratio of two sRGB hex colours. */
+function contrast(a: string, b: string): number {
+  const luminance = (hex: string) => {
+    const [r = 0, g = 0, bl = 0] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
+}
+
+describe('control outlines', () => {
+  // Input, checkbox and secondary button outlines, canvas links and not-run card borders
+  // are the only thing that shows where a control or link is, so they need the 3:1
+  // non-text contrast against every background they are drawn on.
+  it.each(['--canvas-stripe', '--bg', '--surface'])('reach 3:1 against %s', (bg) => {
+    expect(contrast(token('--border-control'), token(bg))).toBeGreaterThanOrEqual(3);
+  });
+
+  it('stay lighter than the hover outline, so hover still darkens them', () => {
+    expect(contrast(token('--fg-muted'), token('--bg'))).toBeGreaterThan(
+      contrast(token('--border-control'), token('--bg')),
+    );
+  });
+});

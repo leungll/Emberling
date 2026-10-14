@@ -102,7 +102,7 @@
   --surface-selected: rgba(118, 87, 255, 0.1); /* selected row fill, with a 2 px accent bar */
   --border: #e3e6eb; /* panel and table dividers, card outlines */
   --border-subtle: #eceef2; /* row separators */
-  --border-control: #8d96a5; /* input, checkbox and secondary button outline, canvas links */
+  --border-control: #7a8596; /* input, checkbox and secondary button outline, canvas links */
   --fg: #18212f; /* primary text, values */
   --fg-secondary: #344054; /* secondary emphasis */
   --fg-muted: #5d6678; /* labels, captions, metadata, units, IDs */
