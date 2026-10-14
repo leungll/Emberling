@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 import { GENERATED_DEFINITIONS_PATH, type GeneratedDefinitions } from './global-setup';
-import { details, eventList, runStatus, stepCard } from './run-view';
+import { details, eventList, expectImageShown, runStatus, stepCard } from './run-view';
+import { MOCKPROVIDER_URL } from './stack';
 
 /**
  * AIGC Media Generation: the Image
@@ -61,11 +62,6 @@ test('AIGC Media Generation waits for an external callback, then completes with 
   // reports an outside image (an EXTERNAL reference), previewed from its own address.
   await stepCard(page, 'Image').click();
   await details(page).getByRole('tab', { name: 'Output' }).click();
-  const preview = details(page).getByRole('img', {
-    name: 'Preview: Image from an outside service',
-  });
-  await expect(preview).toBeVisible({ timeout: 10_000 });
-  await expect(preview).toHaveJSProperty('complete', true);
-  const naturalWidth = await preview.evaluate((img) => (img as HTMLImageElement).naturalWidth);
-  expect(naturalWidth).toBeGreaterThan(0);
+  const mock = MOCKPROVIDER_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await expectImageShown(page, 'Linked image', new RegExp(`^${mock}/v1/images/`));
 });
