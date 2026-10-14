@@ -2,14 +2,13 @@ import { Pencil, Plus, TriangleAlert } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
 import { Button, IconButton } from '@/components/ui/button';
-import { controlClasses } from '@/components/ui/field';
+import { GrowArea, controlClasses } from '@/components/ui/field';
 import { WorkflowSummary } from '@/components/workflow/WorkflowSummary';
 import { useCopy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { useEditor } from '@/features/editor/editor-context';
 import { useEditorStore } from '@/features/editor/editor-store';
 import { IssueList } from '@/features/editor/IssueList';
-import { GrowArea } from './BasicFields';
 import { Section } from './Section';
 
 /** The description, read as text, edited in place on request. */

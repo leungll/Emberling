@@ -2,8 +2,11 @@ import { CircleAlert } from 'lucide-react';
 import {
   forwardRef,
   useId,
+  useLayoutEffect,
+  useRef,
   type InputHTMLAttributes,
   type ReactNode,
+  type RefObject,
   type TextareaHTMLAttributes,
 } from 'react';
 
@@ -31,6 +34,27 @@ export const TextArea = forwardRef<
     />
   );
 });
+
+const MAX_GROW = 14 * 20 + 14;
+
+/** A text area that grows with its text up to about 14 lines, then scrolls. */
+export function GrowArea(
+  props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+    max?: number;
+    ref?: RefObject<HTMLTextAreaElement | null>;
+  },
+) {
+  const { max = MAX_GROW, className, ref: outer, ...rest } = props;
+  const inner = useRef<HTMLTextAreaElement>(null);
+  const ref = outer ?? inner;
+  useLayoutEffect(() => {
+    const ta = ref.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${String(Math.min(ta.scrollHeight + 2, max))}px`;
+  }, [props.value, max, ref]);
+  return <TextArea ref={ref} {...rest} className={cn('resize-y', className)} />;
+}
 
 interface FieldProps {
   label: string;

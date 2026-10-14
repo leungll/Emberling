@@ -1,10 +1,10 @@
 import { Maximize2 } from 'lucide-react';
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import type { JsonValue, Node } from '@/api/types';
 import { Button, IconButton } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { TextArea, TextInput, controlClasses } from '@/components/ui/field';
+import { GrowArea, TextArea, TextInput, controlClasses } from '@/components/ui/field';
 import { useCopy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/features/editor/editor-store';
@@ -17,27 +17,6 @@ export interface FieldProps {
   node: Node;
   field: string;
   errors: readonly string[];
-}
-
-const MAX_GROW = 14 * 20 + 14;
-
-/** A text area that grows with its text up to about 14 lines, then scrolls. */
-export function GrowArea(
-  props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
-    max?: number;
-    ref?: RefObject<HTMLTextAreaElement | null>;
-  },
-) {
-  const { max = MAX_GROW, className, ref: outer, ...rest } = props;
-  const inner = useRef<HTMLTextAreaElement>(null);
-  const ref = outer ?? inner;
-  useLayoutEffect(() => {
-    const ta = ref.current;
-    if (!ta) return;
-    ta.style.height = 'auto';
-    ta.style.height = `${String(Math.min(ta.scrollHeight + 2, max))}px`;
-  }, [props.value, max, ref]);
-  return <TextArea ref={ref} {...rest} className={cn('resize-y', className)} />;
 }
 
 /** A number box that keeps what is typed until it reads as a number. */

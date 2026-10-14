@@ -3,14 +3,13 @@ import { useId, useRef, useState } from 'react';
 
 import type { JsonValue, Node } from '@/api/types';
 import { Button } from '@/components/ui/button';
-import { controlClasses } from '@/components/ui/field';
+import { GrowArea, controlClasses } from '@/components/ui/field';
 import { useCopy } from '@/lib/copy';
 import { showToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/features/editor/editor-store';
 import { schemaError } from '@/features/editor/model/checks';
 import { SCHEMA_EXAMPLE, schemaSummary, specFor } from '@/features/editor/model/fields';
-import { GrowArea } from './BasicFields';
 import { configEdit } from './config-edit';
 
 /**
