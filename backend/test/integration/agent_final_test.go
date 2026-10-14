@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -325,6 +326,8 @@ func TestAgentFinal_OutputFailsSchema_FailsInvalidActionNoVersions(t *testing.T)
 	}
 	if action.Error == nil || action.Error.Code != "INVALID_ACTION" {
 		t.Errorf("action error = %+v, want INVALID_ACTION", action.Error)
+	} else if want := "INVALID_ACTION: final output: decoded to a JSON string, but the frozen OutputSchema rejects it at /enum"; action.Error.Message != want {
+		t.Errorf("action error message = %q, want %q", action.Error.Message, want)
 	}
 	decision, found := agentDecisionOfTurn(h.ctx, t, h.uow, outcome.AgentTurnID)
 	if !found {
@@ -373,6 +376,46 @@ func TestAgentFinal_OutputFailsSchema_FailsInvalidActionNoVersions(t *testing.T)
 	}
 	if _, present := payload["toolAttemptId"]; present {
 		t.Errorf("AGENT_ACTION_FAILED names a Tool Attempt: a FINAL Action never has one")
+	}
+}
+
+// TestAgentFinal_NoSchemaObjectOutput_FailsInvalidActionNamesDecodedType covers the shape
+// mismatch a model makes most often: an Agent without an Output Schema hands over its text
+// answer, but the committed FINAL output decodes to a JSON object. The Action fails as
+// INVALID_ACTION and the persisted message says which form was expected and which JSON
+// type arrived, without repeating anything the model wrote.
+func TestAgentFinal_NoSchemaObjectOutput_FailsInvalidActionNamesDecodedType(t *testing.T) {
+	const marker = "model-written-value"
+	h := newAgentHarness(t, agentHarnessOptions{})
+	generated := agentScriptFinal(h, mockmodel.Scenario{FinalOutput: json.RawMessage(`{"answer":"` + marker + `"}`)})
+	def := h.saveDefinition(agentFinalDefinition("wf-agent-final-object-output", "", ""))
+	run := h.createRun(def.WorkflowID, def.Version, `{"question":"`+agentQuestion+`"}`)
+	outcome := h.claimAgentNode(run.ID)
+
+	h.execute(outcome)
+
+	if got := generated.Load(); got != 1 {
+		t.Errorf("model calls = %d, want 1: an invalid Final Action never asks the model again", got)
+	}
+	const wantMessage = "INVALID_ACTION: final output: decoded to a JSON object; this Agent's output must be a JSON string"
+	action, _ := agentActionOfTurn(h.ctx, t, h.uow, outcome.AgentTurnID)
+	if action.Status != domain.AgentActionFailed || action.Error == nil || action.Error.Code != "INVALID_ACTION" {
+		t.Fatalf("action = %s %+v, want FAILED with INVALID_ACTION", action.Status, action.Error)
+	}
+	if action.Error.Message != wantMessage {
+		t.Errorf("action error message = %q, want %q", action.Error.Message, wantMessage)
+	}
+	nodeRun := agentNodeRun(h.ctx, t, h.uow, run.ID)
+	if nodeRun.Status != domain.NodeRunFailed || nodeRun.Error == nil || nodeRun.Error.Code != "INVALID_ACTION" {
+		t.Fatalf("agent node run = %s %+v, want FAILED with INVALID_ACTION", nodeRun.Status, nodeRun.Error)
+	}
+	if nodeRun.Error.Message != wantMessage {
+		t.Errorf("agent node run error message = %q, want %q", nodeRun.Error.Message, wantMessage)
+	}
+	for _, event := range listEvents(h.ctx, t, h.uow, run.ID) {
+		if strings.Contains(string(event.Payload), marker) {
+			t.Errorf("event %s payload repeats the model's output: %s", event.Type, event.Payload)
+		}
 	}
 }
 

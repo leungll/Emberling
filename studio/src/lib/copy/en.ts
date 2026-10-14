@@ -296,7 +296,7 @@ export const en = {
       TIMEOUT: 'Ran out of time',
       MODEL_ERROR: 'Model call failed',
       TOOL_ERROR: 'Tool call failed',
-      INVALID_ACTION: 'Asked for an action it isn’t allowed',
+      INVALID_ACTION: 'Decision was rejected',
     },
     completionSource: {
       SYNC_EXECUTION: null,
@@ -389,7 +389,7 @@ export const en = {
     },
     INVALID_ACTION: {
       title: 'The agent’s answer was rejected',
-      short: 'Asked for an action it isn’t allowed',
+      short: 'Its decision was rejected',
       next: 'Check the output schema',
     },
     EXECUTOR_ERROR: {
