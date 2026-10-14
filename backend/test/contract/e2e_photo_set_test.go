@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -413,4 +414,110 @@ func rejectedActionCode(trace photoSetTrace) string {
 		}
 	}
 	return ""
+}
+
+// photoSetAcceptedCaption reads the media result's caption and fails unless the delivery
+// was accepted with every photo passed.
+func photoSetAcceptedCaption(t *testing.T, snapshot map[string]any) {
+	t.Helper()
+	captionText, _ := nodeRunOutputOf(t, snapshot, "node_result")["caption"].(string)
+	var caption struct {
+		Accepted    bool `json:"accepted"`
+		PassedCount int  `json:"passedCount"`
+		PhotoCount  int  `json:"photoCount"`
+	}
+	if err := json.Unmarshal([]byte(captionText), &caption); err != nil {
+		t.Fatalf("media_result caption %q is not JSON: %v", captionText, err)
+	}
+	if !caption.Accepted || caption.PassedCount != 3 || caption.PhotoCount != 3 {
+		t.Errorf("media_result caption = %+v, want accepted with 3 of 3 passed", caption)
+	}
+}
+
+// photoSetObjectOutputSchema is the photo effect-template FINAL shape as an object-form
+// outputSchema.
+const photoSetObjectOutputSchema = `{
+	"type": "object",
+	"properties": {
+		"examples": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {"photoAssetId": {"type": "string"}, "assetRef": {"type": "string"}},
+				"required": ["photoAssetId", "assetRef"],
+				"additionalProperties": false
+			}
+		},
+		"settingsDigest": {"type": "string"}
+	},
+	"required": ["examples", "settingsDigest"],
+	"additionalProperties": false
+}`
+
+// TestPhotoSet_ObjectFormFinal_MockPath_Accepted runs the photo effect template with an
+// object-form outputSchema and a mock script whose FINAL is the object itself, encoded
+// once. The Agent's text port carries the object's canonical JSON text and the media
+// result accepts the delivery.
+func TestPhotoSet_ObjectFormFinal_MockPath_Accepted(t *testing.T) {
+	env := newPhotoSetEnv(t)
+	var schema any
+	if err := json.Unmarshal([]byte(photoSetObjectOutputSchema), &schema); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, trace, photoIDs := runPhotoSet(t, env, "photo-set-object", 0, map[string]any{"outputSchema": schema})
+
+	if got := runStatusOf(snapshot); got != "COMPLETED" {
+		t.Fatalf("Run status = %q, want COMPLETED; snapshot=%v", got, snapshot)
+	}
+	if trace.AgentRun.Termination == nil || *trace.AgentRun.Termination != "FINAL_RESPONSE" {
+		t.Errorf("agentRun.termination = %v, want FINAL_RESPONSE", trace.AgentRun.Termination)
+	}
+	photoSetAcceptedCaption(t, snapshot)
+
+	text, _ := nodeRunOutputOf(t, snapshot, "node_agent")["text"].(string)
+	var delivered struct {
+		Examples []struct {
+			PhotoAssetID string `json:"photoAssetId"`
+			AssetRef     string `json:"assetRef"`
+		} `json:"examples"`
+		SettingsDigest string `json:"settingsDigest"`
+	}
+	if err := json.Unmarshal([]byte(text), &delivered); err != nil {
+		t.Fatalf("agent text port %q is not the FINAL object's JSON text: %v", text, err)
+	}
+	if len(delivered.Examples) != len(photoIDs) || delivered.SettingsDigest == "" {
+		t.Fatalf("agent text port = %s, want one example per photo and a settings digest", text)
+	}
+	// The canonical text: members sorted by name at every level, no whitespace.
+	parts := make([]string, 0, len(delivered.Examples))
+	for _, example := range delivered.Examples {
+		parts = append(parts, `{"assetRef":"`+example.AssetRef+`","photoAssetId":"`+example.PhotoAssetID+`"}`)
+	}
+	want := `{"examples":[` + strings.Join(parts, ",") + `],"settingsDigest":"` + delivered.SettingsDigest + `"}`
+	if text != want {
+		t.Errorf("agent text port =\n  %s\nwant the canonical JSON text\n  %s", text, want)
+	}
+}
+
+// TestPhotoSet_SavedTextFormFixture_StillCompletes runs the unmodified photo
+// effect-template fixture, which declares no outputSchema, with its own text-form script.
+// A Definition saved before object-form output existed needs no migration: the Agent
+// still hands over its answer as text and the media result accepts the delivery.
+func TestPhotoSet_SavedTextFormFixture_StillCompletes(t *testing.T) {
+	env := newPhotoSetEnv(t)
+
+	snapshot, trace, _ := runPhotoSet(t, env, "photo-set", 0)
+
+	if got := runStatusOf(snapshot); got != "COMPLETED" {
+		t.Fatalf("Run status = %q, want COMPLETED; snapshot=%v", got, snapshot)
+	}
+	if trace.AgentRun.Termination == nil || *trace.AgentRun.Termination != "FINAL_RESPONSE" {
+		t.Errorf("agentRun.termination = %v, want FINAL_RESPONSE", trace.AgentRun.Termination)
+	}
+	photoSetAcceptedCaption(t, snapshot)
+	text, _ := nodeRunOutputOf(t, snapshot, "node_agent")["text"].(string)
+	if !strings.HasPrefix(text, `{"examples":[`) {
+		t.Errorf("agent text port = %q, want the scripted text answer", text)
+	}
 }
