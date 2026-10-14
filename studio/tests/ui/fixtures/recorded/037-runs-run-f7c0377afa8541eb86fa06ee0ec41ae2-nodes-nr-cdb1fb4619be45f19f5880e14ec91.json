@@ -53,7 +53,12 @@
           "startedAt": "2026-10-12T02:52:12.387765Z",
           "dispatchedAt": null,
           "completedAt": "2026-10-12T02:52:12.395305Z",
-          "error": null
+          "error": null,
+          "photo": {
+            "photoAssetId": "asset_cedc30fa8865486ca3d2451edf437956",
+            "position": 1,
+            "count": 3
+          }
         }
       ]
     },
@@ -131,7 +136,12 @@
           "startedAt": "2026-10-12T02:52:12.41457Z",
           "dispatchedAt": null,
           "completedAt": "2026-10-12T02:52:12.422841Z",
-          "error": null
+          "error": null,
+          "photo": {
+            "photoAssetId": "asset_45e00e1fa8ba4ae9a91e91542343e76e",
+            "position": 2,
+            "count": 3
+          }
         }
       ]
     },

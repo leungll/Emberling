@@ -50,7 +50,12 @@
           "startedAt": "2026-10-13T17:48:50.533759Z",
           "dispatchedAt": null,
           "completedAt": "2026-10-13T17:50:43.02048Z",
-          "error": null
+          "error": null,
+          "photo": {
+            "photoAssetId": "asset_1163e40e4d624c0fbed64bbaf782a349",
+            "position": 1,
+            "count": 3
+          }
         }
       ]
     },
@@ -136,7 +141,12 @@
           "startedAt": "2026-10-13T17:50:54.257415Z",
           "dispatchedAt": null,
           "completedAt": "2026-10-13T17:52:38.125119Z",
-          "error": null
+          "error": null,
+          "photo": {
+            "photoAssetId": "asset_1163e40e4d624c0fbed64bbaf782a349",
+            "position": 1,
+            "count": 3
+          }
         }
       ]
     },
@@ -222,7 +232,12 @@
           "startedAt": "2026-10-13T17:52:50.096241Z",
           "dispatchedAt": null,
           "completedAt": "2026-10-13T17:54:37.859105Z",
-          "error": null
+          "error": null,
+          "photo": {
+            "photoAssetId": "asset_33551a30dfeb4fb7960909e5c680b4be",
+            "position": 2,
+            "count": 3
+          }
         }
       ]
     },
@@ -308,7 +323,12 @@
           "startedAt": "2026-10-13T17:54:49.261816Z",
           "dispatchedAt": null,
           "completedAt": "2026-10-13T17:56:23.010714Z",
-          "error": null
+          "error": null,
+          "photo": {
+            "photoAssetId": "asset_2141b4e978c9458f874c7ec6dbd8daea",
+            "position": 3,
+            "count": 3
+          }
         }
       ]
     },

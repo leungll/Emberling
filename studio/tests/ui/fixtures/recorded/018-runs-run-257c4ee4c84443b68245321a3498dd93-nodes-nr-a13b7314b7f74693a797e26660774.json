@@ -50,7 +50,14 @@
           "startedAt": "2026-10-12T03:07:54.479517Z",
           "dispatchedAt": "2026-10-12T03:07:54.489087Z",
           "completedAt": "2026-10-12T03:08:33.933138Z",
-          "error": null
+          "error": null,
+          "test": {
+            "passed": true,
+            "summary": {
+              "total": 12,
+              "failed": 0
+            }
+          }
         }
       ]
     },
@@ -89,7 +96,14 @@
           "startedAt": "2026-10-12T03:08:33.955267Z",
           "dispatchedAt": null,
           "completedAt": "2026-10-12T03:08:33.965043Z",
-          "error": null
+          "error": null,
+          "deployment": {
+            "target": {
+              "service": "checkout",
+              "environment": "staging"
+            },
+            "version": "v1"
+          }
         }
       ]
     },

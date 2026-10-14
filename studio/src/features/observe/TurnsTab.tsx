@@ -15,6 +15,7 @@ import { useState, type ReactNode } from 'react';
 import { ElementTime, RunOffset, Tokens } from './RunFacts';
 import { ToolName, Words } from './Words';
 import type { DetailContext } from './detail-context';
+import { turnResult } from './card-info';
 import { notRetried } from './run-diagnosis';
 import { factImage, imageLabel, mediaItems, savedImageOf } from './run-media';
 import { attemptWord, toolSequence, type RunModel, type TraceElement } from './run-model';
@@ -202,6 +203,7 @@ function TurnBlock({
   const dec = ctx.model.byId.get(`dec:${turn.id}`);
   const act = action ? ctx.model.byId.get(action.id) : undefined;
   const attempts = turn.toolAttempts;
+  const result = tel.step ? turnResult(ctx.model, tel.step, turn) : null;
   const errorCode = action?.error?.code;
   const blockedWhy =
     (errorCode
@@ -292,6 +294,11 @@ function TurnBlock({
           {!final && action?.status === 'FAILED' && notRetried(tool, attempts, ctx.tools) ? (
             <Line icon={TriangleAlert} caution>
               <Words text={copy.runs.diagnosis.notRetried(tool)} tools={[tool]} />
+            </Line>
+          ) : null}
+          {result ? (
+            <Line icon={ArrowRightFromLine}>
+              <Words text={t.result(result.text)} tools={result.tools} />
             </Line>
           ) : null}
           {final && action?.status === 'SUCCEEDED' && tel.step ? (
