@@ -29,6 +29,15 @@ async function details(page: Page, rowName: RegExp, tab: string) {
   await expect(selected).toBeVisible();
 }
 
+/** The details of the element the address selects, opening the drawer where it is closed. */
+async function selectedDetails(page: Page, tab: string) {
+  const selected = page.getByRole('tab', { name: tab, selected: true });
+  if (!(await selected.isVisible())) {
+    await page.getByRole('treegrid').getByRole('row', { selected: true }).click();
+  }
+  await expect(selected).toBeVisible();
+}
+
 /** The photo set run as it stood while its agent was generating an image. */
 const generating = partwayRun(data.photos.runId, 24, 'running', 2);
 
@@ -132,13 +141,56 @@ const states: ReviewState[] = [
     },
   },
   {
+    name: 'run-tool-photo-arguments',
+    url: runPath(photoRun, '?el=action_ed283771e2ff4520a503ece37a1395e0&tab=input'),
+    mode: 'block',
+    overrides: photoRunOverrides(),
+    ready: graphReady,
+    act: async (page) => {
+      await selectedDetails(page, 'Arguments');
+      const panel = page.getByRole('tabpanel');
+      await expect(panel).toContainText('Photo 1 of 3');
+      await expect(panel.getByRole('button', { name: /^Open/ })).toHaveCount(1);
+    },
+  },
+  {
+    name: 'run-tool-delivery-turns',
+    url: runPath(data.completed, '?el=node_agent&tab=turns'),
+    mode: 'block',
+    ready: async (page) => {
+      await expect(page.getByRole('treegrid')).toBeVisible();
+      await expect(card(page, 'node_agent')).toContainText('Deployed v1 to checkout in staging');
+    },
+    act: async (page) => {
+      await selectedDetails(page, 'Turns');
+      const panel = page.getByRole('tabpanel');
+      await expect(panel).toContainText('Result: Tests passed (12)');
+      await expect(panel).toContainText('Result: Deployed v1 to checkout in staging');
+    },
+  },
+  {
+    name: 'run-tool-test-result',
+    url: runPath(data.completed, '?el=action_37d7842a349c4030b1aba2997c41da5a&tab=output'),
+    mode: 'block',
+    ready: async (page) => {
+      await expect(page.getByRole('treegrid')).toBeVisible();
+    },
+    act: async (page) => {
+      await selectedDetails(page, 'Result');
+      const panel = page.getByRole('tabpanel');
+      await expect(panel).toContainText('Tests passed (12).');
+    },
+  },
+  {
     name: 'run-media-generating',
     url: runPath(generating),
     mode: 'block',
     overrides: { '/api/runs': runList(withRuns([generating.item])), ...generating.overrides },
     ready: async (page) => {
       await expect(page.getByRole('treegrid')).toBeVisible();
-      await expect(card(page, 'node_agent')).toContainText('Calling generate_image');
+      await expect(card(page, 'node_agent')).toContainText(
+        'Calling generate_image for photo 2 of 3',
+      );
       await expect(card(page, 'node_agent')).toContainText('Turn 3');
       await expect(card(page, 'node_result')).toContainText('Not started');
     },

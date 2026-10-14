@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { cardInfo, type CardInfo } from './card-info';
+import type { ExecutionFactTrace, ToolAttemptTrace } from '@/api/types';
+import { callArguments, callSaved, cardInfo, turnResult, type CardInfo } from './card-info';
 import type { RunModel } from './run-model';
 import {
   agentTrace,
@@ -102,8 +103,8 @@ describe('a completed delivery run, as recorded', () => {
     expect(c.clamp).toBe(false);
   });
 
-  it('says the agent finished with an answer when its last call returned nothing it saved', () => {
-    expect(info(m, 'node_agent').line.text).toBe('Finished with an answer');
+  it('names the version and target its last deploy reported', () => {
+    expect(info(m, 'node_agent').line.text).toBe('Deployed v1 to checkout in staging');
   });
 });
 
@@ -322,5 +323,205 @@ describe('outputs without content', () => {
       definition: FLOW,
     });
     expect(info(m, 'gen')).toMatchObject({ line: { text: 'No text' }, idle: true });
+  });
+});
+
+/* ---------- Tool-call facts the trace projects on each Tool Attempt -------------------- */
+
+describe('tool-call facts on a running call', () => {
+  const runningCall = (tool: string, attempt: Partial<ToolAttemptTrace>) =>
+    model({
+      snapshot: snapshot('RUNNING', [
+        nodeRun('agent', 'agent', { status: 'RUNNING', completedAt: null, latencyMs: null }),
+      ]),
+      definition: FLOW,
+      traces: {
+        nr_agent: agentTrace([
+          turn(1, tool, 1, {
+            action: { status: 'RUNNING', completedAt: null },
+            attempts: [
+              toolAttempt('ta_1', tool, { status: 'STARTED', completedAt: null, ...attempt }),
+            ],
+          }),
+        ]),
+      },
+    });
+
+  it('names the photo of the set a generate_image call works on, by its returned position', () => {
+    const m = runningCall('generate_image', {
+      photo: { photoAssetId: 'asset_2', position: 2, count: 3 },
+    });
+    expect(info(m, 'agent').line).toEqual({
+      text: 'Calling generate_image for photo 2 of 3',
+      tools: ['generate_image'],
+    });
+  });
+
+  it('names only the tool when the photo has no returned position', () => {
+    const m = runningCall('generate_image', { photo: { photoAssetId: 'asset_2' } });
+    expect(info(m, 'agent').line.text).toBe('Calling generate_image');
+    expect(info(runningCall('generate_image', {}), 'agent').line.text).toBe(
+      'Calling generate_image',
+    );
+  });
+
+  it('names the target a running deploy goes to', () => {
+    const m = runningCall('deploy', {
+      deployment: { target: { service: 'checkout', environment: 'staging' } },
+    });
+    expect(info(m, 'agent').line.text).toBe('Deploying to checkout in staging');
+    expect(info(runningCall('deploy', {}), 'agent').line.text).toBe('Calling deploy');
+  });
+});
+
+describe('tool-call facts on a finished call', () => {
+  const finished = (
+    tool: string,
+    attempt: Partial<ToolAttemptTrace>,
+    facts: ExecutionFactTrace[] = [],
+  ) => {
+    const trace = agentTrace(
+      [
+        turn(1, tool, 1, {
+          attempts: [toolAttempt('ta_1', tool, { completedAt: at(1), ...attempt })],
+        }),
+        turn(2, null, 2),
+      ],
+      { termination: 'FINAL_RESPONSE' },
+    );
+    trace.facts.items = facts;
+    return model({
+      snapshot: snapshot('COMPLETED', [nodeRun('agent', 'agent', { output: { text: 'done' } })]),
+      definition: FLOW,
+      traces: { nr_agent: trace },
+    });
+  };
+  const lineOf = (m: RunModel) => info(m, 'agent').line.text;
+
+  it('gives the test total of a passed sandbox_test', () => {
+    expect(
+      lineOf(
+        finished('sandbox_test', { test: { passed: true, summary: { total: 12, failed: 0 } } }),
+      ),
+    ).toBe('Tests passed (12)');
+  });
+
+  it('gives the failed and total counts of a failed sandbox_test, as recorded', () => {
+    expect(
+      lineOf(
+        finished('sandbox_test', { test: { passed: false, summary: { total: 12, failed: 3 } } }),
+      ),
+    ).toBe('Tests failed (3 of 12)');
+  });
+
+  it('keeps the saved verdict alone when the test summary is not returned', () => {
+    const fact: ExecutionFactTrace = {
+      id: 'f_1',
+      factType: 'patch_tested',
+      subject: 'patch',
+      bindings: {},
+      verdict: true,
+      basisFactId: null,
+      toolAttemptId: 'ta_1',
+      createdAt: at(1),
+    };
+    expect(lineOf(finished('sandbox_test', {}, [fact]))).toBe('Tests passed');
+  });
+
+  it('names the version, service and environment of a deploy', () => {
+    const target = { service: 'checkout', environment: 'staging' };
+    expect(lineOf(finished('deploy', { deployment: { target, version: 'v1' } }))).toBe(
+      'Deployed v1 to checkout in staging',
+    );
+    expect(lineOf(finished('deploy', { deployment: { target } }))).toBe(
+      'Deployed to checkout in staging',
+    );
+    expect(lineOf(finished('deploy', {}))).toBe('Finished with an answer');
+  });
+
+  it('says a video is ready, and says so plainly when its link is withheld', () => {
+    expect(
+      lineOf(finished('generate_video', { video: { videoUrl: 'https://cdn.test/v/1.mp4' } })),
+    ).toBe('Video ready');
+    expect(
+      lineOf(
+        finished('generate_video', {
+          withheld: [{ field: 'video.videoUrl', reason: 'UNSAFE_URL' }],
+        }),
+      ),
+    ).toBe('Video ready (link not shown)');
+    expect(lineOf(finished('generate_video', {}))).toBe('Finished with an answer');
+  });
+});
+
+describe('a tool call’s arguments and result in the details pane', () => {
+  const callModel = (tool: string, attempt: Partial<ToolAttemptTrace>) =>
+    model({
+      snapshot: snapshot('COMPLETED', [nodeRun('agent', 'agent', { output: { text: 'done' } })]),
+      definition: FLOW,
+      traces: {
+        nr_agent: agentTrace([
+          turn(1, tool, 1, { attempts: [toolAttempt('ta_1', tool, attempt)] }),
+          turn(2, null, 2),
+        ]),
+      },
+    });
+  const actionEl = (m: RunModel) => {
+    const el = m.byId.get('act_1');
+    if (!el) throw new Error('no action element');
+    return el;
+  };
+
+  it('lists the photo by its returned position and the deploy target', () => {
+    const photo = callArguments(
+      actionEl(
+        callModel('generate_image', { photo: { photoAssetId: 'asset_2', position: 2, count: 3 } }),
+      ),
+    );
+    expect(photo).toMatchObject({
+      photo: { photoAssetId: 'asset_2', position: 2, count: 3 },
+      target: null,
+    });
+    const deploy = callArguments(
+      actionEl(
+        callModel('deploy', {
+          deployment: { target: { service: 'checkout', environment: 'staging' } },
+        }),
+      ),
+    );
+    expect(deploy).toMatchObject({ photo: null, target: 'checkout in staging' });
+    expect(callArguments(actionEl(callModel('review_asset', {})))).toBeNull();
+  });
+
+  it('carries the video link, or why it is withheld, into the result', () => {
+    const m = callModel('generate_video', { video: { videoUrl: 'https://cdn.test/v/1.mp4' } });
+    expect(callSaved(m, actionEl(m))).toMatchObject({
+      result: { text: 'Video ready' },
+      videoUrl: 'https://cdn.test/v/1.mp4',
+      withheld: [],
+    });
+    const w = callModel('generate_video', {
+      withheld: [{ field: 'video.videoUrl', reason: 'TOO_LARGE' }],
+    });
+    expect(callSaved(w, actionEl(w))).toMatchObject({
+      result: { text: 'Video ready (link not shown)' },
+      videoUrl: null,
+      withheld: [{ field: 'video.videoUrl', reason: 'TOO_LARGE' }],
+    });
+  });
+
+  it('gives a Turns row the result of a call that saved no image or review', () => {
+    const m = callModel('sandbox_test', {
+      test: { passed: true, summary: { total: 12, failed: 0 } },
+    });
+    const step = m.byNode.get('agent');
+    const t = step?.trace?.turns[0];
+    if (!step || !t) throw new Error('no turn');
+    expect(turnResult(m, step, t)?.text).toBe('Tests passed (12)');
+    const img = callModel('generate_image', { photo: { photoAssetId: 'asset_2' } });
+    const s2 = img.byNode.get('agent');
+    const t2 = s2?.trace?.turns[0];
+    if (!s2 || !t2) throw new Error('no turn');
+    expect(turnResult(img, s2, t2)).toBeNull();
   });
 });

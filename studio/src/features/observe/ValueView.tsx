@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import type { DetailContext } from './detail-context';
-import { cardInfo, type CallSaved } from './card-info';
+import { cardInfo, type CallArguments, type CallSaved } from './card-info';
 import {
   factImage,
   imageLabel,
@@ -13,7 +13,7 @@ import {
 } from './run-media';
 import type { RunModel, Step } from './run-model';
 import { Words } from './Words';
-import type { JsonValue } from '@/api/types';
+import type { JsonValue, WithheldToolField } from '@/api/types';
 import { FactList, TechnicalDetails } from '@/components/facts/FactList';
 import { JsonViewer } from '@/components/json/JsonViewer';
 import type { MediaRef } from '@/components/media/media-ref';
@@ -122,15 +122,79 @@ export function StepImages({ ctx, step }: { ctx: DetailContext; step: Step }) {
   );
 }
 
+/** Why a member the trace left out is missing, in a sentence. */
+function WithheldNotes({ withheld }: { withheld: readonly WithheldToolField[] }) {
+  const m = useCopy().runs.media;
+  if (!withheld.length) return null;
+  return (
+    <>
+      {withheld.map((w) => {
+        const what = m.withheldField[w.field] ?? m.withheldOther(w.field);
+        const say = m.withheld[w.reason];
+        return (
+          <p key={w.field} className="m-0 text-sm text-fg-secondary">
+            {say ? say(what) : what}
+          </p>
+        );
+      })}
+    </>
+  );
+}
+
 /**
- * A tool call's Result tab. The trace does not carry a call's result yet; what it does
- * carry is shown: what the call saved (the image it generated, a review or test verdict).
+ * A tool call's Arguments tab, from the arguments the trace projects: the photo a
+ * generate_image call works on (placed by the position the trace returns) and a deploy's
+ * target.
+ */
+export function CallArgumentsView({ ctx, args }: { ctx: DetailContext; args: CallArguments }) {
+  const copy = useCopy();
+  const m = copy.runs.media;
+  const { photo, target, withheld } = args;
+  const ref = photo ? photoList(ctx.model).find((p) => p.id === photo.photoAssetId) : undefined;
+  const json: Record<string, JsonValue> = {};
+  if (photo) json.photoAssetId = photo.photoAssetId;
+  return (
+    <>
+      {photo ? (
+        <Sub
+          title={
+            photo.position !== undefined && photo.count !== undefined
+              ? m.photoOf(photo.position, photo.count)
+              : m.photoArg
+          }
+        >
+          {ref ? (
+            <Gallery items={mediaItems(ctx.model, [ref])} />
+          ) : (
+            <p className="m-0 text-sm text-fg-secondary">{m.notInPhotoSet(photo.photoAssetId)}</p>
+          )}
+        </Sub>
+      ) : null}
+      {target ? (
+        <Sub title={m.target}>
+          <p className="m-0 text-sm text-fg">{target}</p>
+        </Sub>
+      ) : null}
+      <WithheldNotes withheld={withheld} />
+      {photo ? (
+        <TechnicalDetails storageKey="json-args" label={copy.media.json}>
+          <JsonViewer value={json} root="arguments" />
+        </TechnicalDetails>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * A tool call's Result tab: the result facts the trace projects (a test summary, a deploy's
+ * version, a video) and what the call saved (the image it generated, a review or test
+ * verdict).
  */
 export function CallResultView({ ctx, saved }: { ctx: DetailContext; saved: CallSaved }) {
   const copy = useCopy();
   const m = copy.runs.media;
   const f = copy.runs.details.facts2;
-  const { facts, result } = saved;
+  const { facts, result, videoUrl, withheld } = saved;
   const images = facts.flatMap((x) => {
     const r = factImage(x);
     return r ? [r] : [];
@@ -143,6 +207,17 @@ export function CallResultView({ ctx, saved }: { ctx: DetailContext; saved: Call
           <Words text={m.callResult(result.text)} tools={result.tools} />
         </p>
       ) : null}
+      {videoUrl ? (
+        <Sub title={m.video}>
+          <video
+            controls
+            preload="none"
+            src={videoUrl}
+            className="w-full max-w-full rounded-md border border-border bg-surface-inset"
+          />
+        </Sub>
+      ) : null}
+      <WithheldNotes withheld={withheld} />
       <Gallery items={mediaItems(ctx.model, images)} />
       {rest.length ? (
         <Sub title={m.savedResults}>

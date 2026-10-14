@@ -54,7 +54,12 @@
           "startedAt": "2026-10-12T02:52:09.174253Z",
           "dispatchedAt": null,
           "completedAt": "2026-10-12T02:52:09.178662Z",
-          "error": null
+          "error": null,
+          "photo": {
+            "photoAssetId": "asset_aa1b5ff26b7a4bbd855620b7c9bcfa3b",
+            "position": 1,
+            "count": 3
+          }
         }
       ]
     },

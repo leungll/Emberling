@@ -1,4 +1,13 @@
-import type { AgentTurnTrace, ExecutionFactTrace, JsonValue } from '@/api/types';
+import type {
+  AgentTurnTrace,
+  ExecutionFactTrace,
+  JsonValue,
+  ToolAttemptTrace,
+  ToolDeploymentTrace,
+  ToolPhotoTrace,
+  ToolTestTrace,
+  WithheldToolField,
+} from '@/api/types';
 import {
   collectMedia,
   mediaFormat,
@@ -14,9 +23,10 @@ import type { RunModel, Step, TraceElement } from './run-model';
  * What a run graph card says under the step's name: what the step is doing now or what it
  * produced, the Agent's turn, and its images. Built only from returned records: the
  * NodeRun (status, error, input and output), its Agent Trace and its Attempts. A number
- * shown is a field of one record (a limit, a turn number, passedCount) or the length of one
- * returned list (the photo set's photos, the images the Agent answered with); Studio never
- * counts records across the run.
+ * shown is a field of one record (a limit, a turn number, passedCount, a photo's position,
+ * a test summary's total and failed) or the length of one returned list (the photo set's
+ * photos, the images the Agent answered with); Studio never counts records across the run
+ * and never derives one number from others.
  */
 
 /** A sentence with the tool names in it, for Words. */
@@ -78,7 +88,30 @@ function savedRefs(step: Step): MediaRef[] {
   });
 }
 
-/** What one finished tool call returned, from the results it saved. */
+const targetOf = (d: ToolDeploymentTrace | undefined): string | null =>
+  d?.target ? c().target(d.target.service, d.target.environment) : null;
+
+/** "Tests passed (12)", "Tests failed (3 of 12)": the runner's two recorded numbers. */
+function testLine(t: ToolTestTrace): CardLine {
+  const { total, failed } = t.summary;
+  if (!t.passed) return line(c().testsFailedOf(failed, total));
+  return line(failed ? c().testsPassedWithFailures(failed, total) : c().testsPassedOf(total));
+}
+
+function deployedLine(d: ToolDeploymentTrace | undefined): CardLine | null {
+  const target = targetOf(d);
+  const version = d?.version;
+  if (version) return line(target ? c().deployed(version, target) : c().deployedVersion(version));
+  return target ? line(c().deployedTo(target)) : null;
+}
+
+const VIDEO_URL = 'video.videoUrl';
+
+function withheld(attempt: ToolAttemptTrace, field: string): WithheldToolField | undefined {
+  return attempt.withheld?.find((w) => w.field === field);
+}
+
+/** What one finished tool call returned: the results it saved, else its projected result. */
 export function callResult(model: RunModel, step: Step, turn: AgentTurnTrace): CardLine | null {
   const attempt = turn.toolAttempts[turn.toolAttempts.length - 1];
   if (!attempt) return null;
@@ -94,26 +127,67 @@ export function callResult(model: RunModel, step: Step, turn: AgentTurnTrace): C
     const n = photoNo(model, review.bindings.photoAssetId);
     return line(n !== null ? c().ofPhoto(verdict, n) : verdict);
   }
+  if (attempt.test) return testLine(attempt.test);
   const tested = facts.find((f) => f.factType === 'patch_tested');
   if (tested) return line(tested.verdict ? c().testsPassed : c().testsFailed);
-  // Other tools' results (a deploy's version and target, a video) are not in the trace.
+  const deployed = deployedLine(attempt.deployment);
+  if (deployed) return deployed;
+  if (attempt.video) return line(c().videoReady);
+  if (withheld(attempt, VIDEO_URL)) return line(c().videoReadyLinkWithheld);
   return null;
+}
+
+/** Tools whose saved image or review a Turns row already lists under the call. */
+const SAVES_ITS_RESULT: readonly string[] = ['generate_image', 'review_asset'];
+
+/** A Turns row's "Result:" line: a finished call's result its saved results do not show. */
+export function turnResult(model: RunModel, step: Step, turn: AgentTurnTrace): CardLine | null {
+  const tool = turn.decision?.tool;
+  if (turn.decision?.kind !== 'TOOL_CALL' || !tool || SAVES_ITS_RESULT.includes(tool)) return null;
+  return turn.action?.status === 'SUCCEEDED' ? callResult(model, step, turn) : null;
 }
 
 export interface CallSaved {
   facts: ExecutionFactTrace[];
   result: CardLine | null;
+  /** The video the call made, when the trace returns its link. */
+  videoUrl: string | null;
+  /** Result members the trace left out, and why. */
+  withheld: WithheldToolField[];
 }
 
-/** What a tool call saved, and what that says it returned; null when it saved nothing. */
+/** What a tool call saved and returned; null when the trace holds neither. */
 export function callSaved(model: RunModel, el: TraceElement): CallSaved | null {
   const turn = el.turn;
   const step = el.step;
   if (!turn || !step?.trace || turn.decision?.kind !== 'TOOL_CALL') return null;
   const ids = new Set(turn.toolAttempts.map((a) => a.id));
   const facts = step.trace.facts.items.filter((f) => ids.has(f.toolAttemptId));
-  const result = turn.action?.status === 'SUCCEEDED' ? callResult(model, step, turn) : null;
-  return facts.length || result ? { facts, result } : null;
+  const done = turn.action?.status === 'SUCCEEDED';
+  const result = done ? callResult(model, step, turn) : null;
+  const attempt = turn.toolAttempts.at(-1);
+  const videoUrl = done ? (attempt?.video?.videoUrl ?? null) : null;
+  const left = done && attempt ? (attempt.withheld ?? []) : [];
+  return facts.length || result || left.length ? { facts, result, videoUrl, withheld: left } : null;
+}
+
+export interface CallArguments {
+  photo: ToolPhotoTrace | null;
+  /** "checkout in staging". */
+  target: string | null;
+  withheld: WithheldToolField[];
+}
+
+/** The arguments the trace projects for a tool call; null when it projects none. */
+export function callArguments(el: TraceElement): CallArguments | null {
+  const turn = el.turn;
+  if (!turn || turn.decision?.kind !== 'TOOL_CALL') return null;
+  const attempt = el.toolAttempt ?? turn.toolAttempts.at(-1);
+  if (!attempt) return null;
+  const photo = attempt.photo ?? null;
+  const target = targetOf(attempt.deployment);
+  const left = (attempt.withheld ?? []).filter((w) => w.field !== VIDEO_URL);
+  return photo || target || left.length ? { photo, target, withheld: left } : null;
 }
 
 function failureLine(step: Step): CardLine {
@@ -166,6 +240,13 @@ function agentRunningLine(step: Step): CardLine {
   if (action && (action.status === 'RUNNING' || action.status === 'READY')) {
     if (decision.kind === 'FINAL') return line(c().passingAnswer);
     const tool = decision.tool ?? '';
+    const attempt = last.toolAttempts.at(-1);
+    const photo = attempt?.photo;
+    if (photo?.position !== undefined && photo.count !== undefined) {
+      return line(c().callingForPhoto(tool, photo.position, photo.count), [tool]);
+    }
+    const target = targetOf(attempt?.deployment);
+    if (target) return line(c().deployingTo(target));
     return line(c().calling(tool), [tool]);
   }
   return line(c().deciding);
