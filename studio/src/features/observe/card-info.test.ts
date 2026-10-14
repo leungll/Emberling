@@ -414,6 +414,14 @@ describe('tool-call facts on a finished call', () => {
     ).toBe('Tests failed (3 of 12)');
   });
 
+  it('gives both recorded counts when a passed sandbox_test reports failures', () => {
+    expect(
+      lineOf(
+        finished('sandbox_test', { test: { passed: true, summary: { total: 12, failed: 3 } } }),
+      ),
+    ).toBe('Tests passed, 3 of 12 failed');
+  });
+
   it('keeps the saved verdict alone when the test summary is not returned', () => {
     const fact: ExecutionFactTrace = {
       id: 'f_1',
