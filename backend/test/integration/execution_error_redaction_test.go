@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,8 +48,20 @@ import (
 // and a query value standing for a credential.
 const redactionSecretURL = "http://mockprovider:9101/v1/tasks?key=s3cr3t"
 
-// redactionLeaks are the fragments no persisted fact may contain.
-var redactionLeaks = []string{"s3cr3t", "key=", "mockprovider", "9101", `Post "`, "connection refused", "context deadline exceeded"}
+// redactionLeaks are the fragments no persisted fact may contain. The Provider port is
+// matched separately by redactionPortLeak.
+var redactionLeaks = []string{redactionSecretURL, "s3cr3t", "key=", "mockprovider", `Post "`, "connection refused", "context deadline exceeded"}
+
+// redactionPortLeak matches the Provider port in host:port form, whatever host the
+// transport text names (mockprovider:9101, 127.0.0.1:9101).
+var redactionPortLeak = hostPortPattern(9101)
+
+// hostPortPattern matches port as the port of a host:port pair. A bare digit substring is
+// not a leak: random hex IDs, such as a NodeRun ID, can contain the same digits, and a
+// JSON number follows a quote rather than a host character.
+func hostPortPattern(port int) *regexp.Regexp {
+	return regexp.MustCompile(`[\w.\]-]:` + strconv.Itoa(port) + `\b`)
+}
 
 // redactionTransport fails every request with err(req).
 type redactionTransport func(*http.Request) error
@@ -211,6 +224,9 @@ func (h *redactionHarness) assertNoLeak(run domain.Run, outcome service.AdvanceO
 			if bytes.Contains(raw, []byte(leak)) {
 				h.t.Errorf("%s carries %q: %s", what, leak, raw)
 			}
+		}
+		if leak := redactionPortLeak.Find(raw); leak != nil {
+			h.t.Errorf("%s carries the Provider port %q: %s", what, leak, raw)
 		}
 	}
 
@@ -383,7 +399,8 @@ func TestAgentTurn_ModelTransportFailureWithSecretURL_PersistsStableModelError(t
 		t.Errorf("turn error = %+v, want MODEL_ERROR %q", turn.Error, want)
 	}
 	agentRun, _ := agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
-	leaks := []string{"s3cr3t", "key=", "llm.internal", "8443", `Post "`, "connection refused", "sk-redaction-test"}
+	leaks := []string{"s3cr3t", "key=", "llm.internal", `Post "`, "connection refused", "sk-redaction-test"}
+	portLeak := hostPortPattern(8443)
 	facts := map[string][]byte{"Agent Run error": mustJSON(t, agentRun.Error), "turn error": mustJSON(t, turn.Error)}
 	for _, ev := range listEvents(h.ctx, t, h.uow, run.ID) {
 		facts[string(ev.Type)+" Event payload (seq "+strconv.FormatInt(ev.Seq, 10)+")"] = ev.Payload
@@ -393,6 +410,9 @@ func TestAgentTurn_ModelTransportFailureWithSecretURL_PersistsStableModelError(t
 			if bytes.Contains(raw, []byte(leak)) {
 				t.Errorf("%s carries %q: %s", what, leak, raw)
 			}
+		}
+		if leak := portLeak.Find(raw); leak != nil {
+			t.Errorf("%s carries the Provider port %q: %s", what, leak, raw)
 		}
 	}
 }
