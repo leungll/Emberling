@@ -192,6 +192,10 @@ func (r *cbRunRepo) SetError(_ context.Context, lock *store.RunLock, execErr dom
 	r.tx.state.runs[lock.RunID()] = run
 	return nil
 }
+func (r *cbRunRepo) GetByIdempotencyKey(context.Context, string, string) (domain.Run, error) {
+	return domain.Run{}, errCbNotImplemented
+}
+
 func (r *cbRunRepo) LatestByWorkflow(context.Context, string) (*domain.Run, error) {
 	return nil, errCbNotImplemented
 }
