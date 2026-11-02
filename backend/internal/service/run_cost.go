@@ -64,10 +64,13 @@ func runCostOf(calls []store.FinishedCall, tools *registry.ToolRegistry) RunCost
 // accounts for. A call that recorded a Cost did reach a Provider. Otherwise an Agent Turn
 // always counts, since every Turn is one model call; a Node Attempt counts when it
 // dispatched a task to a Provider or failed without knowing whether the Provider acted;
-// and a Tool Attempt counts when its registered side effect is EXTERNAL, or when its Tool
-// is no longer registered and the question cannot be answered, so the call is reported
-// as unknown rather than silently dropped. A Node or Tool call that never left the
-// process has no Provider charge and is not an unknown one.
+// and a Tool Attempt counts when its registered side effect is EXTERNAL, when its Tool
+// reviews with the Agent Run's review model and the Agent Run froze one, since that
+// review is one call to a billed model however it ended, or when its Tool is no longer
+// registered and the question cannot be answered, so the call is reported as unknown
+// rather than silently dropped. A Node or Tool call that never left the process, which
+// includes a review the local mock policy decided, has no Provider charge and is not an
+// unknown one.
 func isExternalCall(call store.FinishedCall, tools *registry.ToolRegistry) bool {
 	if call.Cost != nil {
 		return true
@@ -82,7 +85,10 @@ func isExternalCall(call store.FinishedCall, tools *registry.ToolRegistry) bool 
 			return true
 		}
 		reg, ok := tools.Get(call.ToolName)
-		return !ok || reg.Metadata.SideEffect.Kind == domain.SideEffectExternal
+		if !ok || reg.Metadata.SideEffect.Kind == domain.SideEffectExternal {
+			return true
+		}
+		return reg.Metadata.UsesReviewModel && call.ReviewModelID != ""
 	default:
 		return false
 	}

@@ -308,6 +308,12 @@ type ToolMetadata struct {
 	// on its Agent node. Each call receives the Agent Run's frozen review Model ID, or none
 	// when the node selected none; the Runtime never decides this by Tool Name.
 	UsesReviewModel bool `json:"usesReviewModel"`
+	// CostSource is the stable identifier the charges of this Tool's calls are attributed
+	// to when the call is bound to no Model ID, such as a task sent to a Provider that
+	// names no model. A Tool that calls a registered model attributes its charges to that
+	// Model ID instead and leaves it empty. It is a Runtime attribution key, not a
+	// Provider identifier or a credential, and it is not part of the catalog projection.
+	CostSource string `json:"-"`
 }
 
 // Validate mirrors NodeMetadata.Validate for Tool registrations. Executor presence and

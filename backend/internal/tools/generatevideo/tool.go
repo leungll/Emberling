@@ -37,6 +37,12 @@ const ToolName = "generate_video"
 // persisted in the Callback Binding and shown in Trace; it is not a credential.
 const ProviderID = "mock-task-provider-v1"
 
+// CostSource is the stable identifier the charge of a video task is attributed to. The
+// task names no model, so the charge cannot be traced to a Model ID the way a generation
+// or a review is; it is traced to the registered video generator instead. It is declared
+// in the Tool's Metadata and recorded as the cost source of every priced video call.
+const CostSource = "mock-video-generator-v1"
+
 // reviewedFactType is the fact a video dispatch requires: a passing review of the same
 // asset, made for the same photo.
 const reviewedFactType = "asset_reviewed"
@@ -116,6 +122,7 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 				MatchBindings:   []string{"photoAssetId"},
 				RequireVerdict:  &requirePassed,
 			}},
+			CostSource: CostSource,
 		},
 		Executor: New(baseURL, client),
 	}
@@ -227,7 +234,8 @@ func buildRequest(settings map[string]any, callback registry.CallbackContext) ta
 	return request
 }
 
-// callbackPayload is the Provider's callback body as this Tool reads it.
+// callbackPayload is the Provider's callback body as this Tool reads it. `usage.cost` is
+// the charge the Provider reports for the task.
 type callbackPayload struct {
 	Status   string  `json:"status"`
 	VideoURL *string `json:"videoUrl"`
@@ -235,6 +243,42 @@ type callbackPayload struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+	// Usage is kept raw so a member of an unexpected shape is dropped by reportedCost
+	// instead of failing a payload whose video URL is otherwise valid.
+	Usage json.RawMessage `json:"usage"`
+}
+
+// reportedCost maps a SUCCEEDED payload's usage.cost to the Cost the result carries: a
+// finite, non-negative JSON number is an amount in US dollars, the currency the task
+// protocol's usage.cost is denominated in, attributed to CostSource. A payload without
+// usage, or with a cost that is not such a number, yields nil: the Provider reported no
+// charge, and no charge is ever assumed.
+func reportedCost(raw json.RawMessage) *domain.Cost {
+	var usage struct {
+		Cost json.RawMessage `json:"cost"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &usage) != nil || len(usage.Cost) == 0 {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(usage.Cost))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil {
+		return nil
+	}
+	number, ok := value.(json.Number)
+	if !ok {
+		return nil
+	}
+	reported, err := strconv.ParseFloat(number.String(), 64)
+	if err != nil {
+		return nil
+	}
+	amount, ok := domain.CostAmountFromFloat(reported)
+	if !ok {
+		return nil
+	}
+	return &domain.Cost{Amount: amount, Currency: domain.CurrencyUSD, Source: CostSource}
 }
 
 // OnCallback converts one Provider callback payload into the Tool result.
@@ -243,7 +287,7 @@ type callbackPayload struct {
 // Attempt with the callback as its failure source. A payload this Tool cannot interpret
 // stays a plain error: a malformed delivery is not evidence that the external task failed.
 // Only videoUrl is republished, so a Provider-private member never reaches the Agent
-// Context.
+// Context; the reported charge travels beside the result as its Cost.
 func (e *Executor) OnCallback(_ context.Context, state registry.ToolAsyncState, payload []byte) (registry.ToolResult, error) {
 	var body callbackPayload
 	if err := json.Unmarshal(payload, &body); err != nil {
@@ -258,7 +302,7 @@ func (e *Executor) OnCallback(_ context.Context, state registry.ToolAsyncState, 
 		if err != nil {
 			return registry.ToolResult{}, fmt.Errorf("%s: encode result for external task %s: %w", ToolName, state.ExternalTask.ExternalTaskID, err)
 		}
-		return registry.ToolResult{Output: output}, nil
+		return registry.ToolResult{Output: output, Cost: reportedCost(body.Usage)}, nil
 	case statusFailed:
 		failure := domain.ExecutionError{Code: defaultFailureCode, Message: "provider reported the external task failed"}
 		if body.Error != nil {
