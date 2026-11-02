@@ -193,7 +193,7 @@ func (t *execFakeTx) ToolAttempts() store.ToolAttemptRepository     { return nil
 func (t *execFakeTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *execFakeTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *execFakeTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
-func (t *execFakeTx) ProviderSlots() store.ProviderSlotRepository               { return nil }
+func (t *execFakeTx) ProviderSlots() store.ProviderSlotRepository               { return noSlotsRepo{} }
 
 type execFakeDefinitionRepo struct{ def domain.Definition }
 

@@ -198,3 +198,42 @@ func (s *ExecutionService) admitCandidate(ctx context.Context, tx store.Tx, lock
 	}
 	return capacityAdmission{deferred: true}, nil
 }
+
+// releaseSlot frees the Provider slot a NodeRun holds, inside the transaction that moves
+// the NodeRun to its terminal status. It returns the Provider id the slot belonged to,
+// empty when the NodeRun held none (an ungoverned node, or a NodeRun admitted before
+// the Provider was limited and already released). The release takes no Provider lock: a
+// concurrent admission reads the count under its own lock after this commit or before it,
+// and both orders stay within the limit.
+func releaseSlot(ctx context.Context, tx store.Tx, nodeRunID string) (string, error) {
+	providerID, released, err := tx.ProviderSlots().Release(ctx, nodeRunID)
+	if err != nil {
+		return "", fmt.Errorf("execution: release provider slot of node run %s: %w", nodeRunID, err)
+	}
+	if !released {
+		return "", nil
+	}
+	return providerID, nil
+}
+
+// releaseHandoff runs after the releasing transaction committed: it offers the earliest
+// queued Run of the Provider to the in-process queue so the freed slot is taken without
+// waiting for the Reconciler. It is only a latency optimization: the queued NodeRun is
+// persisted READY work, so a failure here is logged and the Reconciler rediscovers it.
+func (s *ExecutionService) releaseHandoff(ctx context.Context, providerID string) {
+	var runID string
+	var found bool
+	err := s.deps.UoW.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		runID, found, err = tx.ProviderSlots().NextDeferredRun(ctx, providerID)
+		return err
+	})
+	if err != nil {
+		s.deps.Logger.Warn("execution: provider slot handoff lookup failed; the reconciler will rediscover the queued work",
+			"providerId", providerID, "error", err)
+		return
+	}
+	if found {
+		s.deps.Queue.EnqueueAdvance(runID)
+	}
+}

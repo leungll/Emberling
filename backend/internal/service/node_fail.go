@@ -80,6 +80,7 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 	var result nodeOutcomeResult
 	var runID string
 	var lastSeq int64
+	var releasedProvider string
 
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		attempt, err := tx.NodeAttempts().Get(ctx, p.attemptID)
@@ -218,6 +219,12 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 			}
 			return err
 		}
+		// A retry above kept the slot: the NodeRun stays RUNNING and its next Attempt
+		// re-dispatches under the same admission. Only the terminal failure frees it, in
+		// the same transaction, whether or not the external result is uncertain.
+		if releasedProvider, err = releaseSlot(ctx, tx, nodeRun.ID); err != nil {
+			return err
+		}
 		if err := s.appendEvent(ctx, tx, lock, run.ID, &nodeRun.ID, domain.EventNodeFailed, now, nodeFailedPayload{
 			AttemptNo: attempt.AttemptNo, Error: p.execError,
 		}); err != nil {
@@ -274,6 +281,9 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 	}
 	if runID != "" {
 		s.postCommit(runID, lastSeq)
+	}
+	if releasedProvider != "" {
+		s.releaseHandoff(ctx, releasedProvider)
 	}
 	return result, nil
 }

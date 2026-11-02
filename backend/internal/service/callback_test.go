@@ -126,7 +126,7 @@ func (t *cbTx) ToolAttempts() store.ToolAttemptRepository     { return nil }
 func (t *cbTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *cbTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *cbTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
-func (t *cbTx) ProviderSlots() store.ProviderSlotRepository               { return nil }
+func (t *cbTx) ProviderSlots() store.ProviderSlotRepository               { return noSlotsRepo{} }
 
 type cbDefinitionRepo struct{ tx *cbTx }
 

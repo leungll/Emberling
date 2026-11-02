@@ -25,6 +25,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textoutput"
+	"github.com/leungll/Emberling/backend/internal/reconciler"
 	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/service"
@@ -61,11 +62,16 @@ type capDispatch struct {
 type capTaskExecutor struct {
 	mu          sync.Mutex
 	dispatches  map[string]capDispatch // by NodeRun id, latest Attempt
-	count       int
 	dispatchErr error
 }
 
 func (e *capTaskExecutor) ValidateSemantics(context.Context, map[string]any) error { return nil }
+
+func (e *capTaskExecutor) setDispatchErr(err error) {
+	e.mu.Lock()
+	e.dispatchErr = err
+	e.mu.Unlock()
+}
 func (e *capTaskExecutor) dispatchOf(nodeRunID string) (capDispatch, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -85,7 +91,6 @@ func (e *capTaskExecutor) Execute(_ context.Context, in registry.NodeInput, conf
 	if modelID, _ := config["modelId"].(string); modelID == capModelID {
 		providerID = capProviderID
 	}
-	e.count++
 	taskID := fmt.Sprintf("task-%s-%d", in.NodeRunID, in.AttemptNo)
 	if e.dispatches == nil {
 		e.dispatches = make(map[string]capDispatch)
@@ -514,6 +519,48 @@ func (h *capHarness) assertQueued(nr domain.NodeRun, wantPosition int) {
 	}
 }
 
+func (h *capHarness) assertHeld(nr domain.NodeRun) {
+	h.t.Helper()
+	for _, id := range h.heldNodeRuns() {
+		if id == nr.ID {
+			return
+		}
+	}
+	h.t.Fatalf("node run %s holds no slot; held: %v", nr.ID, h.heldNodeRuns())
+}
+
+func (h *capHarness) assertNotHeld(nr domain.NodeRun) {
+	h.t.Helper()
+	for _, id := range h.heldNodeRuns() {
+		if id == nr.ID {
+			h.t.Fatalf("node run %s still holds a slot", nr.ID)
+		}
+	}
+}
+
+func (h *capHarness) attempts(nodeRunID string) []domain.NodeAttempt {
+	h.t.Helper()
+	var attempts []domain.NodeAttempt
+	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		attempts, err = tx.NodeAttempts().ListByNodeRun(ctx, nodeRunID)
+		return err
+	}); err != nil {
+		h.t.Fatalf("list attempts of %s: %v", nodeRunID, err)
+	}
+	return attempts
+}
+
+// lastHandoff is the Run the most recent post-commit enqueue offered to the queue.
+func (h *capHarness) lastHandoff() string {
+	h.t.Helper()
+	advanced := h.queue.advanced()
+	if len(advanced) == 0 {
+		h.t.Fatal("nothing was enqueued")
+	}
+	return advanced[len(advanced)-1]
+}
+
 // ---------------------------------------------------------------------------
 // Admission
 // ---------------------------------------------------------------------------
@@ -826,4 +873,218 @@ func TestProviderCapacity_DeferredInFailedRun_DoesNotBlockQueue(t *testing.T) {
 
 	_, task := h.queueRun(h.linearDefinition(capModelID, nil))
 	h.assertQueued(task, 1)
+}
+
+// ---------------------------------------------------------------------------
+// Release
+// ---------------------------------------------------------------------------
+
+func TestProviderCapacity_ReleaseOnSuccess_EarliestDeferredRunAdmitted(t *testing.T) {
+	h := newCapHarness(t, 1)
+	def := h.linearDefinition(capModelID, nil)
+	holder, held := h.holdSlot(def)
+	first, firstTask := h.queueRun(def)
+	second, secondTask := h.queueRun(def)
+	h.assertQueued(secondTask, 2)
+
+	if outcome := h.callback(held.ID, `{"status":"SUCCEEDED","text":"done"}`); !outcome.Accepted {
+		t.Fatalf("callback = %+v, want accepted", outcome)
+	}
+	h.assertNotHeld(held)
+	if h.heldCount() != 0 {
+		t.Fatalf("held = %d right after the release, want 0", h.heldCount())
+	}
+	if got := h.lastHandoff(); got != first.ID {
+		t.Fatalf("release handed the slot to %s, want the earliest queued Run %s", got, first.ID)
+	}
+	h.drive(holder.ID)
+	if got := h.run(holder.ID).Status; got != domain.RunCompleted {
+		t.Fatalf("holder run = %s, want COMPLETED", got)
+	}
+
+	// The later Run reaches the free slot first yet is refused: an earlier queued Run
+	// of another live Run is still waiting.
+	if outcome, err := h.svc.Advance(h.ctx, second.ID); err != nil || outcome.Claimed {
+		t.Fatalf("advance of the later Run = (%v, %v), want refused while an earlier Run waits", outcome.Claimed, err)
+	}
+	h.assertQueued(secondTask, 2)
+	if h.heldCount() != 0 {
+		t.Fatalf("held = %d after the refused overtake, want 0", h.heldCount())
+	}
+
+	h.drive(first.ID)
+	admitted := h.nodeRun(first.ID, "task")
+	if admitted.Status != domain.NodeRunWaitingCallback {
+		t.Fatalf("earliest queued task = %s, want dispatched", admitted.Status)
+	}
+	h.assertHeld(admitted)
+	if admitted.CapacityDeferredAt == nil || !admitted.CapacityDeferredAt.Equal(*firstTask.CapacityDeferredAt) {
+		t.Fatalf("admission erased the queued-since fact %v, want it kept as %v", admitted.CapacityDeferredAt, firstTask.CapacityDeferredAt)
+	}
+	if n := len(h.waitingEvents(first.ID, admitted.ID)); n != 1 {
+		t.Fatalf("admitted task has %d NODE_WAITING_CAPACITY events, want the single first refusal", n)
+	}
+	h.drive(second.ID)
+	h.assertQueued(secondTask, 2)
+}
+
+func TestProviderCapacity_NewlyReadyNodeRun_CannotOvertakeEarlierDeferred(t *testing.T) {
+	h := newCapHarness(t, 1)
+	def := h.linearDefinition(capModelID, nil)
+	_, held := h.holdSlot(def)
+	queued, queuedTask := h.queueRun(def)
+	h.callback(held.ID, `{"status":"SUCCEEDED","text":"done"}`)
+	if h.heldCount() != 0 {
+		t.Fatalf("held = %d after the release, want 0", h.heldCount())
+	}
+
+	// A Run created after the release finds a free slot and is still refused, behind
+	// the Run that queued while the slot was taken.
+	h.clock.Advance(time.Second)
+	late := h.createRun(def)
+	h.drive(late.ID)
+	h.assertQueued(h.nodeRun(late.ID, "task"), 2)
+	if h.heldCount() != 0 {
+		t.Fatalf("held = %d after the newcomer was refused, want 0", h.heldCount())
+	}
+
+	h.drive(queued.ID)
+	h.assertHeld(h.nodeRun(queued.ID, "task"))
+	h.drive(late.ID)
+	h.assertQueued(h.nodeRun(late.ID, "task"), 2)
+	_ = queuedTask
+}
+
+func TestProviderCapacity_RetryOfSameNodeRun_KeepsSingleSlotRow(t *testing.T) {
+	h := newCapHarness(t, 1)
+	def := h.linearDefinition(capModelID, &domain.ExecutionPolicy{MaxAttempts: 3, Backoff: domain.BackoffFixed, TimeoutMs: 60_000})
+	h.exec.setDispatchErr(errors.New("provider unreachable"))
+
+	run := h.createRun(def)
+	h.drive(run.ID)
+	task := h.nodeRun(run.ID, "task")
+	if task.Status != domain.NodeRunRunning || task.NextAttemptAt == nil {
+		t.Fatalf("task after a failed dispatch = %s next=%v, want RUNNING with a scheduled retry", task.Status, task.NextAttemptAt)
+	}
+	// The slot stays with the NodeRun across the retry wait: a second Run is refused.
+	h.assertHeld(task)
+	_, other := h.queueRun(def)
+	h.assertQueued(other, 1)
+
+	h.exec.setDispatchErr(nil)
+	h.clock.Advance(time.Minute)
+	h.drive(run.ID)
+	task = h.nodeRun(run.ID, "task")
+	if task.Status != domain.NodeRunWaitingCallback {
+		t.Fatalf("task after the retry = %s, want WAITING_CALLBACK", task.Status)
+	}
+	if n := len(h.attempts(task.ID)); n != 2 {
+		t.Fatalf("attempts = %d, want the failed first and the dispatched second", n)
+	}
+	if got := h.heldNodeRuns(); len(got) != 1 || got[0] != task.ID {
+		t.Fatalf("held = %v, want exactly one row for the retried NodeRun", got)
+	}
+	if task.CapacityDeferredAt != nil {
+		t.Fatalf("retried task was marked queued at %v, want never queued: a retry bypasses admission", task.CapacityDeferredAt)
+	}
+}
+
+func TestProviderCapacity_TerminalFailure_ReleasesSlot(t *testing.T) {
+	h := newCapHarness(t, 1)
+	def := h.linearDefinition(capModelID, &domain.ExecutionPolicy{MaxAttempts: 3, Backoff: domain.BackoffFixed, TimeoutMs: 60_000})
+	holder, held := h.holdSlot(def)
+	queued, _ := h.queueRun(def)
+
+	// A Provider-reported failure of a waiting task is terminal even though attempts
+	// remain: the slot is freed in that same transaction.
+	if outcome := h.callback(held.ID, `{"status":"FAILED"}`); !outcome.Accepted {
+		t.Fatalf("failure callback = %+v, want accepted", outcome)
+	}
+	failed := h.nodeRun(holder.ID, "task")
+	if failed.Status != domain.NodeRunFailed {
+		t.Fatalf("task after the provider failure = %s, want FAILED", failed.Status)
+	}
+	h.assertNotHeld(failed)
+	if got := h.run(holder.ID).Status; got != domain.RunFailed {
+		t.Fatalf("holder run = %s, want FAILED", got)
+	}
+	if got := h.lastHandoff(); got != queued.ID {
+		t.Fatalf("release handed the slot to %s, want %s", got, queued.ID)
+	}
+	h.drive(queued.ID)
+	h.assertHeld(h.nodeRun(queued.ID, "task"))
+}
+
+func TestProviderCapacity_UncertainTimeoutNotRetryable_ReleasesSlotAndAttemptUncertain(t *testing.T) {
+	h := newCapHarness(t, 1)
+	def := h.linearDefinition(capModelID, &domain.ExecutionPolicy{MaxAttempts: 3, Backoff: domain.BackoffFixed, TimeoutMs: 1_000})
+	holder, held := h.holdSlot(def)
+	queued, _ := h.queueRun(def)
+	attempts := h.attempts(held.ID)
+	if len(attempts) != 1 || attempts[0].Status != domain.NodeAttemptDispatched {
+		t.Fatalf("attempts = %+v, want one DISPATCHED attempt", attempts)
+	}
+
+	h.clock.Advance(2 * time.Second)
+	if err := h.svc.TimeoutAttempt(h.ctx, attempts[0].ID); err != nil {
+		t.Fatalf("timeout: %v", err)
+	}
+	attempt := h.attempts(held.ID)[0]
+	if attempt.Status != domain.NodeAttemptFailed || attempt.Uncertain == nil || !*attempt.Uncertain {
+		t.Fatalf("timed-out attempt = %s uncertain=%v, want FAILED and uncertain", attempt.Status, attempt.Uncertain)
+	}
+	task := h.nodeRun(holder.ID, "task")
+	if task.Status != domain.NodeRunFailed {
+		t.Fatalf("task after the wait timeout = %s, want FAILED: a dispatched task is never re-dispatched", task.Status)
+	}
+	h.assertNotHeld(task)
+	if n := len(h.attempts(held.ID)); n != 1 {
+		t.Fatalf("attempts = %d after an uncertain timeout, want no retry", n)
+	}
+	if got := h.lastHandoff(); got != queued.ID {
+		t.Fatalf("release handed the slot to %s, want %s", got, queued.ID)
+	}
+	h.drive(queued.ID)
+	h.assertHeld(h.nodeRun(queued.ID, "task"))
+}
+
+// ---------------------------------------------------------------------------
+// Recovery
+// ---------------------------------------------------------------------------
+
+func TestProviderCapacity_CrashWithAllSlotsHeld_RowsUnchangedAfterRestart(t *testing.T) {
+	h := newCapHarness(t, 1)
+	def := h.linearDefinition(capModelID, nil)
+	_, held := h.holdSlot(def)
+	queued, queuedTask := h.queueRun(def)
+	heldBefore := h.heldNodeRuns()
+
+	// The process dies with the slot held and one Run queued. The next process has no
+	// queue items and no memory of either; the Reconciler scans persisted READY work.
+	h.svc = h.newService()
+	h.queue = &capQueue{}
+	rec := reconciler.New(reconciler.Config{UoW: h.uow, Executor: h.svc, Clock: h.clock, BatchLimit: 100})
+	report, err := rec.RunOnce(h.ctx)
+	if err != nil {
+		t.Fatalf("reconcile after restart: %v", err)
+	}
+	if report.ReadyOrRetryableFound == 0 {
+		t.Fatal("reconciler rediscovered no READY work, want the queued NodeRun")
+	}
+	if got := h.heldNodeRuns(); len(got) != len(heldBefore) || got[0] != heldBefore[0] {
+		t.Fatalf("held after restart = %v, want unchanged %v", got, heldBefore)
+	}
+	h.assertQueued(queuedTask, 1)
+
+	// Only the slot's release lets the queued Run in, and the Reconciler alone (no
+	// in-process handoff survived the restart) rediscovers it.
+	h.callback(held.ID, `{"status":"SUCCEEDED","text":"done"}`)
+	if _, err := rec.RunOnce(h.ctx); err != nil {
+		t.Fatalf("reconcile after the release: %v", err)
+	}
+	admitted := h.nodeRun(queued.ID, "task")
+	if admitted.Status != domain.NodeRunWaitingCallback {
+		t.Fatalf("queued task after the release and a reconcile pass = %s, want dispatched", admitted.Status)
+	}
+	h.assertHeld(admitted)
 }
