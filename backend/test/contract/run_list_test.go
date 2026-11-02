@@ -13,7 +13,7 @@ import (
 // runListItemKeys is the complete key set of one GET /api/runs item; nullable keys are
 // always present.
 var runListItemKeys = []string{
-	"completedAt", "createdAt", "definitionVersion", "error", "failedStep", "id", "latestVersion",
+	"completedAt", "cost", "createdAt", "definitionVersion", "error", "failedStep", "id", "latestVersion",
 	"startedAt", "status", "waitingSteps", "workflowId", "workflowName",
 }
 
