@@ -243,6 +243,7 @@ describe('api client', () => {
         ],
         facts: { items: [], truncated: false },
         generationBudget: { maxGenerationCalls: null, generationCallsUsed: 0 },
+        workspace: null,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);

@@ -18,6 +18,7 @@ const (
 	IDPrefixToolAttempt         = "tool_attempt"
 	IDPrefixAgentContextVersion = "ctxv"
 	IDPrefixAgentStateVersion   = "statev"
+	IDPrefixWorkspacePatch      = "wpatch"
 )
 
 // IDGenerator produces new domain identifiers. It is an interface so that tests which

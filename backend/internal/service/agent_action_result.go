@@ -255,6 +255,16 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return nil
 		}
 
+		// A workspace patch the result carries is re-verified against the patch text and
+		// the frozen allowed paths and appended with the next sequence number, all inside
+		// this transaction. A patch the Runtime will not record rolls the whole result back
+		// (nothing of it is written) and the call fails as an invalid Tool result below.
+		if result.WorkspacePatch != nil {
+			if err := s.recordWorkspacePatchLocked(ctx, tx, call, *result.WorkspacePatch, now); err != nil {
+				return err
+			}
+		}
+
 		if err := tx.AgentActions().MarkSucceeded(ctx, call.actionID, src.fromAction, now); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
@@ -316,10 +326,18 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq()}
 		return nil
 	})
-	if errors.Is(err, errAgentTurnSuperseded) {
+	var rejected *errWorkspacePatchRejected
+	switch {
+	case errors.Is(err, errAgentTurnSuperseded):
 		return agentToolCommit{}, nil
-	}
-	if err != nil {
+	case errors.As(err, &rejected):
+		// The result transaction rolled back with the Attempt still in its pre-result
+		// status, so the shared Tool failure commits in its place with the same source.
+		return s.commitAgentToolFailure(ctx, call, src, domain.ExecutionError{
+			Code:    codeWorkspacePatchInvalid,
+			Message: fmt.Sprintf("tool %q returned a workspace patch the runtime will not record: %s", call.toolName, rejected.reason),
+		})
+	case err != nil:
 		return agentToolCommit{}, err
 	}
 	s.wake(commit)

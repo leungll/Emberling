@@ -191,6 +191,9 @@ type AgentTrace struct {
 	// both read in the same transaction as the Turns.
 	Facts  AgentTraceFacts
 	Budget AgentGenerationBudget
+	// Workspace is the frozen workspace with its recorded patch summaries, nil when the
+	// Agent Run froze none.
+	Workspace *AgentTraceWorkspace
 }
 
 // AgentTraceTurn is one round: the Turn, the single Decision and Action it committed (both
@@ -322,7 +325,11 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		if err != nil {
 			return err
 		}
-		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget}
+		workspace, err := agentTraceWorkspace(ctx, tx, agentRun.ID)
+		if err != nil {
+			return err
+		}
+		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget, Workspace: workspace}
 		return nil
 	})
 	if err != nil {
