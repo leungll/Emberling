@@ -7,6 +7,7 @@ package contract
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -167,5 +168,130 @@ func TestE2E_SoftwareDelivery_DeployHeldPastDeadline_TimesOutWithoutSecondDeploy
 	assertContiguousSeq(t, events)
 	if n := len(eventsOfType(events, "RUN_FAILED")); n != 1 {
 		t.Errorf("RUN_FAILED events = %d, want exactly 1", n)
+	}
+}
+
+// deliveryUncertainReport is the FINAL document the deploy-lost script answers with when
+// the deployment's outcome is unknown.
+type deliveryUncertainReport struct {
+	Status      string `json:"status"`
+	BaseCommit  string `json:"baseCommit"`
+	PatchDigest string `json:"patchDigest"`
+	Message     string `json:"message"`
+}
+
+// TestE2E_SoftwareDelivery_DeployHeldAndBackendRestarted_AgentToldUncertainReportsWithoutSecondDeployment
+// holds the deployment request at production's barrier and stops the Backend, so the
+// request is abandoned and its outcome never reaches Emberling. A second Backend under a
+// new process identity, still within the Agent deadline, finds the STARTED deploy Attempt
+// of the stopped process on its Reconciler scan and hands it back to the Agent: the
+// Attempt and its Action fail with RESULT_UNCERTAIN and failureSource RUNNER_LOST, the
+// Agent's next Turn answers with a report instead of deploying again, the Run completes
+// with that report, and production is never called a second time.
+func TestE2E_SoftwareDelivery_DeployHeldAndBackendRestarted_AgentToldUncertainReportsWithoutSecondDeployment(t *testing.T) {
+	f := newDeliveryFixture(t)
+	control(t, f.production.URL, "pause", `{"kinds":["deploy"]}`)
+	first := f.startBackend(t, testEnvOptions{RunnerID: "runner-before-restart"})
+
+	runID := createDeliveryRun(t, first, "software-delivery-deploy-lost")
+	var operationID string
+	select {
+	case operationID = <-f.productionHeld:
+	case <-time.After(e2eWait):
+		t.Fatalf("production held no deployment request within %s", e2eWait)
+	}
+
+	// --- restart while production holds the request: its response is lost.
+	pool := first.pool
+	first.stop()
+	waitRecordLine(t, f.production.URL, "abandoned", "deploy", func(line map[string]any) bool {
+		return line["operationId"] == operationID
+	})
+
+	const restartedRunner = "runner-after-restart"
+	second := f.startBackend(t, testEnvOptions{Pool: pool, RunnerID: restartedRunner})
+	rec := reconciler.New(reconciler.Config{UoW: second.uow, Executor: second.execution, BatchLimit: 100, RunnerID: restartedRunner})
+	report, err := rec.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("reconciler RunOnce: %v", err)
+	}
+	if len(report.Errors) != 0 || report.OrphanToolAttemptsFound != 1 || report.OrphanToolAttemptsHandled != 1 || report.AgentRunsTimedOut != 0 {
+		t.Fatalf("reconciler report = %+v, want the orphaned deploy Attempt found and handled once, nothing timed out", report)
+	}
+
+	snapshot := second.waitForTerminal(t, runID, e2eWait)
+	if got := runStatusOf(snapshot); got != "COMPLETED" {
+		t.Fatalf("Run status = %q, want COMPLETED with the Agent's report; snapshot=%v", got, snapshot)
+	}
+	trace := loadDeliveryTrace(t, second, runID, nodeRunIDOf(t, snapshot, "node_agent"))
+	if trace.AgentRun.Termination == nil || *trace.AgentRun.Termination != string(domain.TerminationFinalResponse) {
+		t.Errorf("Agent termination = %v, want FINAL_RESPONSE", trace.AgentRun.Termination)
+	}
+	deploys := trace.callsOf(deploy.ToolName)
+	if len(deploys) != 1 {
+		t.Fatalf("deploy Attempts = %+v, want exactly 1: an uncertain deployment is never retried", deploys)
+	}
+	call := deploys[0]
+	if call.attempt.Status != "FAILED" || call.attempt.AttemptNo != 1 || call.actionStatus != "FAILED" ||
+		call.actionError != "RESULT_UNCERTAIN" || call.failureSource != string(domain.FailureRunnerLost) {
+		t.Errorf("deploy call = %+v, want its first Attempt and its Action FAILED with RESULT_UNCERTAIN and RUNNER_LOST", call)
+	}
+	if want := deploy.OperationID(call.actionID, 1); operationID != want {
+		t.Errorf("held operationId = %q, want %q derived from the deploy Action", operationID, want)
+	}
+	var nextDecision string
+	for _, turn := range trace.Turns {
+		if turn.TurnNo == call.turnNo+1 && turn.Decision != nil {
+			nextDecision = turn.Decision.Kind
+		}
+	}
+	if nextDecision != string(domain.DecisionFinal) {
+		t.Errorf("Decision of the Turn after the uncertain deployment = %q, want FINAL", nextDecision)
+	}
+
+	var patchDigest string
+	for _, fact := range trace.Facts.Items {
+		if fact.FactType == "patch_tested" && fact.Verdict != nil && *fact.Verdict {
+			patchDigest = fact.Subject
+		}
+	}
+	text, _ := nodeRunOutputOf(t, snapshot, "node_result")["text"].(string)
+	var result deliveryUncertainReport
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		t.Fatalf("result text %q is not the Agent's report: %v", text, err)
+	}
+	if patchDigest == "" || result.Status != "DEPLOYMENT_UNCERTAIN" || result.BaseCommit != deliveryBaseCommit ||
+		result.PatchDigest != patchDigest || result.Message == "" {
+		t.Errorf("result = %+v, want DEPLOYMENT_UNCERTAIN for the tested patch %q", result, patchDigest)
+	}
+
+	// A second pass finds nothing left to hand back, and nothing calls production again.
+	again, err := rec.RunOnce(context.Background())
+	if err != nil || len(again.Errors) != 0 || again.OrphanToolAttemptsFound != 0 || again.AgentRunsTimedOut != 0 {
+		t.Errorf("second reconciler pass = %+v err %v, want nothing to do", again, err)
+	}
+	productionLines := serviceRecord(t, f.production.URL)
+	if arrived := recordLines(productionLines, "arrived", "deploy"); len(arrived) != 1 || arrived[0]["operationId"] != operationID {
+		t.Errorf("production deploy arrivals = %v, want only the held %s", arrived, operationID)
+	}
+	if deployed := recordLines(productionLines, "deployed", "deploy"); len(deployed) != 0 {
+		t.Errorf("production deployed lines = %v, want none: the held request was abandoned", deployed)
+	}
+
+	events := second.listEvents(t, runID)
+	assertContiguousSeq(t, events)
+	failed := eventsOfType(events, "AGENT_ACTION_FAILED")
+	if len(failed) != 1 {
+		t.Fatalf("AGENT_ACTION_FAILED events = %d, want exactly 1", len(failed))
+	}
+	payload, _ := failed[0]["payload"].(map[string]any)
+	if payload["failureSource"] != string(domain.FailureRunnerLost) {
+		t.Errorf("AGENT_ACTION_FAILED payload = %v, want failureSource RUNNER_LOST", payload)
+	}
+	if n := len(eventsOfType(events, "RUN_COMPLETED")); n != 1 {
+		t.Errorf("RUN_COMPLETED events = %d, want exactly 1", n)
+	}
+	if n := len(eventsOfType(events, "RUN_FAILED")); n != 0 {
+		t.Errorf("RUN_FAILED events = %d, want none", n)
 	}
 }

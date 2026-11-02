@@ -318,6 +318,7 @@ func TestProvider_Generate_SoftwareDeliveryTrajectories_TestThenDeployThenFinal(
 	const wantFinal = `{"operationId":"op_act_b_1","patchDigest":"sha256:p","version":"v1"}`
 	cases := map[string]string{
 		"software-delivery":                    `{"baseCommit":"fixture-v1","patch":"--- a/x\n+++ b/x\n"}`,
+		"software-delivery-deploy-lost":        `{"baseCommit":"fixture-v1","patch":"--- a/x\n+++ b/x\n"}`,
 		"software-delivery-duplicate-callback": `{"baseCommit":"fixture-v1","mock":"duplicate","patch":"--- a/x\n+++ b/x\n"}`,
 	}
 	for script, wantTestArguments := range cases {
@@ -333,7 +334,8 @@ func TestTrajectories_EmbeddedFixtures_LoadAndAppearInTextModelConfigSchema(t *t
 	names := TrajectoryNames()
 	for _, want := range []string{
 		"photo-review-interrupted", "photo-set", "photo-set-limit", "photo-set-object", "photo-set-skip-review",
-		"photo-set-sync-crash", "photo-set-video-restart", "software-delivery", "software-delivery-duplicate-callback",
+		"photo-set-sync-crash", "photo-set-video-restart", "software-delivery", "software-delivery-deploy-lost",
+		"software-delivery-duplicate-callback",
 	} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("TrajectoryNames() = %v, want to contain %q", names, want)
