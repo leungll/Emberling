@@ -138,7 +138,7 @@ func TestToolMetadata_JSON_FactDeclarationsUseWireNames(t *testing.T) {
 	const want = `{"name":"review_asset","description":"Review a generated asset","inputSchema":{"type":"object"},"outputSchema":{"type":"object"},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC",` +
 		`"produces":{"factType":"asset_reviewed","subjectPointer":{"source":"RESULT","pointer":"/assetId"},"bindArguments":{"photoAssetId":{"source":"ARGUMENTS","pointer":"/photoAssetId"}},"verdictPointer":{"source":"RESULT","pointer":"/approved"},"basisFactType":"image_generated"},` +
 		`"requires":[{"factType":"image_generated","subjectArgument":"/assetRef","matchBindings":["photoAssetId"],"requireVerdict":true}],` +
-		`"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false}`
+		`"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"records":null,"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
 
 	encoded, err := json.Marshal(declaringToolMetadata())
 	if err != nil {

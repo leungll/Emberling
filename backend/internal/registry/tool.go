@@ -37,8 +37,29 @@ type ToolAction struct {
 	// Tool does not declare it or the Agent Run froze no review model. The Tool uses it
 	// verbatim: empty selects its deterministic mock policy, never another model.
 	ReviewModelID string
+	// Workspace is the Agent Run's frozen workspace view, resolved in the claim
+	// transaction, for a Tool whose Metadata declares UsesWorkspace; nil otherwise. The
+	// Tool reads it verbatim and never resolves a repository or commit of its own.
+	Workspace *WorkspaceView
 	// Callback is set only for an ASYNC Tool dispatch.
 	Callback *CallbackContext
+}
+
+// WorkspaceView is what a workspace Tool sees of the Agent Run's frozen workspace: the
+// registered repository, the base commit the Run is bound to, the cumulative patch so far
+// with its digest, and the relative path prefixes the Agent may change. It carries no
+// filesystem location: the Tool resolves the repository through its own registered
+// configuration.
+type WorkspaceView struct {
+	RepositoryID string
+	BaseCommit   string
+	// Patch is the current cumulative unified diff on top of BaseCommit, empty when the
+	// Agent has changed nothing yet. PatchDigest identifies that patch; a Tool that
+	// requires the latest patch compares digests, never patch text.
+	Patch       string
+	PatchDigest string
+	// AllowedPaths are normalised relative path prefixes inside the repository.
+	AllowedPaths []string
 }
 
 // ToolResult is the complete logical result of one Tool call. The Runtime validates it
@@ -54,6 +75,36 @@ type ToolResult struct {
 	// none. It is recorded on the Tool Attempt in the transaction that commits the result
 	// and never read back into an execution decision.
 	Cost *domain.Cost
+	// WorkspacePatch is the new cumulative workspace patch a result carries, for a Tool
+	// whose Metadata declares the WORKSPACE_PATCH record; nil otherwise. The Runtime
+	// persists it in the result transaction. A result carrying one the registration does
+	// not declare is invalid.
+	WorkspacePatch *WorkspacePatch
+	// ChangeRequest is the change request a result carries, for a Tool whose Metadata
+	// declares the CHANGE_REQUEST record; nil otherwise, under the same rule.
+	ChangeRequest *ChangeRequest
+}
+
+// WorkspacePatch is one new cumulative patch of the Agent Run's workspace: the whole
+// unified diff on top of the frozen base commit, its digest and the repository paths it
+// touches. The Tool computes it; the Runtime decides whether it may be recorded.
+type WorkspacePatch struct {
+	Patch        string
+	PatchDigest  string
+	TouchedPaths []string
+}
+
+// ChangeRequest is the record a change-request Tool assembles from committed facts: the
+// patch it describes by digest, the verification fact it rests on, the Artifact holding its
+// content with that content's digest, and the decision basis it cites. Every reference is
+// to something already committed; the Runtime checks them against the Run's facts before
+// recording the request.
+type ChangeRequest struct {
+	PatchDigest        string
+	VerificationFactID string
+	ContentArtifact    domain.ArtifactRef
+	ContentDigest      string
+	DecisionBasis      json.RawMessage
 }
 
 // ToolResultKind distinguishes a finished Tool call from a dispatch.

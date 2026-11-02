@@ -320,6 +320,81 @@ type ToolMetadata struct {
 	// Model ID instead and leaves it empty. It is a Runtime attribution key, not a
 	// Provider identifier or a credential, and it is not part of the catalog projection.
 	CostSource string `json:"-"`
+	// Authorization declares the risk and reversibility the per-Action authorization
+	// decision reads. A Tool that declares none is a LOW-risk Tool: every Tool registered
+	// before this declaration existed keeps its behaviour, and the Runtime never infers
+	// risk from a Tool Name. Omitted on the wire when undeclared.
+	Authorization *ToolAuthorization `json:"authorization,omitempty"`
+	// Records lists the record kinds a successful result of this Tool may carry, which the
+	// result transaction persists. A result carrying a record of an undeclared kind is an
+	// invalid Tool result; the Runtime decides this by the declaration, never by Tool Name.
+	Records []ToolRecordKind `json:"records"`
+	// UsesWorkspace marks a Tool whose calls receive the Agent Run's frozen workspace view.
+	UsesWorkspace bool `json:"usesWorkspace"`
+	// Reconcilable marks an ASYNC Tool whose uncertain or lost external operation the
+	// Runtime may query for an authoritative result after the fact. It requires a Poll
+	// declaration: reconciliation is a status query, never a resend.
+	Reconcilable bool `json:"reconcilable"`
+	// ReturnUnmetRequirement makes an unmet fact requirement a definite refusal that is
+	// returned to the Agent, so it can establish the missing fact and call again, instead
+	// of ending the Agent Run. A Tool that leaves it false keeps the terminal behaviour.
+	ReturnUnmetRequirement bool `json:"returnUnmetRequirement"`
+}
+
+// ToolAuthorizationRisk is the declared risk class of a Tool's calls.
+type ToolAuthorizationRisk string
+
+const (
+	// ToolRiskLow calls are allowed without a human decision. It is also what an
+	// undeclared Authorization means.
+	ToolRiskLow ToolAuthorizationRisk = "LOW"
+	// ToolRiskProduction calls change a production system and need a human decision.
+	ToolRiskProduction ToolAuthorizationRisk = "PRODUCTION"
+)
+
+func (r ToolAuthorizationRisk) IsValid() bool {
+	return r == ToolRiskLow || r == ToolRiskProduction
+}
+
+// ToolAuthorization is the declared authorization profile of one Tool.
+type ToolAuthorization struct {
+	Risk ToolAuthorizationRisk `json:"risk"`
+	// Reversible reports whether the effect of a call can be undone by a later call.
+	Reversible bool `json:"reversible"`
+}
+
+// EffectiveRisk is the risk the authorization decision reads: the declared one, or LOW
+// when the Tool declares no Authorization.
+func (m ToolMetadata) EffectiveRisk() ToolAuthorizationRisk {
+	if m.Authorization == nil {
+		return ToolRiskLow
+	}
+	return m.Authorization.Risk
+}
+
+// ToolRecordKind names a record a Tool result may carry for the result transaction to
+// persist.
+type ToolRecordKind string
+
+const (
+	// ToolRecordWorkspacePatch is a new cumulative workspace patch.
+	ToolRecordWorkspacePatch ToolRecordKind = "WORKSPACE_PATCH"
+	// ToolRecordChangeRequest is a change request assembled from verified facts.
+	ToolRecordChangeRequest ToolRecordKind = "CHANGE_REQUEST"
+)
+
+func (k ToolRecordKind) IsValid() bool {
+	return k == ToolRecordWorkspacePatch || k == ToolRecordChangeRequest
+}
+
+// DeclaresRecord reports whether the Tool's registration lists the record kind.
+func (m ToolMetadata) DeclaresRecord(kind ToolRecordKind) bool {
+	for _, declared := range m.Records {
+		if declared == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // Validate mirrors NodeMetadata.Validate for Tool registrations. Executor presence and
@@ -342,11 +417,45 @@ func (m ToolMetadata) Validate() error {
 	errs = append(errs, validateSideEffect(m.SideEffect)...)
 	errs = append(errs, validatePollPolicy(m.Poll, m.ExecutionKind == ToolExecutionAsync)...)
 	errs = append(errs, validateToolFactDeclarations(m.Produces, m.Requires)...)
+	errs = append(errs, validateToolAuthorization(m.Authorization)...)
+	errs = append(errs, validateToolRecords(m.Records)...)
+	if m.Reconcilable && (m.ExecutionKind != ToolExecutionAsync || m.Poll == nil) {
+		errs = append(errs, errors.New("reconcilable is only allowed on an ASYNC tool that declares poll"))
+	}
 
 	if len(errs) == 0 {
 		return nil
 	}
 	return fmt.Errorf("invalid tool metadata %q: %w", m.Name, errors.Join(errs...))
+}
+
+// validateToolAuthorization checks an optional authorization declaration. Absence is the
+// LOW profile and needs no check.
+func validateToolAuthorization(authorization *ToolAuthorization) []error {
+	if authorization == nil {
+		return nil
+	}
+	if !authorization.Risk.IsValid() {
+		return []error{fmt.Errorf("authorization.risk %q is not a supported risk", authorization.Risk)}
+	}
+	return nil
+}
+
+// validateToolRecords checks that every declared record kind is known and listed once.
+func validateToolRecords(records []ToolRecordKind) []error {
+	var errs []error
+	seen := make(map[ToolRecordKind]struct{}, len(records))
+	for _, kind := range records {
+		if !kind.IsValid() {
+			errs = append(errs, fmt.Errorf("records: %q is not a supported record kind", kind))
+			continue
+		}
+		if _, duplicate := seen[kind]; duplicate {
+			errs = append(errs, fmt.Errorf("records: %q is declared more than once", kind))
+		}
+		seen[kind] = struct{}{}
+	}
+	return errs
 }
 
 // validatePorts checks one port list. Port names identify Edge handles, so a duplicate

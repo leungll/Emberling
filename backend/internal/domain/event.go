@@ -110,19 +110,28 @@ func (s CompletionSource) IsValid() bool {
 // FailureSource records which path produced a failure. It adds TIMEOUT to the completion
 // sources, because a deadline can fail work that no path ever completed, and RUNNER_LOST,
 // because a synchronous call can be left without the process that was executing it.
+//
+// AUTHORIZATION, HUMAN and PROVIDER_REFUSAL are the sources of a definite refusal that is
+// returned to the Agent rather than ending the Agent Run: the Runtime refused the call on
+// the Run's facts, a person rejected or let expire what the call asked for, or the
+// external system answered with a definite no. Their Events carry returnedToAgent.
 type FailureSource string
 
 const (
-	FailureSyncExecution FailureSource = "SYNC_EXECUTION"
-	FailureCallback      FailureSource = "CALLBACK"
-	FailureProviderPoll  FailureSource = "PROVIDER_POLL"
-	FailureTimeout       FailureSource = "TIMEOUT"
-	FailureRunnerLost    FailureSource = "RUNNER_LOST"
+	FailureSyncExecution   FailureSource = "SYNC_EXECUTION"
+	FailureCallback        FailureSource = "CALLBACK"
+	FailureProviderPoll    FailureSource = "PROVIDER_POLL"
+	FailureTimeout         FailureSource = "TIMEOUT"
+	FailureRunnerLost      FailureSource = "RUNNER_LOST"
+	FailureAuthorization   FailureSource = "AUTHORIZATION"
+	FailureHuman           FailureSource = "HUMAN"
+	FailureProviderRefusal FailureSource = "PROVIDER_REFUSAL"
 )
 
 func (s FailureSource) IsValid() bool {
 	switch s {
-	case FailureSyncExecution, FailureCallback, FailureProviderPoll, FailureTimeout, FailureRunnerLost:
+	case FailureSyncExecution, FailureCallback, FailureProviderPoll, FailureTimeout, FailureRunnerLost,
+		FailureAuthorization, FailureHuman, FailureProviderRefusal:
 		return true
 	default:
 		return false
