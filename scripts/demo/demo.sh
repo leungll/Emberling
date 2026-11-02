@@ -22,6 +22,10 @@
 #                                       synchronous generation is held at the Provider; the
 #                                       restarted Backend reports RESULT_UNCERTAIN to the
 #                                       Agent, which generates the photo again;
+#                   photo-video-restart photo-video-restart.sh: SIGKILL while the Agent waits
+#                                       for the video task's callback; the callback reaches
+#                                       the restarted Backend and completes the original
+#                                       Action once, with nothing re-sent;
 #                   delivery            delivery.sh main: an Agent tests a patch in the
 #                                       sandbox runner, answered by callback, then deploys
 #                                       it once to the mock production service;
@@ -85,10 +89,10 @@ run)
   case "${EMBERLING_DEMO_VARIANT:-all}" in
   all)
     variants=(held-before-accept after-accept photo-set photo-gate photo-limit photo-sync-crash
-      delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery)
+      photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery)
     ;;
-  held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | delivery | \
-    delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
+  held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | photo-video-restart | \
+    delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
   serving)
@@ -99,7 +103,7 @@ run)
     serving-version-switch | serving-client-retry | serving-response-lost)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, serving or one serving-* variant" ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, serving or one serving-* variant" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -119,6 +123,7 @@ run)
     photo-gate) script=photo-set.sh story=gate ;;
     photo-limit) script=photo-set.sh story=limit ;;
     photo-sync-crash) script=photo-sync-crash.sh ;;
+    photo-video-restart) script=photo-video-restart.sh ;;
     delivery) script=delivery.sh story=main ;;
     delivery-restart-during-test) script=delivery.sh story=restart ;;
     delivery-deploy-lost) script=delivery.sh story=deploy-lost ;;
