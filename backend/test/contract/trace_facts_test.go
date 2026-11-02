@@ -256,12 +256,15 @@ func TestAgentTraceFacts_NoGenerationLimit_LimitNullCallsStillCounted(t *testing
 }
 
 // TestAgentTraceFacts_Ledger_CarriesNoSecretsOrPayloads proves the ledger adds no Tool
-// result, credential, callback token or storage key to the Trace response.
+// result, credential, callback token or storage key to the Trace response. The Tool
+// Attempts' named settings and review verdict are the only places a settings object or a
+// verdict member may appear, so their exact projections are set aside before the check.
 func TestAgentTraceFacts_Ledger_CarriesNoSecretsOrPayloads(t *testing.T) {
 	_, raw := runTraceFactsAgent(t, nil)
+	rest := strings.NewReplacer(`"settings":{"prompt":"Natural light"}`, "", `"review":{"passed":true}`, "").Replace(raw)
 
 	for _, forbidden := range []string{traceFactsFinal, `"result"`, `"arguments"`, `"settings"`, `"passed"`} {
-		if strings.Contains(raw, forbidden) {
+		if strings.Contains(rest, forbidden) {
 			t.Errorf("agent trace response contains %q: %s", forbidden, raw)
 		}
 	}
