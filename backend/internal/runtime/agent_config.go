@@ -31,6 +31,10 @@ type AgentNodeConfig struct {
 	// with. Whether it resolves, declares the right capability and is required by the
 	// allowlist is decided in service, which holds the Registries.
 	ImageModelID string `json:"imageModelId,omitempty"`
+	// ReviewModelID optionally names the vision model the node's review Tools run with;
+	// without it they apply the deterministic mock review policy. Whether it resolves and
+	// declares vision input is decided in service, which holds the Registries.
+	ReviewModelID string `json:"reviewModelId,omitempty"`
 	// OutputForm is the form outputSchema gives the FINAL output. It is derived by
 	// ParseAgentNodeConfig and is not part of the saved config.
 	OutputForm AgentOutputForm `json:"-"`

@@ -34,6 +34,11 @@ type AgentRun struct {
 	// image model; nil when the node selected none. Claims of such a Tool resolve this
 	// frozen value, never the Definition's current one.
 	ImageModelID *string `json:"imageModelId"`
+	// ReviewModelID is the vision Model ID the Agent node selected for Tools that review
+	// with a review model; nil when the node selected none, in which case those Tools
+	// apply the deterministic mock review policy. Claims resolve this frozen value, never
+	// the Definition's current one.
+	ReviewModelID *string `json:"reviewModelId"`
 
 	// CurrentTurnNo is the highest Turn number created so far; the initialisation
 	// transaction sets it to 1. CurrentContextVersion and CurrentStateVersion point at

@@ -297,6 +297,10 @@ type ToolMetadata struct {
 	// node. Saving a Definition requires that node to select one, and each call receives
 	// the Agent Run's frozen image Model ID; the Runtime never decides this by Tool Name.
 	UsesImageModel bool `json:"usesImageModel"`
+	// UsesReviewModel marks a Tool that reviews with the vision model optionally selected
+	// on its Agent node. Each call receives the Agent Run's frozen review Model ID, or none
+	// when the node selected none; the Runtime never decides this by Tool Name.
+	UsesReviewModel bool `json:"usesReviewModel"`
 }
 
 // Validate mirrors NodeMetadata.Validate for Tool registrations. Executor presence and
