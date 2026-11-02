@@ -467,6 +467,8 @@ export interface RunListResponse {
 
 export interface RunListQuery {
   workflowId?: string;
+  /** Keeps Runs bound to this version of `workflowId`; refused (400) without `workflowId`. */
+  definitionVersion?: number;
   status?: RunStatus;
   /** RFC 3339; keeps Runs started at or after this instant. */
   startedAfter?: string;
