@@ -47,6 +47,7 @@ func (r *NodeRegistry) Register(reg NodeRegistration) error {
 			errs = append(errs, fmt.Errorf("node type %q: configSchema: %w", reg.Metadata.Type, err))
 		} else {
 			errs = append(errs, validateNodeUIFields(reg.Metadata.Type, reg.Metadata.ConfigSchema, reg.Metadata.UISchema)...)
+			errs = append(errs, validateDispatchModelPath(reg.Metadata)...)
 		}
 	}
 
@@ -99,6 +100,28 @@ func validateNodeBinding(metadata domain.NodeMetadata, binding NodeBinding) []er
 		}
 	default:
 		// Invalid ExecutionKind is already reported by domain.NodeMetadata.Validate.
+	}
+	return errs
+}
+
+// validateDispatchModelPath checks the declared dispatch Model ID property: only an ASYNC
+// Node dispatches an external task, and the property must be a string of the compiled
+// ConfigSchema, so the Runtime can read a Model ID from a frozen node config without
+// consulting the node's code.
+func validateDispatchModelPath(metadata domain.NodeMetadata) []error {
+	if metadata.DispatchModelPath == "" {
+		return nil
+	}
+	var errs []error
+	if metadata.ExecutionKind != domain.NodeExecutionAsync {
+		errs = append(errs, fmt.Errorf("node type %q: dispatchModelPath is only allowed with executionKind ASYNC", metadata.Type))
+	}
+	property, err := schemaProperty(metadata.ConfigSchema, metadata.DispatchModelPath)
+	if err != nil {
+		return append(errs, fmt.Errorf("node type %q: dispatchModelPath %q: %w", metadata.Type, metadata.DispatchModelPath, err))
+	}
+	if !propertyHasType(property, "string") {
+		errs = append(errs, fmt.Errorf("node type %q: dispatchModelPath %q must name a string property", metadata.Type, metadata.DispatchModelPath))
 	}
 	return errs
 }

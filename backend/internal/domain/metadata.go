@@ -167,6 +167,12 @@ type NodeMetadata struct {
 	// FactInputs lists the execution fact types of the current Run this Node Type reads.
 	// Empty means the Node reads no execution facts.
 	FactInputs []string `json:"factInputs"`
+	// DispatchModelPath names the ConfigSchema property that holds the Model ID an ASYNC
+	// Node dispatches its external task to. The Runtime reads it to find the Provider a
+	// NodeRun will occupy a capacity slot of, before the node's own code runs; a Node that
+	// declares none is never governed by Provider capacity. It is a registration fact
+	// for the Runtime, not part of the catalogue Studio reads, so it stays off the wire.
+	DispatchModelPath string `json:"-"`
 }
 
 // Validate checks the structural rules a registration must satisfy before the Backend can
