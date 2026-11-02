@@ -34,6 +34,12 @@
 #   response-lost   the Provider accepts each of 3 tasks and drops its answer; Attempt 1
 #                   fails as uncertain, the keyed retry is answered with the original task
 #                   and that task's callback completes the retry.
+#   capacity        the backend is restarted with EMBERLING_DEMO_SLOTS (2) slots on the
+#                   image Provider and every callback delayed; EMBERLING_DEMO_SERVING_USERS
+#                   users submit at once. At most that many image tasks are in flight at
+#                   any sampled moment, the rest wait as READY steps with a queue
+#                   position, and every Run completes once the slots cycle. The backend
+#                   is restarted without the limit afterwards.
 #   rollout         version 2 (image width 768, callbacks delayed) is saved beside
 #                   version 1; traffic-split.sh sends EMBERLING_DEMO_ROLLOUT_REQUESTS (30)
 #                   keyed requests with EMBERLING_DEMO_ROLLOUT_RATIO (10)% assigned to
@@ -46,7 +52,8 @@
 #                   printed by evidence-report.sh.
 #
 # Writes RUN_ID (the Runs, comma-separated), WORKFLOW_ID, RECORD_AFTER, RUN_STATUS,
-# SUBMISSIONS and SUMMARY to $DEMO_STATE when it is set, for ledger-vs-record.sh and the
+# SUBMISSIONS, SUMMARY and PROVIDER_CAPACITY (the limit the capacity story ran with, else
+# empty) to $DEMO_STATE when it is set, for ledger-vs-record.sh, invariants.sh and the
 # demo summary.
 set -euo pipefail
 
@@ -56,8 +63,8 @@ require_tools docker curl jq
 
 story=${1:-}
 case "$story" in
-burst | crash-held | crash-waiting | duplicate | version-switch | client-retry | response-lost | rollout) ;;
-*) die "usage: serving.sh burst|crash-held|crash-waiting|duplicate|version-switch|client-retry|response-lost|rollout" ;;
+burst | crash-held | crash-waiting | duplicate | version-switch | client-retry | response-lost | rollout | capacity) ;;
+*) die "usage: serving.sh burst|crash-held|crash-waiting|duplicate|version-switch|client-retry|response-lost|rollout|capacity" ;;
 esac
 
 FIXTURE="$DEMO_ROOT/backend/test/fixtures/definitions/serving_template.json"
@@ -73,11 +80,18 @@ HELD_TIMEOUT_MS=${EMBERLING_DEMO_IMAGE_TIMEOUT_MS:-30000}
 ROLLOUT_REQUESTS=${EMBERLING_DEMO_ROLLOUT_REQUESTS:-30}
 ROLLOUT_RATIO=${EMBERLING_DEMO_ROLLOUT_RATIO:-10}
 ROLLOUT_FOLLOWUP=${EMBERLING_DEMO_ROLLOUT_FOLLOWUP:-10}
-for value in "$USERS" "$RETRY_USERS" "$RETRY_SENDS" "$CALLBACK_DELAY_MS" "$HELD_TIMEOUT_MS" "$ROLLOUT_REQUESTS" "$ROLLOUT_RATIO" "$ROLLOUT_FOLLOWUP"; do
+SLOTS=${EMBERLING_DEMO_SLOTS:-2}
+# The image Provider of the serving template is the Mock Provider's task path.
+IMAGE_PROVIDER_ID=mock-task-provider-v1
+for value in "$USERS" "$RETRY_USERS" "$RETRY_SENDS" "$CALLBACK_DELAY_MS" "$HELD_TIMEOUT_MS" "$ROLLOUT_REQUESTS" "$ROLLOUT_RATIO" "$ROLLOUT_FOLLOWUP" "$SLOTS"; do
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || die "serving settings must be positive integers, got: $value"
 done
 STEP_DEADLINE_S=120
 TERMINAL_DEADLINE_S=$((CALLBACK_DELAY_MS / 1000 + 240))
+# With the slots limited, the users are served in rounds of SLOTS, each a callback delay.
+if [[ "$story" == capacity ]]; then
+  TERMINAL_DEADLINE_S=$((CALLBACK_DELAY_MS / 1000 * ((USERS + SLOTS - 1) / SLOTS) + 240))
+fi
 
 failures=0
 pass() { printf 'PASS %s\n' "$*"; }
@@ -91,12 +105,25 @@ check() {
 work=$(mktemp -d "${TMPDIR:-/tmp}/emberling-serving.XXXXXX")
 barrier_paused=false
 backend_down=false
+# The capacity story recreates the backend container with the limit in its environment;
+# the original value (usually empty) is restored the same way at the end.
+provider_capacity=""
+original_capacity=${EMBERLING_PROVIDER_CAPACITY:-}
+capacity_applied=false
+restart_backend_with_capacity() {
+  log "recreating the backend with EMBERLING_PROVIDER_CAPACITY=${1:-<empty>}"
+  EMBERLING_PROVIDER_CAPACITY=$1 compose up -d --wait backend >/dev/null
+  wait_until "Backend /ready" "$STEP_DEADLINE_S" backend_ready
+}
 cleanup() {
   if [[ "$barrier_paused" == true ]]; then
     curl -fsS -X POST "$MOCK_URL/control/release" >/dev/null 2>&1 || true
   fi
   if [[ "$backend_down" == true ]]; then
     compose start backend >/dev/null 2>&1 || true
+  fi
+  if [[ "$capacity_applied" == true ]]; then
+    EMBERLING_PROVIDER_CAPACITY=$original_capacity compose up -d --wait backend >/dev/null 2>&1 || true
   fi
   rm -rf "$work"
 }
@@ -216,6 +243,16 @@ log "dispatch record baseline seq=$record_after_seq"
 submissions=0
 run_ids=()
 
+# image_counts RUN... prints "<in flight> <queued>": image NodeRuns that are RUNNING or
+# WAITING_CALLBACK, and READY ones marked as waiting for a Provider slot.
+image_counts() {
+  local run_id
+  for run_id in "$@"; do
+    curl -fsS "$BACKEND_URL/api/runs/$run_id" | jq -c '[.nodeRuns[] | select(.nodeId == "node_image")][0] // {}'
+  done | jq -s -r '[([.[] | select(.status == "RUNNING" or .status == "WAITING_CALLBACK")] | length),
+                   ([.[] | select(.status == "READY" and .capacityDeferredAt != null)] | length)] | @tsv'
+}
+
 case "$story" in
 burst | duplicate | response-lost)
   template="" users=$USERS
@@ -326,6 +363,36 @@ client-retry)
   submissions=$((RETRY_USERS * RETRY_SENDS))
   lines_into run_ids submitted_runs 1 "$RETRY_USERS"
   ;;
+capacity)
+  provider_capacity="$IMAGE_PROVIDER_ID=$SLOTS"
+  capacity_applied=true
+  restart_backend_with_capacity "$provider_capacity"
+  create_definition "$(serving_definition "mock:delay:$CALLBACK_DELAY_MS" $((CALLBACK_DELAY_MS + 60000)) 1024)"
+  log "$USERS users submit at once against $SLOTS slot(s); every callback comes ${CALLBACK_DELAY_MS}ms after acceptance"
+  submit_users "$version" "$USERS" 1
+  submissions=$USERS
+  lines_into run_ids submitted_runs 1 "$USERS"
+  # The first round: every slot taken and every other image step queued.
+  first_round_full() {
+    local counts
+    counts=$(image_counts "${run_ids[@]}") || return 1
+    in_flight=${counts%%$'\t'*}
+    queued=${counts##*$'\t'}
+    ((in_flight == SLOTS && queued == USERS - SLOTS))
+  }
+  expected_queued=$((USERS - SLOTS))
+  ((expected_queued > 0)) || die "EMBERLING_DEMO_SERVING_USERS must exceed EMBERLING_DEMO_SLOTS for the capacity story"
+  wait_until "$SLOTS image tasks in flight and $expected_queued queued" "$STEP_DEADLINE_S" first_round_full
+  log "$in_flight image task(s) in flight, $queued queued"
+  # One queued step's live place, as Studio shows it.
+  queued_position=""
+  for run_id in "${run_ids[@]}"; do
+    queued_position=$(image_detail "$run_id" | jq -r 'select(.capacityWait != null) | .capacityWait | "\(.position) of \(.held)/\(.limit)"')
+    [[ -n "$queued_position" ]] && break
+  done
+  log "a queued step reports position $queued_position"
+  demo_pause "$SLOTS of $USERS image tasks are in flight; the other $queued wait as READY steps with a queue position. Next: let the slots cycle until every Run completes"
+  ;;
 rollout)
   create_definition "$(serving_definition "" 60000 1024)"
   v1=$version
@@ -377,7 +444,21 @@ esac
 ((${#run_ids[@]} > 0)) || die "no submission created a Run"
 for run_id in "${run_ids[@]}"; do studio_run_link "$run_id"; done
 log "waiting for ${#run_ids[@]} Run(s) to reach a terminal status (deadline ${TERMINAL_DEADLINE_S}s)"
-wait_until "every Run to become COMPLETED or FAILED" "$TERMINAL_DEADLINE_S" all_terminal
+if [[ "$story" == capacity ]]; then
+  # Each wait step also samples how many image tasks are in flight; the highest sample
+  # is reported. The integration tests prove the bound at every commit, this only shows it.
+  max_in_flight=0
+  all_terminal_sampling() {
+    local counts
+    counts=$(image_counts "${run_ids[@]}") || return 1
+    local now=${counts%%$'\t'*}
+    ((now > max_in_flight)) && max_in_flight=$now
+    all_terminal
+  }
+  wait_until "every Run to become COMPLETED or FAILED" "$TERMINAL_DEADLINE_S" all_terminal_sampling
+else
+  wait_until "every Run to become COMPLETED or FAILED" "$TERMINAL_DEADLINE_S" all_terminal
+fi
 
 completed=0
 for run_id in "${run_ids[@]}"; do
@@ -488,6 +569,23 @@ rollout)
   "$DEMO_ROOT/scripts/demo/evidence-report.sh" --real "$workflow_id" || fail "evidence report"
   summary="requests=$ROLLOUT_REQUESTS ratio=$ROLLOUT_RATIO% v$v2=${#first_v2[@]} replayed=$replayed_same followup_v$v1=$second_v1 completed=$completed"
   ;;
+capacity)
+  waiting_events=$(events_of_runs | jq '[.[] | select(.type == "NODE_WAITING_CAPACITY")] | length')
+  queued_steps=0
+  for run_id in "${run_ids[@]}"; do
+    curl -fsS "$BACKEND_URL/api/runs/$run_id" | jq -e '.nodeRuns[] | select(.nodeId == "node_image" and .capacityDeferredAt != null)' >/dev/null &&
+      queued_steps=$((queued_steps + 1))
+  done
+  check first_round_filled_slots "in flight=$in_flight slots=$SLOTS queued=$queued" test "$in_flight" -eq "$SLOTS" -a "$queued" -eq "$expected_queued"
+  check in_flight_never_above_slots "max sampled=$max_in_flight slots=$SLOTS" test "$max_in_flight" -le "$SLOTS"
+  check queued_steps_recorded_once "queued steps=$queued_steps NODE_WAITING_CAPACITY=$waiting_events" \
+    test "$queued_steps" -eq "$expected_queued" -a "$waiting_events" -eq "$expected_queued"
+  log "restoring the backend without the limit"
+  EMBERLING_PROVIDER_CAPACITY=$original_capacity compose up -d --wait backend >/dev/null
+  capacity_applied=false
+  wait_until "Backend /ready" "$STEP_DEADLINE_S" backend_ready
+  summary="users=$USERS slots=$SLOTS queued=$expected_queued max_in_flight=$max_in_flight position_sample=$queued_position completed=$completed"
+  ;;
 response-lost)
   taken_over=0
   for run_id in "${run_ids[@]}"; do
@@ -509,8 +607,8 @@ esac
 
 if [[ -n "${DEMO_STATE:-}" ]]; then
   ids=$(IFS=,; printf '%s' "${run_ids[*]}")
-  printf 'RUN_ID=%s\nWORKFLOW_ID=%s\nRECORD_AFTER=%s\nRUN_STATUS=%s\nSUBMISSIONS=%s\nSUMMARY=%s\n' \
-    "$ids" "$workflow_id" "$record_after_seq" "COMPLETED $completed/$runs" "$submissions" "$summary" >"$DEMO_STATE"
+  printf 'RUN_ID=%s\nWORKFLOW_ID=%s\nRECORD_AFTER=%s\nRUN_STATUS=%s\nSUBMISSIONS=%s\nSUMMARY=%s\nPROVIDER_CAPACITY=%s\n' \
+    "$ids" "$workflow_id" "$record_after_seq" "COMPLETED $completed/$runs" "$submissions" "$summary" "$provider_capacity" >"$DEMO_STATE"
 fi
 
 printf '\n'

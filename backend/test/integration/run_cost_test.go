@@ -21,29 +21,35 @@ import (
 	"github.com/leungll/Emberling/backend/test/testdb"
 )
 
+// costReviewModelID is the review Model ID the seeded Agent Run froze.
+const costReviewModelID = "vision-model-v1"
+
 type costNoopTool struct{}
 
 func (costNoopTool) Execute(context.Context, registry.ToolAction) (registry.ToolExecutionResult, error) {
 	return registry.ToolExecutionResult{}, nil
 }
 
-// costToolRegistry registers one EXTERNAL and one NONE Tool so the read can tell a Tool
-// call that reached a Provider from one that never left the process.
+// costToolRegistry registers one EXTERNAL Tool, one NONE Tool and one NONE Tool that
+// reviews with the Agent Run's review model, so the read can tell a Tool call that reached
+// a Provider from one that never left the process.
 func costToolRegistry(t *testing.T) *registry.ToolRegistry {
 	t.Helper()
 	reg := registry.NewToolRegistry()
 	policies := map[string]domain.SideEffectPolicy{
-		"draw_image": {Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
-		"read_fact":  {Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
+		"draw_image":   {Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
+		"read_fact":    {Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
+		"review_image": {Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
 	}
 	for name, policy := range policies {
 		err := reg.Register(registry.ToolRegistration{
 			Metadata: domain.ToolMetadata{
-				Name:          name,
-				ExecutionKind: domain.ToolExecutionSync,
-				InputSchema:   json.RawMessage(`{"type":"object"}`),
-				OutputSchema:  json.RawMessage(`{"type":"object"}`),
-				SideEffect:    policy,
+				Name:            name,
+				ExecutionKind:   domain.ToolExecutionSync,
+				InputSchema:     json.RawMessage(`{"type":"object"}`),
+				OutputSchema:    json.RawMessage(`{"type":"object"}`),
+				SideEffect:      policy,
+				UsesReviewModel: name == "review_image",
 			},
 			Executor: costNoopTool{},
 		})
@@ -55,7 +61,8 @@ func costToolRegistry(t *testing.T) *registry.ToolRegistry {
 }
 
 // seedCostedRun builds one COMPLETED Run whose image NodeRun made three Attempts and whose
-// Agent NodeRun made three Turns and three Tool calls, each with a different cost fact:
+// Agent NodeRun, which froze the review model costReviewModelID, made three Turns and four
+// Tool calls, each with a different cost fact:
 //
 //	image Attempt 1  dispatched, FAILED uncertain, no cost  -> unknown
 //	image Attempt 2  dispatched, SUCCEEDED, 0.04 USD        -> charged
@@ -66,6 +73,7 @@ func costToolRegistry(t *testing.T) *registry.ToolRegistry {
 //	Tool call a      draw_image (EXTERNAL), 0.004 USD       -> charged
 //	Tool call b      draw_image (EXTERNAL), no cost         -> unknown
 //	Tool call c      read_fact (NONE), no cost              -> not an external call
+//	Tool call d      review_image (NONE, review model), no cost -> unknown
 func seedCostedRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runID string) {
 	t.Helper()
 	seedListRun(ctx, t, uow, listRunSpec{
@@ -106,7 +114,10 @@ func seedCostedRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runI
 		}
 
 		agentRunID := runID + "_ar"
-		if err := tx.AgentRuns().Create(ctx, newAgentRun(agentRunID, agentNodeRun)); err != nil {
+		agentRun := newAgentRun(agentRunID, agentNodeRun)
+		reviewModelID := costReviewModelID
+		agentRun.ReviewModelID = &reviewModelID
+		if err := tx.AgentRuns().Create(ctx, agentRun); err != nil {
 			return err
 		}
 		turns := []struct {
@@ -156,6 +167,7 @@ func seedCostedRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runI
 			{id: runID + "_ta", action: runID + "_a1", tool: "draw_image", no: 1, cost: usd("0.004", "image-model-v1")},
 			{id: runID + "_tb", action: runID + "_a1", tool: "draw_image", no: 2},
 			{id: runID + "_tc", action: runID + "_a2", tool: "read_fact", no: 1},
+			{id: runID + "_td", action: runID + "_a2", tool: "review_image", no: 2},
 		}
 		for _, call := range toolCalls {
 			attempt := newToolAttempt(call.id, call.action, call.no)
@@ -177,7 +189,8 @@ func seedCostedRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runI
 
 // TestRunList_FinishedCalls_ReadsEveryCallTableThroughItsNodeRun pins the store read: one
 // row per finished Attempt or Turn of the requested Runs, each with its recorded Cost in
-// canonical form, and nothing from an unrelated Run.
+// canonical form, each Tool call with the review Model ID its Agent Run froze, and
+// nothing from an unrelated Run.
 func TestRunList_FinishedCalls_ReadsEveryCallTableThroughItsNodeRun(t *testing.T) {
 	ctx := context.Background()
 	uow := postgres.NewUnitOfWork(testdb.Open(t))
@@ -211,22 +224,25 @@ func TestRunList_FinishedCalls_ReadsEveryCallTableThroughItsNodeRun(t *testing.T
 		}
 		charged[call.Cost.Amount]++
 	}
-	if kinds[store.FinishedNodeAttempt] != 3 || kinds[store.FinishedToolAttempt] != 3 || kinds[store.FinishedAgentTurn] != 3 {
-		t.Errorf("finished calls per kind = %v, want 3 of each", kinds)
+	if kinds[store.FinishedNodeAttempt] != 3 || kinds[store.FinishedToolAttempt] != 4 || kinds[store.FinishedAgentTurn] != 3 {
+		t.Errorf("finished calls per kind = %v, want 3 Attempts, 4 Tool calls and 3 Turns", kinds)
 	}
 	wantCharged := map[string]int{"0.04": 1, "0": 1, "0.000032": 1, "0.004": 1}
 	if diff := cmp.Diff(wantCharged, charged); diff != "" {
 		t.Errorf("recorded amounts (-want +got):\n%s", diff)
 	}
-	if unknown != 5 {
-		t.Errorf("rows without a cost = %d, want 5 (uncertain Attempt, undispatched Attempt, failed Turn, two Tool calls)", unknown)
+	if unknown != 6 {
+		t.Errorf("rows without a cost = %d, want 6 (uncertain Attempt, undispatched Attempt, failed Turn, three Tool calls)", unknown)
 	}
 	for _, call := range got {
 		if call.Kind == store.FinishedNodeAttempt && call.Uncertain && !call.Dispatched {
 			t.Errorf("the uncertain Attempt lost its dispatched flag: %+v", call)
 		}
-		if call.Kind == store.FinishedToolAttempt && call.ToolName == "" {
-			t.Errorf("a Tool call carries no tool name: %+v", call)
+		if call.Kind == store.FinishedToolAttempt && (call.ToolName == "" || call.ReviewModelID != costReviewModelID) {
+			t.Errorf("a Tool call carries no tool name or not its Agent Run's review model: %+v", call)
+		}
+		if call.Kind != store.FinishedToolAttempt && call.ReviewModelID != "" {
+			t.Errorf("a review model is reported on a call that is not a Tool call: %+v", call)
 		}
 	}
 }
@@ -234,9 +250,10 @@ func TestRunList_FinishedCalls_ReadsEveryCallTableThroughItsNodeRun(t *testing.T
 // TestRunList_Cost_SumsKnownChargesAndCountsUnknownExternalCalls is the aggregation
 // contract end to end on PostgreSQL: the list item's total is the exact decimal sum
 // 0.04 + 0 + 0.000032 + 0.004 across the image Attempt, both completed Turns and the
-// charged Tool call, and exactly three calls are unknown: the uncertain Attempt, the
-// failed Turn and the EXTERNAL Tool call without a charge. The never-dispatched Attempt
-// and the NONE Tool call count nowhere, and a Run without calls reports nothing.
+// charged Tool call, and exactly four calls are unknown: the uncertain Attempt, the
+// failed Turn, the EXTERNAL Tool call without a charge and the review Tool call that ran
+// with the frozen review model without a charge. The never-dispatched Attempt and the
+// NONE Tool call count nowhere, and a Run without calls reports nothing.
 func TestRunList_Cost_SumsKnownChargesAndCountsUnknownExternalCalls(t *testing.T) {
 	ctx := context.Background()
 	uow := postgres.NewUnitOfWork(testdb.Open(t))
@@ -251,7 +268,7 @@ func TestRunList_Cost_SumsKnownChargesAndCountsUnknownExternalCalls(t *testing.T
 	}
 	want := service.RunCost{
 		Totals:       []service.CostTotal{{Amount: "0.044032", Currency: domain.CurrencyUSD}},
-		UnknownCalls: 3,
+		UnknownCalls: 4,
 	}
 	if diff := cmp.Diff(want, page.Items[0].Cost); diff != "" {
 		t.Errorf("run_costed cost (-want +got):\n%s", diff)

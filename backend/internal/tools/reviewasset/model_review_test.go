@@ -43,8 +43,11 @@ func (f *fakeArtifacts) OpenArtifact(_ context.Context, runID, _ string) (Image,
 type fakeReviewModel struct {
 	capabilities []string
 	answer       registry.ModelDecision
-	err          error
-	requests     []registry.ModelRequest
+	// cost is what the Adapter reports beside the answer; nil reproduces a Provider that
+	// reported no charge.
+	cost     *domain.Cost
+	err      error
+	requests []registry.ModelRequest
 }
 
 func (m *fakeReviewModel) Models(context.Context) ([]registry.ModelRegistration, error) {
@@ -56,7 +59,7 @@ func (m *fakeReviewModel) Generate(_ context.Context, request registry.ModelRequ
 	if m.err != nil {
 		return registry.ModelResponse{}, m.err
 	}
-	return registry.ModelResponse{Decision: m.answer}, nil
+	return registry.ModelResponse{Decision: m.answer, Cost: m.cost}, nil
 }
 
 func (m *fakeReviewModel) Get(modelID string) (registry.ModelRegistration, registry.ModelProvider, bool) {

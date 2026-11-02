@@ -203,10 +203,20 @@ func toNodeAttemptDTO(a domain.NodeAttempt, binding *domain.CallbackBinding) nod
 	return dto
 }
 
-// nodeRunDetailResponse mirrors Studio's NodeRunDetail.
+// nodeRunDetailResponse mirrors Studio's NodeRunDetail. capacityWait is always present
+// and null unless the NodeRun is READY and queued for a Provider slot.
 type nodeRunDetailResponse struct {
-	NodeRun  domain.NodeRun   `json:"nodeRun"`
-	Attempts []nodeAttemptDTO `json:"attempts"`
+	NodeRun      domain.NodeRun   `json:"nodeRun"`
+	Attempts     []nodeAttemptDTO `json:"attempts"`
+	CapacityWait *capacityWaitDTO `json:"capacityWait"`
+}
+
+// capacityWaitDTO is the live queue position of a NodeRun waiting for a Provider slot.
+type capacityWaitDTO struct {
+	ProviderID string `json:"providerId"`
+	Limit      int    `json:"limit"`
+	Held       int    `json:"held"`
+	Position   int    `json:"position"`
 }
 
 // getNodeRunDetail serves GET /runs/{runId}/nodes/{nodeRunId}.
@@ -226,7 +236,16 @@ func (d Deps) getNodeRunDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		attempts[i] = toNodeAttemptDTO(a, binding)
 	}
-	writeJSON(w, http.StatusOK, nodeRunDetailResponse{NodeRun: detail.NodeRun, Attempts: attempts})
+	var wait *capacityWaitDTO
+	if detail.CapacityWait != nil {
+		wait = &capacityWaitDTO{
+			ProviderID: detail.CapacityWait.ProviderID,
+			Limit:      detail.CapacityWait.Limit,
+			Held:       detail.CapacityWait.Held,
+			Position:   detail.CapacityWait.Position,
+		}
+	}
+	writeJSON(w, http.StatusOK, nodeRunDetailResponse{NodeRun: detail.NodeRun, Attempts: attempts, CapacityWait: wait})
 }
 
 // ---- Agent Trace ----

@@ -40,6 +40,9 @@ const (
 	EventNodeCallbackReceived EventType = "NODE_CALLBACK_RECEIVED"
 	EventNodeCompleted        EventType = "NODE_COMPLETED"
 	EventNodeFailed           EventType = "NODE_FAILED"
+	// EventNodeWaitingCapacity records the first time a READY NodeRun was refused a
+	// Provider slot. It is written at most once per NodeRun and does not change its status.
+	EventNodeWaitingCapacity EventType = "NODE_WAITING_CAPACITY"
 
 	EventAgentStarted           EventType = "AGENT_STARTED"
 	EventAgentTurnReady         EventType = "AGENT_TURN_READY"
@@ -60,7 +63,7 @@ var eventTypes = map[EventType]struct{}{
 
 	EventNodeReady: {}, EventNodeStarted: {}, EventNodeRetrying: {},
 	EventNodeDispatched: {}, EventNodeCallbackReceived: {},
-	EventNodeCompleted: {}, EventNodeFailed: {},
+	EventNodeCompleted: {}, EventNodeFailed: {}, EventNodeWaitingCapacity: {},
 
 	EventAgentStarted: {}, EventAgentTurnReady: {}, EventAgentTurnStarted: {},
 	EventAgentDecisionCommitted: {}, EventAgentActionStarted: {},

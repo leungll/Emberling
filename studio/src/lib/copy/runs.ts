@@ -375,6 +375,7 @@ export const runs = {
       retry: (n: number, next: string | null) =>
         next ? `Attempt ${n} failed, next at ${next}` : `Attempt ${n} failed`,
       took: (d: string) => `Took ${d}`,
+      queued: (position: number) => `Position ${position} in the queue`,
       upTo: (n: number) => `Up to ${plural(n, 'turn')}`,
       failed: 'Failed',
       stopped: 'Run stopped',
@@ -436,6 +437,9 @@ export const runs = {
       timeLimit: 'Time limit',
       perAttempt: 'per attempt',
       nextAttempt: 'Next attempt',
+      queue: 'Queue',
+      queuePlace: (position: number, held: number, limit: number) =>
+        `Position ${position}; ${held} of ${limit} slots in use`,
       scheduled: 'scheduled',
       attempt: 'Attempt',
       attempts: 'Attempts',

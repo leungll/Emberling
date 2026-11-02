@@ -78,6 +78,7 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 	var result nodeOutcomeResult
 	var runID string
 	var lastSeq int64
+	var releasedProvider string
 
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		attempt, err := tx.NodeAttempts().Get(ctx, p.attemptID)
@@ -155,6 +156,11 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 			}
 			return err
 		}
+		// The Provider slot is freed in the same transaction as the terminal status, so
+		// occupancy never outlives the task it counted.
+		if releasedProvider, err = releaseSlot(ctx, tx, nodeRun.ID); err != nil {
+			return err
+		}
 
 		// Only the callback that wins the completion right writes
 		// NODE_CALLBACK_RECEIVED. A Provider Poll completion must not write it.
@@ -195,6 +201,9 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 	}
 	if runID != "" {
 		s.postCommit(runID, lastSeq)
+	}
+	if releasedProvider != "" {
+		s.releaseHandoff(ctx, releasedProvider)
 	}
 	return result, nil
 }

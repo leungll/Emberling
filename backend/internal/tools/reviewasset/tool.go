@@ -155,8 +155,12 @@ func (e Executor) Execute(ctx context.Context, action registry.ToolAction) (regi
 		return registry.ToolExecutionResult{}, fmt.Errorf("%s: %w", ToolName, errors.New("arguments carry no assetRef, photoAssetId and styleRequirement"))
 	}
 
-	var out result
+	var (
+		out  result
+		cost *domain.Cost
+	)
 	if action.ReviewModelID == "" {
+		// The mock policy asks no model, so there is no charge to record.
 		out = mockReview(args)
 	} else {
 		// A forced verdict would let the deciding model overrule the review model, so the
@@ -164,11 +168,11 @@ func (e Executor) Execute(ctx context.Context, action registry.ToolAction) (regi
 		if args.Mock != "" {
 			return registry.ToolExecutionResult{}, fmt.Errorf("%s: the mock control applies only to the mock review policy", ToolName)
 		}
-		reviewed, err := e.modelReview(ctx, action, args)
+		reviewed, reviewedCost, err := e.modelReview(ctx, action, args)
 		if err != nil {
 			return registry.ToolExecutionResult{}, err
 		}
-		out = reviewed
+		out, cost = reviewed, reviewedCost
 	}
 	out.StyleDigest = StyleDigest(args.StyleRequirement)
 
@@ -176,7 +180,7 @@ func (e Executor) Execute(ctx context.Context, action registry.ToolAction) (regi
 	if err != nil {
 		return registry.ToolExecutionResult{}, fmt.Errorf("%s: encode result: %w", ToolName, err)
 	}
-	return registry.ToolExecutionResult{Kind: registry.ToolResultCompleted, Result: &registry.ToolResult{Output: output}}, nil
+	return registry.ToolExecutionResult{Kind: registry.ToolResultCompleted, Result: &registry.ToolResult{Output: output, Cost: cost}}, nil
 }
 
 // mockReview applies the deterministic mock policy.

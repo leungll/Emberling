@@ -23,7 +23,7 @@ The Agent node selects:
 |---|---|---|
 | `modelId` | `opus-5.5` | Decision model; must be an `id` in `EMBERLING_MODELS` |
 | `imageModelId` | `seedream-5.0-pro` | Image model; must be an `id` in `EMBERLING_IMAGE_MODELS` |
-| `reviewModelId` | `vision-review` | Review model; must be an `id` in `EMBERLING_MODELS` that declares `visionInput`, and a model other than the image model |
+| `reviewModelId` | `vision-review` | Review model; must be an `id` in `EMBERLING_MODELS` that declares `visionInput`, and a model other than the image model. The configuration below maps it to `anthropic/claude-sonnet-5.5`, a verified working example |
 | `timeoutMs` | `1800000` | 30 minutes covers three rounds of slow image calls and reviews plus the decision turns |
 | `maxGenerationCalls` | `10` | Three rounds of three photos, with one call to spare |
 | `maxTurns` | `24` | One generation and one review per call, plus the final answer |
@@ -76,7 +76,7 @@ export EMBERLING_MODEL_API_KEY=<your-openrouter-api-key>
 export EMBERLING_MODEL_OPENROUTER_REQUIRE_PARAMETERS=true
 export EMBERLING_MODELS='[
   {"id":"opus-5.5","model":"anthropic/claude-opus-5.5","displayName":"Opus 5.5"},
-  {"id":"vision-review","model":"<vision-model-chosen-by-smoke-test>","displayName":"Vision Review",
+  {"id":"vision-review","model":"anthropic/claude-sonnet-5.5","displayName":"Vision Review",
    "visionInput":true}
 ]'
 
@@ -103,9 +103,9 @@ docker compose -f deploy/compose.yaml --profile mock up -d --build
 ```
 
 `GET http://localhost:8080/api/models` should list `opus-5.5`, `vision-review`,
-`seedream-5.0-pro` and `gpt-image-2.5`. Replace the `vision-review` placeholder with the
-vision model the smoke test selects; it must accept image input and differ from the image
-model, so no model judges its own output.
+`seedream-5.0-pro` and `gpt-image-2.5`. The `vision-review` entry above is a verified
+working example, not the only choice: any registered model that accepts image input and
+differs from the image model works, so no model judges its own output.
 
 ## Run it
 
@@ -136,7 +136,9 @@ jq -n --arg wf "$workflow_id" --argjson v "$version" --argjson photos "$photos" 
 ```
 
 The saved Definition and its Runs also appear in Studio at `http://localhost:5173`, where
-you can follow the Run, its Agent Trace and each generated image. `GET
+you can follow the Run, its Agent Trace and each generated image. The output node
+delivers one image with its caption, the first photo's result; the whole set, one image
+per photo with its review, is in the Agent Trace and the Agent's final answer. `GET
 /api/runs/<run-id>` reports the Run status from the command line.
 
 ## Time and cost

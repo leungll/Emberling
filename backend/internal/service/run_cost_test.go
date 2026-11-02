@@ -23,8 +23,9 @@ func costToolRegistry(t *testing.T) *registry.ToolRegistry {
 	t.Helper()
 	reg := registry.NewToolRegistry()
 	for name, kind := range map[string]domain.SideEffectKind{
-		"draw_image": domain.SideEffectExternal,
-		"read_fact":  domain.SideEffectNone,
+		"draw_image":   domain.SideEffectExternal,
+		"read_fact":    domain.SideEffectNone,
+		"review_image": domain.SideEffectNone,
 	} {
 		idempotency := domain.IdempotencyUnknown
 		if kind == domain.SideEffectNone {
@@ -37,6 +38,9 @@ func costToolRegistry(t *testing.T) *registry.ToolRegistry {
 				InputSchema:   json.RawMessage(`{"type":"object"}`),
 				OutputSchema:  json.RawMessage(`{"type":"object"}`),
 				SideEffect:    domain.SideEffectPolicy{Kind: kind, Idempotency: idempotency},
+				// review_image reads only, but asks the Agent Run's review model when one
+				// was frozen, the way a review Tool does.
+				UsesReviewModel: name == "review_image",
 			},
 			Executor: costTestTool{},
 		})
@@ -63,6 +67,7 @@ func TestRunCostOf_UncertainAndUnreportedExternalCalls_CountAsUnknownNotZero(t *
 		"external tool without a cost": {Kind: store.FinishedToolAttempt, ToolName: "draw_image"},
 		"uncertain external tool":      {Kind: store.FinishedToolAttempt, ToolName: "draw_image", Uncertain: true},
 		"tool no longer registered":    {Kind: store.FinishedToolAttempt, ToolName: "retired_tool"},
+		"review with a model, no cost": {Kind: store.FinishedToolAttempt, ToolName: "review_image", ReviewModelID: "vision-model-v1"},
 	}
 	for name, call := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -77,12 +82,16 @@ func TestRunCostOf_UncertainAndUnreportedExternalCalls_CountAsUnknownNotZero(t *
 
 // TestRunCostOf_CallsThatNeverLeftTheProcess_AreNeitherChargedNorUnknown: a Node Attempt
 // that dispatched nothing and a Tool whose registered side effect is NONE have no Provider
-// charge to be unknown about.
+// charge to be unknown about. A review Tool whose Agent Run froze no review model decided
+// with its local policy, and a NONE Tool that does not review with a model never asks one,
+// whatever the Agent Run froze.
 func TestRunCostOf_CallsThatNeverLeftTheProcess_AreNeitherChargedNorUnknown(t *testing.T) {
 	tools := costToolRegistry(t)
 	calls := []store.FinishedCall{
 		{Kind: store.FinishedNodeAttempt},
 		{Kind: store.FinishedToolAttempt, ToolName: "read_fact"},
+		{Kind: store.FinishedToolAttempt, ToolName: "read_fact", ReviewModelID: "vision-model-v1"},
+		{Kind: store.FinishedToolAttempt, ToolName: "review_image"},
 	}
 	if diff := cmp.Diff(RunCost{}, runCostOf(calls, tools)); diff != "" {
 		t.Fatalf("run cost (-want +got):\n%s", diff)

@@ -92,6 +92,7 @@ type tx struct {
 	agentContextVersions *agentContextVersionRepository
 	agentStateVersions   *agentStateVersionRepository
 	executionFacts       *executionFactRepository
+	providerSlots        *providerSlotRepository
 }
 
 func newTx(conn pgx.Tx) *tx {
@@ -115,6 +116,7 @@ func newTx(conn pgx.Tx) *tx {
 		agentContextVersions: &agentContextVersionRepository{conn: conn},
 		agentStateVersions:   &agentStateVersionRepository{conn: conn},
 		executionFacts:       &executionFactRepository{conn: conn},
+		providerSlots:        &providerSlotRepository{conn: conn},
 	}
 }
 
@@ -141,6 +143,7 @@ func (t *tx) AgentContextVersions() store.AgentContextVersionRepository {
 }
 func (t *tx) AgentStateVersions() store.AgentStateVersionRepository { return t.agentStateVersions }
 func (t *tx) ExecutionFacts() store.ExecutionFactRepository         { return t.executionFacts }
+func (t *tx) ProviderSlots() store.ProviderSlotRepository           { return t.providerSlots }
 
 var (
 	_ store.UnitOfWork = (*UnitOfWork)(nil)

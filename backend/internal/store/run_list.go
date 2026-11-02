@@ -54,16 +54,19 @@ const (
 )
 
 // FinishedCall is one finished Node Attempt, Tool Attempt or Agent Turn of a Run, reduced
-// to what the cost read needs. ToolName is set for a Tool Attempt only. Dispatched
-// reports that a Node Attempt handed a task to a Provider; Uncertain that an Attempt
-// failed without knowing whether the Provider acted. Cost is the charge recorded with the
-// result, nil when none was recorded.
+// to what the cost read needs. ToolName and ReviewModelID are set for a Tool Attempt
+// only: ReviewModelID is the review Model ID its Agent Run froze, empty when it froze
+// none, so the caller can tell a review that asked a model from one its local policy
+// decided. Dispatched reports that a Node Attempt handed a task to a Provider; Uncertain
+// that an Attempt failed without knowing whether the Provider acted. Cost is the charge
+// recorded with the result, nil when none was recorded.
 type FinishedCall struct {
-	Kind       FinishedCallKind
-	ToolName   string
-	Dispatched bool
-	Uncertain  bool
-	Cost       *domain.Cost
+	Kind          FinishedCallKind
+	ToolName      string
+	ReviewModelID string
+	Dispatched    bool
+	Uncertain     bool
+	Cost          *domain.Cost
 }
 
 // RunListFilter narrows the Run list. A zero-valued field does not filter.

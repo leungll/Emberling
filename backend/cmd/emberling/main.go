@@ -132,6 +132,7 @@ func run(logger *slog.Logger) error {
 			SigningSecret: []byte(cfg.Callback.SigningSecret.Reveal()),
 			PendingTTL:    cfg.PendingCallback.TTL,
 		},
+		ProviderCapacity: cfg.ProviderCapacity,
 	}
 
 	definitionService := service.NewDefinitionService(serviceDeps)
@@ -260,7 +261,16 @@ func run(logger *slog.Logger) error {
 			}
 			// Fact declarations may name a producer Tool registered after its consumer, so
 			// they are checked only once every registration is in.
-			return registry.ValidateFactDeclarations(toolRegistry.ListMetadata(), nodeRegistry.ListMetadata())
+			if err := registry.ValidateFactDeclarations(toolRegistry.ListMetadata(), nodeRegistry.ListMetadata()); err != nil {
+				return err
+			}
+			// A capacity limit must name a Provider some registered model dispatches to,
+			// and admission can only serialize on a lock row that exists, so both are
+			// settled here, after every model is registered and the schema is migrated.
+			if err := validateProviderCapacity(modelRegistry, cfg.ProviderCapacity); err != nil {
+				return err
+			}
+			return seedProviderSlotLocks(ctx, uow, cfg.ProviderCapacity)
 		},
 		// Step 4: the Asset storage volume must exist and accept the write, read and
 		// delete an upload performs, in both the Asset tree and the Execution Artifact
