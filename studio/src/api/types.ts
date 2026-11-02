@@ -329,6 +329,12 @@ export interface ToolMetadata {
   records: ToolRecordKind[];
   /** True when the Tool runs against the workspace bound on its Agent node. */
   usesWorkspace: boolean;
+  /**
+   * JSON Pointer into the call's arguments naming the repository path the Tool writes; the
+   * Backend refuses a path outside the Agent's allowed paths before the Tool runs. Absent
+   * when the Tool declares no single written path.
+   */
+  workspaceWritePath?: string;
   /** True when an uncertain asynchronous result of this Tool is reconciled by polling. */
   reconcilable: boolean;
   /**
@@ -825,6 +831,31 @@ export interface AgentTrace {
   turns: AgentTurnTrace[];
   facts: AgentTraceFacts;
   generationBudget: GenerationBudgetTrace;
+  /** The frozen workspace and its recorded patches; `null` when the Agent froze none. */
+  workspace: AgentWorkspaceTrace | null;
+}
+
+/**
+ * The repository binding frozen when the Agent Run started, with the summaries of every
+ * write recorded since, oldest first. A patch is named by its sequence number, digest and
+ * touched paths; the patch text is never part of the trace. `patchesTruncated` means the
+ * Agent Run holds more patches than `patches` shows.
+ */
+export interface AgentWorkspaceTrace {
+  repositoryId: string;
+  baseCommit: string;
+  allowedPaths: string[];
+  deployTarget: { service: string; environment: string } | null;
+  patches: WorkspacePatchTrace[];
+  patchesTruncated: boolean;
+}
+
+export interface WorkspacePatchTrace {
+  seq: number;
+  patchDigest: string;
+  touchedPaths: string[];
+  toolAttemptId: string;
+  createdAt: string;
 }
 
 /**

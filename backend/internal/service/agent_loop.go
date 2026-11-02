@@ -209,6 +209,14 @@ func (s *ExecutionService) startAgentRun(
 	}); err != nil {
 		return err
 	}
+	// The workspace binding is frozen with the Agent Run and in the same transaction: a
+	// running Agent never reads the Definition's repository, commit or allowed paths again,
+	// and a failed initialisation leaves no binding behind.
+	if cfg.Workspace != nil {
+		if err := freezeAgentWorkspaceLocked(ctx, tx, agentRunID, *cfg.Workspace, now); err != nil {
+			return err
+		}
+	}
 
 	if err := tx.AgentContextVersions().Create(ctx, domain.AgentContextVersion{
 		ID:         s.deps.IDs.NewID(domain.IDPrefixAgentContextVersion),

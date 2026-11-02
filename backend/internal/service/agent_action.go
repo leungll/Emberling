@@ -617,6 +617,44 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			}
 		}
 
+		// A workspace Tool receives the Agent Run's frozen workspace: the binding, the newest
+		// recorded patch and its sequence, read under this lock so the view names exactly
+		// the version the call runs against. An Agent Run that froze none cannot run the
+		// Tool at all; that is a Definition defect, so the Action fails before any Attempt
+		// exists. A Tool that declares the path it writes has that path checked against
+		// the frozen allowed paths here, and a path outside them is handed back to the
+		// Agent as a SCOPE_DENIED refusal: no Attempt, no executor call, no patch.
+		var workspace *registry.WorkspaceView
+		if reg.Metadata.UsesWorkspace {
+			view, err := workspaceViewLocked(ctx, tx, agentRun.ID)
+			switch {
+			case errors.Is(err, domain.ErrNotFound):
+				if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
+					domain.FailureSyncExecution, domain.TerminationToolError, domain.ExecutionError{
+						Code:    codeWorkspaceNotConfigured,
+						Message: fmt.Sprintf("tool %q needs a workspace, but the Agent node froze none", toolName),
+					}, now); err != nil {
+					return err
+				}
+				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
+				return nil
+			case err != nil:
+				return err
+			}
+			workspace = view
+			if refusal := workspaceWriteScopeRefusal(reg.Metadata, decision.Arguments, view.AllowedPaths); refusal != nil {
+				turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
+					lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
+				}, domain.AgentActionRunning, domain.ReturnScopeDenied, scopeDeniedMessage(refusal, view.AllowedPaths), now)
+				if err != nil {
+					return err
+				}
+				nextTurnID = turnID
+				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
+				return nil
+			}
+		}
+
 		// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
 		// exists so a Tool call carries the same audit and callback target model as a Node
 		// Attempt. A synchronous call saves no callback token.
@@ -699,6 +737,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 				Arguments:     decision.Arguments,
 				ImageModelID:  imageModelID,
 				ReviewModelID: reviewModelID,
+				Workspace:     workspace,
 				Callback:      callbackCtx,
 			},
 			async:    async,

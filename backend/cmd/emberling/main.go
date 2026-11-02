@@ -261,6 +261,9 @@ func run(logger *slog.Logger) error {
 			if err := registerSandboxTool(toolRegistry, cfg.SandboxRunner, taskClient); err != nil {
 				return err
 			}
+			if err := registerWorkspaceTools(toolRegistry, cfg.WorkspaceRepositories); err != nil {
+				return err
+			}
 			// Fact declarations may name a producer Tool registered after its consumer, so
 			// they are checked only once every registration is in.
 			if err := registry.ValidateFactDeclarations(toolRegistry.ListMetadata(), nodeRegistry.ListMetadata()); err != nil {

@@ -313,6 +313,32 @@ function StepFacts({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
     facts.push({ label: f.timeLimit, value: limitText(numberOf(config, 'timeoutMs')) });
     const term = trace.agentRun.termination;
     if (term) facts.push({ label: f.ended, value: copy.status.termination[term] });
+    const ws = trace.workspace;
+    if (ws) {
+      facts.push({ label: f.repository, value: ws.repositoryId });
+      facts.push({
+        label: f.baseCommit,
+        value: <span className="font-mono">{ws.baseCommit.slice(0, 12)}</span>,
+      });
+      facts.push({ label: f.allowedPaths, value: ws.allowedPaths.join(', ') });
+      if (ws.deployTarget) {
+        facts.push({
+          label: f.deployTarget,
+          value: `${ws.deployTarget.service} (${ws.deployTarget.environment})`,
+        });
+      }
+      const latest = ws.patches.at(-1);
+      facts.push({
+        label: f.patches,
+        value: (
+          <>
+            <span className="tabular-nums">{ws.patches.length}</span>
+            {latest ? <Muted> {f.latestPatch(latest.patchDigest.slice(0, 12))}</Muted> : null}
+            {ws.patchesTruncated ? <Muted> ({f.morePatches})</Muted> : null}
+          </>
+        ),
+      });
+    }
   } else if (policy && (policy.maxAttempts ?? 1) > 1) {
     facts.push({
       label: f.attempts,

@@ -265,6 +265,35 @@ type agentTraceResponse struct {
 	Turns            []agentTraceTurnDTO `json:"turns"`
 	Facts            agentTraceFactsDTO  `json:"facts"`
 	GenerationBudget generationBudgetDTO `json:"generationBudget"`
+	// Workspace is the frozen workspace and its recorded patches, null for an Agent Run
+	// that froze none.
+	Workspace *agentWorkspaceDTO `json:"workspace"`
+}
+
+// agentWorkspaceDTO projects the frozen workspace binding and the summaries of its
+// recorded patches, oldest first. The patch text is never part of the response: a patch is
+// named by its sequence number, digest and touched paths. PatchesTruncated reports that the
+// Agent Run holds more patches than Patches shows; the stored rows are never cut.
+type agentWorkspaceDTO struct {
+	RepositoryID     string              `json:"repositoryId"`
+	BaseCommit       string              `json:"baseCommit"`
+	AllowedPaths     []string            `json:"allowedPaths"`
+	DeployTarget     *deployTargetDTO    `json:"deployTarget"`
+	Patches          []workspacePatchDTO `json:"patches"`
+	PatchesTruncated bool                `json:"patchesTruncated"`
+}
+
+type deployTargetDTO struct {
+	Service     string `json:"service"`
+	Environment string `json:"environment"`
+}
+
+type workspacePatchDTO struct {
+	Seq           int       `json:"seq"`
+	PatchDigest   string    `json:"patchDigest"`
+	TouchedPaths  []string  `json:"touchedPaths"`
+	ToolAttemptID string    `json:"toolAttemptId"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 // agentTraceFactsDTO is the bounded fact ledger, oldest first. Truncated reports that the
@@ -440,7 +469,42 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			MaxGenerationCalls:  trace.Budget.MaxGenerationCalls,
 			GenerationCallsUsed: trace.Budget.Used,
 		},
+		Workspace: toAgentWorkspaceDTO(trace.Workspace),
 	}
+}
+
+func toAgentWorkspaceDTO(workspace *service.AgentTraceWorkspace) *agentWorkspaceDTO {
+	if workspace == nil {
+		return nil
+	}
+	allowed := workspace.Workspace.AllowedPaths
+	if allowed == nil {
+		allowed = []string{}
+	}
+	dto := &agentWorkspaceDTO{
+		RepositoryID:     workspace.Workspace.RepositoryID,
+		BaseCommit:       workspace.Workspace.BaseCommit,
+		AllowedPaths:     allowed,
+		Patches:          make([]workspacePatchDTO, len(workspace.Patches)),
+		PatchesTruncated: workspace.PatchesTruncated,
+	}
+	if target := workspace.Workspace.DeployTarget; target != nil {
+		dto.DeployTarget = &deployTargetDTO{Service: target.Service, Environment: target.Environment}
+	}
+	for i, patch := range workspace.Patches {
+		touched := patch.TouchedPaths
+		if touched == nil {
+			touched = []string{}
+		}
+		dto.Patches[i] = workspacePatchDTO{
+			Seq:           patch.Seq,
+			PatchDigest:   patch.PatchDigest,
+			TouchedPaths:  touched,
+			ToolAttemptID: patch.ToolAttemptID,
+			CreatedAt:     utcTime(patch.CreatedAt),
+		}
+	}
+	return dto
 }
 
 func toAgentTraceFactsDTO(ledger service.AgentTraceFacts) agentTraceFactsDTO {
