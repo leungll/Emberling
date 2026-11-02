@@ -43,7 +43,7 @@
 #                                       no Event.
 #                 Each photo and delivery variant is followed by the invariant report as well.
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
-#                 The serving variants run only when named, or all seven with
+#                 The serving variants run only when named, or all eight with
 #                 EMBERLING_DEMO_VARIANT=serving. Each is serving.sh STORY, many users of
 #                 the photo effect serving template, followed by the invariant report of
 #                 every Run and the per-task ledger of all of them:
@@ -57,7 +57,14 @@
 #                   serving-client-retry    concurrent resubmissions under one
 #                                           Idempotency-Key per user;
 #                   serving-response-lost   the Provider drops each acceptance answer and
-#                                           the keyed retry takes over the original task.
+#                                           the keyed retry takes over the original task;
+#                   serving-rollout         keyed requests split 10% to a slower version 2,
+#                                           then the ratio goes back to 0: replays return
+#                                           the original Runs, new requests go to version 1,
+#                                           in-flight version 2 Runs finish as version 2.
+#                 scripts/demo/build-v1.sh builds the serving template from a tuning Run's
+#                 delivered settings, and scripts/demo/evidence-report.sh summarises the
+#                 fault-injection and real-flow evidence; both are run by hand.
 #                 EMBERLING_DEMO_STUDIO=1 also builds and starts Studio, prints a Studio link
 #                 to every Run and pauses for Enter at the moments worth watching; the
 #                 stack and Studio keep running afterwards. EMBERLING_DEMO_PAUSE=0 keeps
@@ -97,10 +104,10 @@ run)
     ;;
   serving)
     variants=(serving-burst serving-crash-held serving-crash-waiting serving-duplicate
-      serving-version-switch serving-client-retry serving-response-lost)
+      serving-version-switch serving-client-retry serving-response-lost serving-rollout)
     ;;
   serving-burst | serving-crash-held | serving-crash-waiting | serving-duplicate | \
-    serving-version-switch | serving-client-retry | serving-response-lost)
+    serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
   *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, serving or one serving-* variant" ;;
