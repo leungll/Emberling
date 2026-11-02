@@ -85,6 +85,9 @@ type Config struct {
 	PendingCallback PendingCallback
 	Projection      Projection
 	HTTP            HTTP
+	// ProviderCapacity is the in-flight task limit per asynchronous Provider id; a
+	// Provider absent from it is not limited.
+	ProviderCapacity map[string]int
 }
 
 // Database addresses PostgreSQL, the authority for Emberling-owned execution facts.
@@ -265,6 +268,7 @@ func Load(env func(string) string) (Config, error) {
 		HTTP: HTTP{
 			Addr: l.optional(KeyHTTPAddr, DefaultHTTPAddr),
 		},
+		ProviderCapacity: l.providerCapacity(),
 	}
 
 	if err := l.err(); err != nil {
@@ -363,6 +367,9 @@ func (c Config) Validate() error {
 		}
 	}
 	if err := c.ImageModel.validate(c.OpenAIModel); err != nil {
+		return err
+	}
+	if err := validateProviderCapacity(c.ProviderCapacity); err != nil {
 		return err
 	}
 	return c.TaskGateway.validate(c.OpenAIModel, c.ImageModel)

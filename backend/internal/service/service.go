@@ -71,6 +71,14 @@ type Deps struct {
 	// PollHooks lets a test stop or synchronize PollAttempt between its claim commit and
 	// the Provider query. The zero value installs no hook.
 	PollHooks PollHooks
+	// ProviderCapacity is the in-flight task limit per asynchronous Provider id, read once
+	// at startup. A Provider absent from it is never refused a slot; the limit is never
+	// persisted, so a restart with a smaller value only stops new admissions until the
+	// held count drops below it.
+	ProviderCapacity map[string]int
+	// CapacityHooks lets a test synchronize admission at exact points inside the claim
+	// transaction. The zero value installs no hook.
+	CapacityHooks CapacityHooks
 	// RunnerID identifies this process instance. It is generated once per process start
 	// and written onto every Tool Attempt this process creates, so a later process can
 	// tell that nobody is executing a STARTED Attempt any more. The process entry point

@@ -193,6 +193,7 @@ func (t *execFakeTx) ToolAttempts() store.ToolAttemptRepository     { return nil
 func (t *execFakeTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *execFakeTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *execFakeTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
+func (t *execFakeTx) ProviderSlots() store.ProviderSlotRepository               { return nil }
 
 type execFakeDefinitionRepo struct{ def domain.Definition }
 
@@ -304,6 +305,9 @@ func (r *execFakeNodeRunRepo) MarkFailed(context.Context, string, domain.NodeRun
 }
 func (r *execFakeNodeRunRepo) MarkWaiting(context.Context, string, time.Time) error {
 	return errExecFakeNotImplemented
+}
+func (r *execFakeNodeRunRepo) MarkCapacityDeferred(context.Context, string, string, time.Time) (bool, error) {
+	return false, errExecFakeNotImplemented
 }
 
 type execFakeNodeAttemptRepo struct{}

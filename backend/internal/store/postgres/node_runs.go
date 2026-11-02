@@ -18,7 +18,7 @@ type nodeRunRepository struct {
 
 const nodeRunColumns = `id, run_id, node_id, node_type, status, input, output, error,
 	attempt_count, next_attempt_at, ready_at, started_at, waiting_at, completed_at,
-	latency_ms, token_usage, updated_at`
+	latency_ms, token_usage, updated_at, capacity_deferred_at, capacity_provider_id`
 
 // Create inserts a NodeRun. UNIQUE (run_id, node_id) is what makes repeated scheduler
 // computation by immediate advancement and the Reconciler converge on one row.
@@ -34,12 +34,13 @@ func (r *nodeRunRepository) Create(ctx context.Context, nr domain.NodeRun) error
 
 	const insert = `
 		INSERT INTO node_runs (` + nodeRunColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`
 	if _, err := r.conn.Exec(ctx, insert,
 		nr.ID, nr.RunID, nr.NodeID, nr.NodeType, string(nr.Status),
 		nr.Input, nullableJSON(nr.Output), errPayload,
 		nr.AttemptCount, nr.NextAttemptAt, nr.ReadyAt, nr.StartedAt, nr.WaitingAt,
 		nr.CompletedAt, nr.LatencyMs, tokenUsage, nr.UpdatedAt,
+		nr.CapacityDeferredAt, nr.CapacityProviderID,
 	); err != nil {
 		return mapError("node_runs.Create", err, nr.ID, nr.RunID, nr.NodeID)
 	}
@@ -336,6 +337,25 @@ func (r *nodeRunRepository) MarkWaiting(ctx context.Context, nodeRunID string, n
 	return nil
 }
 
+// MarkCapacityDeferred records the first refusal of a Provider slot. The predicate makes
+// the write conditional on the NodeRun still being READY and never refused before, so a
+// second refusal changes nothing and the caller writes no second Event.
+func (r *nodeRunRepository) MarkCapacityDeferred(ctx context.Context, nodeRunID, providerID string, now time.Time) (bool, error) {
+	const update = `
+		UPDATE node_runs
+		   SET capacity_deferred_at = $3, capacity_provider_id = $2, updated_at = $3
+		 WHERE id = $1 AND status = 'READY' AND capacity_deferred_at IS NULL`
+
+	affected, err := affectedRows(ctx, r.conn, "node_runs.MarkCapacityDeferred", update, nodeRunID, providerID, now)
+	if err != nil {
+		return false, err
+	}
+	if affected > 1 {
+		return false, errUnexpectedRows("node_runs.MarkCapacityDeferred", nodeRunID, affected)
+	}
+	return affected == 1, nil
+}
+
 func scanNodeRuns(rows pgx.Rows) ([]domain.NodeRun, error) {
 	defer rows.Close()
 
@@ -353,6 +373,7 @@ func scanNodeRuns(rows pgx.Rows) ([]domain.NodeRun, error) {
 			&nr.Input, &output, &errPayload,
 			&nr.AttemptCount, &nr.NextAttemptAt, &nr.ReadyAt, &nr.StartedAt, &nr.WaitingAt,
 			&nr.CompletedAt, &nr.LatencyMs, &tokenUsage, &nr.UpdatedAt,
+			&nr.CapacityDeferredAt, &nr.CapacityProviderID,
 		); err != nil {
 			return nil, err
 		}

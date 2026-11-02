@@ -145,6 +145,7 @@ func (t *defsFakeTx) ToolAttempts() store.ToolAttemptRepository     { return nil
 func (t *defsFakeTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *defsFakeTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *defsFakeTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
+func (t *defsFakeTx) ProviderSlots() store.ProviderSlotRepository               { return nil }
 
 // defsFakeCallbackBindingRepo is a minimal store.CallbackBindingRepository double: only
 // ListByTargets is exercised (by QueryService.NodeRunDetail), always against an empty set,
@@ -347,6 +348,9 @@ func (r *defsFakeNodeRunRepo) MarkFailed(context.Context, string, domain.NodeRun
 }
 func (r *defsFakeNodeRunRepo) MarkWaiting(context.Context, string, time.Time) error {
 	return errDefsFakeNotImplemented
+}
+func (r *defsFakeNodeRunRepo) MarkCapacityDeferred(context.Context, string, string, time.Time) (bool, error) {
+	return false, errDefsFakeNotImplemented
 }
 
 var _ store.NodeRunRepository = (*defsFakeNodeRunRepo)(nil)

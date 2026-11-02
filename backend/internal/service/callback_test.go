@@ -126,6 +126,7 @@ func (t *cbTx) ToolAttempts() store.ToolAttemptRepository     { return nil }
 func (t *cbTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *cbTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *cbTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
+func (t *cbTx) ProviderSlots() store.ProviderSlotRepository               { return nil }
 
 type cbDefinitionRepo struct{ tx *cbTx }
 
@@ -307,6 +308,9 @@ func (r *cbNodeRunRepo) MarkFailed(_ context.Context, nodeRunID string, from dom
 	nr.UpdatedAt = now
 	r.tx.state.nodeRuns[nodeRunID] = nr
 	return nil
+}
+func (r *cbNodeRunRepo) MarkCapacityDeferred(context.Context, string, string, time.Time) (bool, error) {
+	return false, errors.New("cbNodeRunRepo: MarkCapacityDeferred is not part of the callback path")
 }
 func (r *cbNodeRunRepo) MarkWaiting(_ context.Context, nodeRunID string, now time.Time) error {
 	nr := r.tx.state.nodeRuns[nodeRunID]
