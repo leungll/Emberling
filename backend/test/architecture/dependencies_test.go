@@ -111,6 +111,10 @@ func role(pkg string) string {
 		return "mockproduction"
 	case pkg == "internal/fixture/mockcontrol":
 		return "mockcontrol"
+	// The task gateway is a separate demo process standing in for an asynchronous image
+	// Provider, like the Mock Provider.
+	case pkg == "internal/fixture/taskgateway":
+		return "taskgateway"
 	// The sandbox test runner is a separate process standing in for an external test
 	// service, like the Mock Provider.
 	case pkg == "internal/fixture/sandboxrunner":
@@ -260,6 +264,14 @@ var allowedInternalImports = map[string]map[string]bool{
 	// Tool reaches it only over HTTP, so like mockprovider it shares no Go type with the
 	// Runtime; its only internal import is the shared barrier and request record.
 	"sandboxrunner": set("internal/fixture/mockcontrol"),
+
+	// taskgateway: the task gateway served by cmd/taskgateway, which wraps a synchronous
+	// image model as an asynchronous task Provider speaking the Mock Provider's protocol.
+	// Emberling reaches it only over HTTP, so it shares no Go type with the Runtime, and
+	// the upstream image Adapter reaches it only through its own ImageGenerator port,
+	// bridged in cmd/taskgateway. It needs no barrier or record, so it imports nothing
+	// internal at all.
+	"taskgateway": set(),
 }
 
 // violation is one forbidden edge (or one unclassifiable package) found by

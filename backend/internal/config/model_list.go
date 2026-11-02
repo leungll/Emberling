@@ -74,10 +74,20 @@ func (l *loader) modelList(key string) []OpenAIModelEntry {
 	if value == "" {
 		return nil
 	}
+	entries, reason := parseModelList(value)
+	if reason != "" {
+		l.fail(key, reason)
+		return nil
+	}
+	return entries
+}
+
+// parseModelList parses and validates one model list value. It returns the entries, or
+// the reason the value is refused, which names entry indexes and fields only.
+func parseModelList(value string) ([]OpenAIModelEntry, string) {
 	var items []json.RawMessage
 	if err := json.Unmarshal([]byte(value), &items); err != nil {
-		l.fail(key, "must be a JSON array of objects with id, model, displayName and an optional description")
-		return nil
+		return nil, "must be a JSON array of objects with id, model, displayName and an optional description"
 	}
 	entries := make([]OpenAIModelEntry, 0, len(items))
 	var problems []string
@@ -100,10 +110,9 @@ func (l *loader) modelList(key string) []OpenAIModelEntry {
 		problems = validateModelList(entries)
 	}
 	if len(problems) > 0 {
-		l.fail(key, strings.Join(problems, "; "))
-		return nil
+		return nil, strings.Join(problems, "; ")
 	}
-	return entries
+	return entries, ""
 }
 
 // validateModelList returns every problem in models: an empty list, a missing field, an
