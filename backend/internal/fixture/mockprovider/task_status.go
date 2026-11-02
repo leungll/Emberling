@@ -46,30 +46,54 @@ type trackedTask struct {
 // until its callback first becomes due; from then on it reports its outcome. A task whose
 // callback is never scheduled (delayMs "lost") therefore stays RUNNING: the simulated
 // Provider never finishes it.
+//
+// The same map counts the tasks in flight: accepted and not yet finished. That count and
+// its highest value since start are what the in-flight control reports; a task forgotten
+// by eviction stops counting, so the count never exceeds the bounded map.
 type taskStatuses struct {
-	mu    sync.Mutex
-	tasks map[string]*trackedTask
-	order []string
+	mu       sync.Mutex
+	tasks    map[string]*trackedTask
+	order    []string
+	inFlight int
+	peak     int
 }
 
 func newTaskStatuses() *taskStatuses {
 	return &taskStatuses{tasks: make(map[string]*trackedTask)}
 }
 
-// accept records task as RUNNING. Accepting an id again (a new request reusing an
-// explicit externalTaskId) restarts it as RUNNING with the new outcome.
-func (t *taskStatuses) accept(externalTaskID string, payload json.RawMessage, failed bool) {
+// accept records task as RUNNING and returns the in-flight count it leaves. Accepting an
+// id again (a new request reusing an explicit externalTaskId) restarts it as RUNNING with
+// the new outcome; it counts once more only if it had already finished.
+func (t *taskStatuses) accept(externalTaskID string, payload json.RawMessage, failed bool) int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if _, known := t.tasks[externalTaskID]; !known {
+	previous, known := t.tasks[externalTaskID]
+	if !known {
 		if len(t.order) >= maxTaskStatuses {
 			oldest := t.order[0]
 			t.order = t.order[1:]
+			if evicted := t.tasks[oldest]; evicted != nil && !evicted.terminal {
+				t.inFlight--
+			}
 			delete(t.tasks, oldest)
 		}
 		t.order = append(t.order, externalTaskID)
 	}
+	if !known || previous.terminal {
+		t.inFlight++
+		t.peak = max(t.peak, t.inFlight)
+	}
 	t.tasks[externalTaskID] = &trackedTask{payload: payload, failed: failed}
+	return t.inFlight
+}
+
+// inFlightCounts returns the tasks currently in flight and the highest such count since
+// this Provider instance started.
+func (t *taskStatuses) inFlightCounts() (current, peak int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.inFlight, t.peak
 }
 
 // markDue makes task terminal. The Dispatcher calls it when a callback delivery for task
@@ -78,8 +102,9 @@ func (t *taskStatuses) accept(externalTaskID string, payload json.RawMessage, fa
 func (t *taskStatuses) markDue(task callbackTask) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if tracked, ok := t.tasks[task.ExternalTaskID]; ok {
+	if tracked, ok := t.tasks[task.ExternalTaskID]; ok && !tracked.terminal {
 		tracked.terminal = true
+		t.inFlight--
 	}
 }
 

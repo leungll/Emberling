@@ -217,12 +217,19 @@ const (
 // version is frozen and are never re-injected at Run or recovery time. Description is an
 // optional one-line note Studio shows with the model, bounded by ValidateModelDescription;
 // empty means none and is omitted on the wire.
+//
+// ProviderID is the stable identifier of the asynchronous Provider that runs this model's
+// tasks: the same value an Adapter stamps into the external task identity and Callback
+// Binding. It is required for a model declaring ModelCapabilityImageGeneration, whose
+// generation is always dispatched as an asynchronous task, and is empty, and omitted on
+// the wire, for a model served only by synchronous calls. It is not a credential.
 type ModelMetadata struct {
 	ID           string          `json:"id"`
 	DisplayName  string          `json:"displayName"`
 	Description  string          `json:"description,omitempty"`
 	Capabilities []string        `json:"capabilities"`
 	ConfigSchema json.RawMessage `json:"configSchema"`
+	ProviderID   string          `json:"providerId,omitempty"`
 }
 
 // PollPolicy bounds Provider status polling for one async registration. Both bounds come

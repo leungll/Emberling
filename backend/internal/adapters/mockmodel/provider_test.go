@@ -75,6 +75,26 @@ func TestProvider_Models_RegistersImageModelV1WithImageGenerationCapability(t *t
 	}
 }
 
+// TestProvider_Models_ImageModelDeclaresMockTaskProvider pins the Provider ID the image
+// model's asynchronous tasks run on, and that the text model, served only synchronously,
+// declares none.
+func TestProvider_Models_ImageModelDeclaresMockTaskProvider(t *testing.T) {
+	models, err := NewProvider().Models(context.Background())
+	if err != nil {
+		t.Fatalf("Models() error = %v, want nil", err)
+	}
+	providers := map[string]string{}
+	for _, model := range models {
+		providers[model.ID] = model.ProviderID
+	}
+	if got := providers[ImageModelID]; got != "mock-task-provider-v1" {
+		t.Fatalf("image model ProviderID = %q, want %q", got, "mock-task-provider-v1")
+	}
+	if got := providers[ModelID]; got != "" {
+		t.Fatalf("text model ProviderID = %q, want empty", got)
+	}
+}
+
 // TestProvider_Models_DescribeThemselvesAsDeterministicFixtures pins that each mock model
 // carries a fixed English description the Registry accepts and that says it is a
 // deterministic test fixture, so Studio never presents it as a real model.

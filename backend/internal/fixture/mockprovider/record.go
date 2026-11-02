@@ -25,6 +25,9 @@ const (
 	recordCallback = "callback"
 	// recordPolled is written when a task status query is answered.
 	recordPolled = "polled"
+	// recordResponseDropped is written in place of responded when a task was accepted and
+	// the connection was then closed without any response (delayMs "noResponse").
+	recordResponseDropped = "responseDropped"
 )
 
 // Request kinds the record and the barrier distinguish.
@@ -86,6 +89,12 @@ type recordDetail struct {
 	// Delivery is the 1-based count of callback attempts for ExternalTaskID within this
 	// Provider process.
 	Delivery int `json:"delivery,omitempty"`
+	// InFlight is the number of accepted, unfinished tasks right after the task on this
+	// responded or responseDropped line was accepted.
+	InFlight int `json:"inFlight,omitempty"`
+	// OverLimit marks an acceptance that took InFlight above the configured in-flight
+	// limit, so an evidence check can find every such moment in the record.
+	OverLimit bool `json:"overLimit,omitempty"`
 	// Error is a fixed short summary; transport error text is never copied because it can
 	// echo the full callback URL.
 	Error string `json:"error,omitempty"`

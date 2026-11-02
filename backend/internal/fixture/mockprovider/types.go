@@ -13,6 +13,7 @@
 // POST /v1/tasks selects an asynchronous scenario through three independent fields:
 //
 //	delayMs:        0 (default, immediate) | <milliseconds> | "lost" | "duplicate" | "beforeResponse"
+//	                | "noResponse" (test controls only)
 //	outcome:        "succeeded" (default) | "failed" | "wrong-token"
 //	idempotencyKey: optional; replaying a key returns the first task's externalTaskId
 //	                with HTTP 200 and schedules no further callback
@@ -46,6 +47,14 @@
 // GET /v1/images/{name}.png serves one fixed, deterministic PNG under any name, with no
 // credential of any kind. It is what makes an image reference in a task callback payload
 // genuinely readable instead of a URL that resolves to nothing.
+//
+// delayMs "noResponse" simulates a response lost in transit: the Provider creates the task
+// and claims its idempotency key, then closes the connection without writing any response,
+// and delivers the callback after the delay WithNoResponseCallbackDelay configures. Every
+// task result (callback and status query) then also carries a fixed `usage.cost`, and the
+// Provider keeps the in-flight task count and its peak, served by GET /control/inflight;
+// an acceptance that takes the count above WithInFlightLimit is marked in the record.
+// These three behaviours exist only with WithTestControls.
 //
 // WithTestControls adds a demo and test control surface under /control, absent otherwise:
 // an external barrier (pause, release and GET /control/barrier) that records a dispatch's
@@ -81,11 +90,15 @@ const (
 	// delayBeforeResponse delivers the callback synchronously before /v1/tasks' own HTTP
 	// response is written, so a test can observe callback-before-dispatch-ack ordering.
 	delayBeforeResponse
+	// delayNoResponse accepts the task and then drops the connection without answering,
+	// delivering the callback after the Server's configured no-response delay. It is
+	// available only with test controls.
+	delayNoResponse
 )
 
 // delaySpec is the parsed form of the request body's `delayMs` field. That field accepts
 // either a non-negative integer number of milliseconds (0 meaning delayImmediate) or one
-// of three sentinel strings ("lost", "duplicate", "beforeResponse") naming a scenario that
+// of the sentinel strings ("lost", "duplicate", "beforeResponse", "noResponse") naming a scenario that
 // cannot be expressed as a duration.
 type delaySpec struct {
 	Mode     delayMode
@@ -102,6 +115,8 @@ func (d delaySpec) MarshalJSON() ([]byte, error) {
 		return json.Marshal("duplicate")
 	case delayBeforeResponse:
 		return json.Marshal("beforeResponse")
+	case delayNoResponse:
+		return json.Marshal("noResponse")
 	case delayAfter:
 		return json.Marshal(d.Duration.Milliseconds())
 	default: // delayImmediate
@@ -121,15 +136,17 @@ func (d *delaySpec) UnmarshalJSON(data []byte) error {
 			*d = delaySpec{Mode: delayDuplicate}
 		case "beforeResponse":
 			*d = delaySpec{Mode: delayBeforeResponse}
+		case "noResponse":
+			*d = delaySpec{Mode: delayNoResponse}
 		default:
-			return fmt.Errorf("mockprovider: delayMs %q is not one of \"lost\", \"duplicate\", \"beforeResponse\"", sentinel)
+			return fmt.Errorf("mockprovider: delayMs %q is not one of \"lost\", \"duplicate\", \"beforeResponse\", \"noResponse\"", sentinel)
 		}
 		return nil
 	}
 
 	var milliseconds int64
 	if err := json.Unmarshal(data, &milliseconds); err != nil {
-		return fmt.Errorf("mockprovider: delayMs must be a non-negative integer of milliseconds or one of \"lost\", \"duplicate\", \"beforeResponse\": %w", err)
+		return fmt.Errorf("mockprovider: delayMs must be a non-negative integer of milliseconds or one of \"lost\", \"duplicate\", \"beforeResponse\", \"noResponse\": %w", err)
 	}
 	if milliseconds < 0 {
 		return fmt.Errorf("mockprovider: delayMs must be >= 0, got %d", milliseconds)

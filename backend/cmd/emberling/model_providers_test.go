@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
+	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
 	"github.com/leungll/Emberling/backend/internal/config"
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
@@ -257,5 +259,23 @@ func TestRegisterModelProviders_NotConfigured_RegistersMockOnly(t *testing.T) {
 	}
 	if diff := cmp.Diff(mockModelIDs(t), registeredModelIDs(models), cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
 		t.Errorf("registered model IDs mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestRegisterModelProviders_MockImageModel_ResolvesToTheDispatchingAdapter pins that the
+// mock image model resolves to exactly the Provider ID the image task Adapter it is
+// dispatched through stamps into the external task identity and Callback Binding. The two
+// packages may not import each other, so this wiring point is where they are compared.
+func TestRegisterModelProviders_MockImageModel_ResolvesToTheDispatchingAdapter(t *testing.T) {
+	models := registry.NewModelRegistry()
+	if err := registerModelProviders(context.Background(), models, config.OpenAIModel{}); err != nil {
+		t.Fatalf("registerModelProviders() error = %v", err)
+	}
+	got, err := models.ProviderID(mockmodel.ImageModelID)
+	if err != nil || got != mocktask.ProviderID {
+		t.Fatalf("ProviderID(%q) = %q, %v; want %q, nil", mockmodel.ImageModelID, got, err, mocktask.ProviderID)
+	}
+	if _, err := models.ProviderID(mockmodel.ModelID); !errors.Is(err, registry.ErrModelProviderNotDeclared) {
+		t.Fatalf("ProviderID(%q) error = %v, want ErrModelProviderNotDeclared", mockmodel.ModelID, err)
 	}
 }

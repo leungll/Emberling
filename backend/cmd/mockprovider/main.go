@@ -50,12 +50,25 @@ type config struct {
 	// publicBaseURL is the normalised browser-reachable origin generated image URLs
 	// start with; empty keeps the origin the caller used.
 	publicBaseURL string
+	// noResponseDelay is how long a delayMs "noResponse" task waits before its callback;
+	// settable only with testControls.
+	noResponseDelay time.Duration
+	// inFlightLimit marks acceptances above this in-flight count in the record; zero
+	// means no limit. Settable only with testControls.
+	inFlightLimit int
 }
 
+// noResponseDelayEnv and inFlightLimitEnv configure test-control-only behaviour.
+const (
+	noResponseDelayEnv = "MOCKPROVIDER_NO_RESPONSE_DELAY_MS"
+	inFlightLimitEnv   = "MOCKPROVIDER_INFLIGHT_LIMIT"
+)
+
 // loadConfig reads MOCKPROVIDER_ADDR, MOCKPROVIDER_TEST_CONTROLS,
-// MOCKPROVIDER_RECORD_PATH and EMBERLING_MOCKPROVIDER_PUBLIC_URL through getenv. A record
-// path without test controls is rejected rather than ignored, so a configuration never
-// looks like it records when it does not; an unusable public URL is rejected at startup
+// MOCKPROVIDER_RECORD_PATH, MOCKPROVIDER_NO_RESPONSE_DELAY_MS, MOCKPROVIDER_INFLIGHT_LIMIT
+// and EMBERLING_MOCKPROVIDER_PUBLIC_URL through getenv. A record path, no-response delay
+// or in-flight limit without test controls is rejected rather than ignored, so a
+// configuration never looks like it records or marks anything when it does not; an unusable public URL is rejected at startup
 // rather than producing image URLs nobody can open.
 func loadConfig(getenv func(string) string) (config, error) {
 	cfg := config{addr: getenv("MOCKPROVIDER_ADDR"), recordPath: getenv("MOCKPROVIDER_RECORD_PATH")}
@@ -75,6 +88,26 @@ func loadConfig(getenv func(string) string) (config, error) {
 			return config{}, fmt.Errorf("%s: %w", publicURLEnv, err)
 		}
 		cfg.publicBaseURL = base
+	}
+	if raw := getenv(noResponseDelayEnv); raw != "" {
+		if !cfg.testControls {
+			return config{}, fmt.Errorf("%s is set but MOCKPROVIDER_TEST_CONTROLS is not enabled", noResponseDelayEnv)
+		}
+		milliseconds, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || milliseconds < 0 {
+			return config{}, fmt.Errorf("%s must be a non-negative integer of milliseconds", noResponseDelayEnv)
+		}
+		cfg.noResponseDelay = time.Duration(milliseconds) * time.Millisecond
+	}
+	if raw := getenv(inFlightLimitEnv); raw != "" {
+		if !cfg.testControls {
+			return config{}, fmt.Errorf("%s is set but MOCKPROVIDER_TEST_CONTROLS is not enabled", inFlightLimitEnv)
+		}
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit <= 0 {
+			return config{}, fmt.Errorf("%s must be a positive integer", inFlightLimitEnv)
+		}
+		cfg.inFlightLimit = limit
 	}
 	switch {
 	case cfg.testControls && cfg.recordPath == "":
@@ -105,7 +138,11 @@ func main() {
 			logger.Error("mockprovider: open dispatch record", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-		opts = append(opts, mockprovider.WithTestControls(record))
+		opts = append(opts,
+			mockprovider.WithTestControls(record),
+			mockprovider.WithNoResponseCallbackDelay(cfg.noResponseDelay),
+			mockprovider.WithInFlightLimit(cfg.inFlightLimit),
+		)
 		logger.Info("mockprovider: test controls enabled", slog.String("record_path", cfg.recordPath))
 	}
 	if cfg.publicBaseURL != "" {

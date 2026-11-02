@@ -42,7 +42,7 @@ type controlledProvider struct {
 	notify     chan callbackOutcome
 }
 
-func newControlledProvider(t *testing.T, recordPath string) *controlledProvider {
+func newControlledProvider(t *testing.T, recordPath string, opts ...Option) *controlledProvider {
 	t.Helper()
 	record, err := OpenRecord(recordPath)
 	if err != nil {
@@ -51,7 +51,7 @@ func newControlledProvider(t *testing.T, recordPath string) *controlledProvider 
 	dispatcher := NewDispatcher(nil)
 	notify := make(chan callbackOutcome, 8)
 	dispatcher.notify = notify
-	server := NewServer(dispatcher, WithTestControls(record))
+	server := NewServer(dispatcher, append([]Option{WithTestControls(record)}, opts...)...)
 	held := make(chan string, 8)
 	server.controls.heldHook = held
 	p := &controlledProvider{

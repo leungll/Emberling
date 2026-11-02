@@ -251,6 +251,8 @@ export interface ModelMetadata {
   description?: string;
   capabilities: string[];
   configSchema: JsonSchema;
+  /** Stable ID of the asynchronous Provider that runs this model's tasks; omitted for a model served only synchronously. */
+  providerId?: string;
 }
 
 export interface ToolMetadata {
