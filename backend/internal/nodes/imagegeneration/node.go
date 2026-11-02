@@ -155,6 +155,9 @@ func Registration(resolver ModelResolver, providers ...TaskProvider) registry.No
 			// (EXTERNAL + KEYED).
 			SideEffect: domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed},
 			Poll:       &domain.PollPolicy{IntervalMs: pollIntervalMs, MaxPolls: maxPolls},
+			// The Runtime resolves the Provider a task will occupy a capacity slot of
+			// from this model, before Execute runs.
+			DispatchModelPath: "modelId",
 		},
 		Binding: registry.ExecutorBinding{Executor: Executor{resolver: resolver, providers: instances}},
 	}

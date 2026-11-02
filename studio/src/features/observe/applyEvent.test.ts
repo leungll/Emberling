@@ -65,6 +65,7 @@ const NON_RUN_EVENTS: EventType[] = [
   'NODE_READY',
   'NODE_STARTED',
   'NODE_RETRYING',
+  'NODE_WAITING_CAPACITY',
   'NODE_DISPATCHED',
   'NODE_CALLBACK_RECEIVED',
   'NODE_COMPLETED',
@@ -169,6 +170,12 @@ describe('applyEvent', () => {
     expect(applyEvent(base, event(2, 'NODE_CALLBACK_RECEIVED', 'nr_1')).nodeRuns[0]?.status).toBe(
       'RUNNING',
     );
+    // A step refused a Provider slot stays READY: queueing is not a transition.
+    const queued = snapshot('RUNNING', [nodeRun('nr_2', 'READY')]);
+    expect(
+      applyEvent(queued, event(1, 'NODE_WAITING_CAPACITY', 'nr_2', { position: 1 })).nodeRuns[0]
+        ?.status,
+    ).toBe('READY');
   });
 
   it('does not mutate the input snapshot', () => {

@@ -164,9 +164,10 @@ func TestEventType_IsValid_ExcludesPhase2Types(t *testing.T) {
 		EventAgentDecisionCommitted, EventAgentActionStarted, EventAgentActionWaiting,
 		EventAgentActionCompleted, EventAgentActionFailed, EventAgentStateUpdated,
 		EventAgentCompleted, EventAgentFailed,
+		EventNodeWaitingCapacity,
 	}
-	if len(mvp) != 23 {
-		t.Fatalf("MVP event type count: want 23, got %d", len(mvp))
+	if len(mvp) != 24 {
+		t.Fatalf("MVP event type count: want 24, got %d", len(mvp))
 	}
 	for _, typ := range mvp {
 		if !typ.IsValid() {

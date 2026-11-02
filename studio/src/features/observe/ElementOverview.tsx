@@ -335,6 +335,10 @@ function StepFacts({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
       });
     }
   }
+  const wait = step.detail?.capacityWait;
+  if (nr.status === 'READY' && wait) {
+    facts.push({ label: f.queue, value: f.queuePlace(wait.position, wait.held, wait.limit) });
+  }
   if (nr.tokenUsage) facts.push({ label: f.tokens, value: <Tokens usage={nr.tokenUsage} /> });
   return <FactList compact facts={facts} />;
 }

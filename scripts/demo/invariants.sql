@@ -1,7 +1,9 @@
 -- Execution-ledger invariant report for one Run.
 --
--- Usage: psql -v ON_ERROR_STOP=1 -v run_id=<run id> -f invariants.sql
--- (scripts/demo/invariants.sh runs it inside the Compose postgres container).
+-- Usage: psql -v ON_ERROR_STOP=1 -v run_id=<run id> [-v provider_capacity=<id>=<n>,...] -f invariants.sql
+-- (scripts/demo/invariants.sh runs it inside the Compose postgres container). The
+-- Provider capacity is not stored in the database, so the per-Provider slot check runs
+-- only when the limits are passed in, in the EMBERLING_PROVIDER_CAPACITY format.
 --
 -- PostgreSQL is the authority for every Emberling-owned execution fact, so this report
 -- reads only committed rows: no API projection, process memory or SSE stream is consulted.
@@ -17,6 +19,11 @@
 \pset tuples_only on
 \pset footer off
 
+\if :{?provider_capacity}
+\else
+\set provider_capacity ''
+\endif
+
 BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 
 \echo 'checks run:'
@@ -28,7 +35,10 @@ BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 \echo '  run_status_matches_noderuns        the Run status is the one its NodeRuns derive'
 \echo '  one_external_task_per_attempt      no Attempt is bound to two external tasks, no external task id is bound twice'
 \echo '  at_most_one_succeeded_attempt      no NodeRun or Agent Action has two SUCCEEDED Attempts'
-\echo 'checks not run: none of the requested checks is unsupported by the schema'
+\echo '  provider_slot_live_noderun         every Provider slot this Run holds belongs to a RUNNING or WAITING_CALLBACK NodeRun'
+SELECT CASE WHEN :'provider_capacity' = ''
+    THEN 'checks not run: provider_slots_within_capacity (pass -v provider_capacity=<id>=<n>,... to check every Provider''s held slots against its limit)'
+    ELSE '  provider_slots_within_capacity     no Provider holds more slots than its configured limit (' || :'provider_capacity' || ')' END;
 \echo ''
 
 WITH
@@ -251,6 +261,32 @@ v_succeeded AS (
     GROUP BY action_id, node_id, turn_no HAVING count(*) > 1
 ),
 
+-- A Provider slot is taken in the transaction that claims the NodeRun and freed in the
+-- one that moves it to SUCCEEDED or a terminal FAILED, so a committed slot row always
+-- belongs to a NodeRun that is still RUNNING or WAITING_CALLBACK. A slot held by a
+-- READY or terminal NodeRun would be occupancy that outlived its task.
+v_slot_live AS (
+    SELECT 'slot of ' || nr.node_id || ' held while the NodeRun is ' || nr.status AS detail
+    FROM provider_slots ps JOIN run_node_runs nr ON nr.id = ps.node_run_id
+    WHERE nr.status NOT IN ('RUNNING', 'WAITING_CALLBACK')
+),
+
+-- Admission counts the held slots under the Provider's row lock before inserting its
+-- own, so the committed count never exceeds the configured limit. The limit is not a
+-- database fact: it is passed in, and the check runs only when it was. It is a snapshot
+-- of this moment across every Run, not of every moment.
+capacity_limits AS (
+    SELECT split_part(entry, '=', 1) AS provider_id, split_part(entry, '=', 2)::int AS slot_limit
+    FROM string_to_table(:'provider_capacity', ',') AS entry
+    WHERE entry <> ''
+),
+v_within_capacity AS (
+    SELECT 'provider ' || l.provider_id || ' holds ' || count(ps.node_run_id) || ' slots, limit ' || l.slot_limit AS detail
+    FROM capacity_limits l LEFT JOIN provider_slots ps ON ps.provider_id = l.provider_id
+    GROUP BY l.provider_id, l.slot_limit
+    HAVING count(ps.node_run_id) > l.slot_limit
+),
+
 results AS (
     SELECT 1 AS ord, 'run_exists' AS check_name, detail FROM v_run_exists
     UNION ALL SELECT 2, 'event_seq_contiguous', detail FROM v_event_seq
@@ -259,11 +295,19 @@ results AS (
     UNION ALL SELECT 5, 'run_status_matches_noderuns', detail FROM v_run_status
     UNION ALL SELECT 6, 'one_external_task_per_attempt', detail FROM v_external_task
     UNION ALL SELECT 7, 'at_most_one_succeeded_attempt', detail FROM v_succeeded
+    UNION ALL SELECT 8, 'provider_slot_live_noderun', detail FROM v_slot_live
+    UNION ALL SELECT 9, 'provider_slots_within_capacity', detail FROM v_within_capacity
 ),
 checks(ord, check_name) AS (
-    VALUES (1, 'run_exists'), (2, 'event_seq_contiguous'), (3, 'transition_has_event'),
-           (4, 'no_inflight_work_in_terminal_run'), (5, 'run_status_matches_noderuns'),
-           (6, 'one_external_task_per_attempt'), (7, 'at_most_one_succeeded_attempt')
+    SELECT * FROM (
+        VALUES (1, 'run_exists'), (2, 'event_seq_contiguous'), (3, 'transition_has_event'),
+               (4, 'no_inflight_work_in_terminal_run'), (5, 'run_status_matches_noderuns'),
+               (6, 'one_external_task_per_attempt'), (7, 'at_most_one_succeeded_attempt'),
+               (8, 'provider_slot_live_noderun')
+    ) AS always(ord, check_name)
+    UNION ALL
+    -- Listed, and so reported, only when the limits were passed in.
+    SELECT 9, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
 )
 SELECT line FROM (
     SELECT c.ord, 0 AS sub,
@@ -280,6 +324,8 @@ ORDER BY ord, sub, line;
 \echo 'run facts:'
 SELECT 'run ' || id || ' status=' || status || ' last_seq=' || last_seq FROM runs WHERE id = :'run_id';
 SELECT '  ' || rpad(nr.node_id, 16) || rpad(nr.status, 17) || 'attempts=' || nr.attempt_count
+       || coalesce('  queued_for=' || nr.capacity_provider_id, '')
+       || CASE WHEN ps.node_run_id IS NOT NULL THEN '  slot=' || ps.provider_id ELSE '' END
        || coalesce('  [' || string_agg(a.attempt_no || ':' || a.status
                          || coalesce(' bound=' || b.external_task_id, '')
                          || CASE WHEN a.poll_count > 0 THEN ' polls=' || a.poll_count ELSE '' END,
@@ -290,8 +336,9 @@ SELECT '  ' || rpad(nr.node_id, 16) || rpad(nr.status, 17) || 'attempts=' || nr.
 FROM node_runs nr
 LEFT JOIN node_attempts a ON a.node_run_id = nr.id
 LEFT JOIN callback_bindings b ON b.target_type = 'NODE_ATTEMPT' AND b.target_id = a.id
+LEFT JOIN provider_slots ps ON ps.node_run_id = nr.id
 WHERE nr.run_id = :'run_id'
-GROUP BY nr.id, nr.node_id, nr.status, nr.attempt_count, nr.ready_at
+GROUP BY nr.id, nr.node_id, nr.status, nr.attempt_count, nr.ready_at, nr.capacity_provider_id, ps.node_run_id, ps.provider_id
 ORDER BY nr.ready_at, nr.node_id;
 
 ROLLBACK;

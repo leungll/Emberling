@@ -433,8 +433,8 @@ func TestMigrations_ApplyTwice_Idempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM goose_db_version WHERE version_id > 0`).Scan(&applied); err != nil {
 		t.Fatalf("read goose version table: %v", err)
 	}
-	if applied != 12 {
-		t.Fatalf("applied migrations after two runs: want 12, got %d", applied)
+	if applied != 13 {
+		t.Fatalf("applied migrations after two runs: want 13, got %d", applied)
 	}
 }
 
@@ -657,9 +657,12 @@ func seedLegacyRun(ctx context.Context, t *testing.T, pool *pgxpool.Pool, uow st
 		f.runID, f.workflowID, fixtureTime); err != nil {
 		t.Fatalf("seed legacy run: %v", err)
 	}
-	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.NodeRuns().Create(ctx, newNodeRun(f.nodeRunID, f.runID, "node_input"))
-	}); err != nil {
+	// Raw SQL as for the Run: the Store maps node_runs columns later migrations add,
+	// which do not exist on the initial schema.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO node_runs (id, run_id, node_id, node_type, status, input, ready_at, updated_at)
+		VALUES ($1, $2, 'node_input', 'text_input', 'READY', '{}', $3, $3)`,
+		f.nodeRunID, f.runID, fixtureTime); err != nil {
 		t.Fatalf("seed legacy node run: %v", err)
 	}
 	return f

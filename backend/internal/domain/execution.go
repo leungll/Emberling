@@ -55,7 +55,12 @@ type NodeRun struct {
 	// retry backoff.
 	LatencyMs  *int64      `json:"latencyMs"`
 	TokenUsage *TokenUsage `json:"tokenUsage"`
-	UpdatedAt  time.Time   `json:"-"`
+	// CapacityDeferredAt and CapacityProviderID are set together the first time this
+	// NodeRun, still READY, was refused a slot of an asynchronous Provider, and are never
+	// changed afterwards: a later admission keeps them as the record that it waited.
+	CapacityDeferredAt *time.Time `json:"capacityDeferredAt"`
+	CapacityProviderID *string    `json:"capacityProviderId"`
+	UpdatedAt          time.Time  `json:"-"`
 }
 
 // NodeAttempt records one real execution or external dispatch of an EXECUTOR node.

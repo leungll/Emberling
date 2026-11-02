@@ -49,6 +49,7 @@ type Tx interface {
 	AgentContextVersions() AgentContextVersionRepository
 	AgentStateVersions() AgentStateVersionRepository
 	ExecutionFacts() ExecutionFactRepository
+	ProviderSlots() ProviderSlotRepository
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
@@ -242,6 +243,11 @@ type NodeRunRepository interface {
 	// MarkWaiting conditionally moves a RUNNING NodeRun to WAITING_CALLBACK and stamps
 	// waiting_at. It returns domain.ErrStaleClaim when the row is not RUNNING.
 	MarkWaiting(ctx context.Context, nodeRunID string, now time.Time) error
+	// MarkCapacityDeferred records that a READY NodeRun was refused a slot of providerID.
+	// It writes only while capacity_deferred_at is still NULL and the NodeRun is READY,
+	// and reports whether this call was the first refusal: only the first one writes the
+	// NODE_WAITING_CAPACITY Event in the caller's transaction.
+	MarkCapacityDeferred(ctx context.Context, nodeRunID, providerID string, now time.Time) (bool, error)
 }
 
 // NodeRunOutcome bundles the fields MarkSucceeded writes together with the terminal
@@ -651,6 +657,42 @@ type EventRepository interface {
 	// ListForNodeRun returns the committed Events of one NodeRun of runID whose type is
 	// one of types, ascending by seq. The limit bounds the read.
 	ListForNodeRun(ctx context.Context, runID, nodeRunID string, types []domain.EventType, limit int) ([]domain.Event, error)
+}
+
+// ProviderSlotRepository persists Provider occupancy facts: which NodeRun holds a slot of
+// which asynchronous Provider. Every write happens inside the caller's transaction, which
+// already holds the Run aggregate lock; the Provider row lock is always taken after it.
+type ProviderSlotRepository interface {
+	// SeedLocks inserts one provider_slot_locks row per id; existing rows are kept.
+	SeedLocks(ctx context.Context, providerIDs []string) error
+	// LockProvider takes the Provider row lock (SELECT ... FOR UPDATE) for the rest of the
+	// transaction; a missing row is an error, because an unseeded Provider cannot be
+	// serialized.
+	LockProvider(ctx context.Context, providerID string) error
+	// CountHeld counts the provider_slots rows of providerID. Read after LockProvider
+	// returned, it sees every admission that committed under that lock.
+	CountHeld(ctx context.Context, providerID string) (int, error)
+	// Acquire inserts the occupancy row; a primary-key conflict is returned as an error,
+	// because a READY NodeRun can never already hold a slot.
+	Acquire(ctx context.Context, nodeRunID, providerID string, now time.Time) error
+	// Release deletes the occupancy row and reports which Provider it belonged to. A
+	// NodeRun that holds no slot releases nothing, which is not an error.
+	Release(ctx context.Context, nodeRunID string) (providerID string, released bool, err error)
+	// CountEarlierDeferred counts the READY, already-refused NodeRuns of providerID in
+	// other Runs that are still RUNNING or PAUSED and whose (ready_at, id) sorts before
+	// key. A result above zero means an earlier arrival is still queued; the result plus
+	// one is the queue position.
+	CountEarlierDeferred(ctx context.Context, providerID, excludeRunID string, key QueueKey) (int, error)
+	// NextDeferredRun returns the Run of the earliest READY, already-refused NodeRun of
+	// providerID whose Run is still RUNNING or PAUSED.
+	NextDeferredRun(ctx context.Context, providerID string) (runID string, found bool, err error)
+}
+
+// QueueKey orders queued NodeRuns of one Provider: ready_at first, NodeRun id as the
+// tie-break, so the order is total and the same on every path.
+type QueueKey struct {
+	ReadyAt   time.Time
+	NodeRunID string
 }
 
 // RunLock is proof that the caller holds the Run aggregate lock inside the current

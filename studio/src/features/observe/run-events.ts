@@ -30,6 +30,7 @@ const GROUPS_OF: Record<EventType, readonly EventGroup[]> = {
   NODE_COMPLETED: ['state'],
   NODE_FAILED: ['state', 'errors'],
   NODE_RETRYING: ['state', 'errors'],
+  NODE_WAITING_CAPACITY: ['waits'],
   NODE_DISPATCHED: ['waits'],
   NODE_CALLBACK_RECEIVED: ['waits'],
   AGENT_STARTED: ['state'],
@@ -156,6 +157,8 @@ export function eventSummary(model: RunModel, e: RunEvent): string {
             next ? offsetText(new Date(next).getTime() - new Date(model.runStart).getTime()) : null,
           );
     }
+    case 'NODE_WAITING_CAPACITY':
+      return typeof p.position === 'number' ? s.queued(p.position) : '';
     case 'NODE_COMPLETED':
       return typeof p.latencyMs === 'number' ? s.took(duration(p.latencyMs)) : '';
     case 'NODE_FAILED':

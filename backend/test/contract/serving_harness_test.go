@@ -160,6 +160,9 @@ type servingFixture struct {
 	callbacks *servingCallbacks
 	// held receives one label per request the Provider's barrier holds.
 	held chan string
+	// capacity, when set, limits the Backends this fixture starts to that many in-flight
+	// tasks per Provider.
+	capacity map[string]int
 }
 
 func newServingFixture(t *testing.T, callbacksOpen bool) *servingFixture {
@@ -200,9 +203,10 @@ func newServingFixture(t *testing.T, callbacksOpen bool) *servingFixture {
 func (f *servingFixture) startBackend(t *testing.T, previous *testEnv, clock domain.Clock) *testEnv {
 	t.Helper()
 	opts := testEnvOptions{
-		MockTaskBaseURL: f.provider.URL,
-		TaskClient:      &http.Client{Timeout: e2eHTTPTimeout},
-		Clock:           clock,
+		MockTaskBaseURL:  f.provider.URL,
+		TaskClient:       &http.Client{Timeout: e2eHTTPTimeout},
+		Clock:            clock,
+		ProviderCapacity: f.capacity,
 	}
 	if previous != nil {
 		opts.Pool = previous.pool

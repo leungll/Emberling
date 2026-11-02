@@ -180,6 +180,17 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 				return nil
 			}
 			nr := byNodeID[readyIDs[0]]
+			admission, err := s.admitCandidate(ctx, tx, lock, run, def, nodeRuns, nr, now)
+			if err != nil {
+				return err
+			}
+			if !admission.admitted {
+				if admission.deferred {
+					lastSeq = lock.LastSeq()
+					notifyRunID = run.ID
+				}
+				return nil
+			}
 			won, err := tx.NodeRuns().ClaimReady(ctx, nr.ID, now)
 			if err != nil {
 				return err
@@ -200,6 +211,21 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 			return nil
 		}
 		nr := byNodeID[nodeID]
+		// Provider capacity admission sits between the scheduler's choice and the claim.
+		// A refused candidate ends this Advance unclaimed even if the Run has other READY
+		// NodeRuns: SelectNextToExecute is the only source of execution order, and
+		// admission answers "may this candidate take a slot now", never "pick another".
+		admission, err := s.admitCandidate(ctx, tx, lock, run, def, nodeRuns, nr, now)
+		if err != nil {
+			return err
+		}
+		if !admission.admitted {
+			if admission.deferred {
+				lastSeq = lock.LastSeq()
+				notifyRunID = run.ID
+			}
+			return nil
+		}
 		won, err := tx.NodeRuns().ClaimReady(ctx, nr.ID, now)
 		if err != nil {
 			return err

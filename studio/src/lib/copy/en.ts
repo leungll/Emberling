@@ -319,6 +319,7 @@ export const en = {
       NODE_READY: 'Step queued',
       NODE_STARTED: 'Step started',
       NODE_RETRYING: 'Step will retry',
+      NODE_WAITING_CAPACITY: 'Waiting for a free slot',
       NODE_DISPATCHED: 'Sent to external service',
       NODE_CALLBACK_RECEIVED: 'External result received',
       NODE_COMPLETED: 'Step succeeded',

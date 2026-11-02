@@ -254,6 +254,11 @@ services:
       # The sandbox_test Tool is registered only when this is set. Set it to an empty value
       # to run without a sandbox runner.
       EMBERLING_SANDBOX_RUNNER_BASE_URL: ${EMBERLING_SANDBOX_RUNNER_BASE_URL-http://sandboxrunner:9103}
+      # Optional in-flight task limit per asynchronous Provider, as
+      # "<provider id>=<n>,...", for example "mock-task-provider-v1=2". Empty by default:
+      # no Provider is limited. Read once at startup; the serving-capacity demo variant
+      # recreates the backend with it set and then without it again.
+      EMBERLING_PROVIDER_CAPACITY: ${EMBERLING_PROVIDER_CAPACITY:-}
       EMBERLING_RECONCILE_INTERVAL: 5s
       EMBERLING_RECONCILE_BATCH_SIZE: "100"
       EMBERLING_PENDING_CALLBACK_TTL: 24h

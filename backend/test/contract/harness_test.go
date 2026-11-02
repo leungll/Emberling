@@ -186,6 +186,11 @@ type testEnvOptions struct {
 	// with a barrier instead of sleeping.
 	WorkHooks work.Hooks
 
+	// ProviderCapacity limits the in-flight tasks per asynchronous Provider, as the
+	// EMBERLING_PROVIDER_CAPACITY setting would; the harness seeds the Provider lock rows
+	// the way startup does. Empty leaves every Provider unlimited.
+	ProviderCapacity map[string]int
+
 	// StreamHooks is handed to api.Deps, so a test can hold the SSE cursor loop at its
 	// query-to-wait switch with a barrier instead of sleeping.
 	StreamHooks api.StreamHooks
@@ -432,6 +437,18 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 			SigningSecret: []byte(testCallbackSigningSecret),
 			PendingTTL:    testPendingCallbackTTL,
 		},
+		ProviderCapacity: opts.ProviderCapacity,
+	}
+	if len(opts.ProviderCapacity) > 0 {
+		ids := make([]string, 0, len(opts.ProviderCapacity))
+		for id := range opts.ProviderCapacity {
+			ids = append(ids, id)
+		}
+		if err := uow.WithinTx(context.Background(), func(ctx context.Context, tx store.Tx) error {
+			return tx.ProviderSlots().SeedLocks(ctx, ids)
+		}); err != nil {
+			t.Fatalf("seed provider slot locks: %v", err)
+		}
 	}
 
 	definitionService := service.NewDefinitionService(deps)

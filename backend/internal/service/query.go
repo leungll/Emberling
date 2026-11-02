@@ -54,6 +54,20 @@ type NodeRunDetail struct {
 	NodeRun          domain.NodeRun
 	Attempts         []domain.NodeAttempt
 	CallbackBindings map[string]domain.CallbackBinding
+	// CapacityWait is the live queue position of a NodeRun that is READY and waiting
+	// for a Provider slot, computed in the same read as the NodeRun; nil otherwise.
+	CapacityWait *CapacityWait
+}
+
+// CapacityWait is the read-time projection of one queued NodeRun's place in its
+// Provider's queue: how many slots the Provider has and holds right now, and the position
+// this NodeRun's Run would be admitted at (1 is next). The NODE_WAITING_CAPACITY Event
+// records the position at the first refusal; this one moves as other Runs finish.
+type CapacityWait struct {
+	ProviderID string
+	Limit      int
+	Held       int
+	Position   int
 }
 
 // Snapshot reads the Run, its NodeRuns and LastSeq inside one transaction so they are
@@ -150,7 +164,11 @@ func (s *QueryService) NodeRunDetail(ctx context.Context, runID, nodeRunID strin
 		for _, b := range bindings {
 			byAttempt[b.TargetID] = b
 		}
-		detail = NodeRunDetail{NodeRun: nodeRun, Attempts: attempts, CallbackBindings: byAttempt}
+		wait, err := s.capacityWaitOf(ctx, tx, nodeRun)
+		if err != nil {
+			return err
+		}
+		detail = NodeRunDetail{NodeRun: nodeRun, Attempts: attempts, CallbackBindings: byAttempt, CapacityWait: wait}
 		return nil
 	})
 	if err != nil {

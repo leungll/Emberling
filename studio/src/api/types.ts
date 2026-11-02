@@ -498,6 +498,25 @@ export interface NodeRun {
   /** Retry bookkeeping. Absent from the spec's Node Detail example; present on the wire. */
   attemptCount?: number;
   nextAttemptAt?: string | null;
+  /**
+   * When a READY step was first refused a slot of its Provider and which Provider that
+   * was. Both are set together, stay set once the step is admitted, and are `null` for a
+   * step that never waited. Present on the wire.
+   */
+  capacityDeferredAt?: string | null;
+  capacityProviderId?: string | null;
+}
+
+/**
+ * The live place of a queued step in its Provider's queue, read with the step: `held` of
+ * `limit` slots are in use, and `position` 1 is admitted next. The NODE_WAITING_CAPACITY
+ * Event keeps the position at the first refusal; this one moves as other Runs finish.
+ */
+export interface CapacityWait {
+  providerId: string;
+  limit: number;
+  held: number;
+  position: number;
 }
 
 /** Projection of the Callback Binding. It never carries a token hash or credential. */
@@ -546,6 +565,8 @@ export interface RunSnapshot {
 export interface NodeRunDetail {
   nodeRun: NodeRun;
   attempts: NodeAttempt[];
+  /** `null` unless the step is READY and waiting for a Provider slot. */
+  capacityWait?: CapacityWait | null;
 }
 
 /**
@@ -776,6 +797,7 @@ export type NodeEventType =
   | 'NODE_READY'
   | 'NODE_STARTED'
   | 'NODE_RETRYING'
+  | 'NODE_WAITING_CAPACITY'
   | 'NODE_DISPATCHED'
   | 'NODE_CALLBACK_RECEIVED'
   | 'NODE_COMPLETED'
@@ -795,7 +817,7 @@ export type AgentEventType =
   | 'AGENT_FAILED';
 
 /**
- * The 23 MVP Event types. RUN_CANCELLED, NODE_SKIPPED, NODE_CANCELLED and the
+ * The 24 MVP Event types. RUN_CANCELLED, NODE_SKIPPED, NODE_CANCELLED and the
  * MODEL_STREAM_* types are Phase 2 and are absent on purpose.
  */
 export type EventType = RunEventType | NodeEventType | AgentEventType;
