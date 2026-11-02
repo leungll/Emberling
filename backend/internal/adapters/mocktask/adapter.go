@@ -199,7 +199,10 @@ func (a *Adapter) buildRequest(prompt string, reference *domain.ImageRef, option
 		// The Provider's own outcome payload is used; an explicit payload would override
 		// it (cmd/mockprovider: callbackPayload).
 		request.Outcome = name
-	case "lost", "duplicate":
+	case "lost", "duplicate", "noResponse":
+		// noResponse asks the Provider to accept the task and drop the connection without
+		// answering. The Provider honours it only with its test controls enabled and
+		// rejects it otherwise, so it cannot be triggered against a default deployment.
 		request.DelayMs = name
 		request.Payload = successPayload(a.baseURL, prompt, options)
 	case "delay":

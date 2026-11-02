@@ -491,3 +491,48 @@ func TestMockTaskAdapter_Dispatch_TransportFailure_ErrorCarriesNoURLOrTransportT
 		})
 	}
 }
+
+// TestMockTaskAdapter_Dispatch_NoResponseDirective_AsksForResponseLossAndIsUncertain pins
+// the `mock:noResponse` directive: the dispatch asks the Provider to accept the task and
+// drop the connection without answering (delayMs "noResponse"), still carries the success
+// payload its callback will deliver, and the lost answer is reported as an uncertain
+// failure, because the Provider may have created the task. Text after a second colon is
+// ordinary prompt content, so a template can append the user's own request.
+func TestMockTaskAdapter_Dispatch_NoResponseDirective_AsksForResponseLossAndIsUncertain(t *testing.T) {
+	bodies := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode dispatch body: %v", err)
+		}
+		bodies <- body
+		conn, _, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Errorf("hijack: %v", err)
+			return
+		}
+		_ = conn.Close()
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := New(server.URL, server.Client()).Dispatch(
+		context.Background(), "mock:noResponse:a watercolor portrait", nil, map[string]any{"width": float64(512)}, testCallback(), "nr_1")
+	if err == nil {
+		t.Fatal("Dispatch() error = nil, want a failure for a dropped response")
+	}
+	if !isUncertain(err) {
+		t.Fatalf("Dispatch() error = %v, want an uncertain failure (the Provider may have accepted the task)", err)
+	}
+
+	body := <-bodies
+	if got := body["delayMs"]; got != "noResponse" {
+		t.Errorf("delayMs = %v, want %q", got, "noResponse")
+	}
+	if got := body["idempotencyKey"]; got != "nr_1" {
+		t.Errorf("idempotencyKey = %v, want the Runtime's key", got)
+	}
+	payload, _ := body["payload"].(map[string]any)
+	if payload["status"] != "SUCCEEDED" {
+		t.Errorf("payload = %v, want the success payload the later callback delivers", body["payload"])
+	}
+}
