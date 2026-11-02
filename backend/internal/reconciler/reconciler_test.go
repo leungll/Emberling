@@ -95,13 +95,7 @@ type fakeTx struct {
 	toolAttempts *fakeToolAttemptRepo
 }
 
-func (t *fakeTx) ToolAttempts() store.ToolAttemptRepository {
-	if t.toolAttempts == nil {
-		// A nil repository makes any orphan scan call panic, proving it never happened.
-		return nil
-	}
-	return t.toolAttempts
-}
+func (t *fakeTx) ToolAttempts() store.ToolAttemptRepository { return t.toolAttempts }
 
 func (t *fakeTx) NodeRuns() store.NodeRunRepository                 { return t.nodeRuns }
 func (t *fakeTx) NodeAttempts() store.NodeAttemptRepository         { return t.attempts }
@@ -140,17 +134,26 @@ func (r *fakeAgentRunRepo) ListExpired(context.Context, time.Time, int) ([]domai
 	return r.expired, nil
 }
 
-// fakeToolAttemptRepo serves the orphan scan's lister and records the runner it was asked
-// about. Like the other fakes, any other call panics on the embedded nil interface.
+// fakeToolAttemptRepo serves the orphan scan's lister, recording the runner it was asked
+// about, and the due Tool poll lister. Like the other fakes, any other call panics on the
+// embedded nil interface, so a scan that claimed or cleared a poll itself would be caught.
 type fakeToolAttemptRepo struct {
 	store.ToolAttemptRepository
 	orphans    []domain.ToolAttempt
 	runnerSeen []string
+	duePolls   []store.DueToolPoll
+	// duePollLimits records the limit of every ListDuePolls call.
+	duePollLimits []int
 }
 
 func (r *fakeToolAttemptRepo) ListOrphanStarted(_ context.Context, currentRunnerID string, _ time.Time, _ int) ([]domain.ToolAttempt, error) {
 	r.runnerSeen = append(r.runnerSeen, currentRunnerID)
 	return r.orphans, nil
+}
+
+func (r *fakeToolAttemptRepo) ListDuePolls(_ context.Context, _ time.Time, limit int) ([]store.DueToolPoll, error) {
+	r.duePollLimits = append(r.duePollLimits, limit)
+	return r.duePolls, nil
 }
 
 type fakeUoW struct{ tx *fakeTx }
@@ -172,6 +175,9 @@ type fakeExecutor struct {
 
 	pollCalls []service.PollAttempt
 	pollFunc  func(service.PollAttempt) (service.PollAttemptOutcome, error)
+
+	toolPollCalls []service.PollToolAttempt
+	toolPollFunc  func(service.PollToolAttempt) (service.PollToolAttemptOutcome, error)
 
 	agentTurnCalls    []agentCall
 	agentToolCalls    []agentCall
@@ -236,6 +242,14 @@ func (e *fakeExecutor) PollAttempt(_ context.Context, req service.PollAttempt) (
 	return service.PollAttemptOutcome{Kind: service.PollAttemptSkipped, SkipReason: service.PollSkipNotClaimed}, nil
 }
 
+func (e *fakeExecutor) PollToolAttempt(_ context.Context, req service.PollToolAttempt) (service.PollToolAttemptOutcome, error) {
+	e.toolPollCalls = append(e.toolPollCalls, req)
+	if e.toolPollFunc != nil {
+		return e.toolPollFunc(req)
+	}
+	return service.PollToolAttemptOutcome{Kind: service.PollAttemptSkipped, SkipReason: service.PollSkipNotClaimed}, nil
+}
+
 func newTestReconciler(t *testing.T, exec *fakeExecutor, tx *fakeTx, logBuf *bytes.Buffer) *Reconciler {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -256,6 +270,7 @@ func emptyFakeTx() *fakeTx {
 		agentTurns:   &fakeAgentTurnRepo{},
 		agentActions: &fakeAgentActionRepo{},
 		agentRuns:    &fakeAgentRunRepo{},
+		toolAttempts: &fakeToolAttemptRepo{},
 	}
 }
 
@@ -602,15 +617,82 @@ func TestReconciler_OrphanScan_HandsEachOrphanToUseCase(t *testing.T) {
 }
 
 // TestReconciler_OrphanScan_SkippedWithoutRunnerID proves a Reconciler with no runner
-// identity never scans for orphans: the nil Tool Attempt repository would panic otherwise.
+// identity never scans for orphans: the orphan lister is never asked about any runner.
 func TestReconciler_OrphanScan_SkippedWithoutRunnerID(t *testing.T) {
 	exec := &fakeExecutor{}
+	tx := emptyFakeTx()
+	tx.toolAttempts.orphans = []domain.ToolAttempt{{ID: "ta_1"}}
 	var logBuf bytes.Buffer
-	report, err := newTestReconciler(t, exec, emptyFakeTx(), &logBuf).RunOnce(context.Background())
+	report, err := newTestReconciler(t, exec, tx, &logBuf).RunOnce(context.Background())
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(exec.orphanCalls) != 0 || report.OrphanToolAttemptsFound != 0 {
-		t.Errorf("orphan calls = %v, report = %+v, want no orphan scan", exec.orphanCalls, report)
+	if len(tx.toolAttempts.runnerSeen) != 0 || len(exec.orphanCalls) != 0 || report.OrphanToolAttemptsFound != 0 {
+		t.Errorf("runners asked = %v, orphan calls = %v, report = %+v, want no orphan scan", tx.toolAttempts.runnerSeen, exec.orphanCalls, report)
+	}
+}
+
+// TestReconciler_DueToolPolls_OnlyCallsPollToolAttempt proves the Tool row of the due-poll
+// scan only discovers work: every row the Tool Attempt lister returns is handed to the Tool
+// poll use case with its persisted identifiers, bounded by the batch limit, each outcome
+// kind lands in its own Report count, the Reconciler never claims or clears a poll itself,
+// and an error from one Attempt is collected without stopping the others.
+func TestReconciler_DueToolPolls_OnlyCallsPollToolAttempt(t *testing.T) {
+	tx := emptyFakeTx()
+	tx.toolAttempts.duePolls = []store.DueToolPoll{
+		{AttemptID: "ta_running", ActionID: "act_1", PollCount: 0},
+		{AttemptID: "ta_broken", ActionID: "act_2", PollCount: 4},
+		{AttemptID: "ta_resumed", ActionID: "act_3", PollCount: 1},
+		{AttemptID: "ta_returned", ActionID: "act_4", PollCount: 1},
+		{AttemptID: "ta_duplicate", ActionID: "act_5", PollCount: 2},
+		{AttemptID: "ta_skipped", ActionID: "act_6", PollCount: 3},
+	}
+	providerDown := errors.New("provider connection refused")
+	exec := &fakeExecutor{
+		toolPollFunc: func(req service.PollToolAttempt) (service.PollToolAttemptOutcome, error) {
+			switch req.AttemptID {
+			case "ta_running":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptClaimedNotFinal}, nil
+			case "ta_broken":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptClaimedNotFinal}, providerDown
+			case "ta_resumed":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptResumed}, nil
+			case "ta_returned":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptReturned}, nil
+			case "ta_duplicate":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptDuplicate}, nil
+			default:
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptSkipped, SkipReason: service.PollSkipNotClaimed}, nil
+			}
+		},
+	}
+	var logBuf bytes.Buffer
+	rec := newTestReconciler(t, exec, tx, &logBuf)
+
+	report, err := rec.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(exec.toolPollCalls) != len(tx.toolAttempts.duePolls) {
+		t.Fatalf("PollToolAttempt calls: want %d (one error must not stop the scan), got %d", len(tx.toolAttempts.duePolls), len(exec.toolPollCalls))
+	}
+	for i, row := range tx.toolAttempts.duePolls {
+		want := service.PollToolAttempt{AttemptID: row.AttemptID, ActionID: row.ActionID}
+		if exec.toolPollCalls[i] != want {
+			t.Fatalf("PollToolAttempt call %d: want %+v, got %+v", i, want, exec.toolPollCalls[i])
+		}
+	}
+	if len(tx.toolAttempts.duePollLimits) != 1 || tx.toolAttempts.duePollLimits[0] != 50 {
+		t.Fatalf("ListDuePolls: want one call bounded by the batch limit 50, got %v", tx.toolAttempts.duePollLimits)
+	}
+	if len(exec.resumeCalls) != 0 || len(exec.pollCalls) != 0 {
+		t.Fatalf("ResumeNode calls %d, PollAttempt calls %d: want none, only PollToolAttempt enters the Tool resume path", len(exec.resumeCalls), len(exec.pollCalls))
+	}
+	if report.DueToolPollsFound != 6 || report.ToolPollsClaimed != 3 || report.ToolPollsResumed != 1 || report.ToolPollsReturned != 1 ||
+		report.ToolPollsDuplicate != 1 || report.ToolPollsSkipped != 1 {
+		t.Fatalf("report: want found 6, claimed 3, resumed 1, returned 1, duplicate 1, skipped 1, got %+v", report)
+	}
+	if len(report.Errors) != 1 || !errors.Is(report.Errors[0], providerDown) || !strings.Contains(report.Errors[0].Error(), "ta_broken") {
+		t.Fatalf("report.Errors: want only the ta_broken error, got %v", report.Errors)
 	}
 }

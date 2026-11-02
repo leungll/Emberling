@@ -475,8 +475,9 @@ func TestResumeNode_PollDoesNotTouchPendingCallbacks(t *testing.T) {
 }
 
 // TestResumeNode_PollForToolAttempt_NotSupported proves a poll result for an external
-// task bound to an Agent Tool Attempt is refused explicitly: asynchronous Tools resume by
-// callback only, and the refusal writes nothing and leaves the callback path intact.
+// task bound to the Attempt of an Agent Tool that declares no poll policy is refused
+// explicitly: such a Tool resumes by callback only, and the refusal writes nothing and
+// leaves the callback path intact.
 func TestResumeNode_PollForToolAttempt_NotSupported(t *testing.T) {
 	tool := &agentAsyncTool{}
 	h, run, outcome, token := agentDispatchedAsync(t, "wf-agent-poll-unsupported", tool, nil)
