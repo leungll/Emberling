@@ -175,6 +175,7 @@ function missingTool(name: string, description: string): ToolMetadata {
     requires: [],
     countsTowardGenerationLimit: false,
     usesImageModel: false,
+    usesReviewModel: false,
   };
 }
 

@@ -55,6 +55,12 @@ export const FIELD_SPEC: Record<string, FieldSpec> = {
   },
   'agent.modelId': { label: f.model, widget: 'model', section: 'model' },
   'agent.imageModelId': { label: f.imageModel, widget: 'model', section: 'model' },
+  'agent.reviewModelId': {
+    label: f.reviewModel,
+    widget: 'model',
+    section: 'model',
+    optional: true,
+  },
   'agent.allowedTools': { label: f.tools, widget: 'tools', section: 'tools' },
   'agent.maxTurns': {
     label: f.maxTurns,
@@ -232,6 +238,17 @@ export function imageToolsOf(node: Node, tools: ReadonlyMap<string, ToolMetadata
   return list
     .map((x) => (typeof x === 'string' ? tools.get(x) : undefined))
     .filter((x): x is ToolMetadata => !!x && x.usesImageModel);
+}
+
+/** The review tools of an agent: they review with its review model, or the mock policy. */
+export function reviewToolsOf(
+  node: Node,
+  tools: ReadonlyMap<string, ToolMetadata>,
+): ToolMetadata[] {
+  const list = Array.isArray(node.config.allowedTools) ? node.config.allowedTools : [];
+  return list
+    .map((x) => (typeof x === 'string' ? tools.get(x) : undefined))
+    .filter((x): x is ToolMetadata => !!x && x.usesReviewModel);
 }
 
 /** A config value as plain text: strings as they are, anything else as JSON. */
