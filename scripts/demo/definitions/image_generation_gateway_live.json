@@ -1,0 +1,48 @@
+{
+  "name": "Photo Restyle (Live, Task Gateway)",
+  "description": "A creative brief and one reference photo go through a prompt template into image generation, which a real image model behind the task gateway serves as an asynchronous task",
+  "nodes": [
+    {
+      "id": "node_brief",
+      "type": "text_input",
+      "name": "Creative Brief",
+      "position": {"x": 0, "y": 0},
+      "config": {"inputKey": "brief", "label": "Creative Brief", "required": true}
+    },
+    {
+      "id": "node_reference",
+      "type": "image_input",
+      "name": "Reference Photo",
+      "position": {"x": 0, "y": 160},
+      "config": {"inputKey": "reference", "required": true, "acceptedMediaTypes": ["image/png", "image/jpeg"], "maxSizeBytes": 10485760}
+    },
+    {
+      "id": "node_prompt",
+      "type": "prompt_template",
+      "name": "Prompt",
+      "position": {"x": 200, "y": 0},
+      "config": {"template": "Restyle the reference photo as follows: {{text}}. Keep the subject, composition and identity recognizable."}
+    },
+    {
+      "id": "node_image",
+      "type": "image_generation",
+      "name": "Image Generation",
+      "position": {"x": 400, "y": 80},
+      "config": {"modelId": "gateway-seedream-5.0-pro", "width": 1024}
+    },
+    {
+      "id": "node_output",
+      "type": "media_output",
+      "name": "Output",
+      "position": {"x": 600, "y": 80},
+      "config": {}
+    }
+  ],
+  "edges": [
+    {"id": "edge_brief_prompt", "source": "node_brief", "sourceHandle": "text", "target": "node_prompt", "targetHandle": "text"},
+    {"id": "edge_prompt_image", "source": "node_prompt", "sourceHandle": "text", "target": "node_image", "targetHandle": "prompt"},
+    {"id": "edge_reference_image", "source": "node_reference", "sourceHandle": "image", "target": "node_image", "targetHandle": "reference"},
+    {"id": "edge_image_output", "source": "node_image", "sourceHandle": "image", "target": "node_output", "targetHandle": "image"},
+    {"id": "edge_brief_output", "source": "node_brief", "sourceHandle": "text", "target": "node_output", "targetHandle": "caption"}
+  ]
+}

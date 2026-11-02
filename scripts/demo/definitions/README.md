@@ -133,3 +133,53 @@ finish in 5 to 15 minutes, well inside the 30 minute deadline. GPT Image 2.5 is 
 Every Run spends real money on the provider account: up to six image generations and up
 to sixteen decision calls. Set a spending limit on the provider account before running
 it.
+
+## Photo Restyle (Live, Task Gateway)
+
+`image_generation_gateway_live.json` is the workflow path to a real image model: a
+creative brief goes through a prompt template, and together with one reference photo
+into an `image_generation` node, whose image reaches the output with the brief as its
+caption. The node selects `gateway-seedream-5.0-pro`, a model served by the task gateway.
+
+The task gateway is a small demo service that wraps a synchronous Images API model as an
+asynchronous task, speaking exactly the protocol of the Mock Provider: it accepts the
+task with an idempotency key, generates the image in the background, and reports it in a
+callback. The same Definition therefore runs against the Mock Provider by selecting
+`image-model-v1` instead; only the model ID differs. The gateway keeps everything in
+memory, so a gateway restart loses its tasks, and such a task ends when its Attempt
+deadline passes. The node's `width` is not sent upstream: the Images API takes no width,
+so the generated image has the model's own default size.
+
+Configure the gateway in addition to the image group above. Both services read the same
+gateway model list, whose ids must start with `gateway-`:
+
+```sh
+export EMBERLING_TASK_GATEWAY_BASE_URL=http://taskgateway:9104
+export EMBERLING_TASK_GATEWAY_MODELS='[
+  {"id":"gateway-seedream-5.0-pro","model":"bytedance-seed/seedream-5-0-pro","displayName":"Seedream 5.0 Pro (gateway)"}
+]'
+
+docker compose -f deploy/compose.yaml --profile mock --profile gateway up -d --build
+```
+
+`GET http://localhost:8080/api/models` should list `gateway-seedream-5.0-pro`. Save the
+Definition, upload one photo and start a Run:
+
+```sh
+created=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data-binary @scripts/demo/definitions/image_generation_gateway_live.json \
+  http://localhost:8080/api/definitions)
+workflow_id=$(jq -r '.workflowId' <<<"$created")
+version=$(jq -r '.version' <<<"$created")
+ref=$(curl -fsS -F "file=@photo.jpg;type=image/jpeg" http://localhost:8080/api/assets)
+
+jq -n --arg wf "$workflow_id" --argjson v "$version" --argjson ref "$ref" \
+  '{workflowId: $wf, definitionVersion: $v,
+    input: {brief: "A hand-made clay stop-motion look", reference: $ref}}' |
+  curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- \
+    http://localhost:8080/api/runs | jq -r '.id'
+```
+
+The image NodeRun's Callback Binding names the provider `task-gateway-v1`, and the output
+image is an `EXTERNAL` reference to `http://localhost:9104/v1/images/...`, which opens in
+the browser until the gateway restarts. Each Run makes one upstream image call.

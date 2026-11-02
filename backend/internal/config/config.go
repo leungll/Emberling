@@ -77,6 +77,7 @@ type Config struct {
 	ModelProvider   ModelProvider
 	OpenAIModel     OpenAIModel
 	ImageModel      ImageModel
+	TaskGateway     TaskGateway
 	Production      Production
 	Callback        Callback
 	SandboxRunner   SandboxRunner
@@ -240,6 +241,7 @@ func Load(env func(string) string) (Config, error) {
 		},
 		OpenAIModel: l.openAIModel(),
 		ImageModel:  l.imageModel(),
+		TaskGateway: l.taskGateway(),
 		Production: Production{
 			BaseURL: l.optionalProviderURL(KeyProductionBaseURL),
 		},
@@ -309,6 +311,7 @@ func (c Config) Validate() error {
 		}
 	}
 	missing = append(missing, c.ImageModel.missingKeys()...)
+	missing = append(missing, c.TaskGateway.missingKeys()...)
 	if len(missing) > 0 {
 		return &MissingConfigError{Keys: missing}
 	}
@@ -359,7 +362,10 @@ func (c Config) Validate() error {
 			return &InvalidConfigError{Key: KeyModels, Reason: strings.Join(problems, "; ")}
 		}
 	}
-	return c.ImageModel.validate(c.OpenAIModel)
+	if err := c.ImageModel.validate(c.OpenAIModel); err != nil {
+		return err
+	}
+	return c.TaskGateway.validate(c.OpenAIModel, c.ImageModel)
 }
 
 // loader accumulates every problem in one pass instead of failing on the first key.
