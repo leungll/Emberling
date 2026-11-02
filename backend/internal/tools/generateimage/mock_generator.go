@@ -60,6 +60,22 @@ type assetRequest struct {
 type assetResponse struct {
 	AssetID  string `json:"assetId"`
 	ImageURL string `json:"imageUrl"`
+	// Usage is the Provider's charge for the generation, absent when it reports none. It
+	// is kept raw so a member of an unexpected shape yields no charge instead of failing
+	// an image that was already generated.
+	Usage json.RawMessage `json:"usage"`
+}
+
+// reportedCost reads usage.cost as the Provider stated it, or nil when the answer carries
+// no usage or a usage whose cost is not a number.
+func reportedCost(usage json.RawMessage) *float64 {
+	var reported struct {
+		Cost *float64 `json:"cost"`
+	}
+	if len(usage) == 0 || json.Unmarshal(usage, &reported) != nil {
+		return nil
+	}
+	return reported.Cost
 }
 
 // Generate sends one generation request and opens the generated image.
@@ -112,7 +128,9 @@ func (g *MockGenerator) Generate(ctx context.Context, request ImageRequest) (Gen
 	if err != nil {
 		return GeneratedImage{}, err
 	}
-	return GeneratedImage{Content: content}, nil
+	// The charge is carried as the Provider stated it; the Tool decides whether it is a
+	// recordable amount. No model name is reported: the mock model has none.
+	return GeneratedImage{Content: content, Cost: reportedCost(generated.Usage)}, nil
 }
 
 // openImage fetches the generated image from the configured Provider. Errors carry fixed

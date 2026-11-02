@@ -125,20 +125,52 @@ func TestMockProvider_TaskResult_CallerSuppliedUsage_IsKept(t *testing.T) {
 	}
 }
 
-func TestMockProvider_TaskResult_WithoutTestControls_CarriesNoCost(t *testing.T) {
+// TestMockProvider_TaskResult_WithoutTestControls_CarriesFixedCost: the fixed charge is
+// part of the simulated Provider itself, not of the control surface, so a Server built
+// without test controls prices its task results the same way, on the callback and on the
+// status query, and a failed task still reports none.
+func TestMockProvider_TaskResult_WithoutTestControls_CarriesFixedCost(t *testing.T) {
 	receiver := newCallbackReceiver()
 	defer receiver.Close()
 	dispatcher := NewDispatcher(nil)
-	notify := make(chan callbackOutcome, 1)
+	notify := make(chan callbackOutcome, 2)
 	dispatcher.notify = notify
 	srv := httptest.NewServer(NewServer(dispatcher))
 	defer srv.Close()
 
 	resp := postJSON(t, srv.URL+"/v1/tasks", taskRequest{ExternalTaskID: "task-plain", CallbackURL: receiver.server.URL, CallbackToken: "tok-plain"})
 	resp.Body.Close()
-	waitForCalls(t, notify, 1)
+	resp = postJSON(t, srv.URL+"/v1/tasks", taskRequest{ExternalTaskID: "task-plain-failed", CallbackURL: receiver.server.URL, CallbackToken: "tok-plain-failed", Outcome: outcomeFailed})
+	resp.Body.Close()
+	waitForCalls(t, notify, 2)
 
-	if got := string(receiver.Calls()[0].Body.Payload); got != string(succeededPayload) {
-		t.Fatalf("callback payload = %s, want %s unchanged without test controls", got, succeededPayload)
+	for _, call := range receiver.Calls() {
+		usage, ok := payloadUsage(t, call.Body.Payload)
+		switch call.Body.ExternalTaskID {
+		case "task-plain":
+			if !ok || usage.Cost.String() != fixedTaskCost {
+				t.Errorf("callback usage = %+v (present %v), want cost %s without test controls", usage, ok, fixedTaskCost)
+			}
+			var callback struct {
+				Status string `json:"status"`
+			}
+			if err := json.Unmarshal(call.Body.Payload, &callback); err != nil || callback.Status != taskStatusSucceeded {
+				t.Errorf("callback payload = %s, want the SUCCEEDED status kept beside the cost", call.Body.Payload)
+			}
+		case "task-plain-failed":
+			if ok {
+				t.Errorf("failed callback payload = %s, want no usage: a failed task reports no cost", call.Body.Payload)
+			}
+		default:
+			t.Errorf("unexpected callback for %s", call.Body.ExternalTaskID)
+		}
+	}
+
+	status, body := getTaskStatus(t, srv.URL, "task-plain")
+	if status != http.StatusOK {
+		t.Fatalf("GET task-plain status = %d, want 200", status)
+	}
+	if usage, ok := payloadUsage(t, decodeTaskStatus(t, body).Payload); !ok || usage.Cost.String() != fixedTaskCost {
+		t.Errorf("polled usage = %+v (present %v), want cost %s without test controls", usage, ok, fixedTaskCost)
 	}
 }

@@ -285,7 +285,7 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 	if req.Media == mediaVideo && len(req.Payload) == 0 && req.Outcome != outcomeFailed {
 		task.Payload = videoSucceededPayload(requestBaseURL(r), externalTaskID)
 	}
-	if s.controls != nil && req.Outcome != outcomeFailed {
+	if req.Outcome != outcomeFailed {
 		task.Payload = withFixedCost(task.Payload)
 	}
 	s.rememberTask(task)

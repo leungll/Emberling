@@ -65,8 +65,9 @@ func TestGenerateImage_ReportedModelAndCost_CarriedInOutput(t *testing.T) {
 }
 
 // TestGenerateImage_NothingReported_OutputOmitsModelAndUsage covers a generator that
-// reports neither field, as the mock image model does: the result has no model and no
-// usage member rather than empty placeholders.
+// reports neither field: the result has no model and no usage member rather than empty
+// placeholders. The mock image model reports no model name, so its output carries none
+// either; its charge is covered by the mock generator's own cost test.
 func TestGenerateImage_NothingReported_OutputOmitsModelAndUsage(t *testing.T) {
 	output, members := tracedOutput(t, "", nil)
 	for _, member := range []string{"model", "usage"} {
@@ -81,8 +82,8 @@ func TestGenerateImage_NothingReported_OutputOmitsModelAndUsage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute mock: %v", err)
 	}
-	if strings.Contains(string(got.Result.Output), `"model"`) || strings.Contains(string(got.Result.Output), `"usage"`) {
-		t.Errorf("mock output %s carries model or usage, want neither", got.Result.Output)
+	if strings.Contains(string(got.Result.Output), `"model"`) {
+		t.Errorf("mock output %s carries a model name, want none", got.Result.Output)
 	}
 }
 

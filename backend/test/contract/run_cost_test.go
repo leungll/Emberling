@@ -193,12 +193,77 @@ func TestRunCost_ProviderReportsCharge_AttemptAndRunListCarryIt(t *testing.T) {
 	}
 }
 
+// TestRunCost_MockProviderWithoutTestControls_RunListCarriesCharge: the fixed charge is
+// part of the Mock Provider itself, so a Backend wired to one started without test
+// controls, as a plain developer setup is, still records the image task's charge and the
+// Runs list shows a known total with no unpriced call.
+func TestRunCost_MockProviderWithoutTestControls_RunListCarriesCharge(t *testing.T) {
+	callbacks := newCallbackTransport()
+	callbacks.release()
+	dispatcher := mockprovider.NewDispatcher(&http.Client{Transport: callbacks, Timeout: e2eHTTPTimeout})
+	provider := httptest.NewServer(mockprovider.NewServer(dispatcher))
+	t.Cleanup(func() {
+		provider.Close()
+		close(callbacks.done)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := dispatcher.Shutdown(ctx); err != nil {
+			t.Logf("mock provider dispatcher shutdown: %v", err)
+		}
+	})
+	env := newTestEnvWithOptions(t, testEnvOptions{MockTaskBaseURL: provider.URL})
+	callbacks.setTarget(env.server.URL)
+
+	runID := env.createAIGCRun(t, "a small ember creature")
+	snapshot := env.waitForTerminal(t, runID, e2eWait)
+	if status, _ := snapshot["run"].(map[string]any)["status"].(string); status != "COMPLETED" {
+		t.Fatalf("AIGC Run status = %q, want COMPLETED: %v", status, snapshot)
+	}
+	image := env.nodeRunOf(t, runID, "image")
+	imageNodeRunID, _ := image["id"].(string)
+	detail, body := env.nodeRunDetail(t, runID, imageNodeRunID)
+	attempts := attemptsOf(t, detail)
+	if len(attempts) != 1 {
+		t.Fatalf("image Attempts = %d, want 1: %s", len(attempts), body)
+	}
+	want := costBody{Amount: "0.04", Currency: "USD", Source: mockmodel.ImageModelID}
+	if got := costOf(t, attempts[0], "image Attempt"); got == nil || *got != want {
+		t.Errorf("image Attempt cost = %+v, want %+v without test controls", got, want)
+	}
+	cost := runListCostOf(t, env, runID)
+	if len(cost.Totals) != 1 || cost.Totals[0].Amount != "0.04" || cost.Totals[0].Currency != "USD" || cost.UnknownCalls != 0 {
+		t.Errorf("run list cost = %+v, want one USD total of 0.04 and no unknown call", cost)
+	}
+}
+
 // TestRunCost_ProviderReportsNoCharge_AttemptNullAndRunCountsItUnknown: a Provider that
 // returns the image without any usage leaves the Attempt's cost null, never zero, and the
 // Run list counts that one external call as unknown while still summing the caption
-// call's known zero.
+// call's known zero. The Mock Provider prices every task result, so the unpriced callback
+// is produced by dropping its usage member in transit, the way an unpriced Provider would
+// have delivered it.
 func TestRunCost_ProviderReportsNoCharge_AttemptNullAndRunCountsItUnknown(t *testing.T) {
 	fx := newProviderFixture(t)
+	fx.callbacks.rewriteBody(func(body []byte) []byte {
+		var envelope struct {
+			ExternalTaskID string                     `json:"externalTaskId"`
+			Payload        map[string]json.RawMessage `json:"payload"`
+		}
+		if err := json.Unmarshal(body, &envelope); err != nil {
+			t.Errorf("callback body %s is not an envelope: %v", body, err)
+			return body
+		}
+		if _, priced := envelope.Payload["usage"]; !priced {
+			t.Errorf("callback payload %s carries no usage: the test must strip a charge the Provider reported", body)
+		}
+		delete(envelope.Payload, "usage")
+		rewritten, err := json.Marshal(envelope)
+		if err != nil {
+			t.Errorf("encode unpriced callback: %v", err)
+			return body
+		}
+		return rewritten
+	})
 	fx.callbacks.release()
 	env := fx.startBackend(t, nil)
 	runID := env.createAIGCRun(t, "a quiet harbour")

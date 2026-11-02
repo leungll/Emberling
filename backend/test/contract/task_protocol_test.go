@@ -334,6 +334,18 @@ func TestTaskProtocol_Status_RunningThenTerminalWithCallbackPayload(t *testing.T
 		if !bytes.Equal(statusPayload, callbackPayload) {
 			t.Fatalf("status payload %s differs from the callback payload %s", terminal["payload"], envelope.Payload)
 		}
+		// Both targets price a successful result: the Mock Provider with its fixed task
+		// charge, the gateway with the charge its mock Images API upstream stated. A
+		// receiver recording Provider-reported costs therefore never counts either as
+		// unpriced.
+		var priced struct {
+			Usage *struct {
+				Cost *float64 `json:"cost"`
+			} `json:"usage"`
+		}
+		if err := json.Unmarshal(envelope.Payload, &priced); err != nil || priced.Usage == nil || priced.Usage.Cost == nil || *priced.Usage.Cost <= 0 {
+			t.Fatalf("callback payload %s carries no positive usage.cost", envelope.Payload)
+		}
 	})
 }
 
