@@ -223,7 +223,12 @@ func run(logger *slog.Logger) error {
 				return err
 			}
 			for _, reg := range []registry.ToolRegistration{
-				reviewasset.Registration(),
+				reviewasset.Registration(reviewasset.Ports{
+					Photos:        reviewPhotoReader{assets: assetService},
+					Artifacts:     reviewArtifactReader{artifacts: artifactService},
+					Models:        modelRegistry,
+					MaxImageBytes: reviewasset.DefaultMaxImageBytes,
+				}),
 				generatevideo.Registration(cfg.ModelProvider.BaseURL, taskClient),
 			} {
 				if err := toolRegistry.Register(reg); err != nil {

@@ -97,7 +97,7 @@ func generateArgs(photo, prompt string) string {
 }
 
 func reviewArgs(assetRef, verdict, photo string) string {
-	return `{"assetRef":"` + assetRef + `","mock":"` + verdict + `","photoAssetId":"` + photo + `"}`
+	return `{"assetRef":"` + assetRef + `","mock":"` + verdict + `","photoAssetId":"` + photo + `","styleRequirement":"Warm film look"}`
 }
 
 func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExamples(t *testing.T) {
