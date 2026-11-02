@@ -136,11 +136,12 @@ func (t *defsFakeTx) PendingCallbacks() store.PendingCallbackRepository { return
 
 // Definition use cases never touch Agent facts; those repositories are exercised against a
 // real database in test/integration.
-func (t *defsFakeTx) AgentRuns() store.AgentRunRepository           { return nil }
-func (t *defsFakeTx) AgentTurns() store.AgentTurnRepository         { return nil }
-func (t *defsFakeTx) AgentDecisions() store.AgentDecisionRepository { return nil }
-func (t *defsFakeTx) AgentActions() store.AgentActionRepository     { return nil }
-func (t *defsFakeTx) ToolAttempts() store.ToolAttemptRepository     { return nil }
+func (t *defsFakeTx) AgentRuns() store.AgentRunRepository                   { return nil }
+func (t *defsFakeTx) AgentTurns() store.AgentTurnRepository                 { return nil }
+func (t *defsFakeTx) AgentTurnManifests() store.AgentTurnManifestRepository { return nil }
+func (t *defsFakeTx) AgentDecisions() store.AgentDecisionRepository         { return nil }
+func (t *defsFakeTx) AgentActions() store.AgentActionRepository             { return nil }
+func (t *defsFakeTx) ToolAttempts() store.ToolAttemptRepository             { return nil }
 
 func (t *defsFakeTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *defsFakeTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
