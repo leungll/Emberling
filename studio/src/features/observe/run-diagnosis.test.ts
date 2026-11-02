@@ -27,6 +27,10 @@ const deploy: ToolMetadata = {
   countsTowardGenerationLimit: false,
   usesImageModel: false,
   usesReviewModel: false,
+  records: [],
+  usesWorkspace: false,
+  reconcilable: false,
+  returnUnmetRequirement: false,
 };
 
 describe('failureOf', () => {

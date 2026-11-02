@@ -331,7 +331,7 @@ func TestModelMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 }
 
 func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
-	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false}`
+	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
 
 	fixture := ToolMetadata{
 		Name:          "lookup",
@@ -341,6 +341,7 @@ func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 		SideEffect:    SideEffectPolicy{Kind: SideEffectNone, Idempotency: IdempotencySafe},
 		ExecutionKind: ToolExecutionSync,
 		Requires:      []FactRequirement{},
+		Records:       []ToolRecordKind{},
 	}
 	encoded, err := json.Marshal(fixture)
 	if err != nil {
@@ -449,8 +450,9 @@ func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
 		ExecutionKind: ToolExecutionAsync,
 		Poll:          &PollPolicy{IntervalMs: 2000, MaxPolls: 10},
 		Requires:      []FactRequirement{},
+		Records:       []ToolRecordKind{},
 	}
-	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false}`
+	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
 	encoded, err := json.Marshal(tool)
 	if err != nil {
 		t.Fatalf("Marshal() error: %v", err)

@@ -185,6 +185,47 @@ describe('EditPage', () => {
     expect(screen.getByRole('textbox', { name: 'Workflow name' })).toHaveValue('Renamed');
   });
 
+  it('saves an agent step with its workspace, goal and wait bounds unchanged', async () => {
+    // Keys the editor does not render must still reach the Backend as they were loaded.
+    const agentConfig = {
+      instructions: 'Repair the reported dependency.',
+      modelId: 'text-model-v1',
+      allowedTools: ['lookup'],
+      maxTurns: 6,
+      timeoutMs: 600000,
+      workspace: {
+        repositoryId: 'vuln-demo',
+        baseCommit: '0123456789abcdef0123456789abcdef01234567',
+        allowedPaths: ['go.mod', 'go.sum', 'internal/'],
+        deployTarget: { service: 'orders-api', environment: 'staging' },
+      },
+      goalPointer: '/goal',
+      approvalTimeoutMs: 3600000,
+      releaseConfirmTimeoutMs: 900000,
+      voidGraceMs: 60000,
+      maxReleaseRetries: 2,
+      humanWaitTimeoutMs: 7200000,
+    };
+    const agent = step('agent', 'agent', 160, 0, agentConfig, 'Repair');
+    api.getDefinition.mockResolvedValue({
+      ...definition([INPUT, agent, OUTPUT]),
+      edges: [
+        link('e1', 'in', 'text', 'agent', 'input'),
+        link('e2', 'agent', 'text', 'out', 'text'),
+      ],
+    });
+    api.saveDefinition.mockResolvedValue(definition(undefined, 5));
+    renderAt('/workflows/wf_123');
+
+    const user = await editName('Renamed');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(api.saveDefinition).toHaveBeenCalledTimes(1));
+    const [, body] = api.saveDefinition.mock.calls[0] as [string, { nodes: Node[] }];
+    const saved = body.nodes.find((n) => n.id === 'agent');
+    expect(saved?.config).toEqual(agentConfig);
+  });
+
   it('does not save while the checks find issues', async () => {
     // The output step has nothing connected to its required input.
     api.getDefinition.mockResolvedValue(definition([INPUT, OUTPUT, { ...OUTPUT, id: 'out2' }]));

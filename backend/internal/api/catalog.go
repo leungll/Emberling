@@ -49,9 +49,10 @@ func modelMetadataForResponse(metadata domain.ModelMetadata) domain.ModelMetadat
 	return metadata
 }
 
-// tools serves GET /tools. requires, each requirement's matchBindings and a declared
-// production's bindArguments are JSON collections under the catalog interface contract,
-// even when a registration stores nil; an undeclared production is omitted.
+// tools serves GET /tools. requires, records, each requirement's matchBindings and a
+// declared production's bindArguments are JSON collections under the catalog interface
+// contract, even when a registration stores nil; an undeclared production and an
+// undeclared authorization are omitted, the latter meaning the LOW-risk profile.
 func (d Deps) tools(w http.ResponseWriter, r *http.Request) {
 	items := d.Catalog.Tools()
 	for i := range items {
@@ -71,6 +72,9 @@ func toolMetadataForResponse(metadata domain.ToolMetadata) domain.ToolMetadata {
 		requires[i] = requirement
 	}
 	metadata.Requires = requires
+	records := make([]domain.ToolRecordKind, len(metadata.Records))
+	copy(records, metadata.Records)
+	metadata.Records = records
 	if metadata.Produces != nil {
 		produces := *metadata.Produces
 		if produces.BindArguments == nil {
