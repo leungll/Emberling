@@ -26,6 +26,12 @@ const ModelID = "text-model-v1"
 // image_generation dispatches through a TaskDispatcher (mocktask), not a ModelProvider.
 const ImageModelID = "image-model-v1"
 
+// ImageModelProviderID is the asynchronous Provider ImageModelID's tasks run on: the
+// stable Provider ID the image task Adapter (mocktask) stamps into the external task
+// identity and Callback Binding. An Adapter may not import another, so the value is
+// repeated here, and the Backend's wiring test proves the two stay equal.
+const ImageModelProviderID = "mock-task-provider-v1"
+
 // mockDirectivePrefix marks the last user message as a scenario trigger instead of plain
 // prompt content: "mock:fail", "mock:tool-call:<name>[:<json-arguments>]",
 // "mock:invalid-decision" or "mock:script:<trajectory>". The optional JSON arguments let a caller reach this Provider's
@@ -160,6 +166,7 @@ func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error)
 			Description:  "Deterministic test fixture that returns synthetic placeholder images from the local mock provider, at no cost.",
 			Capabilities: []string{domain.ModelCapabilityImageGeneration, domain.ModelCapabilityReferenceImageGeneration},
 			ConfigSchema: json.RawMessage(configSchema),
+			ProviderID:   ImageModelProviderID,
 		}},
 	}, nil
 }
