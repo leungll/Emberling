@@ -251,6 +251,8 @@ export interface ModelMetadata {
   description?: string;
   capabilities: string[];
   configSchema: JsonSchema;
+  /** Stable ID of the asynchronous Provider that runs this model's tasks; omitted for a model served only synchronously. */
+  providerId?: string;
 }
 
 export interface ToolMetadata {
@@ -270,6 +272,11 @@ export interface ToolMetadata {
    * (`imageModelId`); the Backend then requires that selection on Save.
    */
   usesImageModel: boolean;
+  /**
+   * True when the Tool reviews with the vision model optionally selected on its Agent node
+   * (`reviewModelId`); without a selection it applies the mock review policy.
+   */
+  usesReviewModel: boolean;
 }
 
 export interface NodeTypeListResponse {
@@ -348,6 +355,34 @@ export interface TokenUsage {
   totalTokens: number;
 }
 
+/**
+ * The charge a Provider reported for one call, recorded with the call's result and never
+ * changed. `amount` is decimal text so no precision is lost; `currency` is the ISO 4217
+ * code the Provider bills in; `source` is the Model ID of the call. A call whose charge
+ * is not known carries `null` instead, never a zero.
+ */
+export interface Cost {
+  amount: string;
+  currency: string;
+  source: string;
+}
+
+/** The known charges of one currency summed, as decimal text. */
+export interface CostTotal {
+  amount: string;
+  currency: string;
+}
+
+/**
+ * A Run's read-time cost: its known charges summed per currency, and the number of
+ * finished external calls whose charge is not known. The two are never merged: an
+ * unknown charge is a count, not an estimate, and a reported zero is a known charge.
+ */
+export interface RunCost {
+  totals: CostTotal[];
+  unknownCalls: number;
+}
+
 export interface Run {
   id: string;
   workflowId: string;
@@ -408,6 +443,7 @@ export interface RunListItem {
   failedStep: RunStepRef | null;
   /** Filled only for a `PAUSED` Run, ordered by `waitingAt`; empty otherwise. */
   waitingSteps: RunWaitingStep[];
+  cost: RunCost;
 }
 
 /** Server-side counts for the current workflow, time and code filters, ignoring `status`. */
@@ -431,6 +467,8 @@ export interface RunListResponse {
 
 export interface RunListQuery {
   workflowId?: string;
+  /** Keeps Runs bound to this version of `workflowId`; refused (400) without `workflowId`. */
+  definitionVersion?: number;
   status?: RunStatus;
   /** RFC 3339; keeps Runs started at or after this instant. */
   startedAfter?: string;
@@ -490,6 +528,8 @@ export interface NodeAttempt {
   uncertain: boolean | null;
   /** `null` for a synchronous Attempt. */
   callbackBinding: CallbackBindingSummary | null;
+  /** The charge the Provider reported for this Attempt; `null` when none is known. */
+  cost: Cost | null;
 }
 
 /**
@@ -555,8 +595,12 @@ export type ClaimSource = 'IMMEDIATE' | 'RECONCILER';
 /** The path that delivered an Action's successful result. */
 export type CompletionSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL';
 
-/** The path that failed an Action. */
-export type FailureSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL' | 'TIMEOUT';
+/**
+ * The path that failed an Action. `RUNNER_LOST` means the process running a synchronous
+ * Tool call stopped before the call returned.
+ */
+export type FailureSource =
+  'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL' | 'TIMEOUT' | 'RUNNER_LOST';
 
 export interface AgentActionTrace {
   id: string;
@@ -585,8 +629,14 @@ export interface ToolAttemptTrace {
   dispatchedAt: string | null;
   completedAt: string | null;
   error: ExecutionError | null;
+  /** The charge the Provider reported for this Tool call; `null` when none is known. */
+  cost: Cost | null;
   /** `generate_image` only: the photo the call works on, from its arguments. */
   photo?: ToolPhotoTrace;
+  /** `generate_image` only: the named generation settings, from its arguments. */
+  settings?: ToolSettingsTrace;
+  /** `review_asset` only, once the Attempt `SUCCEEDED`: the verdict and its reasons. */
+  review?: ToolReviewTrace;
   /** `sandbox_test` only, once the Attempt `SUCCEEDED`: the runner's verdict and counts. */
   test?: ToolTestTrace;
   /** `deploy` only: the target from its arguments, the version once it `SUCCEEDED`. */
@@ -605,6 +655,23 @@ export interface ToolPhotoTrace {
   photoAssetId: string;
   position?: number;
   count?: number;
+}
+
+/**
+ * The generation settings a `generate_image` call asked for. Each member is absent when
+ * the call did not set it. A prompt over 500 bytes is cut and `promptTruncated` is true.
+ */
+export interface ToolSettingsTrace {
+  prompt?: string;
+  promptTruncated?: boolean;
+  aspectRatio?: string;
+  resolution?: string;
+}
+
+/** A `review_asset` verdict. `reasons` is absent when the review gave none. */
+export interface ToolReviewTrace {
+  passed: boolean;
+  reasons?: string[];
 }
 
 export interface ToolTestTrace {
@@ -641,6 +708,8 @@ export interface AgentTurnTrace {
   error: ExecutionError | null;
   /** Usage the model reported for this Turn; `null` when unreported or not yet known. */
   usage: TokenUsage | null;
+  /** The charge the model reported for this Turn; `null` when unreported or not yet known. */
+  cost: Cost | null;
   /** Read from the Turn's committed Event; `null` until the Turn was claimed. */
   claimSource: ClaimSource | null;
   /** `null` before the Turn committed a Decision. */
@@ -784,6 +853,23 @@ export interface CreateRunResponse {
   lastSeq: number;
 }
 
+/**
+ * Optional request settings for `POST /runs`. `idempotencyKey` is sent as the
+ * `Idempotency-Key` header: 1 to 128 printable ASCII characters, scoped to the Workflow.
+ */
+export interface CreateRunOptions {
+  idempotencyKey?: string;
+}
+
+/**
+ * `CreateRunResponse` plus whether the Backend answered with an existing Run (200 with
+ * `Idempotent-Replayed: true`) instead of creating one (201). On a replay the body reports
+ * that Run's current status.
+ */
+export interface CreateRunResult extends CreateRunResponse {
+  replayed: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -798,6 +884,7 @@ export type ErrorCode =
   | 'NODE_RUN_NOT_FOUND'
   | 'INVALID_STATE_TRANSITION'
   | 'VERSION_CONFLICT'
+  | 'IDEMPOTENCY_KEY_MISMATCH'
   | 'RUNTIME_BINDING_UNAVAILABLE'
   | 'PAYLOAD_TOO_LARGE'
   | 'DAG_HAS_CYCLE'

@@ -37,6 +37,7 @@ func registerModelProviders(ctx context.Context, models *registry.ModelRegistry,
 			DecisionSchema: registry.DecisionSchema(),
 
 			OpenRouterRequireParameters: cfg.OpenRouterRequireParameters,
+			VisionInput:                 entry.VisionInput,
 		})
 		if err != nil {
 			return fmt.Errorf("configure OpenAI-compatible model entry %d: %w", i, err)

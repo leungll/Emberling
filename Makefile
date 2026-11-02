@@ -264,8 +264,9 @@ check-fast:
 ## video, and the generation limit. Four delivery variants run the scripted delivery Agent
 ## that tests a patch in the sandbox runner and deploys it: the main story, a SIGKILL while
 ## the test waits for its callback, a SIGKILL while production holds the deployment so the
-## Agent times out, and a runner restart that redelivers a finished test. Every variant ends
-## with the invariant report and the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=
+## Agent is told the outcome is unknown and reports instead of deploying again, and a runner
+## restart that redelivers a finished test. Every variant ends with the invariant report and
+## the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=
 ## held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery,
 ## delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery runs one.
 ## EMBERLING_DEMO_STUDIO=1 turns on the Studio demo mode described under demo-studio.

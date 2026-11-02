@@ -63,6 +63,7 @@ type runListItemDTO struct {
 	Error             *runErrorCodeDTO    `json:"error"`
 	FailedStep        *runStepDTO         `json:"failedStep"`
 	WaitingSteps      []runWaitingStepDTO `json:"waitingSteps"`
+	Cost              runCostDTO          `json:"cost"`
 }
 
 func toRunErrorCodeDTO(status domain.RunStatus, code string) *runErrorCodeDTO {
@@ -97,6 +98,7 @@ func toRunListItemDTO(item service.RunListItem) runListItemDTO {
 		Error:             toRunErrorCodeDTO(item.Status, item.ErrorCode),
 		FailedStep:        toRunStepDTO(item.FailedStep),
 		WaitingSteps:      waiting,
+		Cost:              toRunCostDTO(item.Cost),
 	}
 }
 
@@ -109,6 +111,14 @@ func (d Deps) listRuns(w http.ResponseWriter, r *http.Request) {
 		Status:     q.Get("status"),
 		Code:       q.Get("code"),
 		Cursor:     q.Get("cursor"),
+	}
+	if raw := q.Get("definitionVersion"); raw != "" {
+		version, err := strconv.Atoi(raw)
+		if err != nil || version < 1 {
+			writeError(w, d.Logger, &badRequestError{message: "definitionVersion must be a positive integer"}, "")
+			return
+		}
+		req.DefinitionVersion = version
 	}
 	if raw := q.Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)

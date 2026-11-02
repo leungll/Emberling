@@ -148,6 +148,15 @@ func (s *ExecutionService) startAgentRun(
 		}
 		imageModelID = &cfg.ImageModelID
 	}
+	// The review model is frozen the same way. Without one the review Tools apply the mock
+	// policy; a selected one that no longer resolves never falls back to it.
+	var reviewModelID *string
+	if cfg.ReviewModelID != "" {
+		if unusable := unusableModel(s.deps.Models, "review model", cfg.ReviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
+			return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil, *unusable, now)
+		}
+		reviewModelID = &cfg.ReviewModelID
+	}
 	for _, toolName := range cfg.AllowedTools {
 		if _, ok := s.deps.Tools.Get(toolName); !ok {
 			return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil, domain.ExecutionError{
@@ -189,6 +198,7 @@ func (s *ExecutionService) startAgentRun(
 		// the Agent Run, never from the Definition. Nil keeps the Agent Run unlimited.
 		MaxGenerationCalls: cfg.MaxGenerationCalls,
 		ImageModelID:       imageModelID,
+		ReviewModelID:      reviewModelID,
 		// The Agent Run starts pointing at the facts this same transaction creates: Turn
 		// 1, Context Version 0 and State Version 0.
 		CurrentTurnNo:         1,

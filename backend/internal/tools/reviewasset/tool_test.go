@@ -45,7 +45,7 @@ func review(t *testing.T, arguments string) result {
 }
 
 func TestRegistration_SafeVerdictProducerRequiringGeneratedImage_RegistersCleanly(t *testing.T) {
-	reg := Registration()
+	reg := Registration(Ports{})
 	if want := (domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe}); reg.Metadata.SideEffect != want {
 		t.Errorf("sideEffect = %+v, want %+v", reg.Metadata.SideEffect, want)
 	}
@@ -68,13 +68,13 @@ func TestExecute_UncontrolledReview_VerdictIsDeterministicPerAssetRef(t *testing
 	passing, failing := 0, 0
 	for i := 0; i < 30; i++ {
 		assetRef := fmt.Sprintf("img_%016x", i)
-		arguments := `{"assetRef":"` + assetRef + `","photoAssetId":"asset_photo_1"}`
+		arguments := `{"assetRef":"` + assetRef + `","photoAssetId":"asset_photo_1","styleRequirement":"clay"}`
 		first, second := review(t, arguments), review(t, arguments)
 		if first.Passed != second.Passed || first.Passed != Verdict(assetRef) {
 			t.Fatalf("verdict for %s = %v then %v, want the same deterministic verdict", assetRef, first.Passed, second.Passed)
 		}
-		if first.PolicyVersion != PolicyVersion {
-			t.Errorf("policyVersion = %q, want %q", first.PolicyVersion, PolicyVersion)
+		if first.PolicyVersion != PolicyVersion || first.ReviewModelID != MockReviewModelID || first.StyleDigest != StyleDigest("clay") {
+			t.Errorf("policyVersion/reviewModelId/styleDigest = %q/%q/%q, want the mock policy and the style digest", first.PolicyVersion, first.ReviewModelID, first.StyleDigest)
 		}
 		if first.Passed {
 			passing++
@@ -98,16 +98,16 @@ func TestExecute_MockControl_ForcesVerdict(t *testing.T) {
 	if Verdict("img_0000000000000000") || !Verdict("img_0000000000000001") {
 		t.Fatal("fixture references no longer have the expected uncontrolled verdicts")
 	}
-	if !review(t, `{"assetRef":"img_0000000000000000","photoAssetId":"p","mock":"pass"}`).Passed {
+	if !review(t, `{"assetRef":"img_0000000000000000","photoAssetId":"p","styleRequirement":"clay","mock":"pass"}`).Passed {
 		t.Error("mock pass did not force a passing verdict")
 	}
-	if review(t, `{"assetRef":"img_0000000000000001","photoAssetId":"p","mock":"fail"}`).Passed {
+	if review(t, `{"assetRef":"img_0000000000000001","photoAssetId":"p","styleRequirement":"clay","mock":"fail"}`).Passed {
 		t.Error("mock fail did not force a failing verdict")
 	}
 }
 
 func TestExecute_InvalidArguments_Fails(t *testing.T) {
-	for _, arguments := range []string{`{"assetRef":"img_1"}`, `{"photoAssetId":"p"}`, `[]`} {
+	for _, arguments := range []string{`{"assetRef":"img_1","styleRequirement":"s"}`, `{"photoAssetId":"p","styleRequirement":"s"}`, `{"assetRef":"img_1","photoAssetId":"p"}`, `[]`} {
 		if _, err := (Executor{}).Execute(context.Background(), action(arguments)); err == nil {
 			t.Errorf("execute(%s) error = nil, want an explicit error", arguments)
 		}

@@ -21,6 +21,12 @@ type Run struct {
 	StartedAt   time.Time  `json:"startedAt"`
 	CompletedAt *time.Time `json:"completedAt"`
 	UpdatedAt   time.Time  `json:"-"`
+	// IdempotencyKey and IdempotencyDigest are the client submission key and the digest
+	// of the request it first accompanied, both empty for a Run created without a key.
+	// They are written once with the Run and never change. Neither is part of any Run
+	// projection.
+	IdempotencyKey    string `json:"-"`
+	IdempotencyDigest string `json:"-"`
 }
 
 // NodeRun is one Definition node executing inside one Run. It owns the node's overall
@@ -81,6 +87,11 @@ type NodeAttempt struct {
 	// uncertain when it failed. It is written once with the failure and is nil on every
 	// other Attempt, and on Attempts that failed before the value was recorded.
 	Uncertain *bool `json:"uncertain"`
+	// Cost is the charge the Provider reported for this Attempt's external call, written
+	// once with the SUCCEEDED result and never changed. It is nil on a FAILED Attempt, on
+	// one whose Provider reported no charge, and on one that never made an external call;
+	// that absence is "unknown", never a zero.
+	Cost *Cost `json:"cost"`
 }
 
 // ExecutionError is the persisted failure summary. It carries no stack traces, database

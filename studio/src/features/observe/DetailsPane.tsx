@@ -223,6 +223,7 @@ function rawOf(el: TraceElement, ctx: DetailContext): [string, unknown][] {
               {
                 decision: el.turn.decision,
                 usage: el.turn.usage,
+                cost: el.turn.cost,
                 startedAt: el.turn.startedAt,
                 completedAt: el.turn.completedAt,
               },

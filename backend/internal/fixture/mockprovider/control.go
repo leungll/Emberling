@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -42,6 +43,27 @@ func WithTestControls(record *Record) Option {
 func WithHeldHook(hook chan string) Option {
 	return func(s *Server) {
 		s.heldHook = hook
+	}
+}
+
+// WithNoResponseCallbackDelay sets how long after dropping the connection a delayMs
+// "noResponse" task delivers its callback. Zero, the default, schedules it immediately.
+// It has effect only together with WithTestControls, the only mode that accepts
+// "noResponse".
+func WithNoResponseCallbackDelay(delay time.Duration) Option {
+	return func(s *Server) {
+		s.noResponseDelay = delay
+	}
+}
+
+// WithInFlightLimit sets the in-flight task count above which an acceptance is marked in
+// the record and the in-flight control reports overLimit. Zero, the default, sets no
+// limit. The Mock Provider never refuses a task over the limit: the mark is evidence for
+// whoever was supposed to keep the count within it. It has effect only together with
+// WithTestControls.
+func WithInFlightLimit(limit int) Option {
+	return func(s *Server) {
+		s.inFlightLimit = limit
 	}
 }
 
@@ -152,6 +174,58 @@ func (s *Server) mountControlRoutes(r chi.Router) {
 		r.Method(http.MethodGet, "/barrier", mockcontrol.BarrierHandler(s.controls.barrier))
 		r.Method(http.MethodGet, "/record", mockcontrol.RecordHandler(s.controls.record))
 		r.Post("/tasks/{externalTaskId}/callback", s.handleRedeliver)
+		r.Get("/inflight", s.handleInFlight)
+	})
+}
+
+// inFlightResponse is the body of GET /control/inflight. Limit is omitted when no limit
+// is configured, and OverLimit is then always false.
+type inFlightResponse struct {
+	InFlight  int  `json:"inFlight"`
+	Peak      int  `json:"peak"`
+	Limit     int  `json:"limit,omitempty"`
+	OverLimit bool `json:"overLimit"`
+}
+
+// handleInFlight reports this Provider instance's in-flight task count, its peak since
+// start and whether that peak ever exceeded the configured limit.
+func (s *Server) handleInFlight(w http.ResponseWriter, _ *http.Request) {
+	current, peak := s.statuses.inFlightCounts()
+	writeJSON(w, http.StatusOK, inFlightResponse{
+		InFlight:  current,
+		Peak:      peak,
+		Limit:     s.inFlightLimit,
+		OverLimit: s.overInFlightLimit(peak),
+	})
+}
+
+// overInFlightLimit reports whether count exceeds the configured limit; with no limit
+// nothing is over it.
+func (s *Server) overInFlightLimit(count int) bool {
+	return s.inFlightLimit > 0 && count > s.inFlightLimit
+}
+
+// recordAcceptance writes the line that closes an accepted task's request: responded with
+// status, or responseDropped when status is 0 because no response was written. It carries
+// the in-flight count the acceptance left and marks one above the limit. It is a no-op
+// without test controls.
+func (s *Server) recordAcceptance(externalTaskID string, status, inFlight int) {
+	if s.controls == nil {
+		return
+	}
+	event := recordResponded
+	if status == 0 {
+		event = recordResponseDropped
+	}
+	_, _ = s.controls.record.Append(mockcontrol.Line{
+		Event: event,
+		Kind:  kindTask,
+		Detail: recordDetail{
+			ExternalTaskID: externalTaskID,
+			Status:         status,
+			InFlight:       inFlight,
+			OverLimit:      s.overInFlightLimit(inFlight),
+		},
 	})
 }
 
@@ -201,6 +275,8 @@ func taskScenarioSummary(req taskRequest) string {
 		delay = "duplicate"
 	case delayBeforeResponse:
 		delay = "beforeResponse"
+	case delayNoResponse:
+		delay = "noResponse"
 	case delayAfter:
 		delay = strconv.FormatInt(req.DelayMs.Duration.Milliseconds(), 10) + "ms"
 	default: // delayImmediate

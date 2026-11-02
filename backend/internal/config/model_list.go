@@ -64,6 +64,7 @@ type modelListEntry struct {
 	Model       string `json:"model"`
 	DisplayName string `json:"displayName"`
 	Description string `json:"description"`
+	VisionInput bool   `json:"visionInput"`
 }
 
 // modelList parses the model list held by key. Problems name the zero-based entry index and the field,
@@ -74,10 +75,20 @@ func (l *loader) modelList(key string) []OpenAIModelEntry {
 	if value == "" {
 		return nil
 	}
+	entries, reason := parseModelList(value)
+	if reason != "" {
+		l.fail(key, reason)
+		return nil
+	}
+	return entries
+}
+
+// parseModelList parses and validates one model list value. It returns the entries, or
+// the reason the value is refused, which names entry indexes and fields only.
+func parseModelList(value string) ([]OpenAIModelEntry, string) {
 	var items []json.RawMessage
 	if err := json.Unmarshal([]byte(value), &items); err != nil {
-		l.fail(key, "must be a JSON array of objects with id, model, displayName and an optional description")
-		return nil
+		return nil, "must be a JSON array of objects with id, model, displayName, an optional description and an optional visionInput"
 	}
 	entries := make([]OpenAIModelEntry, 0, len(items))
 	var problems []string
@@ -86,7 +97,7 @@ func (l *loader) modelList(key string) []OpenAIModelEntry {
 		decoder.DisallowUnknownFields()
 		var parsed modelListEntry
 		if err := decoder.Decode(&parsed); err != nil || bytes.TrimSpace(item)[0] != '{' {
-			problems = append(problems, fmt.Sprintf("entry %d: must be an object with only the string fields id, model, displayName and description", i))
+			problems = append(problems, fmt.Sprintf("entry %d: must be an object with only the string fields id, model, displayName and description and the boolean field visionInput", i))
 			continue
 		}
 		entries = append(entries, OpenAIModelEntry{
@@ -94,16 +105,16 @@ func (l *loader) modelList(key string) []OpenAIModelEntry {
 			Model:       strings.TrimSpace(parsed.Model),
 			DisplayName: strings.TrimSpace(parsed.DisplayName),
 			Description: strings.TrimSpace(parsed.Description),
+			VisionInput: parsed.VisionInput,
 		})
 	}
 	if len(problems) == 0 {
 		problems = validateModelList(entries)
 	}
 	if len(problems) > 0 {
-		l.fail(key, strings.Join(problems, "; "))
-		return nil
+		return nil, strings.Join(problems, "; ")
 	}
-	return entries
+	return entries, ""
 }
 
 // validateModelList returns every problem in models: an empty list, a missing field, an

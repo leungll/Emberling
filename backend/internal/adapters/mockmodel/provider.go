@@ -26,6 +26,12 @@ const ModelID = "text-model-v1"
 // image_generation dispatches through a TaskDispatcher (mocktask), not a ModelProvider.
 const ImageModelID = "image-model-v1"
 
+// ImageModelProviderID is the asynchronous Provider ImageModelID's tasks run on: the
+// stable Provider ID the image task Adapter (mocktask) stamps into the external task
+// identity and Callback Binding. An Adapter may not import another, so the value is
+// repeated here, and the Backend's wiring test proves the two stay equal.
+const ImageModelProviderID = "mock-task-provider-v1"
+
 // mockDirectivePrefix marks the last user message as a scenario trigger instead of plain
 // prompt content: "mock:fail", "mock:tool-call:<name>[:<json-arguments>]",
 // "mock:invalid-decision" or "mock:script:<trajectory>". The optional JSON arguments let a caller reach this Provider's
@@ -93,6 +99,10 @@ type Scenario struct {
 	// domain.TokenUsage, since "the Provider reported 0 tokens" and "the Provider
 	// reported nothing" are different persisted facts.
 	OmitTokenUsage bool
+	// OmitCost reproduces a Provider that reports no charge. By default the fixture
+	// reports a known zero in US dollars, which is what it actually costs; with OmitCost
+	// the response carries nil, the persisted fact for "the Provider said nothing".
+	OmitCost bool
 	// Err overrides the error returned for ScenarioFail; nil means a default error.
 	Err error
 }
@@ -160,6 +170,7 @@ func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error)
 			Description:  "Deterministic test fixture that returns synthetic placeholder images from the local mock provider, at no cost.",
 			Capabilities: []string{domain.ModelCapabilityImageGeneration, domain.ModelCapabilityReferenceImageGeneration},
 			ConfigSchema: json.RawMessage(configSchema),
+			ProviderID:   ImageModelProviderID,
 		}},
 	}, nil
 }
@@ -204,21 +215,21 @@ func (p *Provider) Generate(ctx context.Context, request registry.ModelRequest) 
 			Kind: registry.DecisionToolCall, ToolName: &toolName, Arguments: arguments,
 			StatePatch: scenario.StatePatch,
 		}
-		return p.finish(scenario, decision, promptText, ""), nil
+		return p.finish(scenario, request.ModelID, decision, promptText, ""), nil
 
 	case ScenarioInvalidDecision:
 		// Kind is a recognised value, but TOOL_CALL requires ToolName and Arguments;
 		// leaving both empty makes the envelope fail the Runtime's basic shape
 		// check without this Adapter failing outright.
 		decision := registry.ModelDecision{Kind: registry.DecisionToolCall}
-		return p.finish(scenario, decision, promptText, ""), nil
+		return p.finish(scenario, request.ModelID, decision, promptText, ""), nil
 
 	default:
 		if scenario.FinalOutput != nil {
 			decision := registry.ModelDecision{
 				Kind: registry.DecisionFinal, Output: scenario.FinalOutput, StatePatch: scenario.StatePatch,
 			}
-			return p.finish(scenario, decision, promptText, string(scenario.FinalOutput)), nil
+			return p.finish(scenario, request.ModelID, decision, promptText, string(scenario.FinalOutput)), nil
 		}
 		output := scenario.Output
 		if output == "" {
@@ -231,14 +242,14 @@ func (p *Provider) Generate(ctx context.Context, request registry.ModelRequest) 
 		decision := registry.ModelDecision{
 			Kind: registry.DecisionFinal, Output: encodedOutput, StatePatch: scenario.StatePatch,
 		}
-		return p.finish(scenario, decision, promptText, output), nil
+		return p.finish(scenario, request.ModelID, decision, promptText, output), nil
 	}
 }
 
 // finish builds the common ModelResponse envelope around decision: a bounded response
 // summary and Token usage derived deterministically from prompt and output length, or no
 // Token usage at all when the Scenario omits it.
-func (p *Provider) finish(scenario Scenario, decision registry.ModelDecision, promptText, outputText string) registry.ModelResponse {
+func (p *Provider) finish(scenario Scenario, modelID string, decision registry.ModelDecision, promptText, outputText string) registry.ModelResponse {
 	encodedDecision, _ := json.Marshal(decision)
 	sum := sha256.Sum256(encodedDecision)
 	requestID := "mock-" + hex.EncodeToString(sum[:8])
@@ -251,6 +262,9 @@ func (p *Provider) finish(scenario Scenario, decision registry.ModelDecision, pr
 			FinishReason:      &finishReason,
 			ResponseSHA256:    hex.EncodeToString(sum[:]),
 		},
+	}
+	if !scenario.OmitCost {
+		response.Cost = &domain.Cost{Amount: "0", Currency: domain.CurrencyUSD, Source: modelID}
 	}
 	if scenario.OmitTokenUsage {
 		return response
@@ -356,12 +370,15 @@ func lastToolMessageContent(messages []registry.ModelMessage) string {
 
 // lastUserMessageText decodes the most recent `user` message as plain text. A message
 // whose Content is not a JSON string decodes to its raw bytes so a directive is never
-// silently dropped.
+// silently dropped; a message carried as content parts decodes to its text parts.
 func lastUserMessageText(request registry.ModelRequest) string {
 	for i := len(request.Messages) - 1; i >= 0; i-- {
 		message := request.Messages[i]
 		if message.Role != "user" {
 			continue
+		}
+		if len(message.Parts) > 0 {
+			return partsText(message.Parts)
 		}
 		var text string
 		if err := json.Unmarshal(message.Content, &text); err == nil {
@@ -370,6 +387,18 @@ func lastUserMessageText(request registry.ModelRequest) string {
 		return string(message.Content)
 	}
 	return ""
+}
+
+// partsText joins the text parts of a part-array message with newlines. Image parts
+// contribute nothing: this fixture never reads or records image bytes as text.
+func partsText(parts []registry.ContentPart) string {
+	texts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.Type == registry.ContentPartText {
+			texts = append(texts, part.Text)
+		}
+	}
+	return strings.Join(texts, "\n")
 }
 
 // record appends request to the bounded recording, dropping the oldest entry once the

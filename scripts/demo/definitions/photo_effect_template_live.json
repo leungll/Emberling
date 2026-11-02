@@ -1,6 +1,6 @@
 {
   "name": "Photo Effect Template (Live)",
-  "description": "A real decision model applies one style across a photo set with a real image model, reviews every generation, regenerates a failed one at most once, and delivers one example per photo",
+  "description": "A real decision model tunes one settings group for a whole photo set with a real image model and a real vision review model, regenerating the whole set from the review reasons for at most three rounds, and delivers the last round with its settings",
   "nodes": [
     {
       "id": "node_brief",
@@ -22,10 +22,11 @@
       "name": "Effect Template Agent",
       "position": {"x": 400, "y": 0},
       "config": {
-        "instructions": "You turn every photo of the input photo set into one stylized example in the style the creative brief asks for. The input is a JSON document with the brief and a list of photos, each identified by its photoAssetId. First write one settings object for the whole set: a prompt that describes the requested style and asks to keep each photo's subject, composition and identity recognizable, and resolution \"1K\". Add aspectRatio only when the brief asks for a specific shape. Use only the settings fields prompt, aspectRatio, resolution and seed, and do not set a seed. Reuse exactly the same settings object in every generate_image call, so every example shares one settings digest. For each photo in order, call generate_image with that photoAssetId and the shared settings, then call review_asset with the returned assetRef and the same photoAssetId, passing no other review argument. When a review fails, regenerate that photo once with the same settings and review the new image. Never regenerate a photo more than once, and never make more than 6 generate_image calls in total. After every photo has been generated and reviewed, finish with FINAL. Its output lists exactly one example per photo, with that photoAssetId and the assetRef of the image that passed review or otherwise the newest image for that photo, and gives the settingsDigest that generate_image returned.",
+        "instructions": "You turn every photo of the input photo set into one stylized example in the style the creative brief asks for. The input is a JSON document with the brief and a list of photos, each identified by its photoAssetId. Work in rounds, at most 3. Each round uses one settings object for the whole set with exactly the fields prompt, aspectRatio and resolution, and no seed: a prompt that describes the requested style and asks to keep each photo's subject, composition and identity recognizable; the aspectRatio the brief asks for, or \"3:4\" when it names none; and resolution \"1K\". In a round, for each photo in order, call generate_image with that photoAssetId and the round's settings object exactly as written, then call review_asset with the returned assetRef, the same photoAssetId and the style the brief asks for as styleRequirement, passing no other review argument. Generate every photo in every round, including photos that passed in an earlier round, so the whole set always shares one settings object. When every review of a round passed, finish with FINAL. When any review of a round failed, read the reasons of the failed reviews, write one revised settings object for the whole set that addresses them, and start the next round with it. After the third round, finish with FINAL whatever the reviews say. Never make more than 10 generate_image calls in total; when the next round would need more, finish with FINAL instead. FINAL lists exactly one example per photo, each with that photoAssetId and the assetRef generated for that photo in the last round; gives that round's settings object exactly as passed to generate_image; and gives the settingsDigest generate_image returned in that round.",
         "modelId": "opus-5.5",
         "allowedTools": ["generate_image", "review_asset"],
         "imageModelId": "seedream-5.0-pro",
+        "reviewModelId": "vision-review",
         "outputSchema": {
           "type": "object",
           "properties": {
@@ -42,13 +43,24 @@
                 "additionalProperties": false
               }
             },
+            "settings": {
+              "type": "object",
+              "description": "The settings object of the last round, exactly as passed to generate_image",
+              "properties": {
+                "prompt": {"type": "string"},
+                "aspectRatio": {"type": "string", "enum": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"]},
+                "resolution": {"type": "string", "enum": ["1K"]}
+              },
+              "required": ["prompt", "aspectRatio", "resolution"],
+              "additionalProperties": false
+            },
             "settingsDigest": {"type": "string"}
           },
-          "required": ["examples", "settingsDigest"],
+          "required": ["examples", "settings", "settingsDigest"],
           "additionalProperties": false
         },
-        "maxTurns": 16,
-        "maxGenerationCalls": 6,
+        "maxTurns": 24,
+        "maxGenerationCalls": 10,
         "timeoutMs": 1800000
       }
     },

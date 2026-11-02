@@ -257,9 +257,10 @@ type photoSetFaultTrace struct {
 
 // TestE2E_PhotoSet_ImageProviderFailure_FailsAgentAndRunWithoutReachingTheResult scripts
 // the first generation with the mock image model's mock:fail prompt directive followed by
-// prompt text that must never be quoted back. The Provider refuses definitely: the Action ends in a Tool
-// error, the Agent and the Run fail, the error names neither arguments nor URLs, the model
-// is not asked again, and the downstream media_result Node is never created.
+// prompt text that no error, Event or Snapshot may quote back. The Provider refuses
+// definitely: the Action ends in a Tool error, the Agent and the Run fail, the error names
+// neither arguments nor URLs, the model is not asked again, and the downstream
+// media_result Node is never created.
 func TestE2E_PhotoSet_ImageProviderFailure_FailsAgentAndRunWithoutReachingTheResult(t *testing.T) {
 	const secretSetting = "settings-secret-canary-4417"
 	env := newPhotoSetEnv(t)
@@ -315,8 +316,16 @@ func TestE2E_PhotoSet_ImageProviderFailure_FailsAgentAndRunWithoutReachingTheRes
 		t.Errorf("model calls = %d, want 1: a Tool error is not handed back to the model", got)
 	}
 
+	// The Agent Trace shows a generate_image call's prompt as its named settings member,
+	// which is the one place the prompt may appear; the failure itself, the Events and
+	// the Snapshot never quote it.
+	projectedSettings := `"settings":{"prompt":"mock:fail warm film look ` + secretSetting + `"}`
+	if !strings.Contains(string(traceBody), projectedSettings) {
+		t.Errorf("agent trace does not show the call's prompt as its settings member %s", projectedSettings)
+	}
+	traceRest := []byte(strings.ReplaceAll(string(traceBody), projectedSettings, ""))
 	events, _ := json.Marshal(env.listEvents(t, runID))
-	for label, surface := range map[string][]byte{"agent trace": traceBody, "events": events, "snapshot": mustMarshal(t, snapshot)} {
+	for label, surface := range map[string][]byte{"agent trace": traceRest, "events": events, "snapshot": mustMarshal(t, snapshot)} {
 		for _, forbidden := range []string{secretSetting, "http://", "https://", env.providerURL} {
 			if strings.Contains(string(surface), forbidden) {
 				t.Errorf("%s quotes %q", label, forbidden)

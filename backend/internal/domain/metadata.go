@@ -202,7 +202,9 @@ func (m NodeMetadata) Validate() error {
 // Agent model must declare ModelCapabilityStructuredDecision, meaning it can return fixed
 // JSON for the DecisionSchema. ModelCapabilityReferenceImageGeneration means the model
 // synchronously generates one image from one input image and a prompt; an Agent node's
-// imageModelId must declare it. A capability names the result Emberling needs, not a
+// imageModelId must declare it. ModelCapabilityVisionInput means the model accepts inline
+// image parts in a user message and answers with the strict structured output every
+// Agent model uses; an Agent node's reviewModelId must declare it. A capability names the result Emberling needs, not a
 // Provider-native API. The list stays open: an Adapter may declare a capability this
 // package does not name.
 const (
@@ -210,6 +212,7 @@ const (
 	ModelCapabilityImageGeneration          = "image_generation"
 	ModelCapabilityStructuredDecision       = "structured_decision"
 	ModelCapabilityReferenceImageGeneration = "reference_image_generation"
+	ModelCapabilityVisionInput              = "vision_input"
 )
 
 // ModelMetadata is the registered description of one stable Model ID. ConfigSchema is the
@@ -217,12 +220,19 @@ const (
 // version is frozen and are never re-injected at Run or recovery time. Description is an
 // optional one-line note Studio shows with the model, bounded by ValidateModelDescription;
 // empty means none and is omitted on the wire.
+//
+// ProviderID is the stable identifier of the asynchronous Provider that runs this model's
+// tasks: the same value an Adapter stamps into the external task identity and Callback
+// Binding. It is required for a model declaring ModelCapabilityImageGeneration, whose
+// generation is always dispatched as an asynchronous task, and is empty, and omitted on
+// the wire, for a model served only by synchronous calls. It is not a credential.
 type ModelMetadata struct {
 	ID           string          `json:"id"`
 	DisplayName  string          `json:"displayName"`
 	Description  string          `json:"description,omitempty"`
 	Capabilities []string        `json:"capabilities"`
 	ConfigSchema json.RawMessage `json:"configSchema"`
+	ProviderID   string          `json:"providerId,omitempty"`
 }
 
 // PollPolicy bounds Provider status polling for one async registration. Both bounds come
@@ -294,6 +304,10 @@ type ToolMetadata struct {
 	// node. Saving a Definition requires that node to select one, and each call receives
 	// the Agent Run's frozen image Model ID; the Runtime never decides this by Tool Name.
 	UsesImageModel bool `json:"usesImageModel"`
+	// UsesReviewModel marks a Tool that reviews with the vision model optionally selected
+	// on its Agent node. Each call receives the Agent Run's frozen review Model ID, or none
+	// when the node selected none; the Runtime never decides this by Tool Name.
+	UsesReviewModel bool `json:"usesReviewModel"`
 }
 
 // Validate mirrors NodeMetadata.Validate for Tool registrations. Executor presence and

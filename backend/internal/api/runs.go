@@ -30,24 +30,70 @@ type createRunResponseDTO struct {
 	LastSeq           int64            `json:"lastSeq"`
 }
 
+// Idempotency-Key request header and the response header that marks a replay.
+const (
+	headerIdempotencyKey     = "Idempotency-Key"
+	headerIdempotentReplayed = "Idempotent-Replayed"
+	maxIdempotencyKeyLength  = 128
+)
+
+// idempotencyKey reads the optional Idempotency-Key header. Absent means none. Present,
+// it must be one value of 1 to 128 printable ASCII characters (0x20 to 0x7E); anything
+// else is invalid request content and ok is false.
+func idempotencyKey(r *http.Request) (key string, ok bool) {
+	values := r.Header.Values(headerIdempotencyKey)
+	if len(values) == 0 {
+		return "", true
+	}
+	if len(values) != 1 {
+		return "", false
+	}
+	key = values[0]
+	if len(key) == 0 || len(key) > maxIdempotencyKeyLength {
+		return "", false
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x20 || key[i] > 0x7e {
+			return "", false
+		}
+	}
+	return key, true
+}
+
 // createRun serves POST /runs. It only starts the Run: NodeRun advancement happens after
 // this transaction commits, driven by the work queue/Reconciler this package never calls
-// directly (CLAUDE.md package boundaries).
+// directly (CLAUDE.md package boundaries). With an Idempotency-Key, a submission the key
+// already answered is replayed as 200 with the stored Run's current state and
+// Idempotent-Replayed: true.
 func (d Deps) createRun(w http.ResponseWriter, r *http.Request) {
+	key, ok := idempotencyKey(r)
+	if !ok {
+		writeError(w, d.Logger, &badRequestError{
+			message: "Idempotency-Key must be a single value of 1 to 128 printable ASCII characters",
+		}, "")
+		return
+	}
 	var req createRunRequest
 	if !decodeJSON(w, d.Logger, r, &req) {
 		return
 	}
-	run, err := d.Execution.CreateRun(r.Context(), service.CreateRun{
+	result, err := d.Execution.SubmitRun(r.Context(), service.CreateRun{
 		WorkflowID:        req.WorkflowID,
 		DefinitionVersion: req.DefinitionVersion,
 		Input:             req.Input,
+		IdempotencyKey:    key,
 	})
 	if err != nil {
 		writeError(w, d.Logger, err, codeDefinitionNotFound)
 		return
 	}
-	writeJSON(w, http.StatusCreated, createRunResponseDTO{
+	status := http.StatusCreated
+	if result.Replayed {
+		w.Header().Set(headerIdempotentReplayed, "true")
+		status = http.StatusOK
+	}
+	run := result.Run
+	writeJSON(w, status, createRunResponseDTO{
 		ID:                run.ID,
 		WorkflowID:        run.WorkflowID,
 		DefinitionVersion: run.DefinitionVersion,
@@ -123,6 +169,9 @@ type nodeAttemptDTO struct {
 	// Attempt, null on any other Attempt and on one that failed before it was recorded.
 	Uncertain       *bool `json:"uncertain"`
 	CallbackBinding any   `json:"callbackBinding"`
+	// Cost is the charge the Provider reported for this Attempt, recorded with its
+	// result; null when none is known.
+	Cost *costDTO `json:"cost"`
 }
 
 // toNodeAttemptDTO projects a, together with its Callback Binding when one exists.
@@ -141,6 +190,7 @@ func toNodeAttemptDTO(a domain.NodeAttempt, binding *domain.CallbackBinding) nod
 		CompletedAt:  a.CompletedAt,
 		Error:        a.Error,
 		Uncertain:    a.Uncertain,
+		Cost:         toCostDTO(a.Cost),
 	}
 	if binding != nil {
 		dto.CallbackBinding = callbackBindingDTO{
@@ -251,6 +301,9 @@ type agentTraceTurnDTO struct {
 	// Usage is the Token usage this Turn's model call reported, null when the Provider
 	// reported none or the Turn has no committed model result.
 	Usage *domain.TokenUsage `json:"usage"`
+	// Cost is the charge the Provider reported for this Turn's model call, null when it
+	// reported none or the Turn has no committed model result.
+	Cost *costDTO `json:"cost"`
 	// ClaimSource is who claimed the Turn, read from its committed Event; null before the
 	// Turn was claimed.
 	ClaimSource  *domain.ClaimSource `json:"claimSource"`
@@ -296,12 +349,17 @@ type toolAttemptDTO struct {
 	DispatchedAt    *time.Time               `json:"dispatchedAt"`
 	CompletedAt     *time.Time               `json:"completedAt"`
 	Error           *domain.ExecutionError   `json:"error"`
+	// Cost is the charge the Provider reported for this Tool call, null when none is
+	// known. It is a tracing figure, not a Tool output member.
+	Cost *costDTO `json:"cost"`
 
 	// The keys below are the Tool-call facts of agent_trace_tool_view.go. Each is present
 	// only for the Tool it describes and only once the facts it shows are committed;
 	// Withheld names a member left out because it exceeded the field bound or could carry
 	// a credential.
 	Photo      *toolPhotoDTO      `json:"photo,omitempty"`
+	Settings   *toolSettingsDTO   `json:"settings,omitempty"`
+	Review     *toolReviewDTO     `json:"review,omitempty"`
 	Test       *toolTestDTO       `json:"test,omitempty"`
 	Deployment *toolDeploymentDTO `json:"deployment,omitempty"`
 	Video      *toolVideoDTO      `json:"video,omitempty"`
@@ -340,8 +398,9 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 		for j, attempt := range round.ToolAttempts {
 			view := projector.project(attempt)
 			projected := &turns[i].ToolAttempts[j]
-			projected.Photo, projected.Test, projected.Deployment, projected.Video, projected.Withheld =
-				view.Photo, view.Test, view.Deployment, view.Video, view.Withheld
+			projected.Photo, projected.Settings, projected.Review = view.Photo, view.Settings, view.Review
+			projected.Test, projected.Deployment, projected.Video, projected.Withheld =
+				view.Test, view.Deployment, view.Video, view.Withheld
 		}
 	}
 	return agentTraceResponse{
@@ -395,6 +454,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 		CompletedAt:  utcTimePtr(round.Turn.CompletedAt),
 		Error:        round.Turn.Error,
 		Usage:        round.Turn.TokenUsage,
+		Cost:         toCostDTO(round.Turn.Cost),
 		ClaimSource:  round.TurnClaimSource,
 		ToolAttempts: []toolAttemptDTO{},
 	}
@@ -429,6 +489,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 			DispatchedAt: utcTimePtr(attempt.DispatchedAt),
 			CompletedAt:  utcTimePtr(attempt.CompletedAt),
 			Error:        attempt.Error,
+			Cost:         toCostDTO(attempt.Cost),
 		}
 		if binding, ok := round.CallbackBindings[attempt.ID]; ok {
 			projected.CallbackBinding = agentCallbackBindingDTO{

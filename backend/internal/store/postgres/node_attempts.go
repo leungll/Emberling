@@ -20,6 +20,10 @@ const nodeAttemptColumns = `id, node_run_id, attempt_no, status, input, result,
 	callback_token_hash, started_at, deadline_at, dispatched_at, completed_at, error,
 	next_poll_at, poll_count, uncertain`
 
+// nodeAttemptSelectColumns is nodeAttemptColumns followed by the cost columns, which are
+// written only by MarkSucceeded and therefore are not part of the INSERT list.
+const nodeAttemptSelectColumns = nodeAttemptColumns + `, ` + costColumns
+
 // Create inserts a new Attempt. A retry always creates another row: an old Attempt is
 // never overwritten, so UNIQUE (node_run_id, attempt_no) rejects a duplicated retry.
 func (r *nodeAttemptRepository) Create(ctx context.Context, attempt domain.NodeAttempt) error {
@@ -43,7 +47,7 @@ func (r *nodeAttemptRepository) Create(ctx context.Context, attempt domain.NodeA
 }
 
 func (r *nodeAttemptRepository) Get(ctx context.Context, attemptID string) (domain.NodeAttempt, error) {
-	const query = `SELECT ` + nodeAttemptColumns + ` FROM node_attempts WHERE id = $1`
+	const query = `SELECT ` + nodeAttemptSelectColumns + ` FROM node_attempts WHERE id = $1`
 
 	rows, err := r.conn.Query(ctx, query, attemptID)
 	if err != nil {
@@ -60,7 +64,7 @@ func (r *nodeAttemptRepository) Get(ctx context.Context, attemptID string) (doma
 }
 
 func (r *nodeAttemptRepository) ListByNodeRun(ctx context.Context, nodeRunID string) ([]domain.NodeAttempt, error) {
-	const query = `SELECT ` + nodeAttemptColumns + `
+	const query = `SELECT ` + nodeAttemptSelectColumns + `
 		  FROM node_attempts WHERE node_run_id = $1 ORDER BY attempt_no ASC`
 
 	rows, err := r.conn.Query(ctx, query, nodeRunID)
@@ -130,22 +134,29 @@ func (r *nodeAttemptRepository) MarkDispatched(ctx context.Context, attemptID st
 	return nil
 }
 
-// MarkSucceeded conditionally moves an Attempt to SUCCEEDED and writes its result and
-// completed_at. Result is written once: STARTED and DISPATCHED are the only sources the
-// state machine allows, so a stale or illegal caller never overwrites a committed result.
-func (r *nodeAttemptRepository) MarkSucceeded(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage) error {
+// MarkSucceeded conditionally moves an Attempt to SUCCEEDED and writes its result, its
+// completed_at and the Cost the Provider reported for the call, nil when it reported none.
+// Result and Cost are written once: STARTED and DISPATCHED are the only sources the state
+// machine allows, so a stale or illegal caller never overwrites a committed result or
+// charge.
+func (r *nodeAttemptRepository) MarkSucceeded(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage, cost *domain.Cost) error {
 	if !from.CanTransitionTo(domain.NodeAttemptSucceeded) {
 		return &domain.InvalidStateTransitionError{
 			Entity: "NodeAttempt", ID: attemptID, From: string(from), To: string(domain.NodeAttemptSucceeded),
 		}
 	}
+	amount, currency, source, err := costParams(cost)
+	if err != nil {
+		return fmt.Errorf("store/postgres node_attempts.MarkSucceeded: attempt=%s: %w", attemptID, err)
+	}
 
 	const update = `
 		UPDATE node_attempts
-		   SET status = 'SUCCEEDED', result = $3, completed_at = $4
+		   SET status = 'SUCCEEDED', result = $3, completed_at = $4,
+		       cost_amount = $5::numeric, cost_currency = $6, cost_source = $7
 		 WHERE id = $1 AND status = $2`
 	affected, err := affectedRows(ctx, r.conn, "node_attempts.MarkSucceeded", update,
-		attemptID, string(from), nullableJSON(result), now)
+		attemptID, string(from), nullableJSON(result), now, amount, currency, source)
 	if err != nil {
 		return err
 	}
@@ -200,7 +211,7 @@ func (r *nodeAttemptRepository) ListExpired(ctx context.Context, before time.Tim
 		return nil, fmt.Errorf("store/postgres node_attempts.ListExpired: limit must be positive, got %d", limit)
 	}
 
-	const query = `SELECT ` + nodeAttemptColumns + `
+	const query = `SELECT ` + nodeAttemptSelectColumns + `
 		  FROM node_attempts
 		 WHERE status IN ('STARTED', 'DISPATCHED')
 		   AND deadline_at IS NOT NULL AND deadline_at <= $1
@@ -313,7 +324,7 @@ func (r *nodeAttemptRepository) ListDuePolls(ctx context.Context, now time.Time,
 
 // Latest returns the highest attempt_no Attempt of a NodeRun, or nil if none exists.
 func (r *nodeAttemptRepository) Latest(ctx context.Context, nodeRunID string) (*domain.NodeAttempt, error) {
-	const query = `SELECT ` + nodeAttemptColumns + `
+	const query = `SELECT ` + nodeAttemptSelectColumns + `
 		  FROM node_attempts
 		 WHERE node_run_id = $1
 		 ORDER BY attempt_no DESC
@@ -339,10 +350,13 @@ func scanNodeAttempts(rows pgx.Rows) ([]domain.NodeAttempt, error) {
 	out := []domain.NodeAttempt{}
 	for rows.Next() {
 		var (
-			attempt    domain.NodeAttempt
-			status     string
-			result     []byte
-			errPayload []byte
+			attempt      domain.NodeAttempt
+			status       string
+			result       []byte
+			errPayload   []byte
+			costAmount   *string
+			costCurrency *string
+			costSource   *string
 		)
 		if err := rows.Scan(
 			&attempt.ID, &attempt.NodeRunID, &attempt.AttemptNo, &status,
@@ -350,6 +364,7 @@ func scanNodeAttempts(rows pgx.Rows) ([]domain.NodeAttempt, error) {
 			&attempt.StartedAt, &attempt.DeadlineAt, &attempt.DispatchedAt,
 			&attempt.CompletedAt, &errPayload,
 			&attempt.NextPollAt, &attempt.PollCount, &attempt.Uncertain,
+			&costAmount, &costCurrency, &costSource,
 		); err != nil {
 			return nil, err
 		}
@@ -359,6 +374,9 @@ func scanNodeAttempts(rows pgx.Rows) ([]domain.NodeAttempt, error) {
 
 		var err error
 		if attempt.Error, err = unmarshalExecutionError(errPayload); err != nil {
+			return nil, fmt.Errorf("attempt=%s: %w", attempt.ID, err)
+		}
+		if attempt.Cost, err = scanCost(costAmount, costCurrency, costSource); err != nil {
 			return nil, fmt.Errorf("attempt=%s: %w", attempt.ID, err)
 		}
 		out = append(out, attempt)

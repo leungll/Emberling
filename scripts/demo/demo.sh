@@ -18,6 +18,14 @@
 #                                       asset is rejected before any dispatch;
 #                   photo-limit         photo-set.sh limit: a generation past the frozen
 #                                       limit is rejected before any dispatch;
+#                   photo-sync-crash    photo-sync-crash.sh: SIGKILL while the first
+#                                       synchronous generation is held at the Provider; the
+#                                       restarted Backend reports RESULT_UNCERTAIN to the
+#                                       Agent, which generates the photo again;
+#                   photo-video-restart photo-video-restart.sh: SIGKILL while the Agent waits
+#                                       for the video task's callback; the callback reaches
+#                                       the restarted Backend and completes the original
+#                                       Action once, with nothing re-sent;
 #                   delivery            delivery.sh main: an Agent tests a patch in the
 #                                       sandbox runner, answered by callback, then deploys
 #                                       it once to the mock production service;
@@ -27,14 +35,37 @@
 #                                       twice, completes the original Attempt once;
 #                   delivery-deploy-lost
 #                                       delivery.sh deploy-lost: SIGKILL while production
-#                                       holds the deployment; the Agent times out without a
-#                                       second deployment;
+#                                       holds the deployment; the restarted Backend hands
+#                                       the call back to the Agent as RESULT_UNCERTAIN and
+#                                       the Agent reports instead of deploying again;
 #                   delivery-runner-redelivery
 #                                       delivery.sh redelivery: the restarted runner
 #                                       delivers a finished test again and the ledger gains
 #                                       no Event.
 #                 Each photo and delivery variant is followed by the invariant report as well.
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
+#                 The serving variants run only when named, or all eight with
+#                 EMBERLING_DEMO_VARIANT=serving. Each is serving.sh STORY, many users of
+#                 the photo effect serving template, followed by the invariant report of
+#                 every Run and the per-task ledger of all of them:
+#                   serving-burst           twenty users submit at once;
+#                   serving-crash-held      SIGKILL while dispatches are held before
+#                                           acceptance, then restart;
+#                   serving-crash-waiting   SIGKILL while every task waits for its
+#                                           callback; callbacks and polls complete them;
+#                   serving-duplicate       every callback delivered three times;
+#                   serving-version-switch  a new version saved while Runs are in flight;
+#                   serving-client-retry    concurrent resubmissions under one
+#                                           Idempotency-Key per user;
+#                   serving-response-lost   the Provider drops each acceptance answer and
+#                                           the keyed retry takes over the original task;
+#                   serving-rollout         keyed requests split 10% to a slower version 2,
+#                                           then the ratio goes back to 0: replays return
+#                                           the original Runs, new requests go to version 1,
+#                                           in-flight version 2 Runs finish as version 2.
+#                 scripts/demo/build-v1.sh builds the serving template from a tuning Run's
+#                 delivered settings, and scripts/demo/evidence-report.sh summarises the
+#                 fault-injection and real-flow evidence; both are run by hand.
 #                 EMBERLING_DEMO_STUDIO=1 also builds and starts Studio, prints a Studio link
 #                 to every Run and pauses for Enter at the moments worth watching; the
 #                 stack and Studio keep running afterwards. EMBERLING_DEMO_PAUSE=0 keeps
@@ -65,14 +96,22 @@ run)
 
   case "${EMBERLING_DEMO_VARIANT:-all}" in
   all)
-    variants=(held-before-accept after-accept photo-set photo-gate photo-limit
-      delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery)
+    variants=(held-before-accept after-accept photo-set photo-gate photo-limit photo-sync-crash
+      photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery)
     ;;
-  held-before-accept | after-accept | photo-set | photo-gate | photo-limit | delivery | \
-    delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
+  held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | photo-video-restart | \
+    delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery, delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery" ;;
+  serving)
+    variants=(serving-burst serving-crash-held serving-crash-waiting serving-duplicate
+      serving-version-switch serving-client-retry serving-response-lost serving-rollout)
+    ;;
+  serving-burst | serving-crash-held | serving-crash-waiting | serving-duplicate | \
+    serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout)
+    variants=("$EMBERLING_DEMO_VARIANT")
+    ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, serving or one serving-* variant" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -91,10 +130,13 @@ run)
     photo-set) script=photo-set.sh story=main ;;
     photo-gate) script=photo-set.sh story=gate ;;
     photo-limit) script=photo-set.sh story=limit ;;
+    photo-sync-crash) script=photo-sync-crash.sh ;;
+    photo-video-restart) script=photo-video-restart.sh ;;
     delivery) script=delivery.sh story=main ;;
     delivery-restart-during-test) script=delivery.sh story=restart ;;
     delivery-deploy-lost) script=delivery.sh story=deploy-lost ;;
     delivery-runner-redelivery) script=delivery.sh story=redelivery ;;
+    serving-*) script=serving.sh story=${variant#serving-} ;;
     esac
     printf '\n==== variant %s (%s%s) ====\n' "$variant" "$script" "${story:+ $story}"
     : >"$state"
@@ -105,6 +147,11 @@ run)
     record_after=$(sed -n 's/^RECORD_AFTER=//p' "$state")
     run_status=$(sed -n 's/^RUN_STATUS=//p' "$state")
     story_summary=$(sed -n 's/^SUMMARY=//p' "$state")
+    # A serving story lists all its Runs, comma-separated, and how many submissions the
+    # clients sent; its ledger also requires every Run to have completed.
+    submissions=$(sed -n 's/^SUBMISSIONS=//p' "$state")
+    require_completed=0
+    [[ "$variant" == serving-* ]] && require_completed=1
 
     # The fault scripts end with the invariant report; a photo or delivery story ends with its own
     # checks, so the invariant report runs here.
@@ -117,7 +164,8 @@ run)
     fi
 
     ledger_status=0
-    "$DEMO_ROOT/scripts/demo/ledger-vs-record.sh" "$run_id" "$record_after" || ledger_status=$?
+    LEDGER_SUBMISSIONS=$submissions LEDGER_REQUIRE_COMPLETED=$require_completed \
+      "$DEMO_ROOT/scripts/demo/ledger-vs-record.sh" "$run_id" "$record_after" || ledger_status=$?
 
     summary+=$(printf '\nvariant             %s\nrun                 %s\nrun status          %s\n' \
       "$variant" "$run_id" "$run_status")

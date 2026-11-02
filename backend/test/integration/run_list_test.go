@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -405,5 +406,106 @@ func TestDefinitionsList_FailedLastRun_CarriesErrorCodeAndFailedStep(t *testing.
 	}
 	if never := byID["wf_never"]; never.LastRun != nil || never.LastRunFailedStep != nil {
 		t.Errorf("wf_never = %+v, want no last run", never)
+	}
+}
+
+// TestRunList_DefinitionVersionFilter_PagesWithinOneVersion seeds Runs of two versions of
+// one Workflow, interleaved in time, and proves the version filter narrows both the rows
+// and the counts, that keyset paging in both directions stays within the version without
+// a gap or duplicate, that the version's index exists, and that a cursor issued under one
+// version is refused under another.
+func TestRunList_DefinitionVersionFilter_PagesWithinOneVersion(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+	saveDefinition(ctx, t, uow, listDefinition("wf_list", 1, "Render image"))
+	saveDefinition(ctx, t, uow, listDefinition("wf_list", 2, "Render poster"))
+	saveDefinition(ctx, t, uow, listDefinition("wf_other", 1, "Render image"))
+	saveDefinition(ctx, t, uow, listDefinition("wf_other", 2, "Render poster"))
+	svc := service.NewQueryService(service.Deps{UoW: uow})
+
+	at := func(m int) time.Time { return fixtureTime.Add(time.Duration(m) * time.Minute) }
+	// Versions alternate in time, so every page of one version skips rows of the other.
+	for i := 1; i <= 7; i++ {
+		status := domain.RunCompleted
+		if i == 6 {
+			status = domain.RunFailed
+		}
+		seedListRun(ctx, t, uow, listRunSpec{
+			id: fmt.Sprintf("run_v%d_%02d", 1+i%2, i), workflow: "wf_list", version: 1 + i%2,
+			status: status, startedAt: at(i),
+		})
+	}
+	// A Run of the same version number under another Workflow never matches.
+	seedListRun(ctx, t, uow, listRunSpec{id: "run_other", workflow: "wf_other", version: 2, status: domain.RunCompleted, startedAt: at(8)})
+
+	v2 := service.ListRunsRequest{WorkflowID: "wf_list", DefinitionVersion: 2, Limit: 2}
+	want := []string{"run_v2_07", "run_v2_05", "run_v2_03", "run_v2_01"}
+
+	var forward []string
+	var pages []service.RunListPage
+	cursor := ""
+	for i := 0; ; i++ {
+		req := v2
+		req.Cursor = cursor
+		page := listRuns(ctx, t, svc, req)
+		if i == 0 && page.Counts != (service.RunStatusCounts{All: 4, Completed: 4}) {
+			t.Errorf("version 2 counts = %+v, want all and completed 4", page.Counts)
+		}
+		forward = append(forward, pageIDs(page)...)
+		pages = append(pages, page)
+		if page.NextCursor == nil {
+			break
+		}
+		if i > len(want) {
+			t.Fatal("paging forward did not terminate")
+		}
+		cursor = *page.NextCursor
+	}
+	if !slices.Equal(forward, want) {
+		t.Fatalf("version 2 forward walk = %v, want %v", forward, want)
+	}
+	if len(pages) != 2 || pages[1].PrevCursor == nil {
+		t.Fatalf("pages = %d, want 2 with a prevCursor on the second", len(pages))
+	}
+	back := v2
+	back.Cursor = *pages[1].PrevCursor
+	if got := pageIDs(listRuns(ctx, t, svc, back)); !slices.Equal(got, want[:2]) {
+		t.Fatalf("version 2 page back = %v, want %v", got, want[:2])
+	}
+
+	v1 := listRuns(ctx, t, svc, service.ListRunsRequest{WorkflowID: "wf_list", DefinitionVersion: 1, Limit: 10})
+	if got := pageIDs(v1); !slices.Equal(got, []string{"run_v1_06", "run_v1_04", "run_v1_02"}) {
+		t.Errorf("version 1 items = %v", got)
+	}
+	if v1.Counts != (service.RunStatusCounts{All: 3, Completed: 2, Failed: 1}) {
+		t.Errorf("version 1 counts = %+v, want all 3, completed 2, failed 1", v1.Counts)
+	}
+	for _, item := range v1.Items {
+		if item.DefinitionVersion != 1 || item.LatestVersion != 2 {
+			t.Errorf("item %s versions = %d of %d, want 1 of 2", item.ID, item.DefinitionVersion, item.LatestVersion)
+		}
+	}
+
+	// The version 2 cursor is refused under version 1 and without a version.
+	for name, req := range map[string]service.ListRunsRequest{
+		"other version": {WorkflowID: "wf_list", DefinitionVersion: 1, Limit: 2, Cursor: *pages[0].NextCursor},
+		"no version":    {WorkflowID: "wf_list", Limit: 2, Cursor: *pages[0].NextCursor},
+		"no workflow":   {DefinitionVersion: 2, Limit: 2},
+	} {
+		_, err := svc.ListRuns(ctx, req)
+		var qErr *service.RunListQueryError
+		if !errors.As(err, &qErr) {
+			t.Errorf("%s: err = %v, want *service.RunListQueryError", name, err)
+		}
+	}
+
+	// The version filter is served by its own index in the list order.
+	var indexDef string
+	if err := pool.QueryRow(ctx, `SELECT indexdef FROM pg_indexes WHERE indexname = 'runs_workflow_version_started_id_idx'`).Scan(&indexDef); err != nil {
+		t.Fatalf("read the version index: %v", err)
+	}
+	if want := "(workflow_id, definition_version, started_at DESC, id DESC)"; !strings.Contains(indexDef, want) {
+		t.Errorf("index definition = %q, want it to end with %s", indexDef, want)
 	}
 }

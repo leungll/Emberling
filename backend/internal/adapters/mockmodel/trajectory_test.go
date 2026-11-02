@@ -97,12 +97,14 @@ func generateArgs(photo, prompt string) string {
 }
 
 func reviewArgs(assetRef, verdict, photo string) string {
-	return `{"assetRef":"` + assetRef + `","mock":"` + verdict + `","photoAssetId":"` + photo + `"}`
+	return `{"assetRef":"` + assetRef + `","mock":"` + verdict + `","photoAssetId":"` + photo + `","styleRequirement":"Warm film look"}`
 }
 
-func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExamples(t *testing.T) {
+// photoSetRounds is the two reviewed rounds over three photos that every photo-set
+// trajectory opens with, before its video call.
+func photoSetRounds() []scriptedTurn {
 	const first, second = "sha256:first", "sha256:second"
-	turns := []scriptedTurn{
+	return []scriptedTurn{
 		{"generate_image", generateArgs("asset_photo_1", firstRoundPrompt), imageResult("img_a1", first)},
 		{"review_asset", reviewArgs("img_a1", "pass", "asset_photo_1"), reviewResult(true)},
 		{"generate_image", generateArgs("asset_photo_2", firstRoundPrompt), imageResult("img_a2", first)},
@@ -115,8 +117,21 @@ func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExample
 		{"review_asset", reviewArgs("img_b2", "pass", "asset_photo_2"), reviewResult(true)},
 		{"generate_image", generateArgs("asset_photo_3", secondRoundPrompt), imageResult("img_b3", second)},
 		{"review_asset", reviewArgs("img_b3", "pass", "asset_photo_3"), reviewResult(true)},
-		{"generate_video", `{"assetRef":"img_b1","photoAssetId":"asset_photo_1","settings":{"durationSeconds":4}}`, `{"videoUrl":"http://mock/v1/videos/vid_b1.mp4"}`},
 	}
+}
+
+// photoSetFinalText is the FINAL every photo-set trajectory ends with: one second-round
+// example per photo, the second round's settings and the settings digest they share.
+const photoSetFinalText = `{"examples":[` +
+	`{"assetRef":"img_b1","photoAssetId":"asset_photo_1"},` +
+	`{"assetRef":"img_b2","photoAssetId":"asset_photo_2"},` +
+	`{"assetRef":"img_b3","photoAssetId":"asset_photo_3"}],` +
+	`"settings":{"prompt":"` + secondRoundPrompt + `"},` +
+	`"settingsDigest":"sha256:second"}`
+
+func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExamples(t *testing.T) {
+	turns := append(photoSetRounds(),
+		scriptedTurn{"generate_video", `{"assetRef":"img_b1","photoAssetId":"asset_photo_1","settings":{"durationSeconds":4}}`, `{"videoUrl":"http://mock/v1/videos/vid_b1.mp4"}`})
 
 	final := playTrajectory(t, "photo-set", turns)
 
@@ -124,19 +139,35 @@ func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExample
 		t.Fatalf("turn %d Decision.Kind = %q, want FINAL", len(turns), final.Decision.Kind)
 	}
 	// The FINAL is one JSON string, as the Agent's text output requires, holding one
-	// second-round example per photo and the settings digest those examples share: the
-	// document the media result delivery check consumes.
+	// second-round example per photo, the second round's settings and the settings digest
+	// those examples share: the document the media result delivery check consumes.
 	var text string
 	if err := json.Unmarshal(final.Decision.Output, &text); err != nil {
 		t.Fatalf("FINAL Output %s is not a JSON string: %v", final.Decision.Output, err)
 	}
-	wantText := `{"examples":[` +
-		`{"assetRef":"img_b1","photoAssetId":"asset_photo_1"},` +
-		`{"assetRef":"img_b2","photoAssetId":"asset_photo_2"},` +
-		`{"assetRef":"img_b3","photoAssetId":"asset_photo_3"}],` +
-		`"settingsDigest":"sha256:second"}`
-	if text != wantText {
-		t.Fatalf("FINAL text =\n%s\nwant\n%s", text, wantText)
+	if text != photoSetFinalText {
+		t.Fatalf("FINAL text =\n%s\nwant\n%s", text, photoSetFinalText)
+	}
+}
+
+// The video-restart trajectory is the photo-set story whose video callback the Mock
+// Provider delays by 30s, so a demo can stop the Backend while the Action waits for it.
+// Everything else, the generations, reviews and the FINAL, is the same.
+func TestProvider_Generate_PhotoSetVideoRestartTrajectory_DelaysTheVideoCallbackOnly(t *testing.T) {
+	turns := append(photoSetRounds(),
+		scriptedTurn{"generate_video", `{"assetRef":"img_b1","photoAssetId":"asset_photo_1","settings":{"durationSeconds":4,"mock":"delay:30000"}}`, `{"videoUrl":"http://mock/v1/videos/vid_b1.mp4"}`})
+
+	final := playTrajectory(t, "photo-set-video-restart", turns)
+
+	if final.Decision.Kind != registry.DecisionFinal {
+		t.Fatalf("turn %d Decision.Kind = %q, want FINAL", len(turns), final.Decision.Kind)
+	}
+	var text string
+	if err := json.Unmarshal(final.Decision.Output, &text); err != nil {
+		t.Fatalf("FINAL Output %s is not a JSON string: %v", final.Decision.Output, err)
+	}
+	if text != photoSetFinalText {
+		t.Fatalf("FINAL text =\n%s\nwant\n%s", text, photoSetFinalText)
 	}
 }
 
@@ -287,6 +318,7 @@ func TestProvider_Generate_SoftwareDeliveryTrajectories_TestThenDeployThenFinal(
 	const wantFinal = `{"operationId":"op_act_b_1","patchDigest":"sha256:p","version":"v1"}`
 	cases := map[string]string{
 		"software-delivery":                    `{"baseCommit":"fixture-v1","patch":"--- a/x\n+++ b/x\n"}`,
+		"software-delivery-deploy-lost":        `{"baseCommit":"fixture-v1","patch":"--- a/x\n+++ b/x\n"}`,
 		"software-delivery-duplicate-callback": `{"baseCommit":"fixture-v1","mock":"duplicate","patch":"--- a/x\n+++ b/x\n"}`,
 	}
 	for script, wantTestArguments := range cases {
@@ -301,8 +333,9 @@ func TestProvider_Generate_SoftwareDeliveryTrajectories_TestThenDeployThenFinal(
 func TestTrajectories_EmbeddedFixtures_LoadAndAppearInTextModelConfigSchema(t *testing.T) {
 	names := TrajectoryNames()
 	for _, want := range []string{
-		"photo-set", "photo-set-limit", "photo-set-object", "photo-set-skip-review",
-		"software-delivery", "software-delivery-duplicate-callback",
+		"photo-review-interrupted", "photo-set", "photo-set-limit", "photo-set-object", "photo-set-skip-review",
+		"photo-set-sync-crash", "photo-set-video-restart", "software-delivery", "software-delivery-deploy-lost",
+		"software-delivery-duplicate-callback",
 	} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("TrajectoryNames() = %v, want to contain %q", names, want)

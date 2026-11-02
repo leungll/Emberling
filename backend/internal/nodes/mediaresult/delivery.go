@@ -24,9 +24,12 @@ const (
 	// reasonPhotoMismatch: a declared example was generated for a different photo.
 	reasonPhotoMismatch = "PHOTO_MISMATCH"
 	// reasonSettingsMismatch: an example was generated with settings other than the
-	// declared template settings.
+	// declared template settings, or the declared settings object is missing or does not
+	// hash to the declared settings digest.
 	reasonSettingsMismatch = "SETTINGS_MISMATCH"
-	// reasonPolicyMismatch: the examples were reviewed under more than one policy version.
+	// reasonPolicyMismatch: the examples were reviewed under more than one policy version
+	// or by more than one review model, such as the mock policy for some and a vision
+	// model for others.
 	reasonPolicyMismatch = "POLICY_MISMATCH"
 	// reasonsTruncated closes a reason list that reached maxReasons.
 	reasonsTruncated = "REASONS_TRUNCATED"
@@ -78,15 +81,20 @@ type generation struct {
 	SettingsDigest string `json:"settingsDigest"`
 }
 
+// ReviewModelID is empty on a fact recorded before reviews bound their review model.
 type review struct {
 	PhotoAssetID  string `json:"photoAssetId"`
 	PolicyVersion string `json:"policyVersion"`
+	ReviewModelID string `json:"reviewModelId"`
 	passed        bool
 }
 
 // checkDelivery is the pure delivery decision. Every value it reports comes from the
 // photo set and the facts; the FINAL only names which generated asset is each photo's
-// example and which settings the template uses.
+// example and which settings the template uses. The declared settings must hash to the
+// declared digest, and every example's generation fact must bind that same digest, so
+// the delivered settings are the ones that produced every delivered image: examples
+// taken from different rounds of settings cannot be delivered together.
 //
 // It also returns the cover example: the example declared for the first photo with the
 // bindings of its newest generation fact, provided that fact records the generation for
@@ -100,6 +108,9 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 	}
 	if generated.Truncated || reviewed.Truncated {
 		reasons.add(reasonFactsIncomplete, "", "")
+	}
+	if digest, ok := settingsDigest(final.Settings); !ok || digest != final.SettingsDigest {
+		reasons.add(reasonSettingsMismatch, "", "")
 	}
 
 	// Every fact subject must belong to the photo set. Facts arrive oldest first, so the
@@ -167,15 +178,18 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 		}
 	}
 
-	// The examples' reviews share one policy version, and the pass count comes from their
-	// newest review verdicts. An example never reviewed has not passed.
+	// The examples' reviews share one policy version and one review model, and the pass
+	// count comes from their newest review verdicts. An example never reviewed has not
+	// passed.
 	policies := make(map[string]bool)
+	reviewModels := make(map[string]bool)
 	out := summary{PhotoCount: len(photos), NotPassed: []string{}}
 	for _, p := range photos {
 		assetRef, ok := exampleOf[p.PhotoAssetID]
 		r, reviewedOK := reviews[assetRef]
 		if ok && reviewedOK && r.PhotoAssetID == p.PhotoAssetID {
 			policies[r.PolicyVersion] = true
+			reviewModels[r.ReviewModelID] = true
 			if r.passed {
 				out.PassedCount++
 				continue
@@ -183,7 +197,7 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 		}
 		out.NotPassed = append(out.NotPassed, p.PhotoAssetID)
 	}
-	if len(policies) > 1 {
+	if len(policies) > 1 || len(reviewModels) > 1 {
 		reasons.add(reasonPolicyMismatch, "", "")
 	}
 

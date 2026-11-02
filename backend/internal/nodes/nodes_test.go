@@ -30,6 +30,10 @@ func (noopModelResolver) Get(string) (registry.ModelRegistration, registry.Model
 	return registry.ModelRegistration{}, nil, false
 }
 
+func (noopModelResolver) ProviderID(string) (string, error) {
+	return "", registry.ErrModelNotRegistered
+}
+
 // TestNodeRegistry_Registrations_PassStartupValidation covers every built-in Node
 // registered so far: the synchronous text Nodes and the asynchronous image_generation
 // share one startup check rather than a second, parallel list.

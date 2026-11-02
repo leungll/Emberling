@@ -1,5 +1,5 @@
 // Package mediaresult implements the Media Result Node. It reads an Agent's FINAL output,
-// which declares the template settings and the example chosen for each photo, together
+// which declares the template settings, their digest and the example chosen for each photo, together
 // with the photo set the Media Brief published, and checks the delivery against this
 // Run's committed execution facts rather than against the model's own account.
 //
@@ -184,11 +184,13 @@ type example struct {
 	AssetRef     string `json:"assetRef"`
 }
 
-// finalOutput is the part of the Agent's FINAL the checks read. Members it does not
-// name, such as a free-text summary, are ignored.
+// finalOutput is the part of the Agent's FINAL the checks read. Settings is the template
+// settings object as written, kept raw so its digest is computed over the declared
+// values. Members it does not name, such as a free-text summary, are ignored.
 type finalOutput struct {
-	Examples       []example `json:"examples"`
-	SettingsDigest string    `json:"settingsDigest"`
+	Examples       []example       `json:"examples"`
+	Settings       json.RawMessage `json:"settings"`
+	SettingsDigest string          `json:"settingsDigest"`
 }
 
 // readBrief decodes the Media Brief document from the `brief` port: a JSON string whose

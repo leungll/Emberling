@@ -285,6 +285,10 @@ func (r *defsFakeRunRepo) SetError(context.Context, *store.RunLock, domain.Execu
 	return errDefsFakeNotImplemented
 }
 
+func (r *defsFakeRunRepo) GetByIdempotencyKey(context.Context, string, string) (domain.Run, error) {
+	return domain.Run{}, errDefsFakeNotImplemented
+}
+
 func (r *defsFakeRunRepo) LatestByWorkflow(ctx context.Context, workflowID string) (*domain.Run, error) {
 	return r.byWorkflow[workflowID], nil
 }
@@ -382,7 +386,7 @@ func (r *defsFakeNodeAttemptRepo) ClearPoll(context.Context, string) (bool, erro
 func (r *defsFakeNodeAttemptRepo) ListDuePolls(context.Context, time.Time, int) ([]store.DuePoll, error) {
 	return nil, errDefsFakeNotImplemented
 }
-func (r *defsFakeNodeAttemptRepo) MarkSucceeded(context.Context, string, domain.NodeAttemptStatus, time.Time, json.RawMessage) error {
+func (r *defsFakeNodeAttemptRepo) MarkSucceeded(context.Context, string, domain.NodeAttemptStatus, time.Time, json.RawMessage, *domain.Cost) error {
 	return errDefsFakeNotImplemented
 }
 func (r *defsFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError, bool) error {

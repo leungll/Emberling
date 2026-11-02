@@ -433,8 +433,8 @@ func TestMigrations_ApplyTwice_Idempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM goose_db_version WHERE version_id > 0`).Scan(&applied); err != nil {
 		t.Fatalf("read goose version table: %v", err)
 	}
-	if applied != 7 {
-		t.Fatalf("applied migrations after two runs: want 7, got %d", applied)
+	if applied != 12 {
+		t.Fatalf("applied migrations after two runs: want 12, got %d", applied)
 	}
 }
 
@@ -635,6 +635,32 @@ func seedRun(ctx context.Context, t *testing.T, uow store.UnitOfWork) fixture {
 	})
 	if err != nil {
 		t.Fatalf("seed run: %v", err)
+	}
+	return f
+}
+
+// seedLegacyRun is seedRun for a database migrated only part of the way: the Run row is
+// written with raw SQL because the Store already maps runs columns a later migration
+// adds, which do not exist yet there.
+func seedLegacyRun(ctx context.Context, t *testing.T, pool *pgxpool.Pool, uow store.UnitOfWork) fixture {
+	t.Helper()
+
+	f := fixture{workflowID: "wf_seed", runID: "run_seed", nodeRunID: "nr_seed"}
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.Definitions().Save(ctx, newDefinition(f.workflowID, 1, "Seed"))
+	}); err != nil {
+		t.Fatalf("seed legacy definition: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO runs (id, workflow_id, definition_version, status, input, last_seq, started_at, updated_at)
+		VALUES ($1, $2, 1, 'RUNNING', '{"brief":"a small ember creature"}', 0, $3, $3)`,
+		f.runID, f.workflowID, fixtureTime); err != nil {
+		t.Fatalf("seed legacy run: %v", err)
+	}
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.NodeRuns().Create(ctx, newNodeRun(f.nodeRunID, f.runID, "node_input"))
+	}); err != nil {
+		t.Fatalf("seed legacy node run: %v", err)
 	}
 	return f
 }

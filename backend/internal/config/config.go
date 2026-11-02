@@ -77,6 +77,7 @@ type Config struct {
 	ModelProvider   ModelProvider
 	OpenAIModel     OpenAIModel
 	ImageModel      ImageModel
+	TaskGateway     TaskGateway
 	Production      Production
 	Callback        Callback
 	SandboxRunner   SandboxRunner
@@ -134,12 +135,15 @@ type OpenAIModel struct {
 // OpenAIModelEntry is one registered model. ID is the stable Model ID a Definition
 // stores; Model is the Provider-side model name, which never enters a Definition;
 // DisplayName is what Studio shows. Description is the optional one-line note Studio shows
-// with the model; empty means none.
+// with the model; empty means none. VisionInput declares that the model accepts inline
+// images, so it may serve as an Agent node's review model; it is accepted only on a
+// decision model entry.
 type OpenAIModelEntry struct {
 	ID          string
 	Model       string
 	DisplayName string
 	Description string
+	VisionInput bool
 }
 
 // Enabled reports whether the OpenAI-compatible Model Adapter is configured.
@@ -237,6 +241,7 @@ func Load(env func(string) string) (Config, error) {
 		},
 		OpenAIModel: l.openAIModel(),
 		ImageModel:  l.imageModel(),
+		TaskGateway: l.taskGateway(),
 		Production: Production{
 			BaseURL: l.optionalProviderURL(KeyProductionBaseURL),
 		},
@@ -306,6 +311,7 @@ func (c Config) Validate() error {
 		}
 	}
 	missing = append(missing, c.ImageModel.missingKeys()...)
+	missing = append(missing, c.TaskGateway.missingKeys()...)
 	if len(missing) > 0 {
 		return &MissingConfigError{Keys: missing}
 	}
@@ -356,7 +362,10 @@ func (c Config) Validate() error {
 			return &InvalidConfigError{Key: KeyModels, Reason: strings.Join(problems, "; ")}
 		}
 	}
-	return c.ImageModel.validate(c.OpenAIModel)
+	if err := c.ImageModel.validate(c.OpenAIModel); err != nil {
+		return err
+	}
+	return c.TaskGateway.validate(c.OpenAIModel, c.ImageModel)
 }
 
 // loader accumulates every problem in one pass instead of failing on the first key.

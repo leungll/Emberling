@@ -358,7 +358,7 @@ func (s *ExecutionService) commitAgentDecision(ctx context.Context, call agentMo
 
 		// MarkCompleted is conditional on the Turn still being RUNNING: it is what decides
 		// that this caller, and not a later duplicate delivery, owns the result.
-		if err := tx.AgentTurns().MarkCompleted(ctx, call.turnID, now, responseBytes, response.TokenUsage); err != nil {
+		if err := tx.AgentTurns().MarkCompleted(ctx, call.turnID, now, responseBytes, response.TokenUsage, response.Cost); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}

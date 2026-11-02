@@ -92,3 +92,40 @@ func TestModelsCatalog_Description_RoundTrips(t *testing.T) {
 		}
 	}
 }
+
+// TestModelsCatalog_ProviderID_ServedOnlyForAsyncModels covers GET /models providerId: the
+// mock image model, whose tasks run on an asynchronous Provider, carries that Provider's
+// stable ID, and a model served only synchronously omits the field.
+func TestModelsCatalog_ProviderID_ServedOnlyForAsyncModels(t *testing.T) {
+	env := newTestEnvWithOptions(t, testEnvOptions{
+		ExtraModelProviders: []registry.ModelProvider{describedModelProvider{}},
+	})
+
+	resp, body := env.doJSON(t, http.MethodGet, "/api/models", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/models status = %d, want %d, body=%s", resp.StatusCode, http.StatusOK, body)
+	}
+	rawCatalog := decodeBody[map[string]json.RawMessage](t, body)
+	rawItems := decodeBody[[]map[string]json.RawMessage](t, rawCatalog["items"])
+	byID := make(map[string]map[string]json.RawMessage, len(rawItems))
+	for _, item := range rawItems {
+		var id string
+		if err := json.Unmarshal(item["id"], &id); err != nil {
+			t.Fatalf("GET /api/models item id is not a string: %v, item=%s", err, item["id"])
+		}
+		byID[id] = item
+	}
+
+	image, ok := byID["image-model-v1"]
+	if !ok {
+		t.Fatalf("GET /api/models does not list image-model-v1: %s", body)
+	}
+	if got := string(image["providerId"]); got != `"mock-task-provider-v1"` {
+		t.Errorf("image-model-v1 providerId = %s, want \"mock-task-provider-v1\"", got)
+	}
+	for _, id := range []string{"text-model-v1", "contract-test-described-model"} {
+		if raw, present := byID[id]["providerId"]; present {
+			t.Errorf("%s providerId = %s, want the field omitted for a synchronous model", id, raw)
+		}
+	}
+}

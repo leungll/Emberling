@@ -8,7 +8,7 @@ import { duration } from '@/lib/time';
 import { useEditor } from '@/features/editor/editor-context';
 import { useEditorStore } from '@/features/editor/editor-store';
 import { issuesFor } from '@/features/editor/model/checks';
-import { imageToolsOf, specFor } from '@/features/editor/model/fields';
+import { imageToolsOf, reviewToolsOf, specFor } from '@/features/editor/model/fields';
 import { portLabel, sourcesOf, targetsOf } from '@/features/editor/model/steps';
 import {
   FormatsField,
@@ -42,6 +42,9 @@ export function SettingField({ node, field }: { node: Node; field: string }) {
       return <LongTextField {...props} />;
     case 'model': {
       const capability = meta?.uiSchema.fields.find((x) => x.path === field)?.capability;
+      const reviewTools = reviewToolsOf(node, registry.tools)
+        .map((x) => x.name)
+        .join(', ');
       const hint =
         field === 'imageModelId'
           ? copy.editor.fields.imageModelHint(
@@ -49,8 +52,19 @@ export function SettingField({ node, field }: { node: Node; field: string }) {
                 .map((x) => x.name)
                 .join(', '),
             )
-          : undefined;
-      return <ModelField {...props} models={registry.models} capability={capability} hint={hint} />;
+          : field === 'reviewModelId' && reviewTools
+            ? copy.editor.fields.reviewModelHint(reviewTools)
+            : undefined;
+      const none = field === 'reviewModelId' ? copy.editor.fields.reviewModelNone : undefined;
+      return (
+        <ModelField
+          {...props}
+          models={registry.models}
+          capability={capability}
+          hint={hint}
+          noneLabel={none}
+        />
+      );
     }
     case 'tools':
       return <ToolsField node={node} tools={registry.tools} errors={errors} />;

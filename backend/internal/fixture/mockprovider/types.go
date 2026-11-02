@@ -13,6 +13,7 @@
 // POST /v1/tasks selects an asynchronous scenario through three independent fields:
 //
 //	delayMs:        0 (default, immediate) | <milliseconds> | "lost" | "duplicate" | "beforeResponse"
+//	                | "noResponse" (test controls only)
 //	outcome:        "succeeded" (default) | "failed" | "wrong-token"
 //	idempotencyKey: optional; replaying a key returns the first task's externalTaskId
 //	                with HTTP 200 and schedules no further callback
@@ -20,7 +21,9 @@
 // delayMs decides when and how often the callback is delivered, outcome decides what it
 // contains, and idempotencyKey decides whether a repeated dispatch creates a new task at
 // all. An explicit `payload` is still forwarded verbatim and overrides outcome's default
-// payload.
+// payload. Every result that is not a reported failure (callback and status query) also
+// carries a fixed `usage.cost` unless the caller's payload brought a `usage` of its own,
+// so a call through this Provider is priced deterministically rather than left unknown.
 //
 // GET /v1/tasks/{externalTaskId} reports an accepted task's status: RUNNING until its
 // callback first becomes due, then SUCCEEDED or FAILED (per outcome) together with the
@@ -34,11 +37,11 @@
 // with a deterministic URL derived from the externalTaskId.
 //
 // POST /v1/assets generates one image synchronously from {photoAssetId, settingsDigest}:
-// it answers {assetId, imageUrl}, where assetId is derived from those two values alone and
-// imageUrl addresses GET /v1/assets/{assetId}.png on the host the caller used, or under
-// the public base URL when WithPublicBaseURL configures one. With
-// `outcome: "failed"` it answers 422 and generates nothing. Each generation writes a
-// "generated" record line naming the assetId.
+// it answers {assetId, imageUrl, usage}, where assetId is derived from those two values
+// alone, imageUrl addresses GET /v1/assets/{assetId}.png on the host the caller used, or
+// under the public base URL when WithPublicBaseURL configures one, and usage.cost is the
+// fixed charge of one generation. With `outcome: "failed"` it answers 422 and generates
+// nothing. Each generation writes a "generated" record line naming the assetId.
 //
 // GET /v1/assets/{assetId}.png serves a generated asset as a small PNG whose colour is
 // derived from the asset id. It takes no credential.
@@ -46,6 +49,13 @@
 // GET /v1/images/{name}.png serves one fixed, deterministic PNG under any name, with no
 // credential of any kind. It is what makes an image reference in a task callback payload
 // genuinely readable instead of a URL that resolves to nothing.
+//
+// delayMs "noResponse" simulates a response lost in transit: the Provider creates the task
+// and claims its idempotency key, then closes the connection without writing any response,
+// and delivers the callback after the delay WithNoResponseCallbackDelay configures. The
+// Provider then also keeps the in-flight task count and its peak, served by
+// GET /control/inflight; an acceptance that takes the count above WithInFlightLimit is
+// marked in the record. These two behaviours exist only with WithTestControls.
 //
 // WithTestControls adds a demo and test control surface under /control, absent otherwise:
 // an external barrier (pause, release and GET /control/barrier) that records a dispatch's
@@ -81,11 +91,15 @@ const (
 	// delayBeforeResponse delivers the callback synchronously before /v1/tasks' own HTTP
 	// response is written, so a test can observe callback-before-dispatch-ack ordering.
 	delayBeforeResponse
+	// delayNoResponse accepts the task and then drops the connection without answering,
+	// delivering the callback after the Server's configured no-response delay. It is
+	// available only with test controls.
+	delayNoResponse
 )
 
 // delaySpec is the parsed form of the request body's `delayMs` field. That field accepts
 // either a non-negative integer number of milliseconds (0 meaning delayImmediate) or one
-// of three sentinel strings ("lost", "duplicate", "beforeResponse") naming a scenario that
+// of the sentinel strings ("lost", "duplicate", "beforeResponse", "noResponse") naming a scenario that
 // cannot be expressed as a duration.
 type delaySpec struct {
 	Mode     delayMode
@@ -102,6 +116,8 @@ func (d delaySpec) MarshalJSON() ([]byte, error) {
 		return json.Marshal("duplicate")
 	case delayBeforeResponse:
 		return json.Marshal("beforeResponse")
+	case delayNoResponse:
+		return json.Marshal("noResponse")
 	case delayAfter:
 		return json.Marshal(d.Duration.Milliseconds())
 	default: // delayImmediate
@@ -121,15 +137,17 @@ func (d *delaySpec) UnmarshalJSON(data []byte) error {
 			*d = delaySpec{Mode: delayDuplicate}
 		case "beforeResponse":
 			*d = delaySpec{Mode: delayBeforeResponse}
+		case "noResponse":
+			*d = delaySpec{Mode: delayNoResponse}
 		default:
-			return fmt.Errorf("mockprovider: delayMs %q is not one of \"lost\", \"duplicate\", \"beforeResponse\"", sentinel)
+			return fmt.Errorf("mockprovider: delayMs %q is not one of \"lost\", \"duplicate\", \"beforeResponse\", \"noResponse\"", sentinel)
 		}
 		return nil
 	}
 
 	var milliseconds int64
 	if err := json.Unmarshal(data, &milliseconds); err != nil {
-		return fmt.Errorf("mockprovider: delayMs must be a non-negative integer of milliseconds or one of \"lost\", \"duplicate\", \"beforeResponse\": %w", err)
+		return fmt.Errorf("mockprovider: delayMs must be a non-negative integer of milliseconds or one of \"lost\", \"duplicate\", \"beforeResponse\", \"noResponse\": %w", err)
 	}
 	if milliseconds < 0 {
 		return fmt.Errorf("mockprovider: delayMs must be >= 0, got %d", milliseconds)

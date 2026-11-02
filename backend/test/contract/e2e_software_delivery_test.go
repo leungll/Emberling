@@ -320,7 +320,10 @@ type deliveryTrace struct {
 		Termination *string `json:"termination"`
 	} `json:"agentRun"`
 	Turns []struct {
-		TurnNo int `json:"turnNo"`
+		TurnNo   int `json:"turnNo"`
+		Decision *struct {
+			Kind string `json:"kind"`
+		} `json:"decision"`
 		Action *struct {
 			ID     string `json:"id"`
 			Type   string `json:"type"`
@@ -328,6 +331,7 @@ type deliveryTrace struct {
 			Error  *struct {
 				Code string `json:"code"`
 			} `json:"error"`
+			FailureSource *string `json:"failureSource"`
 		} `json:"action"`
 		ToolAttempts []deliveryToolAttempt `json:"toolAttempts"`
 	} `json:"turns"`
@@ -355,10 +359,12 @@ type deliveryToolAttempt struct {
 
 // toolCall is one Tool Attempt with the Action that made it.
 type toolCall struct {
-	actionID     string
-	actionStatus string
-	actionError  string
-	attempt      deliveryToolAttempt
+	actionID      string
+	actionStatus  string
+	actionError   string
+	failureSource string
+	turnNo        int
+	attempt       deliveryToolAttempt
 }
 
 // callsOf returns every Tool Attempt of toolName in Turn order.
@@ -372,9 +378,12 @@ func (tr deliveryTrace) callsOf(toolName string) []toolCall {
 			if attempt.ToolName != toolName {
 				continue
 			}
-			call := toolCall{actionID: turn.Action.ID, actionStatus: turn.Action.Status, attempt: attempt}
+			call := toolCall{actionID: turn.Action.ID, actionStatus: turn.Action.Status, turnNo: turn.TurnNo, attempt: attempt}
 			if turn.Action.Error != nil {
 				call.actionError = turn.Action.Error.Code
+			}
+			if turn.Action.FailureSource != nil {
+				call.failureSource = *turn.Action.FailureSource
 			}
 			out = append(out, call)
 		}

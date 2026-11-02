@@ -9,11 +9,13 @@ the mock models instead.
 
 `photo_effect_template_live.json` has the same graph as the deterministic photo effect
 template: a creative brief and a photo set feed one Agent, whose answer goes through the
-media result check to the output. The Agent is driven by a real decision model and its
-`generate_image` Tool uses a real image model. For each photo the Agent generates one
-stylized image in the style the brief asks for, reviews it with `review_asset`,
-regenerates a photo at most once when its review fails, and then finishes with one
-example per photo, all made with the same settings.
+media result check to the output. The Agent is driven by a real decision model, its
+`generate_image` Tool uses a real image model and its `review_asset` Tool uses a real
+vision model. The Agent works in rounds of whole-set tuning: it writes one settings
+group (prompt, aspect ratio and resolution), generates every photo with it and reviews
+each image. When any review fails, it revises the settings from the review reasons and
+regenerates the whole set, for at most three rounds. It then finishes with the last
+round's images, one per photo, together with that round's settings and their digest.
 
 The Agent node selects:
 
@@ -21,17 +23,24 @@ The Agent node selects:
 |---|---|---|
 | `modelId` | `opus-5.5` | Decision model; must be an `id` in `EMBERLING_MODELS` |
 | `imageModelId` | `seedream-5.0-pro` | Image model; must be an `id` in `EMBERLING_IMAGE_MODELS` |
-| `timeoutMs` | `1800000` | 30 minutes covers six slow image calls plus the decision turns |
-| `maxGenerationCalls` | `6` | Room for three photos with one regeneration each |
-| `maxTurns` | `16` | One generation and one review per call, plus the final answer |
+| `reviewModelId` | `vision-review` | Review model; must be an `id` in `EMBERLING_MODELS` that declares `visionInput`, and a model other than the image model |
+| `timeoutMs` | `1800000` | 30 minutes covers three rounds of slow image calls and reviews plus the decision turns |
+| `maxGenerationCalls` | `10` | Three rounds of three photos, with one call to spare |
+| `maxTurns` | `24` | One generation and one review per call, plus the final answer |
 
 The Agent also declares an object-form `outputSchema`: its final answer is an object with
-`examples`, one `{photoAssetId, assetRef}` pair per photo, and the shared
-`settingsDigest`. The decision model is asked for that object directly through strict
+`examples`, one `{photoAssetId, assetRef}` pair per photo from the last round, that
+round's `settings` (`prompt`, `aspectRatio` and `resolution`, all required) and the
+`settingsDigest` `generate_image` returned for them. The decision model is asked for that object directly through strict
 structured output, and the Backend validates it against the Schema before the Agent
 succeeds. The media result check then receives the object's canonical JSON text. An
 answer of the wrong shape fails the Agent as `INVALID_ACTION` instead of reaching the
-media result check, and the rejected answer stays visible in the Agent Trace.
+media result check, and the rejected answer stays visible in the Agent Trace. The media
+result check recomputes the digest of the delivered settings and refuses the delivery
+with `SETTINGS_MISMATCH` when it differs from `settingsDigest`, or when any delivered
+image was generated with other settings, such as an image kept from an earlier round.
+Because the answer must name all three settings fields, the Agent is asked to set all
+three in every `generate_image` call, using `"3:4"` when the brief names no shape.
 
 An object-form `outputSchema` must stay inside the strict output subset: every object
 lists all of its properties in `required` and sets `additionalProperties` to `false`; the
@@ -66,7 +75,9 @@ export EMBERLING_MODEL_BASE_URL=https://openrouter.ai/api/v1
 export EMBERLING_MODEL_API_KEY=<your-openrouter-api-key>
 export EMBERLING_MODEL_OPENROUTER_REQUIRE_PARAMETERS=true
 export EMBERLING_MODELS='[
-  {"id":"opus-5.5","model":"anthropic/claude-opus-5.5","displayName":"Opus 5.5"}
+  {"id":"opus-5.5","model":"anthropic/claude-opus-5.5","displayName":"Opus 5.5"},
+  {"id":"vision-review","model":"<vision-model-chosen-by-smoke-test>","displayName":"Vision Review",
+   "visionInput":true}
 ]'
 
 # Real image models for generate_image.
@@ -91,8 +102,10 @@ Start the stack:
 docker compose -f deploy/compose.yaml --profile mock up -d --build
 ```
 
-`GET http://localhost:8080/api/models` should list `opus-5.5`, `seedream-5.0-pro` and
-`gpt-image-2.5`.
+`GET http://localhost:8080/api/models` should list `opus-5.5`, `vision-review`,
+`seedream-5.0-pro` and `gpt-image-2.5`. Replace the `vision-review` placeholder with the
+vision model the smoke test selects; it must accept image input and differ from the image
+model, so no model judges its own output.
 
 ## Run it
 
@@ -128,8 +141,59 @@ you can follow the Run, its Agent Trace and each generated image. `GET
 
 ## Time and cost
 
-With Seedream 5.0 Pro each image takes about one to two minutes, so three photos usually
-finish in 5 to 15 minutes, well inside the 30 minute deadline. GPT Image 2.5 is faster.
-Every Run spends real money on the provider account: up to six image generations and up
-to sixteen decision calls. Set a spending limit on the provider account before running
+With Seedream 5.0 Pro each image takes about one to two minutes, so one round of three
+photos takes 5 to 10 minutes with its reviews, and three rounds can approach the 30
+minute deadline. GPT Image 2.5 is faster. Every Run spends real money on the provider
+account: up to ten image generations, a review for each, and up to twenty-four decision
+calls. Set a spending limit on the provider account before running
 it.
+
+## Photo Restyle (Live, Task Gateway)
+
+`image_generation_gateway_live.json` is the workflow path to a real image model: a
+creative brief goes through a prompt template, and together with one reference photo
+into an `image_generation` node, whose image reaches the output with the brief as its
+caption. The node selects `gateway-seedream-5.0-pro`, a model served by the task gateway.
+
+The task gateway is a small demo service that wraps a synchronous Images API model as an
+asynchronous task, speaking exactly the protocol of the Mock Provider: it accepts the
+task with an idempotency key, generates the image in the background, and reports it in a
+callback. The same Definition therefore runs against the Mock Provider by selecting
+`image-model-v1` instead; only the model ID differs. The gateway keeps everything in
+memory, so a gateway restart loses its tasks, and such a task ends when its Attempt
+deadline passes. The node's `width` is not sent upstream: the Images API takes no width,
+so the generated image has the model's own default size.
+
+Configure the gateway in addition to the image group above. Both services read the same
+gateway model list, whose ids must start with `gateway-`:
+
+```sh
+export EMBERLING_TASK_GATEWAY_BASE_URL=http://taskgateway:9104
+export EMBERLING_TASK_GATEWAY_MODELS='[
+  {"id":"gateway-seedream-5.0-pro","model":"bytedance-seed/seedream-5-0-pro","displayName":"Seedream 5.0 Pro (gateway)"}
+]'
+
+docker compose -f deploy/compose.yaml --profile mock --profile gateway up -d --build
+```
+
+`GET http://localhost:8080/api/models` should list `gateway-seedream-5.0-pro`. Save the
+Definition, upload one photo and start a Run:
+
+```sh
+created=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data-binary @scripts/demo/definitions/image_generation_gateway_live.json \
+  http://localhost:8080/api/definitions)
+workflow_id=$(jq -r '.workflowId' <<<"$created")
+version=$(jq -r '.version' <<<"$created")
+ref=$(curl -fsS -F "file=@photo.jpg;type=image/jpeg" http://localhost:8080/api/assets)
+
+jq -n --arg wf "$workflow_id" --argjson v "$version" --argjson ref "$ref" \
+  '{workflowId: $wf, definitionVersion: $v,
+    input: {brief: "A hand-made clay stop-motion look", reference: $ref}}' |
+  curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- \
+    http://localhost:8080/api/runs | jq -r '.id'
+```
+
+The image NodeRun's Callback Binding names the provider `task-gateway-v1`, and the output
+image is an `EXTERNAL` reference to `http://localhost:9104/v1/images/...`, which opens in
+the browser until the gateway restarts. Each Run makes one upstream image call.

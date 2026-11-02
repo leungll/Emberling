@@ -5,6 +5,8 @@ import type {
   ToolAttemptTrace,
   ToolDeploymentTrace,
   ToolPhotoTrace,
+  ToolReviewTrace,
+  ToolSettingsTrace,
   ToolTestTrace,
   WithheldToolField,
 } from '@/api/types';
@@ -150,6 +152,8 @@ export function turnResult(model: RunModel, step: Step, turn: AgentTurnTrace): C
 export interface CallSaved {
   facts: ExecutionFactTrace[];
   result: CardLine | null;
+  /** A finished review's verdict and the reasons it gave. */
+  review: ToolReviewTrace | null;
   /** The video the call made, when the trace returns its link. */
   videoUrl: string | null;
   /** Result members the trace left out, and why. */
@@ -167,12 +171,17 @@ export function callSaved(model: RunModel, el: TraceElement): CallSaved | null {
   const result = done ? callResult(model, step, turn) : null;
   const attempt = turn.toolAttempts.at(-1);
   const videoUrl = done ? (attempt?.video?.videoUrl ?? null) : null;
+  const review = done ? (attempt?.review ?? null) : null;
   const left = done && attempt ? (attempt.withheld ?? []) : [];
-  return facts.length || result || left.length ? { facts, result, videoUrl, withheld: left } : null;
+  return facts.length || result || review || left.length
+    ? { facts, result, review, videoUrl, withheld: left }
+    : null;
 }
 
 export interface CallArguments {
   photo: ToolPhotoTrace | null;
+  /** The generation settings a generate_image call asked for. */
+  settings: ToolSettingsTrace | null;
   /** "checkout in staging". */
   target: string | null;
   withheld: WithheldToolField[];
@@ -185,10 +194,16 @@ export function callArguments(el: TraceElement): CallArguments | null {
   const attempt = el.toolAttempt ?? turn.toolAttempts.at(-1);
   if (!attempt) return null;
   const photo = attempt.photo ?? null;
+  const settings = attempt.settings ?? null;
   const target = targetOf(attempt.deployment);
-  const left = (attempt.withheld ?? []).filter((w) => w.field !== VIDEO_URL);
-  return photo || target || left.length ? { photo, target, withheld: left } : null;
+  const left = (attempt.withheld ?? []).filter((w) => !RESULT_ONLY.includes(w.field));
+  return photo || settings || target || left.length
+    ? { photo, settings, target, withheld: left }
+    : null;
 }
+
+/** Withheld members a call's Arguments tab leaves to its Result tab. */
+const RESULT_ONLY: readonly string[] = [VIDEO_URL, 'review.reasons'];
 
 function failureLine(step: Step): CardLine {
   const err = step.nodeRun?.error;

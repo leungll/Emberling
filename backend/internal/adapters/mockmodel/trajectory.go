@@ -40,8 +40,28 @@ var trajectoryFiles embed.FS
 //
 // A placeholder that does not resolve fails the Turn explicitly instead of sending a
 // guessed value.
+//
+// OnToolStatus lets a script answer a Tool call the Runtime could not complete. A tool
+// message whose top-level "status" names one of its conditions is not a Tool result of the
+// script: it is left out of the Turn index and of the "{{tool:<n>:...}}" numbering, and
+// when it is the latest tool message the condition's Decision is inserted instead of the
+// next Turn. An inserted Tool call lets the script continue exactly as if the interrupted
+// one had never been part of it; an inserted FINAL ends the script with a report instead,
+// the way an Agent answers when the interrupted call cannot be verified or repeated. Each
+// condition is inserted at most once per conversation: the same status arriving again
+// fails the Turn explicitly, so a script can never loop on it.
 type Trajectory struct {
-	Turns []TrajectoryTurn `json:"turns"`
+	Turns        []TrajectoryTurn      `json:"turns"`
+	OnToolStatus []TrajectoryCondition `json:"onToolStatus,omitempty"`
+}
+
+// TrajectoryCondition is one conditional Decision, inserted when the latest tool message
+// carries Status, such as RESULT_UNCERTAIN or EXECUTION_INTERRUPTED: exactly one of a
+// scripted Tool call or a FINAL.
+type TrajectoryCondition struct {
+	Status   string              `json:"status"`
+	ToolCall *TrajectoryToolCall `json:"toolCall,omitempty"`
+	Final    *TrajectoryFinal    `json:"final,omitempty"`
 }
 
 // TrajectoryTurn is one scripted Turn: exactly one of ToolCall or Final.
@@ -129,6 +149,24 @@ func parseTrajectory(raw []byte) (Trajectory, error) {
 	if trajectory.Turns[len(trajectory.Turns)-1].Final == nil {
 		return Trajectory{}, errors.New("last turn is not final")
 	}
+	statuses := make(map[string]bool, len(trajectory.OnToolStatus))
+	for index, condition := range trajectory.OnToolStatus {
+		switch {
+		case condition.Status == "":
+			return Trajectory{}, fmt.Errorf("condition %d needs a status", index)
+		case statuses[condition.Status]:
+			return Trajectory{}, fmt.Errorf("condition %d repeats status %s", index, condition.Status)
+		case (condition.ToolCall == nil) == (condition.Final == nil):
+			return Trajectory{}, fmt.Errorf("condition %d must set exactly one of toolCall and final", index)
+		case condition.ToolCall != nil && (condition.ToolCall.ToolName == "" || !json.Valid(condition.ToolCall.Arguments)):
+			return Trajectory{}, fmt.Errorf("condition %d needs a tool call with a toolName and JSON arguments", index)
+		case condition.Final != nil && (len(condition.Final.Output) == 0) == (len(condition.Final.OutputText) == 0):
+			return Trajectory{}, fmt.Errorf("condition %d final must set exactly one of output and outputText", index)
+		case condition.Final != nil && !json.Valid(condition.Final.Output) && !json.Valid(condition.Final.OutputText):
+			return Trajectory{}, fmt.Errorf("condition %d final needs a JSON output", index)
+		}
+		statuses[condition.Status] = true
+	}
 	return trajectory, nil
 }
 
@@ -162,36 +200,103 @@ func scriptedScenario(request registry.ModelRequest, name string) (Scenario, err
 	if !ok {
 		return Scenario{}, fmt.Errorf("script %q is not a known trajectory", name)
 	}
-	toolResults := toolMessageContents(request.Messages)
+	toolResults, latest, err := trajectory.scriptedResults(toolMessageContents(request.Messages))
+	if err != nil {
+		return Scenario{}, fmt.Errorf("script %q: %w", name, err)
+	}
+	resolver := placeholderResolver{request: request, toolResults: toolResults}
+	if latest != nil {
+		scenario, err := resolver.scenario(latest.ToolCall, latest.Final)
+		if err != nil {
+			return Scenario{}, fmt.Errorf("script %q condition %s: %w", name, latest.Status, err)
+		}
+		return scenario, nil
+	}
 	turnIndex := len(toolResults)
 	if turnIndex >= len(trajectory.Turns) {
 		return Scenario{}, fmt.Errorf("script %q has no turn %d", name, turnIndex)
 	}
-	resolver := placeholderResolver{request: request, toolResults: toolResults}
 	turn := trajectory.Turns[turnIndex]
-	if turn.ToolCall != nil {
-		arguments, err := resolver.resolve(turn.ToolCall.Arguments)
-		if err != nil {
-			return Scenario{}, fmt.Errorf("script %q turn %d: %w", name, turnIndex, err)
-		}
-		return Scenario{Kind: ScenarioToolCall, ToolName: turn.ToolCall.ToolName, ToolArguments: arguments}, nil
-	}
-	if len(turn.Final.OutputText) > 0 {
-		document, err := resolver.resolve(turn.Final.OutputText)
-		if err != nil {
-			return Scenario{}, fmt.Errorf("script %q turn %d: %w", name, turnIndex, err)
-		}
-		output, err := json.Marshal(string(document))
-		if err != nil {
-			return Scenario{}, fmt.Errorf("script %q turn %d: encode output text: %w", name, turnIndex, err)
-		}
-		return Scenario{Kind: ScenarioFinal, FinalOutput: output}, nil
-	}
-	output, err := resolver.resolve(turn.Final.Output)
+	scenario, err := resolver.scenario(turn.ToolCall, turn.Final)
 	if err != nil {
 		return Scenario{}, fmt.Errorf("script %q turn %d: %w", name, turnIndex, err)
 	}
+	return scenario, nil
+}
+
+// scenario renders one scripted Decision, a Tool call or a FINAL, with its placeholders
+// resolved. parseTrajectory guarantees exactly one of the two is set.
+func (r placeholderResolver) scenario(toolCall *TrajectoryToolCall, final *TrajectoryFinal) (Scenario, error) {
+	if toolCall != nil {
+		arguments, err := r.resolve(toolCall.Arguments)
+		if err != nil {
+			return Scenario{}, err
+		}
+		return Scenario{Kind: ScenarioToolCall, ToolName: toolCall.ToolName, ToolArguments: arguments}, nil
+	}
+	if len(final.OutputText) > 0 {
+		document, err := r.resolve(final.OutputText)
+		if err != nil {
+			return Scenario{}, err
+		}
+		output, err := json.Marshal(string(document))
+		if err != nil {
+			return Scenario{}, fmt.Errorf("encode output text: %w", err)
+		}
+		return Scenario{Kind: ScenarioFinal, FinalOutput: output}, nil
+	}
+	output, err := r.resolve(final.Output)
+	if err != nil {
+		return Scenario{}, err
+	}
 	return Scenario{Kind: ScenarioFinal, FinalOutput: output}, nil
+}
+
+// scriptedResults splits the request's tool messages into the script's own Tool results,
+// oldest first, and the condition the latest tool message triggers, nil when it is an
+// ordinary result. A condition's status arriving more than once is refused.
+func (t Trajectory) scriptedResults(contents []json.RawMessage) ([]json.RawMessage, *TrajectoryCondition, error) {
+	if len(t.OnToolStatus) == 0 {
+		return contents, nil, nil
+	}
+	results := make([]json.RawMessage, 0, len(contents))
+	seen := make(map[string]int, len(t.OnToolStatus))
+	var latest *TrajectoryCondition
+	for _, content := range contents {
+		latest = t.conditionFor(content)
+		if latest == nil {
+			results = append(results, content)
+			continue
+		}
+		seen[latest.Status]++
+		if seen[latest.Status] > 1 {
+			return nil, nil, fmt.Errorf("tool status %s arrived %d times; its conditional decision is inserted once", latest.Status, seen[latest.Status])
+		}
+	}
+	return results, latest, nil
+}
+
+// conditionFor returns the condition whose status the tool message content carries as its
+// top-level "status" member, or nil.
+func (t Trajectory) conditionFor(content json.RawMessage) *TrajectoryCondition {
+	document, err := decodeDocument(content)
+	if err != nil {
+		return nil
+	}
+	object, ok := document.(map[string]any)
+	if !ok {
+		return nil
+	}
+	status, ok := object["status"].(string)
+	if !ok {
+		return nil
+	}
+	for index := range t.OnToolStatus {
+		if t.OnToolStatus[index].Status == status {
+			return &t.OnToolStatus[index]
+		}
+	}
+	return nil
 }
 
 // toolMessageContents returns every "tool" role message's content, oldest first.

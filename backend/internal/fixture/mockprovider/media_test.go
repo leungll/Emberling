@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -108,6 +109,39 @@ func TestServer_GenerateImage_RecordsGeneratedLineAndServesReachableAsset(t *tes
 	}
 	if got := kindEvents(entries, kindImage)[:3]; got[0] != recordArrived || got[1] != recordGenerated || got[2] != recordResponded {
 		t.Fatalf("image record events = %v, want arrived, generated, responded", got)
+	}
+}
+
+// TestServer_GenerateImage_AnswerCarriesFixedCost: a generation answer prices itself with
+// the fixed per-generation charge in usage.cost, with or without test controls, so a
+// caller recording Provider-reported costs sees a known amount rather than none. A
+// refused generation answers no usage at all.
+func TestServer_GenerateImage_AnswerCarriesFixedCost(t *testing.T) {
+	srv := newMediaTestServer(t)
+
+	resp, generated := postImage(t, srv.URL, `{"photoAssetId":"asset_photo_1","settingsDigest":"sha256:aa"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /v1/assets status = %d, want 200", resp.StatusCode)
+	}
+	if generated.Usage.Cost != generatedImageCost {
+		t.Fatalf("usage.cost = %v, want the fixed generation charge %v", generated.Usage.Cost, generatedImageCost)
+	}
+	taskCost, err := strconv.ParseFloat(fixedTaskCost, 64)
+	if err != nil {
+		t.Fatalf("fixedTaskCost %q is not a number: %v", fixedTaskCost, err)
+	}
+	if generatedImageCost == imagesAPICost || generatedImageCost == taskCost {
+		t.Fatalf("generation charge %v coincides with another route's charge; a Run total must tell the routes apart", generatedImageCost)
+	}
+
+	failed, err := http.Post(srv.URL+"/v1/assets", "application/json", strings.NewReader(`{"photoAssetId":"asset_photo_1","settingsDigest":"sha256:aa","outcome":"failed"}`))
+	if err != nil {
+		t.Fatalf("POST /v1/assets (failed) error = %v", err)
+	}
+	defer failed.Body.Close()
+	raw, _ := io.ReadAll(failed.Body)
+	if failed.StatusCode != http.StatusUnprocessableEntity || strings.Contains(string(raw), "usage") {
+		t.Fatalf("failed generation = %d %s, want 422 without a usage member", failed.StatusCode, raw)
 	}
 }
 

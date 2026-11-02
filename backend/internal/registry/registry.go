@@ -259,6 +259,9 @@ func (r *ModelRegistry) Register(ctx context.Context, provider ModelProvider) er
 		if err := domain.ValidateModelDescription(model.Description); err != nil {
 			modelErrs = append(modelErrs, fmt.Errorf("model %q: description: %w", model.ID, err))
 		}
+		if model.HasCapability(domain.ModelCapabilityImageGeneration) && model.ProviderID == "" {
+			modelErrs = append(modelErrs, fmt.Errorf("model %q: providerId is required for capability %q, which is dispatched to an asynchronous Provider", model.ID, domain.ModelCapabilityImageGeneration))
+		}
 		if len(modelErrs) > 0 {
 			errs = append(errs, modelErrs...)
 			continue
@@ -284,6 +287,29 @@ func (r *ModelRegistry) Get(id string) (ModelRegistration, ModelProvider, bool) 
 		return ModelRegistration{}, nil, false
 	}
 	return entry.registration, entry.provider, true
+}
+
+// ErrModelNotRegistered reports that no model is registered under the exact Model ID.
+var ErrModelNotRegistered = errors.New("model is not registered")
+
+// ErrModelProviderNotDeclared reports a registered model that declares no asynchronous
+// Provider, because every call to it is synchronous.
+var ErrModelProviderNotDeclared = errors.New("model declares no asynchronous provider")
+
+// ProviderID resolves one Model ID to the asynchronous Provider its registration declares.
+// Only the exact registered Model ID resolves; nothing is inferred from a similar ID or a
+// capability.
+func (r *ModelRegistry) ProviderID(modelID string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry, ok := r.entries[modelID]
+	if !ok {
+		return "", fmt.Errorf("resolve provider of model %q: %w", modelID, ErrModelNotRegistered)
+	}
+	if entry.registration.ProviderID == "" {
+		return "", fmt.Errorf("resolve provider of model %q: %w", modelID, ErrModelProviderNotDeclared)
+	}
+	return entry.registration.ProviderID, nil
 }
 
 // ListMetadata returns every registered ModelMetadata sorted by ID.

@@ -40,6 +40,10 @@ import (
 // domain.ClaimReconciler instead of domain.ClaimImmediate. Each one owns its own
 // conditional claim and chains the rest of the Agent Loop itself, so the Reconciler hands
 // over one rediscovered work item and makes no Agent state change of its own.
+//
+// HandleOrphanToolAttempt is the use case for a STARTED synchronous Tool Attempt another
+// process created. The Reconciler only hands it the Attempts it discovers; the use case
+// re-checks every condition under the Run lock and owns every write.
 type Advancer interface {
 	Advance(ctx context.Context, runID string) (service.AdvanceOutcome, error)
 	Execute(ctx context.Context, outcome service.AdvanceOutcome) error
@@ -50,6 +54,7 @@ type Advancer interface {
 	ExecuteAgentAction(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
 	CompleteAgentFinal(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
 	TimeoutAgentRun(ctx context.Context, agentRunID string) error
+	HandleOrphanToolAttempt(ctx context.Context, attemptID string) error
 }
 
 // defaultBatchLimit bounds one RunOnce scan of ListReadyOrRetryable/ListExpired. MVP
@@ -68,6 +73,9 @@ type Config struct {
 	Interval   time.Duration
 	BatchLimit int
 	Logger     *slog.Logger
+	// RunnerID is this process's identity, the same value its ExecutionService writes
+	// onto the Tool Attempts it creates. Empty skips the orphaned Tool Attempt scan.
+	RunnerID string
 }
 
 func (c Config) withDefaults() Config {
@@ -118,6 +126,11 @@ type Report struct {
 	// same scan table.
 	ExpiredAgentRunsFound int
 	AgentRunsTimedOut     int
+	// OrphanToolAttemptsFound is how many STARTED synchronous Tool Attempts of another
+	// process the scan found; OrphanToolAttemptsHandled counts those whose use case
+	// returned without error (a handling that writes nothing is a success).
+	OrphanToolAttemptsFound   int
+	OrphanToolAttemptsHandled int
 	// DuePollsFound is how many DISPATCHED Attempts ListDuePolls found with a due poll.
 	// PollsClaimed counts the polls this pass claimed whose answer either resolved
 	// nothing or won the resume; PollsResumed is the subset that won the resume.
@@ -231,10 +244,12 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 	return report, nil
 }
 
-// scanAgentWork performs the three Agent rows of the Reconciler scan table, each bounded
-// by the same BatchLimit as every other scan:
+// scanAgentWork performs the Agent rows of the Reconciler scan table, each bounded by the
+// same BatchLimit as every other scan:
 //
 //   - Agent Runs past their deadline -> the Agent timeout use case.
+//   - STARTED synchronous Tool Attempts another process created -> the orphaned Tool
+//     Attempt use case, which hands the call back to the Agent without calling it again.
 //   - READY Agent Turns -> the Turn advance use case. RUNNING Turns are deliberately not
 //     listed: the model request may already be in flight, so the MVP never re-issues it;
 //     such a Turn ends through the Agent deadline above.
@@ -246,7 +261,10 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 // may still hold a READY Turn or Action; claiming that work first would write
 // AGENT_TURN_STARTED and call the Provider with an already-expired context, buying a
 // cost-bearing call for a round that can never finish. Terminating first leaves the Turn
-// and Action scans to touch only Agent Runs still inside their deadline.
+// and Action scans to touch only Agent Runs still inside their deadline. For the same
+// reason the orphan scan follows it, so an expired Agent Run ends as TIMEOUT; and it
+// precedes the READY Turn scan, so a Turn the orphan handling committed but could not
+// enqueue is picked up in the same pass.
 //
 // A RUNNING Agent NodeRun is never scanned: the next Turn is persisted by the transaction
 // that completed the previous round, so recovery advances that existing READY work instead
@@ -270,6 +288,10 @@ func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *R
 			continue
 		}
 		report.AgentRunsTimedOut++
+	}
+
+	if err := r.scanOrphanToolAttempts(ctx, now, report); err != nil {
+		return err
 	}
 
 	var turns []domain.AgentTurn
@@ -310,6 +332,33 @@ func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *R
 			continue
 		}
 		report.AgentActionsAdvanced++
+	}
+	return nil
+}
+
+// scanOrphanToolAttempts hands every STARTED synchronous Tool Attempt created by a process
+// other than this one to the orphaned Tool Attempt use case. It is skipped when no runner
+// identity is configured, because then no Attempt can be told apart from this process's
+// own in-flight calls.
+func (r *Reconciler) scanOrphanToolAttempts(ctx context.Context, now time.Time, report *Report) error {
+	if r.cfg.RunnerID == "" {
+		return nil
+	}
+	var orphans []domain.ToolAttempt
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		orphans, err = tx.ToolAttempts().ListOrphanStarted(ctx, r.cfg.RunnerID, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list orphaned tool attempts: %w", err)
+	}
+	report.OrphanToolAttemptsFound = len(orphans)
+	for _, attempt := range orphans {
+		if err := r.cfg.Executor.HandleOrphanToolAttempt(ctx, attempt.ID); err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: handle orphaned tool attempt %s: %w", attempt.ID, err))
+			continue
+		}
+		report.OrphanToolAttemptsHandled++
 	}
 	return nil
 }

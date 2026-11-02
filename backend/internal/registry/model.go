@@ -3,6 +3,8 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
@@ -39,12 +41,53 @@ type ModelProvider interface {
 type ModelMessage struct {
 	// Role is user, assistant or tool.
 	Role string
-	// Content is the complete logical content or an immutable ArtifactRef.
+	// Content is the complete logical content or an immutable ArtifactRef. It is empty
+	// when Parts carries the message.
 	Content json.RawMessage
+	// Parts, when non-empty, is the message content as an ordered array of content
+	// parts, and Content is then empty. Only a user message may carry parts, and only a
+	// request to a model that declares domain.ModelCapabilityVisionInput may carry an
+	// image part. Parts are built for one call and never persisted: an image part holds
+	// image bytes, which must not reach a Context Version, an Event, Trace or a log.
+	Parts []ContentPart
 	// ToolName and ToolActionID are required on a tool message and empty otherwise.
 	ToolName     *string
 	ToolActionID *string
 }
+
+// ContentPartType names the kind of one content part.
+type ContentPartType string
+
+const (
+	// ContentPartText is a text part; Text holds it.
+	ContentPartText ContentPartType = "text"
+	// ContentPartImage is an inline image part; Image holds it.
+	ContentPartImage ContentPartType = "image"
+)
+
+// ContentPart is one part of a message whose content is a part array. A text part sets
+// Text only and an image part sets Image only.
+type ContentPart struct {
+	Type  ContentPartType
+	Text  string
+	Image *InlineImage
+}
+
+// InlineImage is one image sent inline, as its bytes and media type. Its String, GoString
+// and LogValue name the media type and size only, so a formatted or logged part never
+// carries the image bytes.
+type InlineImage struct {
+	MediaType string
+	Data      []byte
+}
+
+func (i InlineImage) String() string {
+	return fmt.Sprintf("InlineImage{mediaType: %s, bytes: %d}", i.MediaType, len(i.Data))
+}
+
+func (i InlineImage) GoString() string { return i.String() }
+
+func (i InlineImage) LogValue() slog.Value { return slog.StringValue(i.String()) }
 
 // ModelToolSpec is one Tool as the model sees it. It is built from ToolMetadata in the
 // frozen allowlist order; the Adapter may not add, drop or reorder Tools.
@@ -110,12 +153,13 @@ type ModelResponseSummary struct {
 	ResponseSHA256 string
 }
 
-// ModelResponse is what an Adapter returns for one Generate call. TokenUsage is nil when
-// the Provider reported none.
+// ModelResponse is what an Adapter returns for one Generate call. TokenUsage and Cost are
+// nil when the Provider reported none; neither is ever a fabricated zero.
 type ModelResponse struct {
 	Decision        ModelDecision
 	ResponseSummary ModelResponseSummary
 	TokenUsage      *domain.TokenUsage
+	Cost            *domain.Cost
 }
 
 // decisionSchema is the fixed Decision envelope. It constrains only the TOOL_CALL and

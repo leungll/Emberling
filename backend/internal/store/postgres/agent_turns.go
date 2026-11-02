@@ -19,6 +19,10 @@ type agentTurnRepository struct {
 const agentTurnColumns = `id, agent_run_id, turn_no, status, request, response, token_usage,
 	started_at, completed_at, error`
 
+// agentTurnSelectColumns is agentTurnColumns followed by the cost columns, which are
+// written only by MarkCompleted and therefore are not part of the INSERT list.
+const agentTurnSelectColumns = agentTurnColumns + `, ` + costColumns
+
 // Create inserts a Turn. UNIQUE (agent_run_id, turn_no) is what keeps immediate
 // advancement, a callback and the Reconciler from creating a duplicate round.
 func (r *agentTurnRepository) Create(ctx context.Context, turn domain.AgentTurn) error {
@@ -45,7 +49,7 @@ func (r *agentTurnRepository) Create(ctx context.Context, turn domain.AgentTurn)
 }
 
 func (r *agentTurnRepository) Get(ctx context.Context, turnID string) (domain.AgentTurn, error) {
-	const query = `SELECT ` + agentTurnColumns + ` FROM agent_turns WHERE id = $1`
+	const query = `SELECT ` + agentTurnSelectColumns + ` FROM agent_turns WHERE id = $1`
 
 	rows, err := r.conn.Query(ctx, query, turnID)
 	if err != nil {
@@ -66,7 +70,7 @@ func (r *agentTurnRepository) Get(ctx context.Context, turnID string) (domain.Ag
 // it is the persisted order of the Agent Loop, independent of when a Turn later started or
 // completed. The result is bounded by the frozen max_turns of the Agent Run.
 func (r *agentTurnRepository) ListByAgentRunID(ctx context.Context, agentRunID string) ([]domain.AgentTurn, error) {
-	const query = `SELECT ` + agentTurnColumns + `
+	const query = `SELECT ` + agentTurnSelectColumns + `
 		  FROM agent_turns
 		 WHERE agent_run_id = $1
 		 ORDER BY turn_no ASC`
@@ -86,7 +90,7 @@ func (r *agentTurnRepository) ListByAgentRunID(ctx context.Context, agentRunID s
 // Agent timeout transaction enters the Agent Loop from the Agent Run rather than from a
 // Turn, so this is how it finds the round the deadline has to end.
 func (r *agentTurnRepository) GetByRunAndTurnNo(ctx context.Context, agentRunID string, turnNo int) (domain.AgentTurn, error) {
-	const query = `SELECT ` + agentTurnColumns + `
+	const query = `SELECT ` + agentTurnSelectColumns + `
 		  FROM agent_turns
 		 WHERE agent_run_id = $1 AND turn_no = $2`
 
@@ -131,7 +135,7 @@ func (r *agentTurnRepository) ListReady(ctx context.Context, limit int) ([]domai
 		return nil, fmt.Errorf("store/postgres agent_turns.ListReady: limit must be positive, got %d", limit)
 	}
 
-	const query = `SELECT ` + agentTurnColumns + `
+	const query = `SELECT ` + agentTurnSelectColumns + `
 		  FROM agent_turns
 		 WHERE status = 'READY'
 		 ORDER BY id ASC
@@ -149,20 +153,26 @@ func (r *agentTurnRepository) ListReady(ctx context.Context, limit int) ([]domai
 }
 
 // MarkCompleted conditionally moves a RUNNING Turn to COMPLETED and writes the model
-// response and token usage. Requiring RUNNING means only the transaction that won the
-// model call can record its result.
-func (r *agentTurnRepository) MarkCompleted(ctx context.Context, turnID string, now time.Time, response json.RawMessage, usage *domain.TokenUsage) error {
+// response, the token usage and the Cost the Provider reported for the call, nil when it
+// reported none. Requiring RUNNING means only the transaction that won the model call can
+// record its result, and the charge is written once with it.
+func (r *agentTurnRepository) MarkCompleted(ctx context.Context, turnID string, now time.Time, response json.RawMessage, usage *domain.TokenUsage, cost *domain.Cost) error {
 	tokenUsage, err := marshalTokenUsage(usage)
+	if err != nil {
+		return fmt.Errorf("store/postgres agent_turns.MarkCompleted: turn=%s: %w", turnID, err)
+	}
+	amount, currency, source, err := costParams(cost)
 	if err != nil {
 		return fmt.Errorf("store/postgres agent_turns.MarkCompleted: turn=%s: %w", turnID, err)
 	}
 
 	const update = `
 		UPDATE agent_turns
-		   SET status = 'COMPLETED', response = $2, token_usage = $3, completed_at = $4
+		   SET status = 'COMPLETED', response = $2, token_usage = $3, completed_at = $4,
+		       cost_amount = $5::numeric, cost_currency = $6, cost_source = $7
 		 WHERE id = $1 AND status = 'RUNNING'`
 	affected, err := affectedRows(ctx, r.conn, "agent_turns.MarkCompleted", update,
-		turnID, nullableJSON(response), tokenUsage, now)
+		turnID, nullableJSON(response), tokenUsage, now, amount, currency, source)
 	if err != nil {
 		return err
 	}
@@ -233,16 +243,20 @@ func scanAgentTurns(rows pgx.Rows) ([]domain.AgentTurn, error) {
 	out := []domain.AgentTurn{}
 	for rows.Next() {
 		var (
-			turn       domain.AgentTurn
-			status     string
-			response   []byte
-			tokenUsage []byte
-			errPayload []byte
+			turn         domain.AgentTurn
+			status       string
+			response     []byte
+			tokenUsage   []byte
+			errPayload   []byte
+			costAmount   *string
+			costCurrency *string
+			costSource   *string
 		)
 		if err := rows.Scan(
 			&turn.ID, &turn.AgentRunID, &turn.TurnNo, &status,
 			&turn.Request, &response, &tokenUsage,
 			&turn.StartedAt, &turn.CompletedAt, &errPayload,
+			&costAmount, &costCurrency, &costSource,
 		); err != nil {
 			return nil, err
 		}
@@ -255,6 +269,9 @@ func scanAgentTurns(rows pgx.Rows) ([]domain.AgentTurn, error) {
 			return nil, fmt.Errorf("turn=%s: %w", turn.ID, err)
 		}
 		if turn.Error, err = unmarshalExecutionError(errPayload); err != nil {
+			return nil, fmt.Errorf("turn=%s: %w", turn.ID, err)
+		}
+		if turn.Cost, err = scanCost(costAmount, costCurrency, costSource); err != nil {
 			return nil, fmt.Errorf("turn=%s: %w", turn.ID, err)
 		}
 		out = append(out, turn)

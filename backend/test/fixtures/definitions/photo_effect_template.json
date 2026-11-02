@@ -23,13 +23,13 @@
       "name": "Effect Template Agent",
       "position": {"x": 400, "y": 0},
       "config": {
-        "instructions": "Apply one shared set of effect settings to every photo. Generate each image, review every generation before using it, adjust the shared settings when a review fails, and render a short video from one reviewed asset. Finish with {\"examples\":[{\"photoAssetId\",\"assetRef\"}],\"settingsDigest\"}: one reviewed example per photo, all produced with the same settings.",
+        "instructions": "Apply one shared set of effect settings to every photo. Generate each image, review every generation before using it, adjust the shared settings when a review fails, and render a short video from one reviewed asset. Finish with {\"examples\":[{\"photoAssetId\",\"assetRef\"}],\"settings\",\"settingsDigest\"}: one reviewed example per photo, all produced with the same settings, together with those settings and their digest.",
         "modelId": "text-model-v1",
         "modelConfig": {"script": "photo-set"},
         "allowedTools": ["generate_image", "review_asset", "generate_video"],
         "imageModelId": "image-model-v1",
-        "maxTurns": 16,
-        "maxGenerationCalls": 12,
+        "maxTurns": 24,
+        "maxGenerationCalls": 10,
         "timeoutMs": 120000
       }
     },

@@ -13,7 +13,7 @@ import {
 } from './run-media';
 import type { RunModel, Step } from './run-model';
 import { Words } from './Words';
-import type { JsonValue, WithheldToolField } from '@/api/types';
+import type { JsonValue, ToolReviewTrace, ToolSettingsTrace, WithheldToolField } from '@/api/types';
 import { FactList, TechnicalDetails } from '@/components/facts/FactList';
 import { JsonViewer } from '@/components/json/JsonViewer';
 import type { MediaRef } from '@/components/media/media-ref';
@@ -141,15 +141,72 @@ function WithheldNotes({ withheld }: { withheld: readonly WithheldToolField[] })
   );
 }
 
+/** The generation settings a generate_image call asked for, as the trace returns them. */
+function SettingsBlock({ settings }: { settings: ToolSettingsTrace }) {
+  const m = useCopy().runs.media;
+  return (
+    <Sub title={m.settings}>
+      <FactList
+        compact
+        facts={[
+          settings.prompt !== undefined && {
+            label: m.prompt,
+            value: <span className="whitespace-pre-wrap">{settings.prompt}</span>,
+            note: settings.promptTruncated ? m.promptCut : undefined,
+          },
+          settings.aspectRatio !== undefined && {
+            label: m.aspectRatio,
+            value: settings.aspectRatio,
+          },
+          settings.resolution !== undefined && { label: m.resolution, value: settings.resolution },
+        ]}
+      />
+    </Sub>
+  );
+}
+
+/** A review's verdict and the reasons it gave. */
+function ReviewVerdict({ review }: { review: ToolReviewTrace }) {
+  const m = useCopy().runs.media;
+  const reasons = review.reasons ?? [];
+  return (
+    <Sub title={m.review}>
+      <FactList
+        compact
+        facts={[
+          {
+            label: m.reviewVerdict,
+            value: review.passed ? (
+              <span className="text-st-succeeded-fg">{m.reviewPassed}</span>
+            ) : (
+              <span className="text-st-failed-fg">{m.reviewFailed}</span>
+            ),
+          },
+        ]}
+      />
+      {reasons.length ? (
+        <>
+          <p className="m-0 text-sm font-medium text-fg-secondary">{m.reviewReasons}</p>
+          <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-sm text-fg">
+            {reasons.map((reason, i) => (
+              <li key={i}>{reason}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </Sub>
+  );
+}
+
 /**
  * A tool call's Arguments tab, from the arguments the trace projects: the photo a
- * generate_image call works on (placed by the position the trace returns) and a deploy's
- * target.
+ * generate_image call works on (placed by the position the trace returns) and the
+ * settings it asked for, and a deploy's target.
  */
 export function CallArgumentsView({ ctx, args }: { ctx: DetailContext; args: CallArguments }) {
   const copy = useCopy();
   const m = copy.runs.media;
-  const { photo, target, withheld } = args;
+  const { photo, settings, target, withheld } = args;
   const ref = photo ? photoList(ctx.model).find((p) => p.id === photo.photoAssetId) : undefined;
   const json: Record<string, JsonValue> = {};
   if (photo) json.photoAssetId = photo.photoAssetId;
@@ -170,6 +227,7 @@ export function CallArgumentsView({ ctx, args }: { ctx: DetailContext; args: Cal
           )}
         </Sub>
       ) : null}
+      {settings ? <SettingsBlock settings={settings} /> : null}
       {target ? (
         <Sub title={m.target}>
           <p className="m-0 text-sm text-fg">{target}</p>
@@ -187,14 +245,14 @@ export function CallArgumentsView({ ctx, args }: { ctx: DetailContext; args: Cal
 
 /**
  * A tool call's Result tab: the result facts the trace projects (a test summary, a deploy's
- * version, a video) and what the call saved (the image it generated, a review or test
- * verdict).
+ * version, a video, a review's verdict and reasons) and what the call saved (the image it
+ * generated, a review or test verdict).
  */
 export function CallResultView({ ctx, saved }: { ctx: DetailContext; saved: CallSaved }) {
   const copy = useCopy();
   const m = copy.runs.media;
   const f = copy.runs.details.facts2;
-  const { facts, result, videoUrl, withheld } = saved;
+  const { facts, result, review, videoUrl, withheld } = saved;
   const images = facts.flatMap((x) => {
     const r = factImage(x);
     return r ? [r] : [];
@@ -217,6 +275,7 @@ export function CallResultView({ ctx, saved }: { ctx: DetailContext; saved: Call
           />
         </Sub>
       ) : null}
+      {review ? <ReviewVerdict review={review} /> : null}
       <WithheldNotes withheld={withheld} />
       <Gallery items={mediaItems(ctx.model, images)} />
       {rest.length ? (

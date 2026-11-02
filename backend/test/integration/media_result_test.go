@@ -13,6 +13,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaresult"
 	"github.com/leungll/Emberling/backend/internal/registry"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 )
 
 // mediaResultDefinition stands a Run input text in for the Agent's FINAL, so the delivery
@@ -70,13 +71,16 @@ func mediaResultFacts(photos []domain.AssetRef, digest string) []domain.Executio
 	return facts
 }
 
+// mediaResultSettings is the template settings object both Runs declare.
+var mediaResultSettings = json.RawMessage(`{"prompt":"ember sprites","resolution":"1K"}`)
+
 func mediaResultInput(t *testing.T, photos []domain.AssetRef, digest string) string {
 	t.Helper()
 	examples := make([]map[string]string, len(photos))
 	for i, p := range photos {
 		examples[i] = map[string]string{"photoAssetId": p.AssetID, "assetRef": "gen_" + p.AssetID}
 	}
-	final, err := json.Marshal(map[string]any{"examples": examples, "settingsDigest": digest, "note": "chosen examples"})
+	final, err := json.Marshal(map[string]any{"examples": examples, "settings": mediaResultSettings, "settingsDigest": digest, "note": "chosen examples"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +136,10 @@ func TestMediaResult_FactsFromStore_CheckedPerRunThroughServicePath(t *testing.T
 			SHA256: strings.Repeat(fmt.Sprint(i+1), 64), CreatedAt: fixtureTime,
 		}))
 	}
-	const digest = "sha256:template-settings"
+	digest, err := runtime.SettingsDigest(mediaResultSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
 	input := mediaResultInput(t, photos, digest)
 
 	accepted := h.createRun(def.WorkflowID, def.Version, input)

@@ -125,3 +125,31 @@ func TestRunListFilterOf_FullRunID_ResolvesThroughCode(t *testing.T) {
 		}
 	}
 }
+
+func TestRunListFilterOf_DefinitionVersion_RequiresWorkflowAndBindsCursor(t *testing.T) {
+	for name, req := range map[string]ListRunsRequest{
+		"version without workflow": {DefinitionVersion: 2},
+		"negative version":         {WorkflowID: "wf_1", DefinitionVersion: -1},
+	} {
+		_, _, err := runListFilterOf(req)
+		var qErr *RunListQueryError
+		if !errors.As(err, &qErr) {
+			t.Errorf("%s: err = %v, want *RunListQueryError", name, err)
+		}
+	}
+
+	filter, _, err := runListFilterOf(ListRunsRequest{WorkflowID: "wf_1", DefinitionVersion: 2})
+	if err != nil {
+		t.Fatalf("version with workflow: %v", err)
+	}
+	if filter.WorkflowID != "wf_1" || filter.DefinitionVersion != 2 {
+		t.Fatalf("filter = %+v, want workflow wf_1 version 2", filter)
+	}
+	// A cursor issued for one version is refused under another version, and under no
+	// version at all.
+	unversioned := store.RunListFilter{WorkflowID: "wf_1"}
+	other := store.RunListFilter{WorkflowID: "wf_1", DefinitionVersion: 3}
+	if runListFilterDigest(filter) == runListFilterDigest(unversioned) || runListFilterDigest(filter) == runListFilterDigest(other) {
+		t.Error("the filter digest ignores the Definition version")
+	}
+}

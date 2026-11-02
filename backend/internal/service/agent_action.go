@@ -198,7 +198,9 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 		})
 	}
 
-	return s.completeAgentToolCall(ctx, *call, output, artifacts)
+	// The validated output, the declared artifacts and the reported charge commit
+	// together as the Attempt's result.
+	return s.completeAgentToolCall(ctx, *call, registry.ToolResult{Output: output, Artifacts: artifacts, Cost: result.Result.Cost})
 }
 
 // validateDeclaredArtifacts rejects a declared Execution Artifact whose reference is not
@@ -536,6 +538,23 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			}
 		}
 
+		// A Tool that reviews with the node's review model receives the Agent Run's frozen
+		// review Model ID under the same rule. An Agent Run that froze none passes no ID,
+		// and the Tool applies its mock policy; a frozen ID that no longer resolves fails
+		// here and never falls back to that policy.
+		reviewModelID := ""
+		if reg.Metadata.UsesReviewModel && agentRun.ReviewModelID != nil {
+			reviewModelID = frozenReviewModel(agentRun)
+			if unusable := unusableModel(s.deps.Models, "review model", reviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
+				if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
+					domain.FailureSyncExecution, domain.TerminationToolError, *unusable, now); err != nil {
+					return err
+				}
+				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
+				return nil
+			}
+		}
+
 		// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
 		// exists so a Tool call carries the same audit and callback target model as a Node
 		// Attempt. A synchronous call saves no callback token.
@@ -565,6 +584,9 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			callbackCtx = &registry.CallbackContext{URL: s.deps.Callback.BaseURL + CallbackPath, Token: token}
 		}
 
+		// The claiming process's identity is written with the STARTED row itself, so a
+		// committed Attempt always names the process that will make the call.
+		runnerID := s.deps.RunnerID
 		if err := tx.ToolAttempts().Create(ctx, domain.ToolAttempt{
 			ID:                attemptID,
 			ActionID:          action.ID,
@@ -573,6 +595,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			Status:            domain.ToolAttemptStarted,
 			Input:             decision.Arguments,
 			CallbackTokenHash: tokenHash,
+			RunnerID:          &runnerID,
 			StartedAt:         now,
 		}); err != nil {
 			return err
@@ -604,15 +627,16 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			executor:     reg.Executor,
 			outputSchema: reg.Metadata.OutputSchema,
 			action: registry.ToolAction{
-				RunID:        nodeRun.RunID,
-				AgentRunID:   agentRun.ID,
-				TurnID:       turn.ID,
-				ActionID:     action.ID,
-				ToolName:     toolName,
-				AttemptNo:    1,
-				Arguments:    decision.Arguments,
-				ImageModelID: imageModelID,
-				Callback:     callbackCtx,
+				RunID:         nodeRun.RunID,
+				AgentRunID:    agentRun.ID,
+				TurnID:        turn.ID,
+				ActionID:      action.ID,
+				ToolName:      toolName,
+				AttemptNo:     1,
+				Arguments:     decision.Arguments,
+				ImageModelID:  imageModelID,
+				ReviewModelID: reviewModelID,
+				Callback:      callbackCtx,
 			},
 			async:    async,
 			deadline: agentRun.Deadline,

@@ -34,12 +34,45 @@ type RunListRepository interface {
 	// WaitingSteps returns, per Run ID, the NodeRuns currently in WAITING_CALLBACK,
 	// ordered by waiting_at then node ID.
 	WaitingSteps(ctx context.Context, runIDs []string) (map[string][]RunStep, error)
+
+	// FinishedCalls returns, per Run ID, one entry for every finished call the Run made:
+	// each Node Attempt and Tool Attempt in SUCCEEDED or FAILED and each Agent Turn in
+	// COMPLETED or FAILED, with the Cost recorded beside its result (nil when none was).
+	// Which of them count as external calls is decided by the caller from the
+	// registered extension metadata; this read only reports the persisted facts. Runs
+	// without a finished call are absent from the map.
+	FinishedCalls(ctx context.Context, runIDs []string) (map[string][]FinishedCall, error)
+}
+
+// FinishedCallKind names the table a FinishedCall came from.
+type FinishedCallKind string
+
+const (
+	FinishedNodeAttempt FinishedCallKind = "NODE_ATTEMPT"
+	FinishedToolAttempt FinishedCallKind = "TOOL_ATTEMPT"
+	FinishedAgentTurn   FinishedCallKind = "AGENT_TURN"
+)
+
+// FinishedCall is one finished Node Attempt, Tool Attempt or Agent Turn of a Run, reduced
+// to what the cost read needs. ToolName is set for a Tool Attempt only. Dispatched
+// reports that a Node Attempt handed a task to a Provider; Uncertain that an Attempt
+// failed without knowing whether the Provider acted. Cost is the charge recorded with the
+// result, nil when none was recorded.
+type FinishedCall struct {
+	Kind       FinishedCallKind
+	ToolName   string
+	Dispatched bool
+	Uncertain  bool
+	Cost       *domain.Cost
 }
 
 // RunListFilter narrows the Run list. A zero-valued field does not filter.
 type RunListFilter struct {
 	WorkflowID string
-	Status     domain.RunStatus
+	// DefinitionVersion keeps Runs bound to that version of WorkflowID. It is only
+	// meaningful with WorkflowID set; the service refuses it alone.
+	DefinitionVersion int
+	Status            domain.RunStatus
 	// StartedFrom keeps Runs whose started_at is at or after it.
 	StartedFrom *time.Time
 	// IDPrefix keeps Runs whose ID starts with it, compared byte-wise.

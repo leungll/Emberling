@@ -108,11 +108,23 @@ func TestMockProvider_TaskStatus_AfterOutcome_ReportsSucceededWithPayload(t *tes
 	if got.Status != taskStatusSucceeded {
 		t.Fatalf("status = %q, want %q", got.Status, taskStatusSucceeded)
 	}
-	if want := `{"status":"SUCCEEDED","uri":"https://mock.invalid/v1/images/a.png"}`; string(got.Payload) != want {
+	calls := receiver.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("callbacks delivered = %d, want 1: a status query must not deliver another", len(calls))
+	}
+	// The status query reports the same bytes the callback carried: the caller's members
+	// plus the fixed charge every successful task result reports.
+	if want := string(calls[0].Body.Payload); string(got.Payload) != want {
 		t.Fatalf("payload = %s, want the callback payload %s", got.Payload, want)
 	}
-	if calls := receiver.Calls(); len(calls) != 1 {
-		t.Fatalf("callbacks delivered = %d, want 1: a status query must not deliver another", len(calls))
+	var members struct {
+		Status string          `json:"status"`
+		URI    string          `json:"uri"`
+		Usage  json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(got.Payload, &members); err != nil || members.Status != taskStatusSucceeded ||
+		members.URI != "https://mock.invalid/v1/images/a.png" || string(members.Usage) != `{"cost":`+fixedTaskCost+`}` {
+		t.Fatalf("payload = %s, want the caller's status and uri beside usage.cost %s", got.Payload, fixedTaskCost)
 	}
 }
 

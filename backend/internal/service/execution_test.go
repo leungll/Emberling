@@ -242,6 +242,10 @@ func (r *execFakeRunRepo) SetOutput(context.Context, *store.RunLock, json.RawMes
 func (r *execFakeRunRepo) SetError(context.Context, *store.RunLock, domain.ExecutionError) error {
 	return errExecFakeNotImplemented
 }
+func (r *execFakeRunRepo) GetByIdempotencyKey(context.Context, string, string) (domain.Run, error) {
+	return domain.Run{}, errExecFakeNotImplemented
+}
+
 func (r *execFakeRunRepo) LatestByWorkflow(context.Context, string) (*domain.Run, error) {
 	return nil, errExecFakeNotImplemented
 }
@@ -326,7 +330,7 @@ func (r *execFakeNodeAttemptRepo) ClearPoll(context.Context, string) (bool, erro
 func (r *execFakeNodeAttemptRepo) ListDuePolls(context.Context, time.Time, int) ([]store.DuePoll, error) {
 	return nil, errExecFakeNotImplemented
 }
-func (r *execFakeNodeAttemptRepo) MarkSucceeded(context.Context, string, domain.NodeAttemptStatus, time.Time, json.RawMessage) error {
+func (r *execFakeNodeAttemptRepo) MarkSucceeded(context.Context, string, domain.NodeAttemptStatus, time.Time, json.RawMessage, *domain.Cost) error {
 	return errExecFakeNotImplemented
 }
 func (r *execFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError, bool) error {

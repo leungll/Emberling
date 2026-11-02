@@ -192,6 +192,10 @@ func (r *cbRunRepo) SetError(_ context.Context, lock *store.RunLock, execErr dom
 	r.tx.state.runs[lock.RunID()] = run
 	return nil
 }
+func (r *cbRunRepo) GetByIdempotencyKey(context.Context, string, string) (domain.Run, error) {
+	return domain.Run{}, errCbNotImplemented
+}
+
 func (r *cbRunRepo) LatestByWorkflow(context.Context, string) (*domain.Run, error) {
 	return nil, errCbNotImplemented
 }
@@ -346,7 +350,7 @@ func (r *cbNodeAttemptRepo) MarkDispatched(_ context.Context, attemptID string, 
 	r.tx.state.attempts[attemptID] = attempt
 	return nil
 }
-func (r *cbNodeAttemptRepo) MarkSucceeded(_ context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage) error {
+func (r *cbNodeAttemptRepo) MarkSucceeded(_ context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage, _ *domain.Cost) error {
 	if !from.CanTransitionTo(domain.NodeAttemptSucceeded) {
 		return &domain.InvalidStateTransitionError{Entity: "NodeAttempt", ID: attemptID, From: string(from), To: string(domain.NodeAttemptSucceeded)}
 	}
@@ -1059,6 +1063,36 @@ func TestResumeNode_MixedCallbackAndPollShape_RejectedBeforeAnyRead(t *testing.T
 			}
 			if got := h.store.state.attempts[cbAttemptID].Status; got != domain.NodeAttemptDispatched {
 				t.Fatalf("Attempt after a refused request: want DISPATCHED, got %s", got)
+			}
+		})
+	}
+}
+
+// TestEarlierAttemptCredential_RuleCases_AcceptsOnlyEarlierAttemptOfSameKeyedNodeRun pins
+// the single rule that lets one Node Attempt's callback credential resume another: only an
+// earlier Attempt of the same NodeRun, and only when the node is EXTERNAL+KEYED, so both
+// Attempts presented the same idempotency key and name the same external task.
+func TestEarlierAttemptCredential_RuleCases_AcceptsOnlyEarlierAttemptOfSameKeyedNodeRun(t *testing.T) {
+	keyed := domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed}
+	unknown := domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown}
+	none := domain.SideEffectPolicy{Kind: domain.SideEffectNone}
+	target := domain.NodeAttempt{ID: "attempt_2", NodeRunID: "nr_a", AttemptNo: 2}
+
+	for _, tc := range []struct {
+		name       string
+		credential domain.NodeAttempt
+		side       domain.SideEffectPolicy
+		want       bool
+	}{
+		{name: "earlier attempt of the same keyed NodeRun", credential: domain.NodeAttempt{ID: "attempt_1", NodeRunID: "nr_a", AttemptNo: 1}, side: keyed, want: true},
+		{name: "earlier attempt without an idempotency key", credential: domain.NodeAttempt{ID: "attempt_1", NodeRunID: "nr_a", AttemptNo: 1}, side: unknown, want: false},
+		{name: "earlier attempt of a node without external side effect", credential: domain.NodeAttempt{ID: "attempt_1", NodeRunID: "nr_a", AttemptNo: 1}, side: none, want: false},
+		{name: "later attempt of the same keyed NodeRun", credential: domain.NodeAttempt{ID: "attempt_3", NodeRunID: "nr_a", AttemptNo: 3}, side: keyed, want: false},
+		{name: "attempt of another NodeRun", credential: domain.NodeAttempt{ID: "attempt_b1", NodeRunID: "nr_b", AttemptNo: 1}, side: keyed, want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := earlierAttemptCredentialAccepted(tc.credential, target, tc.side); got != tc.want {
+				t.Fatalf("earlierAttemptCredentialAccepted = %v, want %v", got, tc.want)
 			}
 		})
 	}

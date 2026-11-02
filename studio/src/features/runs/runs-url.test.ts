@@ -15,7 +15,14 @@ import {
   type RunsQuery,
 } from './runs-url';
 
-const base: RunsQuery = { status: null, wf: '', range: null, size: 20, cursor: null };
+const base: RunsQuery = {
+  status: null,
+  wf: '',
+  version: null,
+  range: null,
+  size: 20,
+  cursor: null,
+};
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -24,15 +31,25 @@ beforeEach(() => {
 
 describe('the Runs page address', () => {
   it('reads every parameter and ignores unknown values', () => {
-    expect(parseRunsQuery('?status=waiting&wf=wf_1&range=24h&size=50&cursor=abc')).toEqual({
+    expect(parseRunsQuery('?status=waiting&wf=wf_1&v=2&range=24h&size=50&cursor=abc')).toEqual({
       status: 'waiting',
       wf: 'wf_1',
+      version: 2,
       range: '24h',
       size: 50,
       cursor: 'abc',
     });
     expect(parseRunsQuery('?status=PAUSED&range=30d&size=7')).toEqual(base);
     expect(parseRunsQuery('', 100).size).toBe(100);
+  });
+
+  it('reads a version only with a workflow and only as a positive integer', () => {
+    expect(parseRunsQuery('?v=2').version).toBeNull();
+    expect(parseRunsQuery('?wf=wf_1&v=0').version).toBeNull();
+    expect(parseRunsQuery('?wf=wf_1&v=two').version).toBeNull();
+    expect(parseRunsQuery('?wf=wf_1&v=3').version).toBe(3);
+    expect(runsSearch({ ...base, version: 2 })).toBe('');
+    expect(runsSearch({ ...base, wf: 'wf_1', version: 2 })).toBe('?wf=wf_1&v=2');
   });
 
   it('writes only what differs from the defaults and keeps other markers', () => {
@@ -47,6 +64,12 @@ describe('the Runs page address', () => {
     const paged = { ...base, cursor: 'c2' };
     expect(withFilters(paged, { status: 'running' })).toEqual({ ...base, status: 'running' });
     expect(withFilters(paged, { size: 50 }).cursor).toBeNull();
+    // A version is chosen under one workflow: another workflow, or none, drops it.
+    const versioned = { ...base, wf: 'wf_1', version: 2 };
+    expect(withFilters(versioned, { wf: 'wf_2' }).version).toBeNull();
+    expect(withFilters(versioned, { wf: '' }).version).toBeNull();
+    expect(withFilters(versioned, { range: '7d' }).version).toBe(2);
+    expect(withFilters(versioned, { wf: 'wf_2', version: 1 }).version).toBe(1);
     expect(hasFilters(base)).toBe(false);
     expect(hasFilters({ ...base, range: '7d' })).toBe(true);
     // The status tab is not one of the "Clear filters" filters.
@@ -64,6 +87,11 @@ describe('the Runs page address', () => {
     );
     expect(toListQuery(base, '2026-10-12T00:00:00.000Z')).toEqual({
       startedAfter: '2026-10-12T00:00:00.000Z',
+      limit: 20,
+    });
+    expect(toListQuery({ ...base, wf: 'wf_1', version: 2 }, undefined)).toEqual({
+      workflowId: 'wf_1',
+      definitionVersion: 2,
       limit: 20,
     });
   });

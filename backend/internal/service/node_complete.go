@@ -112,11 +112,13 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 			return fmt.Errorf("execution: encode node output: %w", err)
 		}
 
-		if err := s.consumePendingCallback(ctx, tx, attempt.ID, attempt.CallbackTokenHash, p.consumePending, p.payloadHash, now); err != nil {
+		if err := s.consumePendingCallback(ctx, tx, attempt.ID, s.nodeAttemptCredentials(attempt, nodeRun.NodeType), p.consumePending, p.payloadHash, now); err != nil {
 			return err
 		}
 
-		if err := tx.NodeAttempts().MarkSucceeded(ctx, attempt.ID, p.fromAttempt, now, outputBytes); err != nil {
+		// The Cost the Provider reported travels with the output and commits here, once,
+		// beside the result; a completion without one leaves the charge unknown.
+		if err := tx.NodeAttempts().MarkSucceeded(ctx, attempt.ID, p.fromAttempt, now, outputBytes, p.output.Cost); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				// A duplicate or late completion of an Attempt that has already been
 				// resolved by another path (e.g. TimeoutAttempt won the race first).

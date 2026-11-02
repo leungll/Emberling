@@ -3,8 +3,10 @@ import type {
   ApiError,
   AssetRef,
   CreateDefinitionRequest,
+  CreateRunOptions,
   CreateRunRequest,
   CreateRunResponse,
+  CreateRunResult,
   Definition,
   DefinitionListItem,
   DefinitionListResponse,
@@ -57,10 +59,13 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   signal?: AbortSignal;
+  headers?: Record<string, string>;
+  /** Receives the response headers of a successful request, before the body is returned. */
+  onHeaders?: (headers: Headers) => void;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal } = options;
+  const { method = 'GET', body, signal, headers, onHeaders } = options;
 
   const init: RequestInit = { method };
   if (signal) init.signal = signal;
@@ -71,6 +76,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(body);
   }
+  if (headers)
+    init.headers = { ...(init.headers as Record<string, string> | undefined), ...headers };
 
   const response = await fetch(`${API_BASE}${path}`, init);
   const text = await response.text();
@@ -98,6 +105,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     );
   }
 
+  onHeaders?.(response.headers);
   return parsed as T;
 }
 
@@ -205,8 +213,27 @@ export function uploadAsset(file: File, signal?: AbortSignal): Promise<AssetRef>
 
 // --- Run --------------------------------------------------------------------
 
-export function createRun(body: CreateRunRequest): Promise<CreateRunResponse> {
-  return request<CreateRunResponse>('/runs', { method: 'POST', body });
+/**
+ * Starts a Run. With `options.idempotencyKey`, a resubmission the key already answered
+ * returns that Run with `replayed: true` instead of creating another; the same key with
+ * different content fails with `IDEMPOTENCY_KEY_MISMATCH`.
+ */
+export async function createRun(
+  body: CreateRunRequest,
+  options: CreateRunOptions = {},
+): Promise<CreateRunResult> {
+  let replayed = false;
+  const created = await request<CreateRunResponse>('/runs', {
+    method: 'POST',
+    body,
+    ...(options.idempotencyKey !== undefined
+      ? { headers: { 'Idempotency-Key': options.idempotencyKey } }
+      : {}),
+    onHeaders: (headers) => {
+      replayed = headers.get('Idempotent-Replayed') === 'true';
+    },
+  });
+  return { ...created, replayed };
 }
 
 /**

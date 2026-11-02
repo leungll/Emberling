@@ -6,7 +6,12 @@ import { Button } from '@/components/ui/button';
 import { useCopy } from '@/lib/copy';
 import { useEditor } from '@/features/editor/editor-context';
 import { issuesFor } from '@/features/editor/model/checks';
-import { imageToolsOf, specFor, type SectionId } from '@/features/editor/model/fields';
+import {
+  imageToolsOf,
+  reviewToolsOf,
+  specFor,
+  type SectionId,
+} from '@/features/editor/model/fields';
 import { RunPreview } from './RunPreview';
 import { Disclosure, Section } from './Section';
 import { Connections, HowItRuns, SettingField } from './StepSections';
@@ -95,7 +100,14 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
     const showImage =
       node.type === 'agent' &&
       (imageToolsOf(node, registry.tools).length > 0 || c.imageModelId !== undefined);
-    return section('model', [field('modelId'), showImage ? field('imageModelId') : null]);
+    const showReview =
+      node.type === 'agent' &&
+      (reviewToolsOf(node, registry.tools).length > 0 || c.reviewModelId !== undefined);
+    return section('model', [
+      field('modelId'),
+      showImage ? field('imageModelId') : null,
+      showReview ? field('reviewModelId') : null,
+    ]);
   };
   const behaviorSection = () => {
     const model = typeof c.modelId === 'string' ? registry.models.get(c.modelId) : undefined;

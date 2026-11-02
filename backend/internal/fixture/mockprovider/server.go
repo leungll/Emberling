@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -81,6 +82,13 @@ type Server struct {
 	// publicBaseURL, when set, prefixes every generated imageUrl in place of the
 	// request's own scheme and host. It is empty unless WithPublicBaseURL was passed.
 	publicBaseURL string
+
+	// noResponseDelay is how long a delayMs "noResponse" task waits before its callback
+	// (WithNoResponseCallbackDelay).
+	noResponseDelay time.Duration
+	// inFlightLimit is the in-flight count above which an acceptance is marked in the
+	// record (WithInFlightLimit); zero means no limit.
+	inFlightLimit int
 }
 
 // NewServer wires dispatcher into a ready-to-serve Server. dispatcher is owned by the
@@ -226,6 +234,10 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		s.reject(w, arrival, http.StatusBadRequest, `media must be absent or "video"`)
 		return
 	}
+	if req.DelayMs.Mode == delayNoResponse && s.controls == nil {
+		s.reject(w, arrival, http.StatusBadRequest, `delayMs "noResponse" requires test controls`)
+		return
+	}
 
 	externalTaskID := req.ExternalTaskID
 	if externalTaskID == "" {
@@ -273,8 +285,24 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 	if req.Media == mediaVideo && len(req.Payload) == 0 && req.Outcome != outcomeFailed {
 		task.Payload = videoSucceededPayload(requestBaseURL(r), externalTaskID)
 	}
+	if req.Outcome != outcomeFailed {
+		task.Payload = withFixedCost(task.Payload)
+	}
 	s.rememberTask(task)
-	s.statuses.accept(externalTaskID, task.Payload, req.Outcome == outcomeFailed)
+	inFlight := s.statuses.accept(externalTaskID, task.Payload, req.Outcome == outcomeFailed)
+
+	if req.DelayMs.Mode == delayNoResponse {
+		// The task exists and its idempotency key is claimed, but the caller never learns
+		// either: a retry with the same key is answered with this task's id, and the
+		// callback still arrives, after the configured delay.
+		if req.Media == mediaVideo {
+			s.recordMedia(recordEntry{Event: recordVideoDispatched, Kind: kindTask, recordDetail: recordDetail{ExternalTaskID: arrival.ExternalTaskID}})
+		}
+		s.recordAcceptance(arrival.ExternalTaskID, 0, inFlight)
+		dropResponse(w)
+		s.dispatcher.Schedule(task, s.noResponseDelay)
+		return
+	}
 
 	switch req.DelayMs.Mode {
 	case delayLost:
@@ -297,8 +325,20 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 	if req.Media == mediaVideo {
 		s.recordMedia(recordEntry{Event: recordVideoDispatched, Kind: kindTask, recordDetail: recordDetail{ExternalTaskID: arrival.ExternalTaskID}})
 	}
-	s.recordResponse(kindTask, arrival.ExternalTaskID, http.StatusAccepted, false)
+	s.recordAcceptance(arrival.ExternalTaskID, http.StatusAccepted, inFlight)
 	writeJSON(w, http.StatusAccepted, taskResponse{ExternalTaskID: externalTaskID})
+}
+
+// dropResponse closes the request's connection without writing a single response byte, so
+// the caller sees a transport failure after its request was fully received. A connection
+// that cannot be taken over is aborted through net/http's own abort signal instead, which
+// likewise sends nothing.
+func dropResponse(w http.ResponseWriter) {
+	conn, _, err := http.NewResponseController(w).Hijack()
+	if err != nil {
+		panic(http.ErrAbortHandler)
+	}
+	_ = conn.Close()
 }
 
 // claimIdempotencyKey binds key to externalTaskID unless key is already bound. It returns

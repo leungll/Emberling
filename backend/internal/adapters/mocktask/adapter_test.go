@@ -56,6 +56,40 @@ func TestMockTaskAdapter_Dispatch_ReturnsExternalTask(t *testing.T) {
 	}
 }
 
+// TestMockTaskAdapter_Dispatch_CreatedOrReplayed_ReportsReplayedOnlyForReplay pins how the
+// Provider's two accepting answers are told apart: 202 Accepted creates a task, 200 OK
+// replays the task already accepted under the same idempotency key. Both carry the task
+// id; only the replay sets Replayed.
+func TestMockTaskAdapter_Dispatch_CreatedOrReplayed_ReportsReplayedOnlyForReplay(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		status   int
+		replayed bool
+	}{
+		{name: "created", status: http.StatusAccepted, replayed: false},
+		{name: "replayed", status: http.StatusOK, replayed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(`{"externalTaskId":"provider_task_original"}`))
+			}))
+			t.Cleanup(server.Close)
+
+			task, err := New(server.URL, server.Client()).Dispatch(context.Background(), "prompt", nil, nil, testCallback(), "nr_1")
+			if err != nil {
+				t.Fatalf("Dispatch() error = %v, want nil", err)
+			}
+			if task.ExternalTaskID != "provider_task_original" {
+				t.Fatalf("ExternalTaskID = %q, want provider_task_original", task.ExternalTaskID)
+			}
+			if task.Replayed != tc.replayed {
+				t.Fatalf("Replayed = %v for status %d, want %v", task.Replayed, tc.status, tc.replayed)
+			}
+		})
+	}
+}
+
 // TestMockTaskAdapter_Dispatch_SuccessPayloadIsAnImageRef pins what the fabricated success
 // callback carries: a valid domain.ImageRef, never a Provider-private object. The
 // EXTERNAL branch's uri is the Mock Provider's own image route, so it is stable,
@@ -455,5 +489,50 @@ func TestMockTaskAdapter_Dispatch_TransportFailure_ErrorCarriesNoURLOrTransportT
 				t.Errorf("Detail() = %q, want the raw transport text for the developer log", detail)
 			}
 		})
+	}
+}
+
+// TestMockTaskAdapter_Dispatch_NoResponseDirective_AsksForResponseLossAndIsUncertain pins
+// the `mock:noResponse` directive: the dispatch asks the Provider to accept the task and
+// drop the connection without answering (delayMs "noResponse"), still carries the success
+// payload its callback will deliver, and the lost answer is reported as an uncertain
+// failure, because the Provider may have created the task. Text after a second colon is
+// ordinary prompt content, so a template can append the user's own request.
+func TestMockTaskAdapter_Dispatch_NoResponseDirective_AsksForResponseLossAndIsUncertain(t *testing.T) {
+	bodies := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode dispatch body: %v", err)
+		}
+		bodies <- body
+		conn, _, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Errorf("hijack: %v", err)
+			return
+		}
+		_ = conn.Close()
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := New(server.URL, server.Client()).Dispatch(
+		context.Background(), "mock:noResponse:a watercolor portrait", nil, map[string]any{"width": float64(512)}, testCallback(), "nr_1")
+	if err == nil {
+		t.Fatal("Dispatch() error = nil, want a failure for a dropped response")
+	}
+	if !isUncertain(err) {
+		t.Fatalf("Dispatch() error = %v, want an uncertain failure (the Provider may have accepted the task)", err)
+	}
+
+	body := <-bodies
+	if got := body["delayMs"]; got != "noResponse" {
+		t.Errorf("delayMs = %v, want %q", got, "noResponse")
+	}
+	if got := body["idempotencyKey"]; got != "nr_1" {
+		t.Errorf("idempotencyKey = %v, want the Runtime's key", got)
+	}
+	payload, _ := body["payload"].(map[string]any)
+	if payload["status"] != "SUCCEEDED" {
+		t.Errorf("payload = %v, want the success payload the later callback delivers", body["payload"])
 	}
 }

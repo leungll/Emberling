@@ -9,6 +9,7 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
+	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/store"
 )
@@ -20,8 +21,8 @@ import (
 // SUCCEEDED status, the appended Context Version, the new State Version when the Decision's
 // patch really changed the State, the Agent Run's pointers, and either the next READY Turn
 // or the termination the round or time limit demands.
-func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agentToolCall, result json.RawMessage, artifacts []domain.ArtifactRef) error {
-	outcome, err := s.commitAgentToolResult(ctx, call, syncToolOutcome, result, artifacts)
+func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agentToolCall, result registry.ToolResult) error {
+	outcome, err := s.commitAgentToolResult(ctx, call, syncToolOutcome, result)
 	if err != nil || outcome.nextTurnID == "" {
 		return err
 	}
@@ -100,7 +101,7 @@ type agentToolCommit struct {
 // transaction that acts on it. A row that is already consumed, expired or carries another
 // payload means another delivery won, which rolls this transaction back as superseded.
 func (s *ExecutionService) consumeReplayedPendingLocked(ctx context.Context, tx store.Tx, call agentToolCall, src agentToolOutcomeSource, now time.Time) error {
-	err := s.consumePendingCallback(ctx, tx, call.attemptID, src.attemptTokenHash, src.consumePending, src.payloadHash, now)
+	err := s.consumePendingCallback(ctx, tx, call.attemptID, ownCredentialOnly(src.attemptTokenHash), src.consumePending, src.payloadHash, now)
 	if errors.Is(err, errResumeSuperseded) {
 		return errAgentTurnSuperseded
 	}
@@ -153,11 +154,13 @@ func recordToolArtifacts(ctx context.Context, tx store.Tx, call agentToolCall, a
 // performs the post-COMMIT wake-up it owes. It does not chain the next Turn; the caller
 // decides that.
 //
-// artifacts are the Execution Artifacts the Tool declared with its result. Their content
-// is already in content storage; their metadata commits here, in the same transaction as
-// the result that references them, so a result that loses its race or rolls back leaves
-// no row behind - only unreferenced content for the offline sweeper.
-func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agentToolCall, src agentToolOutcomeSource, result json.RawMessage, artifacts []domain.ArtifactRef) (agentToolCommit, error) {
+// result.Artifacts are the Execution Artifacts the Tool declared with its result. Their
+// content is already in content storage; their metadata commits here, in the same
+// transaction as the result that references them, so a result that loses its race or
+// rolls back leaves no row behind - only unreferenced content for the offline sweeper.
+// result.Cost, the charge the Provider reported, commits on the Attempt in the same
+// transaction and is never written again.
+func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agentToolCall, src agentToolOutcomeSource, result registry.ToolResult) (agentToolCommit, error) {
 	var commit agentCommit
 	var nextTurnID string
 
@@ -198,12 +201,12 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
 			return err
 		}
-		if err := recordToolArtifacts(ctx, tx, call, artifacts, now); err != nil {
+		if err := recordToolArtifacts(ctx, tx, call, result.Artifacts, now); err != nil {
 			return err
 		}
 		// The conditional Attempt update is what decides that this caller, and not a stale
 		// duplicate of the same Tool call, a late callback or the timeout, owns the result.
-		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, result); err != nil {
+		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, result.Output, result.Cost); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}
@@ -238,7 +241,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		// to a successful round, so a result that cannot establish it commits the shared
 		// Action failure in place of the round: the Attempt keeps its result, no fact, patch
 		// or next Turn is written, and the failure keeps this delivery's source.
-		factErr, err := s.recordProducedFactLocked(ctx, tx, call, decision.Arguments, result, now)
+		factErr, err := s.recordProducedFactLocked(ctx, tx, call, decision.Arguments, result.Output, now)
 		if err != nil {
 			return err
 		}
@@ -269,7 +272,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return err
 		}
 
-		messages, err := s.appendToolRoundContext(ctx, tx, agentRun, call, decision, result, now)
+		messages, err := s.appendToolRoundContext(ctx, tx, agentRun, call, decision, result.Output, now)
 		if err != nil {
 			return err
 		}
@@ -300,105 +303,15 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			}
 		}
 
-		// The round and time limits are checked before the next Turn is created, so no Turn
-		// is ever left that nobody is allowed to execute.
-		nextTurnNo := agentRun.CurrentTurnNo + 1
-		termination := domain.AgentTermination("")
-		var execError domain.ExecutionError
-		switch {
-		case nextTurnNo > agentRun.MaxTurns:
-			termination = domain.TerminationMaxTurns
-			execError = domain.ExecutionError{
-				Code:    "MAX_TURNS",
-				Message: fmt.Sprintf("the agent reached its frozen bound of %d turns", agentRun.MaxTurns),
-			}
-		case !now.Before(agentRun.Deadline):
-			termination = domain.TerminationTimeout
-			execError = domain.ExecutionError{Code: "TIMEOUT", Message: "the agent deadline expired"}
-		}
-
-		from := store.AgentRunPointers{
-			CurrentTurnNo:         agentRun.CurrentTurnNo,
-			CurrentContextVersion: agentRun.CurrentContextVersion,
-			CurrentStateVersion:   agentRun.CurrentStateVersion,
-		}
-		to := store.AgentRunPointers{
-			CurrentTurnNo:         agentRun.CurrentTurnNo,
-			CurrentContextVersion: nextContextVersion,
-			CurrentStateVersion:   nextStateVersion,
-		}
-		if termination == "" {
-			to.CurrentTurnNo = nextTurnNo
-		}
-		advanced, err := tx.AgentRuns().AdvancePointers(ctx, agentRun.ID, from, to)
+		turnID, err := s.advanceAgentRoundLocked(ctx, tx, lock, nodeRun, agentRun, call, src, run, plan,
+			nextContextVersion, nextStateVersion, len(messages), now)
 		if err != nil {
 			return err
 		}
-		if !advanced {
-			// Another transaction already moved this Agent Run's recovery position, so it
-			// owns this round's outcome; nothing here may overwrite it.
-			return errAgentTurnSuperseded
-		}
-
-		if termination != "" {
-			if err := s.terminateAgentRunLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, termination, execError, now); err != nil {
-				return err
-			}
+		if turnID == "" {
 			commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq(), terminal: true}
 			return nil
 		}
-
-		if src.resumesWaiting {
-			// The loop continues, so the Agent NodeRun leaves WAITING_CALLBACK in the same
-			// transaction that creates the next Turn. A NodeRun no longer waiting
-			// means another path already resolved it.
-			if err := tx.NodeRuns().Transition(ctx, nodeRun.ID, domain.NodeRunWaitingCallback, domain.NodeRunRunning, now); err != nil {
-				if errors.Is(err, domain.ErrStaleClaim) {
-					return errAgentTurnSuperseded
-				}
-				return err
-			}
-		}
-
-		turnID := s.deps.IDs.NewID(domain.IDPrefixAgentTurn)
-		requestBytes, err := json.Marshal(agentTurnRequest{
-			ModelID:        agentRun.ModelID,
-			ContextVersion: nextContextVersion,
-			StateVersion:   nextStateVersion,
-			AllowedTools:   agentRun.AllowedTools,
-			MessageCount:   len(messages),
-		})
-		if err != nil {
-			return fmt.Errorf("execution: encode agent turn request for agent run %s: %w", agentRun.ID, err)
-		}
-		if err := tx.AgentTurns().Create(ctx, domain.AgentTurn{
-			ID:         turnID,
-			AgentRunID: agentRun.ID,
-			TurnNo:     nextTurnNo,
-			Status:     domain.AgentTurnReady,
-			Request:    requestBytes,
-		}); err != nil {
-			return err
-		}
-		if err := s.appendEvent(ctx, tx, lock, call.runID, &nodeRun.ID, domain.EventAgentTurnReady, now, agentTurnPayload{
-			AgentRunID:     agentRun.ID,
-			TurnID:         turnID,
-			TurnNo:         nextTurnNo,
-			ContextVersion: nextContextVersion,
-			StateVersion:   nextStateVersion,
-		}); err != nil {
-			return err
-		}
-		if src.resumesWaiting {
-			// With the Agent NodeRun RUNNING again, a PAUSED Run becomes RUNNING and
-			// RUN_RESUMED commits in the same transaction.
-			if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
-				return err
-			}
-		} else if err := tx.Runs().UpdateAggregate(ctx, lock, lock.Status(), now); err != nil {
-			return err
-		}
-
 		nextTurnID = turnID
 		commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq()}
 		return nil
@@ -411,6 +324,129 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 	}
 	s.wake(commit)
 	return agentToolCommit{committed: true, nextTurnID: nextTurnID}, nil
+}
+
+// advanceAgentRoundLocked is the shared tail of a round whose Context Version is already
+// appended: it checks the round and time limits, conditionally advances the Agent Run's
+// pointers to nextContextVersion and nextStateVersion, and either terminates the Agent Run
+// the limit demands or creates the next READY Turn with AGENT_TURN_READY and persists the
+// seq watermark. It runs under the Run aggregate lock the caller holds and returns the
+// next Turn's id, or "" when the Agent Run terminated. A pointer update that loses returns
+// errAgentTurnSuperseded, which rolls the caller's whole transaction back.
+//
+// run and plan are needed only when src resumes a waiting Agent NodeRun, which
+// re-derives the Run status.
+func (s *ExecutionService) advanceAgentRoundLocked(
+	ctx context.Context,
+	tx store.Tx,
+	lock *store.RunLock,
+	nodeRun domain.NodeRun,
+	agentRun domain.AgentRun,
+	call agentToolCall,
+	src agentToolOutcomeSource,
+	run domain.Run,
+	plan *runtime.CompiledDefinition,
+	nextContextVersion int,
+	nextStateVersion int,
+	messageCount int,
+	now time.Time,
+) (string, error) {
+	// The round and time limits are checked before the next Turn is created, so no Turn
+	// is ever left that nobody is allowed to execute.
+	nextTurnNo := agentRun.CurrentTurnNo + 1
+	termination := domain.AgentTermination("")
+	var execError domain.ExecutionError
+	switch {
+	case nextTurnNo > agentRun.MaxTurns:
+		termination = domain.TerminationMaxTurns
+		execError = domain.ExecutionError{
+			Code:    "MAX_TURNS",
+			Message: fmt.Sprintf("the agent reached its frozen bound of %d turns", agentRun.MaxTurns),
+		}
+	case !now.Before(agentRun.Deadline):
+		termination = domain.TerminationTimeout
+		execError = domain.ExecutionError{Code: "TIMEOUT", Message: "the agent deadline expired"}
+	}
+
+	from := store.AgentRunPointers{
+		CurrentTurnNo:         agentRun.CurrentTurnNo,
+		CurrentContextVersion: agentRun.CurrentContextVersion,
+		CurrentStateVersion:   agentRun.CurrentStateVersion,
+	}
+	to := store.AgentRunPointers{
+		CurrentTurnNo:         agentRun.CurrentTurnNo,
+		CurrentContextVersion: nextContextVersion,
+		CurrentStateVersion:   nextStateVersion,
+	}
+	if termination == "" {
+		to.CurrentTurnNo = nextTurnNo
+	}
+	advanced, err := tx.AgentRuns().AdvancePointers(ctx, agentRun.ID, from, to)
+	if err != nil {
+		return "", err
+	}
+	if !advanced {
+		// Another transaction already moved this Agent Run's recovery position, so it
+		// owns this round's outcome; nothing here may overwrite it.
+		return "", errAgentTurnSuperseded
+	}
+
+	if termination != "" {
+		return "", s.terminateAgentRunLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, termination, execError, now)
+	}
+
+	if src.resumesWaiting {
+		// The loop continues, so the Agent NodeRun leaves WAITING_CALLBACK in the same
+		// transaction that creates the next Turn. A NodeRun no longer waiting
+		// means another path already resolved it.
+		if err := tx.NodeRuns().Transition(ctx, nodeRun.ID, domain.NodeRunWaitingCallback, domain.NodeRunRunning, now); err != nil {
+			if errors.Is(err, domain.ErrStaleClaim) {
+				return "", errAgentTurnSuperseded
+			}
+			return "", err
+		}
+	}
+
+	turnID := s.deps.IDs.NewID(domain.IDPrefixAgentTurn)
+	requestBytes, err := json.Marshal(agentTurnRequest{
+		ModelID:        agentRun.ModelID,
+		ContextVersion: nextContextVersion,
+		StateVersion:   nextStateVersion,
+		AllowedTools:   agentRun.AllowedTools,
+		MessageCount:   messageCount,
+	})
+	if err != nil {
+		return "", fmt.Errorf("execution: encode agent turn request for agent run %s: %w", agentRun.ID, err)
+	}
+	if err := tx.AgentTurns().Create(ctx, domain.AgentTurn{
+		ID:         turnID,
+		AgentRunID: agentRun.ID,
+		TurnNo:     nextTurnNo,
+		Status:     domain.AgentTurnReady,
+		Request:    requestBytes,
+	}); err != nil {
+		return "", err
+	}
+	if err := s.appendEvent(ctx, tx, lock, call.runID, &nodeRun.ID, domain.EventAgentTurnReady, now, agentTurnPayload{
+		AgentRunID:     agentRun.ID,
+		TurnID:         turnID,
+		TurnNo:         nextTurnNo,
+		ContextVersion: nextContextVersion,
+		StateVersion:   nextStateVersion,
+	}); err != nil {
+		return "", err
+	}
+	if src.resumesWaiting {
+		// With the Agent NodeRun RUNNING again, a PAUSED Run becomes RUNNING and
+		// RUN_RESUMED commits in the same transaction.
+		if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
+			return "", err
+		}
+	} else if err := tx.Runs().UpdateAggregate(ctx, lock, lock.Status(), now); err != nil {
+		return "", err
+	}
+
+	return turnID, nil
 }
 
 // runPlan reads a Run and compiles the immutable Definition version it is bound to.

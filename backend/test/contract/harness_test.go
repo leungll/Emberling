@@ -122,6 +122,9 @@ type testEnv struct {
 // testEnvOptions customizes newTestEnvWithOptions for the handful of tests that need
 // something other than the fast-default wiring newTestEnv gives every other test.
 type testEnvOptions struct {
+	// ReviewMaxImageBytes overrides the inline image bound of review_asset when > 0.
+	ReviewMaxImageBytes int64
+
 	// PollInterval overrides defaultTestPollInterval when > 0.
 	PollInterval time.Duration
 
@@ -199,6 +202,10 @@ type testEnvOptions struct {
 	ExtraNodeRegistrations []registry.NodeRegistration
 	ExtraToolRegistrations []registry.ToolRegistration
 
+	// RunnerID is this Backend process's identity. Left empty, the service generates one,
+	// so two Backends over the same Pool are two processes either way.
+	RunnerID string
+
 	// TraceMaxFieldBytes overrides api.Deps.TraceMaxFieldBytes when > 0, so a test can
 	// push a Tool-call member over the Trace field bound without a large Tool result.
 	TraceMaxFieldBytes int
@@ -209,10 +216,24 @@ type testEnvOptions struct {
 	// photo from this Backend's Asset storage.
 	ImageModels []*openrouterimage.Provider
 
+	// TaskGateway, when set, adds the task gateway path the Backend process adds when
+	// its gateway group is configured: the listed models are registered as
+	// image_generation models of the gateway's Provider, and the image_generation Node
+	// gets a second task instance, which dispatches to BaseURL without mock scenarios.
+	TaskGateway *testTaskGateway
+
 	// Clock, when set, replaces the system clock every service of this Backend reads, so
 	// a restart test can start a second Backend whose time is already past a deadline the
 	// first one froze, instead of waiting for real time to pass.
 	Clock domain.Clock
+}
+
+// testTaskGateway is the task gateway wiring of one testEnv.
+type testTaskGateway struct {
+	ProviderID string
+	BaseURL    string
+	Client     *http.Client
+	Models     []mocktask.TaskModel
 }
 
 // defaultTestCallbackMaxPayloadBytes bounds POST /api/callbacks bodies in every testEnv
@@ -304,6 +325,13 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 			t.Fatalf("register extra model provider: %v", err)
 		}
 	}
+	taskProviders := []imagegeneration.TaskProvider{mocktask.New(mockTaskBaseURL, opts.TaskClient)}
+	if gateway := opts.TaskGateway; gateway != nil {
+		if err := modelRegistry.Register(context.Background(), mocktask.NewTaskModels(gateway.ProviderID, gateway.Models)); err != nil {
+			t.Fatalf("register task gateway models: %v", err)
+		}
+		taskProviders = append(taskProviders, mocktask.New(gateway.BaseURL, gateway.Client, mocktask.WithProviderID(gateway.ProviderID), mocktask.WithoutMockScenarios()))
+	}
 	dispatcher := &fakeAsyncDispatcher{}
 	for _, reg := range append([]registry.NodeRegistration{
 		textinput.Registration(),
@@ -314,7 +342,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		mediaoutput.Registration(),
 		mediaresult.Registration(),
 		textgeneration.Registration(modelRegistry),
-		imagegeneration.Registration(modelRegistry, mocktask.New(mockTaskBaseURL, opts.TaskClient)),
+		imagegeneration.Registration(modelRegistry, taskProviders...),
 		agent.Registration(),
 		testAsyncNodeRegistration(dispatcher),
 	}, opts.ExtraNodeRegistrations...) {
@@ -340,6 +368,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	artifactStore := asset.NewArtifactStore(assetRoot, defaultTestArtifactMaxBytes)
 
 	photos := &assetPhotos{}
+	artifactsRef := &lateArtifacts{}
 	if !opts.SkipLookupTool {
 		if err := toolRegistry.Register(lookup.Registration()); err != nil {
 			t.Fatalf("register tool %s: %v", lookup.ToolName, err)
@@ -352,7 +381,12 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		// The mock image model addresses a photo by its id; a real one reads the photo's
 		// bytes through the photo port, which the Asset service backs once it exists.
 		generateimage.Registration(imageGenerators, photos, artifactStore),
-		reviewasset.Registration(),
+		reviewasset.Registration(reviewasset.Ports{
+			Photos:        reviewPhotos{assets: photos},
+			Artifacts:     reviewArtifacts{env: artifactsRef},
+			Models:        modelRegistry,
+			MaxImageBytes: reviewImageMaxBytes(opts.ReviewMaxImageBytes),
+		}),
 		generatevideo.Registration(mockTaskBaseURL, opts.TaskClient),
 	} {
 		if err := toolRegistry.Register(reg); err != nil {
@@ -392,6 +426,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		Queue:           queue,
 		Notifier:        serviceNotifier,
 		Logger:          opts.Logger,
+		RunnerID:        opts.RunnerID,
 		Callback: service.CallbackConfig{
 			BaseURL:       callbackBaseURL,
 			SigningSecret: []byte(testCallbackSigningSecret),
@@ -406,6 +441,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	assetService := service.NewAssetService(deps)
 	photos.assets = assetService
 	artifactService := service.NewArtifactService(deps)
+	artifactsRef.svc = artifactService
 
 	workPool := work.NewPool(queue, executionService, 4, opts.WorkHooks, opts.Logger)
 

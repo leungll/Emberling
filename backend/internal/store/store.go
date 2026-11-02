@@ -150,6 +150,12 @@ type RunRepository interface {
 	Create(ctx context.Context, run domain.Run) error
 	Get(ctx context.Context, runID string) (domain.Run, error)
 
+	// GetByIdempotencyKey returns the Run of workflowID created with the given submission
+	// key, or domain.ErrNotFound when no Run of that Workflow holds it. Create reports a
+	// key already held by another Run of the same Workflow as
+	// domain.ErrRunIdempotencyKeyInUse.
+	GetByIdempotencyKey(ctx context.Context, workflowID, key string) (domain.Run, error)
+
 	// LockForUpdate takes the Run aggregate lock with SELECT ... FOR UPDATE. Every
 	// transaction that touches execution facts of this Run must hold it before updating
 	// a NodeRun, an Attempt or Agent facts, and before allocating Event seq.
@@ -284,11 +290,12 @@ type NodeAttemptRepository interface {
 	// poll is the caller's conditional update.
 	ListDuePolls(ctx context.Context, now time.Time, limit int) ([]DuePoll, error)
 
-	// MarkSucceeded conditionally moves an Attempt to SUCCEEDED and writes its result
-	// and completed_at. Result is written once: a stale or illegal caller never
-	// overwrites a committed result. Same domain.ErrStaleClaim /
+	// MarkSucceeded conditionally moves an Attempt to SUCCEEDED and writes its result,
+	// completed_at and the Cost the Provider reported for the call (nil when it reported
+	// none). Result and Cost are written once: a stale or illegal caller never overwrites
+	// a committed result. Same domain.ErrStaleClaim /
 	// *domain.InvalidStateTransitionError semantics as Transition.
-	MarkSucceeded(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage) error
+	MarkSucceeded(ctx context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage, cost *domain.Cost) error
 
 	// MarkFailed conditionally moves an Attempt to FAILED and writes its error,
 	// completed_at and whether the failed call's external outcome was uncertain, with the
@@ -456,10 +463,10 @@ type AgentTurnRepository interface {
 	ListReady(ctx context.Context, limit int) ([]domain.AgentTurn, error)
 
 	// MarkCompleted conditionally moves a RUNNING Turn to COMPLETED and writes the model
-	// response, the reported token usage and completed_at, in the transaction that also
-	// commits the Decision and its READY Action. It returns domain.ErrStaleClaim when
-	// the Turn is not RUNNING.
-	MarkCompleted(ctx context.Context, turnID string, now time.Time, response json.RawMessage, usage *domain.TokenUsage) error
+	// response, the reported token usage, the reported Cost (nil when none) and
+	// completed_at, in the transaction that also commits the Decision and its READY
+	// Action. It returns domain.ErrStaleClaim when the Turn is not RUNNING.
+	MarkCompleted(ctx context.Context, turnID string, now time.Time, response json.RawMessage, usage *domain.TokenUsage, cost *domain.Cost) error
 
 	// MarkFailed conditionally moves a RUNNING Turn to FAILED and writes its error and
 	// completed_at. A failed Turn may have no Decision and no Action.
@@ -538,9 +545,10 @@ type ToolAttemptRepository interface {
 
 	// MarkSucceeded conditionally moves an Attempt from `from` (STARTED for a synchronous
 	// call, DISPATCHED for an asynchronous call resumed by its callback) to SUCCEEDED and
-	// writes its result and completed_at. A late duplicate finds the row no longer in
-	// `from` and gets domain.ErrStaleClaim instead of overwriting the committed result.
-	MarkSucceeded(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, result json.RawMessage) error
+	// writes its result, completed_at and the Cost the Provider reported (nil when none).
+	// A late duplicate finds the row no longer in `from` and gets domain.ErrStaleClaim
+	// instead of overwriting the committed result.
+	MarkSucceeded(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, result json.RawMessage, cost *domain.Cost) error
 
 	// MarkFailed conditionally moves an Attempt from `from` to FAILED and writes its error
 	// and completed_at, with the same domain.ErrStaleClaim semantics.
@@ -557,6 +565,18 @@ type ToolAttemptRepository interface {
 	// DISPATCHED one. It reports false when the Attempt already completed, which is what
 	// lets a result that committed first keep its outcome.
 	MarkTimedOut(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) (bool, error)
+
+	// ListOrphanStarted returns STARTED synchronous Tool Attempts written by a runner other
+	// than currentRunnerID, of Agent Runs that have not terminated and whose deadline has
+	// not passed, oldest first and at most limit of them. An Attempt with no recorded
+	// runner is never returned. Read-only; the caller decides nothing from it except which
+	// use case to call.
+	ListOrphanStarted(ctx context.Context, currentRunnerID string, now time.Time, limit int) ([]domain.ToolAttempt, error)
+
+	// MarkInterrupted conditionally moves a STARTED Attempt to FAILED, writing its error,
+	// completed_at and the uncertain determination once. A row no longer STARTED returns
+	// domain.ErrStaleClaim.
+	MarkInterrupted(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError, uncertain bool) error
 
 	// CountByAgentRunForTools counts the Tool Attempts of one Agent Run whose Tool is
 	// one of toolNames, in every Attempt status. This is the number of generation calls

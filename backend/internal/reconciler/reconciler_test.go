@@ -92,6 +92,15 @@ type fakeTx struct {
 	agentTurns   *fakeAgentTurnRepo
 	agentActions *fakeAgentActionRepo
 	agentRuns    *fakeAgentRunRepo
+	toolAttempts *fakeToolAttemptRepo
+}
+
+func (t *fakeTx) ToolAttempts() store.ToolAttemptRepository {
+	if t.toolAttempts == nil {
+		// A nil repository makes any orphan scan call panic, proving it never happened.
+		return nil
+	}
+	return t.toolAttempts
 }
 
 func (t *fakeTx) NodeRuns() store.NodeRunRepository                 { return t.nodeRuns }
@@ -131,6 +140,19 @@ func (r *fakeAgentRunRepo) ListExpired(context.Context, time.Time, int) ([]domai
 	return r.expired, nil
 }
 
+// fakeToolAttemptRepo serves the orphan scan's lister and records the runner it was asked
+// about. Like the other fakes, any other call panics on the embedded nil interface.
+type fakeToolAttemptRepo struct {
+	store.ToolAttemptRepository
+	orphans    []domain.ToolAttempt
+	runnerSeen []string
+}
+
+func (r *fakeToolAttemptRepo) ListOrphanStarted(_ context.Context, currentRunnerID string, _ time.Time, _ int) ([]domain.ToolAttempt, error) {
+	r.runnerSeen = append(r.runnerSeen, currentRunnerID)
+	return r.orphans, nil
+}
+
 type fakeUoW struct{ tx *fakeTx }
 
 func (u *fakeUoW) WithinTx(ctx context.Context, fn func(context.Context, store.Tx) error) error {
@@ -155,6 +177,7 @@ type fakeExecutor struct {
 	agentToolCalls    []agentCall
 	agentFinalCalls   []agentCall
 	agentTimeoutCalls []string
+	orphanCalls       []string
 }
 
 // agentCall records which Agent work item the Reconciler handed to which use case, and
@@ -189,6 +212,11 @@ func (e *fakeExecutor) CompleteAgentFinal(_ context.Context, actionID string, so
 
 func (e *fakeExecutor) TimeoutAgentRun(_ context.Context, agentRunID string) error {
 	e.agentTimeoutCalls = append(e.agentTimeoutCalls, agentRunID)
+	return nil
+}
+
+func (e *fakeExecutor) HandleOrphanToolAttempt(_ context.Context, attemptID string) error {
+	e.orphanCalls = append(e.orphanCalls, attemptID)
 	return nil
 }
 
@@ -539,5 +567,50 @@ func TestReconciler_DuePolls_OnlyCallsPollAttempt(t *testing.T) {
 	}
 	if len(report.Errors) != 1 || !errors.Is(report.Errors[0], providerDown) || !strings.Contains(report.Errors[0].Error(), "at_broken") {
 		t.Fatalf("report.Errors: want only the at_broken error, got %v", report.Errors)
+	}
+}
+
+// TestReconciler_OrphanScan_HandsEachOrphanToUseCase proves the orphan scan only discovers
+// work: it lists with this process's runner identity and hands every Attempt to the
+// orphaned Tool Attempt use case, after the deadline scan and before the READY Turn scan.
+func TestReconciler_OrphanScan_HandsEachOrphanToUseCase(t *testing.T) {
+	exec := &fakeExecutor{}
+	tx := emptyFakeTx()
+	tx.toolAttempts = &fakeToolAttemptRepo{orphans: []domain.ToolAttempt{{ID: "ta_1"}, {ID: "ta_2"}}}
+	tx.agentRuns.expired = []domain.AgentRun{{ID: "ar_expired"}}
+	tx.agentTurns.ready = []domain.AgentTurn{{ID: "turn_ready"}}
+
+	var logBuf bytes.Buffer
+	rec := newTestReconciler(t, exec, tx, &logBuf)
+	rec.cfg.RunnerID = "runner-current"
+	report, err := rec.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if got := tx.toolAttempts.runnerSeen; len(got) != 1 || got[0] != "runner-current" {
+		t.Errorf("orphan scan runner = %v, want [runner-current]", got)
+	}
+	if len(exec.orphanCalls) != 2 || exec.orphanCalls[0] != "ta_1" || exec.orphanCalls[1] != "ta_2" {
+		t.Errorf("orphan use case calls = %v, want [ta_1 ta_2]", exec.orphanCalls)
+	}
+	if report.OrphanToolAttemptsFound != 2 || report.OrphanToolAttemptsHandled != 2 {
+		t.Errorf("report = %+v, want 2 found and 2 handled", report)
+	}
+	if len(exec.agentTimeoutCalls) != 1 || len(exec.agentTurnCalls) != 1 {
+		t.Errorf("timeout calls %v, turn calls %v, want one each", exec.agentTimeoutCalls, exec.agentTurnCalls)
+	}
+}
+
+// TestReconciler_OrphanScan_SkippedWithoutRunnerID proves a Reconciler with no runner
+// identity never scans for orphans: the nil Tool Attempt repository would panic otherwise.
+func TestReconciler_OrphanScan_SkippedWithoutRunnerID(t *testing.T) {
+	exec := &fakeExecutor{}
+	var logBuf bytes.Buffer
+	report, err := newTestReconciler(t, exec, emptyFakeTx(), &logBuf).RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(exec.orphanCalls) != 0 || report.OrphanToolAttemptsFound != 0 {
+		t.Errorf("orphan calls = %v, report = %+v, want no orphan scan", exec.orphanCalls, report)
 	}
 }

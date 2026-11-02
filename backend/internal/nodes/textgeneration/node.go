@@ -145,7 +145,7 @@ func (e Executor) Execute(ctx context.Context, input registry.NodeInput, config 
 
 	return registry.NodeResult{
 		Kind:       registry.NodeResultCompleted,
-		Output:     &registry.NodeOutput{Ports: map[string]json.RawMessage{"text": response.Decision.Output}},
+		Output:     &registry.NodeOutput{Ports: map[string]json.RawMessage{"text": response.Decision.Output}, Cost: response.Cost},
 		TokenUsage: response.TokenUsage,
 	}, nil
 }

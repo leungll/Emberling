@@ -87,7 +87,7 @@ func assertKey(t *testing.T, got map[string]json.RawMessage, key, want string) {
 }
 
 // toolViewKeys are every key this projection may add to a Tool Attempt.
-var toolViewKeys = []string{"photo", "test", "deployment", "video", "withheld"}
+var toolViewKeys = []string{"photo", "settings", "review", "test", "deployment", "video", "withheld"}
 
 func assertNoToolView(t *testing.T, got map[string]json.RawMessage) {
 	t.Helper()
@@ -104,10 +104,11 @@ func TestToolAttemptView_GenerateImageInPhotoSet_ProjectsPhotoPositionOfCount(t 
 		toolViewFieldBound)
 
 	assertKey(t, got, "photo", `{"photoAssetId":"asset_b","position":2,"count":3}`)
-	for _, key := range []string{"test", "deployment", "video", "withheld"} {
+	assertKey(t, got, "settings", `{"prompt":"warm"}`)
+	for _, key := range []string{"review", "test", "deployment", "video", "withheld"} {
 		assertKey(t, got, key, "")
 	}
-	for _, forbidden := range []string{"settings", "imageUrl", "artifact", "result", "arguments"} {
+	for _, forbidden := range []string{"imageUrl", "artifact", "result", "arguments", "settingsDigest"} {
 		if _, present := got[forbidden]; present {
 			t.Errorf("Tool Attempt projects %q, want only the declared members", forbidden)
 		}
@@ -265,7 +266,6 @@ func TestToolAttemptView_MembersOfAnotherShape_ProjectNothing(t *testing.T) {
 func TestToolAttemptView_OtherTools_ProjectNothing(t *testing.T) {
 	for _, attempt := range []domain.ToolAttempt{
 		toolAttempt("lookup", domain.ToolAttemptSucceeded, `{"key":"record-1"}`, `{"value":"v1"}`),
-		toolAttempt("review_asset", domain.ToolAttemptSucceeded, `{"assetRef":"artifact_1","photoAssetId":"asset_b"}`, `{"passed":true,"policyVersion":"p1"}`),
 	} {
 		assertNoToolView(t, projectAttempt(t, photoSetRunInput, attempt, toolViewFieldBound))
 	}

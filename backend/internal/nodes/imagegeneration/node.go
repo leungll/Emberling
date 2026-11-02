@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -58,13 +59,14 @@ const configSchema = `{
   "required": ["modelId", "width"]
 }`
 
-// ModelResolver resolves a Model ID to its registration and serving ModelProvider.
-// *registry.ModelRegistry satisfies it; this node depends only on the narrow shape it
-// calls. Image Generation resolves a Model ID rather than a Provider because its config
-// contract renders `modelId` with a MODEL_SELECTOR filtered by the image_generation
-// capability.
+// ModelResolver resolves a Model ID to its registration and serving ModelProvider, and to
+// the asynchronous Provider that runs its tasks. *registry.ModelRegistry satisfies it;
+// this node depends only on the narrow shape it calls. Image Generation resolves a Model
+// ID rather than a Provider because its config contract renders `modelId` with a
+// MODEL_SELECTOR filtered by the image_generation capability.
 type ModelResolver interface {
 	Get(modelID string) (registry.ModelRegistration, registry.ModelProvider, bool)
+	ProviderID(modelID string) (string, error)
 }
 
 // TaskDispatcher is the one Provider interaction this node needs: accept one image
@@ -93,11 +95,13 @@ type TaskPoller interface {
 	Poll(ctx context.Context, externalTaskID string) (registry.PollStatus, json.RawMessage, error)
 }
 
-// TaskProvider is the Adapter this node is registered with: it dispatches the task and
-// answers status queries for it.
+// TaskProvider is one Adapter instance this node is registered with: it dispatches the
+// task, answers status queries for it, and names the Provider it talks to - the same ID
+// the models it serves declare and its external task identities carry.
 type TaskProvider interface {
 	TaskDispatcher
 	TaskPoller
+	ProviderID() string
 }
 
 // pollIntervalMs and maxPolls bound the Runtime's status queries for one Attempt. The
@@ -110,10 +114,26 @@ const (
 	maxPolls       = 30
 )
 
-// Registration returns the Image Generation NodeRegistration bound to resolver and
-// provider. Both are consulted per call, never cached across calls, so a Registry update
-// between Definition save and Run creation is observed correctly.
-func Registration(resolver ModelResolver, provider TaskProvider) registry.NodeRegistration {
+// Registration returns the Image Generation NodeRegistration bound to resolver and the
+// task Provider instances this process serves, keyed by their Provider IDs. The resolver
+// is consulted per call, never cached across calls, so a Registry update between
+// Definition save and Run creation is observed correctly.
+//
+// An instance with an empty or repeated Provider ID is a wiring error of the process
+// itself, so Registration panics at startup rather than registering a node that could
+// dispatch a model's tasks to the wrong Provider.
+func Registration(resolver ModelResolver, providers ...TaskProvider) registry.NodeRegistration {
+	instances := make(map[string]TaskProvider, len(providers))
+	for _, provider := range providers {
+		id := provider.ProviderID()
+		if id == "" {
+			panic("image_generation: a task Provider instance has an empty Provider ID")
+		}
+		if _, taken := instances[id]; taken {
+			panic(fmt.Sprintf("image_generation: two task Provider instances share the Provider ID %q", id))
+		}
+		instances[id] = provider
+	}
 	return registry.NodeRegistration{
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
@@ -136,19 +156,34 @@ func Registration(resolver ModelResolver, provider TaskProvider) registry.NodeRe
 			SideEffect: domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyKeyed},
 			Poll:       &domain.PollPolicy{IntervalMs: pollIntervalMs, MaxPolls: maxPolls},
 		},
-		Binding: registry.ExecutorBinding{Executor: Executor{resolver: resolver, dispatcher: provider, poller: provider}},
+		Binding: registry.ExecutorBinding{Executor: Executor{resolver: resolver, providers: instances}},
 	}
 }
 
 // Executor implements registry.PollableAsyncNodeExecutor for the Image Generation Node.
 type Executor struct {
-	resolver   ModelResolver
-	dispatcher TaskDispatcher
-	poller     TaskPoller
+	resolver  ModelResolver
+	providers map[string]TaskProvider
 }
 
-// ValidateSemantics checks what ConfigSchema cannot express: the referenced model exists
-// and declares the image_generation capability.
+// providerFor resolves modelID to the Provider instance that runs its tasks. A model whose
+// Provider has no instance in this process fails explicitly: another instance is never
+// substituted, because its tasks would run on a Provider the model does not belong to.
+func (e Executor) providerFor(modelID string) (TaskProvider, error) {
+	providerID, err := e.resolver.ProviderID(modelID)
+	if err != nil {
+		return nil, fmt.Errorf("image_generation: model %q: %w", modelID, err)
+	}
+	provider, ok := e.providers[providerID]
+	if !ok {
+		return nil, fmt.Errorf("image_generation: model %q is served by provider %q, which has no task instance in this process", modelID, providerID)
+	}
+	return provider, nil
+}
+
+// ValidateSemantics checks what ConfigSchema cannot express: the referenced model exists,
+// declares the image_generation capability and is served by a Provider this process can
+// dispatch to.
 func (e Executor) ValidateSemantics(_ context.Context, config map[string]any) error {
 	modelID, _ := config["modelId"].(string)
 	if modelID == "" {
@@ -160,6 +195,9 @@ func (e Executor) ValidateSemantics(_ context.Context, config map[string]any) er
 	}
 	if !model.HasCapability(domain.ModelCapabilityImageGeneration) {
 		return fmt.Errorf("image_generation: model %q lacks capability %q", modelID, domain.ModelCapabilityImageGeneration)
+	}
+	if _, err := e.providerFor(modelID); err != nil {
+		return err
 	}
 	return nil
 }
@@ -180,6 +218,12 @@ func (e Executor) Execute(ctx context.Context, input registry.NodeInput, config 
 	if _, _, ok := e.resolver.Get(modelID); !ok {
 		return registry.NodeResult{}, fmt.Errorf("image_generation: model %q is not registered", modelID)
 	}
+	// Resolved again at dispatch, from the process's own registrations. A missing
+	// instance is a plain, definite error returned before anything is sent.
+	provider, err := e.providerFor(modelID)
+	if err != nil {
+		return registry.NodeResult{}, err
+	}
 
 	promptRaw, present := input.Port(promptPort)
 	if !present {
@@ -197,7 +241,7 @@ func (e Executor) Execute(ctx context.Context, input registry.NodeInput, config 
 		return registry.NodeResult{}, err
 	}
 
-	task, err := e.dispatcher.Dispatch(ctx, promptText, reference, config, *input.Callback, input.IdempotencyKey)
+	task, err := provider.Dispatch(ctx, promptText, reference, config, *input.Callback, input.IdempotencyKey)
 	if err != nil {
 		// Wrapped, not replaced: the Adapter's error carries the uncertainty
 		// classification the Execution Service reads with errors.As.
@@ -231,8 +275,8 @@ func referenceImage(input registry.NodeInput) (*domain.ImageRef, error) {
 
 // callbackPayload is the part of the Provider's callback payload this node interprets.
 // `status` is the discriminator; `image` carries the Provider's image reference, which is
-// normalised into a domain.ImageRef before it reaches the output port, and `error`
-// describes a reported failure.
+// normalised into a domain.ImageRef before it reaches the output port, `error` describes
+// a reported failure, and `usage.cost` is the charge the Provider reports for the task.
 type callbackPayload struct {
 	Status string          `json:"status"`
 	Image  json.RawMessage `json:"image"`
@@ -240,6 +284,46 @@ type callbackPayload struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+	// Usage is kept raw so a member of an unexpected shape is dropped by reportedCost
+	// instead of failing a payload whose image is otherwise valid.
+	Usage json.RawMessage `json:"usage"`
+}
+
+// reportedCost maps a SUCCEEDED payload's usage.cost to the Cost the completion records:
+// a finite, non-negative JSON number is an amount in US dollars, the currency the task
+// protocol's usage.cost is denominated in, attributed to the Model ID the node config
+// selected. A payload without usage, or with a cost that is not such a number, yields nil:
+// the Provider reported no charge, and no charge is ever assumed.
+func reportedCost(body callbackPayload, config map[string]any) *domain.Cost {
+	var usage struct {
+		Cost json.RawMessage `json:"cost"`
+	}
+	if len(body.Usage) == 0 || json.Unmarshal(body.Usage, &usage) != nil || len(usage.Cost) == 0 {
+		return nil
+	}
+	modelID, _ := config["modelId"].(string)
+	if modelID == "" {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(usage.Cost))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil {
+		return nil
+	}
+	number, ok := value.(json.Number)
+	if !ok {
+		return nil
+	}
+	reported, err := strconv.ParseFloat(number.String(), 64)
+	if err != nil {
+		return nil
+	}
+	amount, ok := domain.CostAmountFromFloat(reported)
+	if !ok {
+		return nil
+	}
+	return &domain.Cost{Amount: amount, Currency: domain.CurrencyUSD, Source: modelID}
 }
 
 // OnCallback converts one Provider callback payload into the node's output.
@@ -256,16 +340,22 @@ func (e Executor) OnCallback(_ context.Context, state registry.NodeAsyncState, p
 // never retries and changes no state: the Runtime submits a terminal result through the
 // same idempotent resume path a callback uses.
 //
+// The instance is chosen by the Provider ID the Callback Binding recorded at dispatch, not
+// by resolving the model again, so a task is always asked about at the Provider that
+// accepted it. A Provider with no instance in this process is an error, never a guess;
+// the Attempt deadline then ends the task.
+//
 // A terminal payload is interpreted exactly as OnCallback interprets it. A Provider-reported
 // failure becomes PollFailed with the same ExecutionError the callback path's
 // ProviderFailure carries. A payload this node cannot interpret, or one whose own status
 // contradicts the polled status, is PollStatusUnknown, just as an uninterpretable callback
 // leaves the NodeRun waiting. A query that got no answer returns the Adapter's error.
 func (e Executor) Poll(ctx context.Context, state registry.NodeAsyncState) (registry.PollResult, error) {
-	if e.poller == nil {
-		return registry.PollResult{}, fmt.Errorf("image_generation: poll external task %s: no task poller is configured", state.ExternalTask.ExternalTaskID)
+	poller, ok := e.providers[state.ExternalTask.ProviderID]
+	if !ok {
+		return registry.PollResult{}, fmt.Errorf("image_generation: poll external task %s: provider %q has no task instance in this process", state.ExternalTask.ExternalTaskID, state.ExternalTask.ProviderID)
 	}
-	status, payload, err := e.poller.Poll(ctx, state.ExternalTask.ExternalTaskID)
+	status, payload, err := poller.Poll(ctx, state.ExternalTask.ExternalTaskID)
 	if err != nil {
 		return registry.PollResult{}, fmt.Errorf("image_generation: poll external task %s: %w", state.ExternalTask.ExternalTaskID, err)
 	}
@@ -317,7 +407,7 @@ func interpretTerminalPayload(state registry.NodeAsyncState, payload []byte) (re
 		if err != nil {
 			return registry.NodeOutput{}, fmt.Errorf("image_generation: callback payload for external task %s: encode %q reference: %w", state.ExternalTask.ExternalTaskID, imagePort, err)
 		}
-		return registry.NodeOutput{Ports: map[string]json.RawMessage{imagePort: encoded}}, nil
+		return registry.NodeOutput{Ports: map[string]json.RawMessage{imagePort: encoded}, Cost: reportedCost(body, state.Config)}, nil
 
 	case statusFailed:
 		code := defaultFailureCode
