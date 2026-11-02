@@ -70,6 +70,33 @@ func TestServer_Succeeded_CallbackCarriesExternalImageAndCost(t *testing.T) {
 	}
 }
 
+// The gateway's clock is injected, so the deadline a task runs under must be measured on
+// that clock. Whatever the wall clock says, a task dispatched under the gateway's clock
+// has the full maximum duration ahead of it and must complete and deliver its callback.
+func TestServer_InjectedClockFarFromWallClock_TaskStillRunsUnderItsDeadline(t *testing.T) {
+	clocks := map[string]time.Time{
+		"one year in the past":   time.Now().UTC().AddDate(-1, 0, 0),
+		"one year in the future": time.Now().UTC().AddDate(1, 0, 0),
+	}
+	for name, instant := range clocks {
+		t.Run(name, func(t *testing.T) {
+			f := newGatewayFixture(t, fixtureOptions{now: func() time.Time { return instant }})
+			status, raw := f.post(t, f.taskBody("nr_clock", f.references.assetRef(f.references.content)))
+			if status != http.StatusAccepted {
+				t.Fatalf("POST /v1/tasks status = %d, want 202; body=%s", status, raw)
+			}
+			id := externalTaskIDOf(t, raw)
+			callbackID, payload, rawPayload := decodedCallback(t, f.callbacks.next(t).body)
+			if callbackID != id || payload.Status != statusSucceeded || payload.Error != nil {
+				t.Fatalf("callback payload = %s, want SUCCEEDED for %s", rawPayload, id)
+			}
+			if calls := f.generator.calls.Load(); calls != 1 {
+				t.Fatalf("upstream calls = %d, want exactly 1", calls)
+			}
+		})
+	}
+}
+
 func TestServer_UpstreamOmitsCost_CallbackOmitsUsage(t *testing.T) {
 	generator := &fakeGenerator{image: GeneratedImage{MediaType: "image/png", Content: testPNG(t)}}
 	f := newGatewayFixture(t, fixtureOptions{generator: generator})
