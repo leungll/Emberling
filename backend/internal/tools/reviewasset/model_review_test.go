@@ -126,6 +126,14 @@ func TestExecute_ReviewModel_SendsPhotoCandidateAndStyleWithoutTools(t *testing.
 		t.Errorf("request model/tools/instructions = %q/%d/%t, want the review model, no Tools and the versioned instructions",
 			request.ModelID, len(request.Tools), request.Instructions == reviewInstructions)
 	}
+	// The instructions must demand deliverable quality, not only a recognisable subject
+	// and the style, and that demand belongs to the second policy version.
+	if !strings.Contains(request.Instructions, "deformed") || !strings.Contains(request.Instructions, "generation artifacts") {
+		t.Errorf("instructions = %q, want the deliverable-quality condition", request.Instructions)
+	}
+	if VisionPolicyVersion != "vision-review-policy-v2" {
+		t.Errorf("policy version = %q, want vision-review-policy-v2 for the quality condition", VisionPolicyVersion)
+	}
 	if !bytes.Equal(request.FinalOutputSchema, []byte(verdictSchema)) {
 		t.Errorf("final output schema = %s, want the verdict schema", request.FinalOutputSchema)
 	}
