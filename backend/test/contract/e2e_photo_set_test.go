@@ -28,6 +28,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
+	"github.com/leungll/Emberling/backend/internal/tools/generatevideo"
 	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 )
 
@@ -128,7 +129,8 @@ type photoSetTrace struct {
 			} `json:"error"`
 		} `json:"action"`
 		ToolAttempts []struct {
-			ToolName        string `json:"toolName"`
+			ToolName        string    `json:"toolName"`
+			Cost            *costBody `json:"cost"`
 			CallbackBinding *struct {
 				ExternalTaskID string `json:"externalTaskId"`
 			} `json:"callbackBinding"`
@@ -303,13 +305,13 @@ func TestE2E_PhotoSet_MainStory_DeliversOneReviewedExamplePerPhotoMatchingThePro
 	}
 
 	// The Runs list prices the mock path: six generations at the Mock Provider's fixed
-	// per-generation charge, the mock model's known zero per Turn, and no unpriced call
-	// except the video task, whose Tool records no charge because it has no Model ID to
-	// attribute one to.
+	// per-generation charge, the video task at its fixed task charge attributed to the
+	// video Tool's declared cost source, the mock model's known zero per Turn, and no
+	// unpriced call: the six mock-policy reviews asked no model.
 	runID, _ := snapshot["run"].(map[string]any)["id"].(string)
 	cost := runListCostOf(t, env.testEnv, runID)
-	if len(cost.Totals) != 1 || cost.Totals[0].Amount != "0.12" || cost.Totals[0].Currency != "USD" || cost.UnknownCalls != 1 {
-		t.Errorf("run list cost = %+v, want one USD total of 0.12 for six priced generations and one unpriced call (the video task)", cost)
+	if len(cost.Totals) != 1 || cost.Totals[0].Amount != "0.16" || cost.Totals[0].Currency != "USD" || cost.UnknownCalls != 0 {
+		t.Errorf("run list cost = %+v, want one USD total of 0.16 for six priced generations and one priced video task, and no unknown call", cost)
 	}
 
 	var boundTasks []string
@@ -317,6 +319,17 @@ func TestE2E_PhotoSet_MainStory_DeliversOneReviewedExamplePerPhotoMatchingThePro
 		for _, attempt := range turn.ToolAttempts {
 			if attempt.CallbackBinding != nil && attempt.CallbackBinding.ExternalTaskID != "" {
 				boundTasks = append(boundTasks, attempt.CallbackBinding.ExternalTaskID)
+			}
+			switch attempt.ToolName {
+			case generatevideo.ToolName:
+				want := costBody{Amount: "0.04", Currency: "USD", Source: generatevideo.CostSource}
+				if attempt.Cost == nil || *attempt.Cost != want {
+					t.Errorf("video Tool Attempt cost = %+v, want %+v", attempt.Cost, want)
+				}
+			case reviewasset.ToolName:
+				if attempt.Cost != nil {
+					t.Errorf("mock-policy review Tool Attempt cost = %+v, want null: no model was asked", *attempt.Cost)
+				}
 			}
 		}
 	}

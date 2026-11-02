@@ -45,36 +45,37 @@ type verdict struct {
 	Reasons []string `json:"reasons"`
 }
 
-// modelReview asks the call's review model for a verdict. It reads both images in full
+// modelReview asks the call's review model for a verdict and returns it with the charge
+// the model's Adapter reported, nil when it reported none. It reads both images in full
 // before the model call and fails without calling the model when either is unreadable or
 // over the inline bound. Errors carry the Tool name, the review Model ID, the Asset or
 // artifact id and a fixed label only, never image bytes, the style requirement or the
 // model's text.
-func (e Executor) modelReview(ctx context.Context, action registry.ToolAction, args arguments) (result, error) {
+func (e Executor) modelReview(ctx context.Context, action registry.ToolAction, args arguments) (result, *domain.Cost, error) {
 	modelID := action.ReviewModelID
 	if e.ports.Models == nil || e.ports.Photos == nil || e.ports.Artifacts == nil || e.ports.MaxImageBytes <= 0 {
-		return result{}, fmt.Errorf("%s: review model %q: review with a model is not configured in this process", ToolName, modelID)
+		return result{}, nil, fmt.Errorf("%s: review model %q: review with a model is not configured in this process", ToolName, modelID)
 	}
 	reg, provider, ok := e.ports.Models.Get(modelID)
 	if !ok || !reg.HasCapability(domain.ModelCapabilityVisionInput) {
-		return result{}, fmt.Errorf("%s: review model %q is not registered with %s", ToolName, modelID, domain.ModelCapabilityVisionInput)
+		return result{}, nil, fmt.Errorf("%s: review model %q is not registered with %s", ToolName, modelID, domain.ModelCapabilityVisionInput)
 	}
 
 	photo, err := e.ports.Photos.OpenPhoto(ctx, args.PhotoAssetID)
 	if err != nil {
-		return result{}, fmt.Errorf("%s: photo %s could not be opened: %w", ToolName, args.PhotoAssetID, err)
+		return result{}, nil, fmt.Errorf("%s: photo %s could not be opened: %w", ToolName, args.PhotoAssetID, err)
 	}
 	photoImage, err := readImage(photo, e.ports.MaxImageBytes)
 	if err != nil {
-		return result{}, fmt.Errorf("%s: photo %s: %w", ToolName, args.PhotoAssetID, err)
+		return result{}, nil, fmt.Errorf("%s: photo %s: %w", ToolName, args.PhotoAssetID, err)
 	}
 	candidate, err := e.ports.Artifacts.OpenArtifact(ctx, action.RunID, args.AssetRef)
 	if err != nil {
-		return result{}, fmt.Errorf("%s: candidate %s could not be opened: %w", ToolName, args.AssetRef, err)
+		return result{}, nil, fmt.Errorf("%s: candidate %s could not be opened: %w", ToolName, args.AssetRef, err)
 	}
 	candidateImage, err := readImage(candidate, e.ports.MaxImageBytes)
 	if err != nil {
-		return result{}, fmt.Errorf("%s: candidate %s: %w", ToolName, args.AssetRef, err)
+		return result{}, nil, fmt.Errorf("%s: candidate %s: %w", ToolName, args.AssetRef, err)
 	}
 
 	response, err := provider.Generate(ctx, registry.ModelRequest{
@@ -94,18 +95,29 @@ func (e Executor) modelReview(ctx context.Context, action registry.ToolAction, a
 		DecisionSchema:    registry.DecisionSchema(),
 	})
 	if err != nil {
-		return result{}, fmt.Errorf("%s: review model %q: %w", ToolName, modelID, err)
+		return result{}, nil, fmt.Errorf("%s: review model %q: %w", ToolName, modelID, err)
 	}
 	answer, err := decodeVerdict(response.Decision)
 	if err != nil {
-		return result{}, fmt.Errorf("%s: review model %q: %w", ToolName, modelID, err)
+		return result{}, nil, fmt.Errorf("%s: review model %q: %w", ToolName, modelID, err)
 	}
 	return result{
 		Passed:        answer.Passed,
 		PolicyVersion: VisionPolicyVersion,
 		Reasons:       boundReasons(answer.Reasons),
 		ReviewModelID: modelID,
-	}, nil
+	}, reviewCost(response.Cost, modelID), nil
+}
+
+// reviewCost is the Cost the Runtime records for a review with a model: the amount and
+// currency the Adapter normalised, attributed to the frozen review Model ID the call was
+// made with, so the figure traces back to the model the Agent Run selected. No reported
+// charge is no Cost, never a zero.
+func reviewCost(reported *domain.Cost, reviewModelID string) *domain.Cost {
+	if reported == nil {
+		return nil
+	}
+	return &domain.Cost{Amount: reported.Amount, Currency: reported.Currency, Source: reviewModelID}
 }
 
 // readImage reads and closes one image, refusing a media type that is not a supported

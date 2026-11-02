@@ -10,6 +10,7 @@ package contract
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -23,6 +24,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/fixture/mockprovider"
 	"github.com/leungll/Emberling/backend/internal/reconciler"
 	"github.com/leungll/Emberling/backend/internal/registry"
+	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 )
 
 // costBody decodes a cost object so an absent key, a null and a value are told apart.
@@ -408,5 +410,88 @@ func TestRunCost_AgentLoop_TurnsCarryCostAndRunSumsAcrossTurns(t *testing.T) {
 	cost := runListCostOf(t, env, runID)
 	if len(cost.Totals) != 1 || cost.Totals[0].Amount != "0" || cost.Totals[0].Currency != "USD" || cost.UnknownCalls != 0 {
 		t.Errorf("run list cost = %+v, want one known USD total of 0 and no unknown call: a NONE Tool call is not an external call", cost)
+	}
+}
+
+// answerPricedVerdict replies with a FINAL verdict and the given Chat Completions usage
+// member, the way a Provider that accounts for the call does.
+func answerPricedVerdict(verdict, usage string) func(http.ResponseWriter, *http.Request, []byte) {
+	return func(w http.ResponseWriter, _ *http.Request, _ []byte) {
+		content, _ := json.Marshal(`{"kind":"FINAL","tool":null,"arguments":null,"output":` + verdict + `,"statePatch":null}`)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"chatcmpl-review","choices":[{"message":{"content":`+string(content)+`},"finish_reason":"stop"}],"usage":`+usage+`}`)
+	}
+}
+
+// reviewToolAttemptOf returns the one review_asset Tool Attempt of a review story's Trace.
+func reviewToolAttemptOf(t *testing.T, run reviewRun) map[string]any {
+	t.Helper()
+	trace := decodeBody[map[string]any](t, run.rawTrace)
+	turns, _ := trace["turns"].([]any)
+	var reviews []map[string]any
+	for _, raw := range turns {
+		turn, _ := raw.(map[string]any)
+		attempts, _ := turn["toolAttempts"].([]any)
+		for _, rawAttempt := range attempts {
+			attempt, _ := rawAttempt.(map[string]any)
+			if name, _ := attempt["toolName"].(string); name == reviewasset.ToolName {
+				reviews = append(reviews, attempt)
+			}
+		}
+	}
+	if len(reviews) != 1 {
+		t.Fatalf("review Tool Attempts = %d, want 1: %s", len(reviews), run.rawTrace)
+	}
+	return reviews[0]
+}
+
+// TestRunCost_ReviewModelReportsCharge_ToolAttemptAndRunListCarryIt: a review with a real
+// review model is an external call like a generation. The charge the model reports is
+// recorded on the review Tool Attempt, attributed to the frozen review Model ID, and the
+// Run list total is the generation's charge plus the review's, with no unknown call.
+func TestRunCost_ReviewModelReportsCharge_ToolAttemptAndRunListCarryIt(t *testing.T) {
+	upstream := newVisionUpstream(t, answerPricedVerdict(`{"passed":true,"reasons":[]}`,
+		`{"prompt_tokens":1200,"completion_tokens":30,"total_tokens":1230,"cost":0.0068}`))
+	env := newPhotoSetEnv(t, withReviewModel(t, upstream, e2eHTTPTimeout))
+	run := runReviewStory(t, env)
+	if got := runStatusOf(run.snapshot); got != "COMPLETED" {
+		t.Fatalf("Run status = %q, want COMPLETED; trace=%s", got, run.rawTrace)
+	}
+
+	got := costOf(t, reviewToolAttemptOf(t, run), "review Tool Attempt")
+	want := costBody{Amount: "0.0068", Currency: "USD", Source: contractReviewModelID}
+	if got == nil || *got != want {
+		t.Errorf("review Tool Attempt cost = %+v, want %+v", got, want)
+	}
+	assertNoRawProviderUsage(t, "agent trace", run.rawTrace)
+
+	cost := runListCostOf(t, env.testEnv, run.runID)
+	if len(cost.Totals) != 1 || cost.Totals[0].Amount != "0.0268" || cost.Totals[0].Currency != "USD" || cost.UnknownCalls != 0 {
+		t.Errorf("run list cost = %+v, want one USD total of 0.0268 (0.02 generation + 0.0068 review) and no unknown call", cost)
+	}
+}
+
+// TestRunCost_ReviewModelReportsNoCharge_ToolAttemptNullAndRunCountsItUnknown: a review
+// model that reports no charge leaves the review Tool Attempt's cost null, never zero, and
+// the Run list counts that review as an unknown external call while still summing the
+// generation's known charge.
+func TestRunCost_ReviewModelReportsNoCharge_ToolAttemptNullAndRunCountsItUnknown(t *testing.T) {
+	upstream := newVisionUpstream(t, answerVerdict(`{"passed":true,"reasons":[]}`))
+	env := newPhotoSetEnv(t, withReviewModel(t, upstream, e2eHTTPTimeout))
+	run := runReviewStory(t, env)
+	if got := runStatusOf(run.snapshot); got != "COMPLETED" {
+		t.Fatalf("Run status = %q, want COMPLETED; trace=%s", got, run.rawTrace)
+	}
+
+	if got := costOf(t, reviewToolAttemptOf(t, run), "review Tool Attempt"); got != nil {
+		t.Errorf("review Tool Attempt cost = %+v, want null when the review model reported no usage", *got)
+	}
+
+	cost := runListCostOf(t, env.testEnv, run.runID)
+	if len(cost.Totals) != 1 || cost.Totals[0].Amount != "0.02" || cost.Totals[0].Currency != "USD" {
+		t.Errorf("run list cost totals = %+v, want the generation's known 0.02 in USD", cost.Totals)
+	}
+	if cost.UnknownCalls != 1 {
+		t.Errorf("run list unknownCalls = %d, want 1 for the review without a reported charge", cost.UnknownCalls)
 	}
 }
