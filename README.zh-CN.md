@@ -145,8 +145,34 @@ MVP 的标志性里程碑很容易描述，却很难伪造：
 | 持久化 `READY` 工作一定会被重新发现 | exactly-once 外部副作用 |
 | 重复和过期 callback 不能推进两次 | 数据库与 Provider 之间的严格 dispatch 一致性 |
 | 已提交的 Agent Decision 不会重新生成 | 跨不兼容 Runtime 实现恢复 |
+| 崩溃时遗留的同步 Tool 调用不会被重发；由注册的副作用策略决定告诉 Agent 结果不明还是可以安全重做，下一步交给 Agent 决定 | 知道那次调用是否已经生效或计费 |
 
 这是具有明确副作用边界的 waiting recovery，不是对通用 durable execution 的过度承诺。
+
+---
+
+## 复现：Demo
+
+Demo 跟着一个照片特效模板走完整个生命周期：Agent 先调好它，然后给大量用户使用，接着 Provider 名额不够用，最后发布新版本。每段都在确定性的模拟 Provider 上注入一次故障，再把执行账本和 Provider 自己的请求记录逐条核对，结论靠核对得出，不靠讲述。
+
+| 故事 | 故障要证明什么 | `EMBERLING_DEMO_VARIANT` |
+|---|---|---|
+| **提交与幂等** | 同一次提交用同一个 `Idempotency-Key` 反复发送，只产生一个 Run；重复到达的 callback 不新增 Event；所有任务等待期间崩溃，重启后由 callback 和轮询完成 | `serving-burst`、`serving-client-retry`、`serving-duplicate`、`serving-crash-held`、`serving-crash-waiting` |
+| **响应丢失与接管** | Provider 已受理任务但答复丢失时，带键的重试接管原任务，不再创建第二个；callback 丢失由 Provider 轮询补上 | `serving-response-lost`、`held-before-accept`、`after-accept` |
+| **同步与异步崩溃对照，以及结果不明** | 异步调用期间崩溃什么都不改变：callback 把原 Action 完成一次。同步调用期间崩溃，结果作为"不明且已计数"交还 Agent，绝不重发 | `photo-video-restart`、`photo-sync-crash`、`delivery-deploy-lost` |
+| **名额与改版发布** | 单 Provider 的固定名额跨重启既不泄漏也不超发；10% 流量切到新版本后再回退，执行中的 Run 仍按创建时绑定的版本完成 | `serving-capacity`、`serving-rollout`、`serving-version-switch` |
+
+其余变体是故障对照的基线：`photo-set`、`photo-gate`、`photo-limit` 让调优 Agent 处理三张照片；`delivery`、`delivery-restart-during-test`、`delivery-runner-redelivery` 让 Agent 在沙箱里测试补丁并只部署一次。
+
+```sh
+make demo                                         # 全部照片、交付和故障变体
+EMBERLING_DEMO_VARIANT=serving make demo          # 九个 serving 变体
+EMBERLING_DEMO_VARIANT=photo-sync-crash make demo # 单个变体
+make demo-studio                                  # 同样的流程，在 Studio 里观看
+make demo-down
+```
+
+`make demo` 需要 Docker、`curl` 和 `jq`，每个变体结束时都会输出不变量报告和账本与记录的核对结果。改版故事的版本分流由 `scripts/demo/traffic-split.sh` 完成；`scripts/demo/build-v1.sh` 把调优完成的 Run 转成服务模板，`scripts/demo/evidence-report.sh` 汇总证据。要让同一套 Definition 跑在真实的图像模型和视觉模型上，从 [`scripts/demo/definitions/README.md`](./scripts/demo/definitions/README.md) 开始。
 
 ---
 
