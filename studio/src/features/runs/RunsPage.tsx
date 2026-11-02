@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { RunWorkflowButton } from './RunWorkflowButton';
 import { RunsTable } from './RunsTable';
 import {
+  NO_FILTERS,
   hasFilters,
   nextPage,
   offsetOf,
@@ -186,6 +187,18 @@ export function RunsPage() {
     ],
     [workflows, t.allWorkflows],
   );
+  // The versions of the chosen workflow, newest first, from the Definitions list's
+  // latestVersion; every version from 1 up to it exists, because versions are saved in
+  // sequence and never deleted.
+  const latestVersion = workflows?.find((w) => w.workflowId === query.wf)?.latestVersion ?? null;
+  const versionOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [{ value: '', label: t.allVersions }];
+    const top = Math.max(latestVersion ?? 0, query.version ?? 0);
+    for (let v = top; v >= 1; v--) {
+      options.push({ value: String(v), label: t.versionOption(v) });
+    }
+    return options;
+  }, [latestVersion, query.version, t]);
   const rangeOptions: { value: RangeParam | 'all'; label: string }[] = [
     { value: 'all', label: t.ranges.all },
     { value: '24h', label: t.ranges['24h'] },
@@ -245,7 +258,7 @@ export function RunsPage() {
         action={{
           label: t.clearFilters,
           onClick: () => {
-            go(withFilters(query, { wf: '', range: null }));
+            go(withFilters(query, NO_FILTERS));
           },
         }}
       />
@@ -355,6 +368,16 @@ export function RunsPage() {
                     go(withFilters(query, { wf }));
                   }}
                 />
+                {query.wf ? (
+                  <Select
+                    label={t.version}
+                    value={query.version === null ? '' : String(query.version)}
+                    options={versionOptions}
+                    onChange={(v) => {
+                      go(withFilters(query, { version: v === '' ? null : Number(v) }));
+                    }}
+                  />
+                ) : null}
                 <Select
                   label={t.started}
                   value={query.range ?? 'all'}
@@ -368,7 +391,7 @@ export function RunsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      go(withFilters(query, { wf: '', range: null }));
+                      go(withFilters(query, NO_FILTERS));
                     }}
                     className="inline-flex h-control-md items-center rounded-sm px-1 text-md font-medium text-accent-fg hover:underline"
                   >

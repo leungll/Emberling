@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"testing"
 )
 
@@ -295,5 +296,93 @@ func TestAPI_ListRuns_InvalidQuery_Returns400ValidationFailed(t *testing.T) {
 		if code := errorCode(t, body); code != "VALIDATION_FAILED" {
 			t.Errorf("%s: error.code = %q, want VALIDATION_FAILED", name, code)
 		}
+	}
+}
+
+// TestAPI_ListRuns_DefinitionVersion_FiltersAndPagesWithinVersion saves a second version
+// of a Workflow, runs both versions, and checks that definitionVersion narrows the items
+// and the counts, that a cursor issued under the version pages within it and is refused
+// once the version changes, and that the parameter is rejected without workflowId or with
+// a value that is not a positive integer.
+func TestAPI_ListRuns_DefinitionVersion_FiltersAndPagesWithinVersion(t *testing.T) {
+	env := newTestEnv(t)
+	workflowID, v1 := createFixtureDefinition(t, env)
+	fx := loadDocumentProcessingFixture(t)
+	resp, body := env.doJSON(t, http.MethodPut, "/api/definitions/"+workflowID, map[string]any{
+		"name": fx.Name, "description": fx.Description, "nodes": fx.Nodes, "edges": fx.Edges, "baseVersion": v1,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PUT /api/definitions/%s status = %d, body=%s", workflowID, resp.StatusCode, body)
+	}
+	v2f, _ := decodeBody[map[string]any](t, body)["version"].(float64)
+	v2 := int(v2f)
+
+	// Versions alternate, so a version page always skips Runs of the other version.
+	var v1Runs, v2Runs []string
+	for i := 0; i < 3; i++ {
+		v1Runs = append(v1Runs, env.createCompletedFixtureRun(t, workflowID, v1))
+		v2Runs = append(v2Runs, env.createCompletedFixtureRun(t, workflowID, v2))
+	}
+	slices.Reverse(v1Runs)
+	slices.Reverse(v2Runs)
+
+	q := url.Values{"workflowId": {workflowID}, "definitionVersion": {strconv.Itoa(v2)}, "limit": {"2"}}
+	first := env.listRuns(t, q)
+	if ids := listItemIDs(t, first); !slices.Equal(ids, v2Runs[:2]) {
+		t.Fatalf("version %d first page = %v, want %v", v2, ids, v2Runs[:2])
+	}
+	if counts, _ := first["counts"].(map[string]any); counts["all"] != 3.0 || counts["completed"] != 3.0 {
+		t.Errorf("version %d counts = %v, want all and completed 3", v2, counts)
+	}
+	items, _ := first["items"].([]any)
+	for _, raw := range items {
+		item, _ := raw.(map[string]any)
+		if item["definitionVersion"] != float64(v2) || item["latestVersion"] != float64(v2) {
+			t.Errorf("item %v versions = %v of %v, want %d of %d", item["id"], item["definitionVersion"], item["latestVersion"], v2, v2)
+		}
+	}
+	next, _ := first["nextCursor"].(string)
+	if next == "" {
+		t.Fatal("first page nextCursor missing")
+	}
+	second := env.listRuns(t, withCursor(q, next))
+	if ids := listItemIDs(t, second); !slices.Equal(ids, v2Runs[2:]) {
+		t.Errorf("version %d second page = %v, want %v", v2, ids, v2Runs[2:])
+	}
+	if second["nextCursor"] != nil || second["prevCursor"] == nil {
+		t.Errorf("second page cursors = next %v prev %v, want null next and a prev", second["nextCursor"], second["prevCursor"])
+	}
+	prev, _ := second["prevCursor"].(string)
+	if ids := listItemIDs(t, env.listRuns(t, withCursor(q, prev))); !slices.Equal(ids, v2Runs[:2]) {
+		t.Errorf("version %d page back = %v, want %v", v2, ids, v2Runs[:2])
+	}
+
+	all := env.listRuns(t, url.Values{"workflowId": {workflowID}, "definitionVersion": {strconv.Itoa(v1)}})
+	if ids := listItemIDs(t, all); !slices.Equal(ids, v1Runs) {
+		t.Errorf("version %d items = %v, want %v", v1, ids, v1Runs)
+	}
+
+	for name, changed := range map[string]url.Values{
+		"cursor under another version":        {"workflowId": {workflowID}, "definitionVersion": {strconv.Itoa(v1)}, "limit": {"2"}, "cursor": {next}},
+		"cursor without the version":          {"workflowId": {workflowID}, "limit": {"2"}, "cursor": {next}},
+		"version without workflow":            {"definitionVersion": {strconv.Itoa(v2)}},
+		"version zero":                        {"workflowId": {workflowID}, "definitionVersion": {"0"}},
+		"version negative":                    {"workflowId": {workflowID}, "definitionVersion": {"-1"}},
+		"version not an integer":              {"workflowId": {workflowID}, "definitionVersion": {"two"}},
+		"version with status but no workflow": {"definitionVersion": {"1"}, "status": {"FAILED"}},
+	} {
+		resp, body := env.doJSON(t, http.MethodGet, "/api/runs?"+changed.Encode(), nil)
+		if resp.StatusCode != http.StatusBadRequest || errorCode(t, body) != "VALIDATION_FAILED" {
+			t.Errorf("%s: status %d body %s, want 400 VALIDATION_FAILED", name, resp.StatusCode, body)
+		}
+	}
+
+	// A version the Workflow never had is an empty page, not an error.
+	empty := env.listRuns(t, url.Values{"workflowId": {workflowID}, "definitionVersion": {"99"}})
+	if ids := listItemIDs(t, empty); len(ids) != 0 {
+		t.Errorf("unknown version items = %v, want none", ids)
+	}
+	if counts, _ := empty["counts"].(map[string]any); counts["all"] != 0.0 {
+		t.Errorf("unknown version counts = %v, want all 0", counts)
 	}
 }

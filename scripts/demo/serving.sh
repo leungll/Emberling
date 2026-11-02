@@ -34,6 +34,16 @@
 #   response-lost   the Provider accepts each of 3 tasks and drops its answer; Attempt 1
 #                   fails as uncertain, the keyed retry is answered with the original task
 #                   and that task's callback completes the retry.
+#   rollout         version 2 (image width 768, callbacks delayed) is saved beside
+#                   version 1; traffic-split.sh sends EMBERLING_DEMO_ROLLOUT_REQUESTS (30)
+#                   keyed requests with EMBERLING_DEMO_ROLLOUT_RATIO (10)% assigned to
+#                   version 2. While the version 2 Runs wait for their callbacks the ratio
+#                   goes back to 0: the first batch is replayed under the same keys and
+#                   answered with its original Runs, a second batch of
+#                   EMBERLING_DEMO_ROLLOUT_FOLLOWUP (10) requests all go to version 1, and
+#                   the version 2 Runs finish on version 2. The per-version comparison is
+#                   then read back through the version filter of GET /api/runs and
+#                   printed by evidence-report.sh.
 #
 # Writes RUN_ID (the Runs, comma-separated), WORKFLOW_ID, RECORD_AFTER, RUN_STATUS,
 # SUBMISSIONS and SUMMARY to $DEMO_STATE when it is set, for ledger-vs-record.sh and the
@@ -46,8 +56,8 @@ require_tools docker curl jq
 
 story=${1:-}
 case "$story" in
-burst | crash-held | crash-waiting | duplicate | version-switch | client-retry | response-lost) ;;
-*) die "usage: serving.sh burst|crash-held|crash-waiting|duplicate|version-switch|client-retry|response-lost" ;;
+burst | crash-held | crash-waiting | duplicate | version-switch | client-retry | response-lost | rollout) ;;
+*) die "usage: serving.sh burst|crash-held|crash-waiting|duplicate|version-switch|client-retry|response-lost|rollout" ;;
 esac
 
 FIXTURE="$DEMO_ROOT/backend/test/fixtures/definitions/serving_template.json"
@@ -60,7 +70,10 @@ CALLBACK_DELAY_MS=${EMBERLING_DEMO_CALLBACK_DELAY_MS:-20000}
 # cut at 30s), short enough that the restarted Backend retries them well inside the
 # terminal deadline below.
 HELD_TIMEOUT_MS=${EMBERLING_DEMO_IMAGE_TIMEOUT_MS:-30000}
-for value in "$USERS" "$RETRY_USERS" "$RETRY_SENDS" "$CALLBACK_DELAY_MS" "$HELD_TIMEOUT_MS"; do
+ROLLOUT_REQUESTS=${EMBERLING_DEMO_ROLLOUT_REQUESTS:-30}
+ROLLOUT_RATIO=${EMBERLING_DEMO_ROLLOUT_RATIO:-10}
+ROLLOUT_FOLLOWUP=${EMBERLING_DEMO_ROLLOUT_FOLLOWUP:-10}
+for value in "$USERS" "$RETRY_USERS" "$RETRY_SENDS" "$CALLBACK_DELAY_MS" "$HELD_TIMEOUT_MS" "$ROLLOUT_REQUESTS" "$ROLLOUT_RATIO" "$ROLLOUT_FOLLOWUP"; do
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || die "serving settings must be positive integers, got: $value"
 done
 STEP_DEADLINE_S=120
@@ -313,6 +326,52 @@ client-retry)
   submissions=$((RETRY_USERS * RETRY_SENDS))
   lines_into run_ids submitted_runs 1 "$RETRY_USERS"
   ;;
+rollout)
+  create_definition "$(serving_definition "" 60000 1024)"
+  v1=$version
+  log "saving version 2 with image width 768, whose callbacks come ${CALLBACK_DELAY_MS}ms after acceptance"
+  next=$(serving_definition "mock:delay:$CALLBACK_DELAY_MS" $((CALLBACK_DELAY_MS + 60000)) 768 | jq --argjson base "$v1" '. + {baseVersion: $base}')
+  curl -fsS -X PUT -H 'Content-Type: application/json' --data-binary "$next" "$BACKEND_URL/api/definitions/$workflow_id" >/dev/null
+  v2=$(curl -fsS "$BACKEND_URL/api/definitions/$workflow_id" | jq -r '.version')
+  split="$DEMO_ROOT/scripts/demo/traffic-split.sh"
+  export EMBERLING_DEMO_SPLIT_STATE="$work/split" EMBERLING_DEMO_SPLIT_WAIT=0
+  # The hash of a request identifier decides its version, so a batch name whose
+  # requests include at least one version 2 request is chosen before anything is sent.
+  batch=""
+  for candidate in rollout-1 rollout-2 rollout-3 rollout-4 rollout-5; do
+    # grep -c reads the whole dry run, so the producer never ends on a closed pipe.
+    assigned=$(EMBERLING_DEMO_SPLIT_DRY_RUN=1 "$split" "$workflow_id" "$v1" "$v2" "$ROLLOUT_RATIO" "$ROLLOUT_REQUESTS" "$candidate" | grep -c " v$v2\$" || true)
+    if ((assigned > 0)); then
+      batch=$candidate
+      break
+    fi
+  done
+  [[ -n "$batch" ]] || die "no batch name assigned a request to version $v2 at $ROLLOUT_RATIO%; raise EMBERLING_DEMO_ROLLOUT_RATIO"
+
+  log "batch $batch: $ROLLOUT_REQUESTS keyed requests, $ROLLOUT_RATIO% to version $v2"
+  "$split" "$workflow_id" "$v1" "$v2" "$ROLLOUT_RATIO" "$ROLLOUT_REQUESTS" "$batch" | tee "$work/split-1.txt"
+  # One row per request: identifier, version, Run, HTTP status, replayed.
+  lines_into first_batch awk -v wf="$workflow_id" '$1 ~ "^" wf ":" && $3 ~ /^run_/ {print $3}' "$work/split-1.txt"
+  lines_into first_v2 awk -v wf="$workflow_id" -v v="v$v2" '$1 ~ "^" wf ":" && $2 == v && $3 ~ /^run_/ {print $3}' "$work/split-1.txt"
+  ((${#first_v2[@]} > 0)) || die "batch $batch created no version $v2 Run"
+  wait_until "the version $v2 image Attempts to be DISPATCHED" "$STEP_DEADLINE_S" all_images_dispatched "${first_v2[@]}"
+  # A Run whose image task waits for its callback is PAUSED; one still dispatching is
+  # RUNNING. Either is in flight.
+  v2_in_flight=0
+  for run_id in "${first_v2[@]}"; do
+    status=$(run_status "$run_id")
+    [[ "$status" == RUNNING || "$status" == PAUSED ]] && v2_in_flight=$((v2_in_flight + 1))
+  done
+  demo_pause "version $v2 cost more: ${#first_v2[@]} of its Runs are in flight. Next: ratio back to 0, replay batch $batch and send a second batch. Continue within ~$((CALLBACK_DELAY_MS / 1000 - 5))s"
+
+  log "ratio back to 0: replaying batch $batch under the same keys"
+  "$split" "$workflow_id" "$v1" "$v2" 0 "$ROLLOUT_REQUESTS" "$batch" | tee "$work/split-1-replay.txt"
+  log "ratio 0: $ROLLOUT_FOLLOWUP new requests of batch $batch-followup"
+  "$split" "$workflow_id" "$v1" "$v2" 0 "$ROLLOUT_FOLLOWUP" "$batch-followup" | tee "$work/split-2.txt"
+  lines_into second_batch awk -v wf="$workflow_id" '$1 ~ "^" wf ":" && $3 ~ /^run_/ {print $3}' "$work/split-2.txt"
+  run_ids=("${first_batch[@]}" "${second_batch[@]}")
+  submissions=$((2 * ROLLOUT_REQUESTS + ROLLOUT_FOLLOWUP))
+  ;;
 esac
 
 ((${#run_ids[@]} > 0)) || die "no submission created a Run"
@@ -406,6 +465,28 @@ client-retry)
   check one_created_per_user "201 answers=$created" test "$created" -eq "$RETRY_USERS"
   check every_other_answer_replayed "200 replays=$replayed merged=$merged" test "$replayed" -eq "$merged"
   summary="submissions=$submissions runs=$runs merged=$merged"
+  ;;
+rollout)
+  # The replay answered every request of the first batch with its original Run.
+  replayed_same=$(awk -v wf="$workflow_id" 'FNR == NR {if ($1 ~ "^" wf ":") first[$1] = $3; next}
+    $1 ~ "^" wf ":" && $4 == 200 && $5 == "yes" && first[$1] == $3 {n++} END {print n + 0}' "$work/split-1.txt" "$work/split-1-replay.txt")
+  second_v1=$(awk -v wf="$workflow_id" -v v="v$v1" '$1 ~ "^" wf ":" && $2 == v && $4 == 201 {n++} END {print n + 0}' "$work/split-2.txt")
+  bound_v2=$(curl -fsS "$BACKEND_URL/api/runs?workflowId=$workflow_id&definitionVersion=$v2&limit=1" | jq -r '.counts.all')
+  bound_v1=$(curl -fsS "$BACKEND_URL/api/runs?workflowId=$workflow_id&definitionVersion=$v1&limit=1" | jq -r '.counts.all')
+  finished_as_v2=0
+  for run_id in "${first_v2[@]}"; do
+    curl -fsS "$BACKEND_URL/api/runs/$run_id" | jq -e --argjson v "$v2" '.run.definitionVersion == $v and .run.output.image.width == 768' >/dev/null &&
+      finished_as_v2=$((finished_as_v2 + 1))
+  done
+  check replay_returned_original_runs "replayed=$replayed_same of $ROLLOUT_REQUESTS" test "$replayed_same" -eq "$ROLLOUT_REQUESTS"
+  check v2_runs_in_flight_at_rollback "in flight=$v2_in_flight of ${#first_v2[@]}" test "$v2_in_flight" -eq "${#first_v2[@]}"
+  check followup_all_on_v1 "v$v1 created=$second_v1 of $ROLLOUT_FOLLOWUP" test "$second_v1" -eq "$ROLLOUT_FOLLOWUP"
+  check version_filter_counts_bound_runs "v$v1=$bound_v1 v$v2=$bound_v2 runs=$runs" \
+    test "$bound_v2" -eq "${#first_v2[@]}" -a "$((bound_v1 + bound_v2))" -eq "$runs"
+  check v2_runs_finished_as_v2 "finished as v$v2 with width 768: $finished_as_v2 of ${#first_v2[@]}" test "$finished_as_v2" -eq "${#first_v2[@]}"
+  printf '\n'
+  "$DEMO_ROOT/scripts/demo/evidence-report.sh" --real "$workflow_id" || fail "evidence report"
+  summary="requests=$ROLLOUT_REQUESTS ratio=$ROLLOUT_RATIO% v$v2=${#first_v2[@]} replayed=$replayed_same followup_v$v1=$second_v1 completed=$completed"
   ;;
 response-lost)
   taken_over=0

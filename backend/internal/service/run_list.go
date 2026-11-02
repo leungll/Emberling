@@ -27,12 +27,16 @@ const (
 // ListRunsRequest is one Run list query. Zero-valued filters do not filter; Limit 0 means
 // the default page size.
 type ListRunsRequest struct {
-	WorkflowID   string
-	Status       string
-	StartedAfter *time.Time
-	Code         string
-	Cursor       string
-	Limit        int
+	WorkflowID string
+	// DefinitionVersion narrows the list to Runs bound to that version of WorkflowID;
+	// it is refused without WorkflowID, because a version number means nothing across
+	// Workflows.
+	DefinitionVersion int
+	Status            string
+	StartedAfter      *time.Time
+	Code              string
+	Cursor            string
+	Limit             int
 }
 
 // RunListPage is one page of the Run list, newest first. NextCursor continues to older
@@ -184,6 +188,15 @@ func runListFilterOf(req ListRunsRequest) (store.RunListFilter, int, error) {
 	}
 
 	filter := store.RunListFilter{WorkflowID: req.WorkflowID}
+	if req.DefinitionVersion != 0 {
+		if req.DefinitionVersion < 0 {
+			return store.RunListFilter{}, 0, &RunListQueryError{Message: "definitionVersion must be a positive integer"}
+		}
+		if req.WorkflowID == "" {
+			return store.RunListFilter{}, 0, &RunListQueryError{Message: "definitionVersion requires workflowId"}
+		}
+		filter.DefinitionVersion = req.DefinitionVersion
+	}
 	if req.Status != "" {
 		status := domain.RunStatus(req.Status)
 		if !status.IsValid() {

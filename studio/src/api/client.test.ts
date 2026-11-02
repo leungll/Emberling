@@ -107,6 +107,7 @@ describe('api client', () => {
     await expect(listRuns()).resolves.toEqual(page);
     await listRuns({
       workflowId: 'wf_123',
+      definitionVersion: 2,
       status: 'FAILED',
       startedAfter: '2026-08-03T12:00:00Z',
       cursor: 'abc',
@@ -118,6 +119,7 @@ describe('api client', () => {
     expect(url.pathname).toBe('/api/runs');
     expect(Object.fromEntries(url.searchParams)).toEqual({
       workflowId: 'wf_123',
+      definitionVersion: '2',
       status: 'FAILED',
       startedAfter: '2026-08-03T12:00:00Z',
       cursor: 'abc',

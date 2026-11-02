@@ -30,12 +30,16 @@ func (a *runListArgs) add(v any) string {
 }
 
 // filterSQL renders filter as a conjunction over the runs alias r. Each predicate maps to
-// one of the run list indexes: workflow_id and status lead a (…, started_at, id) index,
-// and the ID prefix is a byte-wise range over the text_pattern_ops index on id.
+// one of the run list indexes: workflow_id, (workflow_id, definition_version) and status
+// each lead a (…, started_at, id) index, and the ID prefix is a byte-wise range over the
+// text_pattern_ops index on id.
 func (a *runListArgs) filterSQL(filter store.RunListFilter) string {
 	clauses := []string{"TRUE"}
 	if filter.WorkflowID != "" {
 		clauses = append(clauses, "r.workflow_id = "+a.add(filter.WorkflowID))
+	}
+	if filter.DefinitionVersion != 0 {
+		clauses = append(clauses, "r.definition_version = "+a.add(filter.DefinitionVersion))
 	}
 	if filter.Status != "" {
 		clauses = append(clauses, "r.status = "+a.add(string(filter.Status)))

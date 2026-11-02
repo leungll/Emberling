@@ -11,13 +11,16 @@ import {
 import { readJson, readString, writeJson, writeString } from '@/lib/storage';
 
 /**
- * The Runs page's state in its address: `?status=&wf=&range=&size=&cursor=`. Defaults are
- * left out, so the plain page is `/runs`. Cursors are opaque and bound by the server to the
- * filters they were issued for: any filter change drops the cursor.
+ * The Runs page's state in its address: `?status=&wf=&v=&range=&size=&cursor=`. Defaults
+ * are left out, so the plain page is `/runs`. Cursors are opaque and bound by the server to
+ * the filters they were issued for: any filter change drops the cursor. The version `v`
+ * narrows the chosen workflow's runs to one Definition version; it means nothing without a
+ * workflow, so it is read and written only together with `wf`.
  */
 export interface RunsQuery {
   status: StatusParam | null;
   wf: string;
+  version: number | null;
   range: RangeParam | null;
   size: PageSize;
   cursor: string | null;
@@ -25,6 +28,10 @@ export interface RunsQuery {
 
 export const PAGE_SIZE_KEY = 'emb.runs.pageSize';
 const DEFAULT_SIZE: PageSize = PAGE_SIZES[0];
+
+function versionParam(value: string | null): number | null {
+  return value !== null && /^[1-9][0-9]*$/.test(value) ? Number(value) : null;
+}
 
 function pageSize(value: string | null | undefined): PageSize | null {
   const n = Number(value);
@@ -42,9 +49,11 @@ export function storePageSize(size: PageSize): void {
 
 export function parseRunsQuery(search: string, fallbackSize: PageSize = DEFAULT_SIZE): RunsQuery {
   const q = new URLSearchParams(search);
+  const wf = q.get('wf') ?? '';
   return {
     status: statusParam(q.get('status')),
-    wf: q.get('wf') ?? '',
+    wf,
+    version: wf ? versionParam(q.get('v')) : null,
     range: rangeParam(q.get('range')),
     size: pageSize(q.get('size')) ?? fallbackSize,
     cursor: q.get('cursor') ? q.get('cursor') : null,
@@ -56,28 +65,40 @@ export function runsSearch(state: RunsQuery, keep?: URLSearchParams): string {
   const q = new URLSearchParams();
   if (state.status) q.set('status', state.status);
   if (state.wf) q.set('wf', state.wf);
+  if (state.wf && state.version !== null) q.set('v', String(state.version));
   if (state.range) q.set('range', state.range);
   if (state.size !== DEFAULT_SIZE) q.set('size', String(state.size));
   if (state.cursor) q.set('cursor', state.cursor);
   // Navigation markers such as ret=1 belong to the list memory, not to this state.
   keep?.forEach((value, key) => {
-    if (!['status', 'wf', 'range', 'size', 'cursor'].includes(key)) q.set(key, value);
+    if (!['status', 'wf', 'v', 'range', 'size', 'cursor'].includes(key)) q.set(key, value);
   });
   const s = q.toString();
   return s ? `?${s}` : '';
 }
 
-/** A change to any filter or the page size starts again from the first page. */
+/**
+ * A change to any filter or the page size starts again from the first page. A version
+ * belongs to the workflow it was chosen under, so another workflow (or none) drops it.
+ */
 export function withFilters(
   state: RunsQuery,
   patch: Partial<Omit<RunsQuery, 'cursor'>>,
 ): RunsQuery {
-  return { ...state, ...patch, cursor: null };
+  const next = { ...state, ...patch, cursor: null };
+  if (patch.wf !== undefined && patch.wf !== state.wf && patch.version === undefined) {
+    next.version = null;
+  }
+  if (!next.wf) next.version = null;
+  return next;
 }
 
 export function hasFilters(state: RunsQuery): boolean {
   return state.wf !== '' || state.range !== null;
 }
+
+/** The filters "Clear filters" resets; the status tab is not one of them. */
+export const NO_FILTERS = { wf: '', version: null, range: null } as const;
 
 /**
  * The instant a start-time filter keeps runs from. A cursor is bound to the exact instant it
@@ -115,6 +136,7 @@ export function toListQuery(state: RunsQuery, after: string | undefined): RunLis
   return {
     ...(state.status ? { status: STATUS_OF_PARAM[state.status] } : {}),
     ...(state.wf ? { workflowId: state.wf } : {}),
+    ...(state.wf && state.version !== null ? { definitionVersion: state.version } : {}),
     ...(after ? { startedAfter: after } : {}),
     ...(state.cursor ? { cursor: state.cursor } : {}),
     limit: state.size,
