@@ -565,6 +565,9 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			callbackCtx = &registry.CallbackContext{URL: s.deps.Callback.BaseURL + CallbackPath, Token: token}
 		}
 
+		// The claiming process's identity is written with the STARTED row itself, so a
+		// committed Attempt always names the process that will make the call.
+		runnerID := s.deps.RunnerID
 		if err := tx.ToolAttempts().Create(ctx, domain.ToolAttempt{
 			ID:                attemptID,
 			ActionID:          action.ID,
@@ -573,6 +576,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			Status:            domain.ToolAttemptStarted,
 			Input:             decision.Arguments,
 			CallbackTokenHash: tokenHash,
+			RunnerID:          &runnerID,
 			StartedAt:         now,
 		}); err != nil {
 			return err
