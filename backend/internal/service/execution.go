@@ -170,12 +170,13 @@ type nodeOutcomeResult struct {
 var errResumeSuperseded = errors.New("execution: resume superseded")
 
 // PendingCallbackCredentialMismatchError reports that a stored early callback's
-// authenticated credential belongs to a different Attempt than the one this resume is
-// about to advance. An unmatched Pending Callback has no right to advance Execution and
-// the callback token is scoped to one Attempt, so a row recorded under Attempt X's
-// credential must never complete Attempt Y merely because a later dispatch reused the
-// same external task id. The message carries neither hash: only the external task id and
-// the Attempt it was refused for.
+// authenticated credential is not one the Attempt this resume is about to advance may
+// accept. An unmatched Pending Callback has no right to advance Execution and the
+// callback token is scoped to one Attempt (or, for an EXTERNAL+KEYED node, to the earlier
+// Attempts of the same NodeRun), so a row recorded under another Attempt's credential must
+// never complete this one merely because a later dispatch reused the same external task
+// id. The message carries neither hash: only the external task id and the Attempt it was
+// refused for.
 type PendingCallbackCredentialMismatchError struct {
 	ExternalTaskID string
 	AttemptID      string
@@ -186,8 +187,8 @@ func (e *PendingCallbackCredentialMismatchError) Error() string {
 }
 
 // matchesAttemptCredential reports, in constant time, whether a Pending Callback's stored
-// token hash equals the target Attempt's own callback credential hash. A nil Attempt hash
-// (no callback token was ever issued to this Attempt) never matches.
+// token hash equals one Attempt's own callback credential hash. A nil Attempt hash (no
+// callback token was ever issued to this Attempt) never matches.
 func matchesAttemptCredential(attemptTokenHash *string, pendingTokenHash string) bool {
 	if attemptTokenHash == nil {
 		return false
@@ -195,13 +196,49 @@ func matchesAttemptCredential(attemptTokenHash *string, pendingTokenHash string)
 	return subtle.ConstantTimeCompare([]byte(*attemptTokenHash), []byte(pendingTokenHash)) == 1
 }
 
+// pendingCredentialCheck decides, inside the transaction that consumes a Pending
+// Callback, whether its stored credential hash may resume the target Attempt.
+type pendingCredentialCheck func(ctx context.Context, tx store.Tx, pendingTokenHash string) (bool, error)
+
+// ownCredentialOnly accepts exactly the target Attempt's own credential.
+func ownCredentialOnly(attemptTokenHash *string) pendingCredentialCheck {
+	return func(_ context.Context, _ store.Tx, pendingTokenHash string) (bool, error) {
+		return matchesAttemptCredential(attemptTokenHash, pendingTokenHash), nil
+	}
+}
+
+// nodeAttemptCredentials accepts the target Node Attempt's own credential and, by the
+// same rule the live callback path applies (earlierAttemptCredentialAccepted), the
+// persisted credential of any earlier Attempt of the same NodeRun of an EXTERNAL+KEYED
+// node. Every candidate hash is compared, so the comparison count does not depend on
+// which one matched.
+func (s *ExecutionService) nodeAttemptCredentials(target domain.NodeAttempt, nodeType string) pendingCredentialCheck {
+	return func(ctx context.Context, tx store.Tx, pendingTokenHash string) (bool, error) {
+		matched := matchesAttemptCredential(target.CallbackTokenHash, pendingTokenHash)
+		side, _ := s.nodeRuntimeMetadata(nodeType)
+		if !hasIdempotencyKey(side) {
+			return matched, nil
+		}
+		attempts, err := tx.NodeAttempts().ListByNodeRun(ctx, target.NodeRunID)
+		if err != nil {
+			return false, err
+		}
+		for _, earlier := range attempts {
+			if earlierAttemptCredentialAccepted(earlier, target, side) && matchesAttemptCredential(earlier.CallbackTokenHash, pendingTokenHash) {
+				matched = true
+			}
+		}
+		return matched, nil
+	}
+}
+
 // consumePendingCallback consumes a stored early callback in the same transaction that
 // acts on it, so a Pending Callback can advance a NodeRun at most once. An
 // already-consumed, expired or different-payload row means this delivery is superseded and
-// the whole transaction rolls back. A row whose stored credential does not match attempt's
-// own callback token hash is also refused -- the consumption performed by ConsumeOnce above
-// is rolled back along with everything else, since attempt is not this row's owner.
-func (s *ExecutionService) consumePendingCallback(ctx context.Context, tx store.Tx, attemptID string, attemptTokenHash *string, externalTaskID, expectedPayloadHash string, now time.Time) error {
+// the whole transaction rolls back. A row whose stored credential the target Attempt may
+// not accept is also refused -- the consumption performed by ConsumeOnce above is rolled
+// back along with everything else, since attempt is not this row's owner.
+func (s *ExecutionService) consumePendingCallback(ctx context.Context, tx store.Tx, attemptID string, accepts pendingCredentialCheck, externalTaskID, expectedPayloadHash string, now time.Time) error {
 	if externalTaskID == "" {
 		return nil
 	}
@@ -215,7 +252,11 @@ func (s *ExecutionService) consumePendingCallback(ctx context.Context, tx store.
 	if expectedPayloadHash != "" && pending.PayloadHash != expectedPayloadHash {
 		return errResumeSuperseded
 	}
-	if !matchesAttemptCredential(attemptTokenHash, pending.CallbackTokenHash) {
+	ok, err := accepts(ctx, tx, pending.CallbackTokenHash)
+	if err != nil {
+		return err
+	}
+	if !ok {
 		return &PendingCallbackCredentialMismatchError{ExternalTaskID: externalTaskID, AttemptID: attemptID}
 	}
 	return nil

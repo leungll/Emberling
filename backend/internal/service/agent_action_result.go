@@ -100,7 +100,7 @@ type agentToolCommit struct {
 // transaction that acts on it. A row that is already consumed, expired or carries another
 // payload means another delivery won, which rolls this transaction back as superseded.
 func (s *ExecutionService) consumeReplayedPendingLocked(ctx context.Context, tx store.Tx, call agentToolCall, src agentToolOutcomeSource, now time.Time) error {
-	err := s.consumePendingCallback(ctx, tx, call.attemptID, src.attemptTokenHash, src.consumePending, src.payloadHash, now)
+	err := s.consumePendingCallback(ctx, tx, call.attemptID, ownCredentialOnly(src.attemptTokenHash), src.consumePending, src.payloadHash, now)
 	if errors.Is(err, errResumeSuperseded) {
 		return errAgentTurnSuperseded
 	}

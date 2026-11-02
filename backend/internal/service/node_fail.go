@@ -122,7 +122,7 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 
 		now := s.deps.Clock.Now()
 
-		if err := s.consumePendingCallback(ctx, tx, attempt.ID, attempt.CallbackTokenHash, p.consumePending, p.payloadHash, now); err != nil {
+		if err := s.consumePendingCallback(ctx, tx, attempt.ID, s.nodeAttemptCredentials(attempt, nodeRun.NodeType), p.consumePending, p.payloadHash, now); err != nil {
 			return err
 		}
 
