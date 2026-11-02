@@ -19,15 +19,21 @@ type toolAttemptRepository struct {
 const toolAttemptColumns = `id, action_id, attempt_no, tool_name, status, input, result,
 	callback_token_hash, started_at, dispatched_at, completed_at, error, runner_id, uncertain`
 
+// toolAttemptPollColumns are the polling and external-operation facts. They are never part
+// of the INSERT list: a new Attempt has no poll scheduled, no operation key and a known
+// outcome, which the column defaults express.
+const toolAttemptPollColumns = `next_poll_at, poll_count, operation_key, outcome_unknown_since`
+
 // toolAttemptSelectColumns is toolAttemptColumns followed by the cost columns, which are
-// written only by MarkSucceeded and therefore are not part of the INSERT list.
-const toolAttemptSelectColumns = toolAttemptColumns + `, ` + costColumns
+// written only by MarkSucceeded, and the poll columns.
+const toolAttemptSelectColumns = toolAttemptColumns + `, ` + costColumns + `, ` + toolAttemptPollColumns
 
 // qualifiedToolAttemptColumns is toolAttemptSelectColumns for a query that joins
 // tool_attempts as "ta".
 const qualifiedToolAttemptColumns = `ta.id, ta.action_id, ta.attempt_no, ta.tool_name, ta.status, ta.input,
 	ta.result, ta.callback_token_hash, ta.started_at, ta.dispatched_at, ta.completed_at, ta.error,
-	ta.runner_id, ta.uncertain, ta.cost_amount::text, ta.cost_currency, ta.cost_source`
+	ta.runner_id, ta.uncertain, ta.cost_amount::text, ta.cost_currency, ta.cost_source,
+	ta.next_poll_at, ta.poll_count, ta.operation_key, ta.outcome_unknown_since`
 
 // Create inserts the STARTED Attempt in the transaction that claimed the Action; the Tool
 // is called only after that transaction commits. UNIQUE (action_id, attempt_no) rejects a
@@ -86,14 +92,17 @@ func (r *toolAttemptRepository) ListByActionID(ctx context.Context, actionID str
 }
 
 // MarkDispatched conditionally moves a STARTED Attempt to DISPATCHED. Requiring STARTED
-// makes the dispatch record lose to an Agent timeout that already closed the Attempt.
-func (r *toolAttemptRepository) MarkDispatched(ctx context.Context, attemptID string, now time.Time) error {
+// makes the dispatch record lose to an Agent timeout that already closed the Attempt. The
+// first poll time is written by the same UPDATE, so a later process can derive the due
+// poll from the committed dispatch alone; firstPollAt is nil when no poll policy is
+// registered.
+func (r *toolAttemptRepository) MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error {
 	const update = `
 		UPDATE tool_attempts
-		   SET status = 'DISPATCHED', dispatched_at = $2
+		   SET status = 'DISPATCHED', dispatched_at = $2, next_poll_at = $3
 		 WHERE id = $1 AND status = 'STARTED'`
 
-	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkDispatched", update, attemptID, now)
+	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkDispatched", update, attemptID, now, firstPollAt)
 	if err != nil {
 		return err
 	}
@@ -229,6 +238,126 @@ func (r *toolAttemptRepository) MarkInterrupted(ctx context.Context, attemptID s
 	return nil
 }
 
+// MarkLost conditionally moves a DISPATCHED Attempt whose Provider no longer knows the
+// dispatched task to FAILED, writing its error, completed_at and the uncertain
+// determination once. Requiring DISPATCHED makes it lose to a callback, a timeout or
+// another poll that committed first.
+func (r *toolAttemptRepository) MarkLost(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError, uncertain bool) error {
+	errPayload, err := marshalExecutionError(&execErr)
+	if err != nil {
+		return fmt.Errorf("store/postgres tool_attempts.MarkLost: tool_attempt=%s: %w", attemptID, err)
+	}
+
+	const update = `
+		UPDATE tool_attempts
+		   SET status = 'FAILED', error = $2, completed_at = $3, uncertain = $4
+		 WHERE id = $1 AND status = 'DISPATCHED'`
+	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkLost", update, attemptID, errPayload, now, uncertain)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres tool_attempts.MarkLost: tool_attempt=%s DISPATCHED -> FAILED: %w",
+			attemptID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("tool_attempts.MarkLost", attemptID, affected)
+	}
+	return nil
+}
+
+// ClaimPoll conditionally claims one Provider poll. The WHERE clause is the single arbiter
+// between concurrent scans and a concurrent completion: only a DISPATCHED Attempt that is
+// due and below the bound is claimed, and the row lock taken by the UPDATE serialises
+// racing claimers so exactly one sees an affected row. In SET, poll_count still reads the
+// pre-update value, so the claim that reaches maxPolls clears next_poll_at instead of
+// scheduling another poll.
+func (r *toolAttemptRepository) ClaimPoll(ctx context.Context, attemptID string, now time.Time, interval time.Duration, maxPolls int) (bool, error) {
+	if interval <= 0 {
+		return false, fmt.Errorf("store/postgres tool_attempts.ClaimPoll: tool_attempt=%s: interval must be positive, got %s", attemptID, interval)
+	}
+	if maxPolls <= 0 {
+		return false, fmt.Errorf("store/postgres tool_attempts.ClaimPoll: tool_attempt=%s: maxPolls must be positive, got %d", attemptID, maxPolls)
+	}
+
+	const update = `
+		UPDATE tool_attempts
+		   SET poll_count   = poll_count + 1,
+		       next_poll_at = CASE WHEN poll_count + 1 >= $3 THEN NULL ELSE $4::timestamptz END
+		 WHERE id = $1
+		   AND status = 'DISPATCHED'
+		   AND next_poll_at IS NOT NULL
+		   AND next_poll_at <= $2
+		   AND poll_count < $3`
+	affected, err := affectedRows(ctx, r.conn, "tool_attempts.ClaimPoll", update,
+		attemptID, now, maxPolls, now.Add(interval))
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case affected == 0:
+		return false, nil
+	case affected > 1:
+		return false, errUnexpectedRows("tool_attempts.ClaimPoll", attemptID, affected)
+	}
+	return true, nil
+}
+
+// ClearPoll unschedules polling of a DISPATCHED Attempt. A terminal Attempt is left
+// untouched: its next_poll_at no longer matters because only DISPATCHED rows are due.
+func (r *toolAttemptRepository) ClearPoll(ctx context.Context, attemptID string) (bool, error) {
+	const update = `
+		UPDATE tool_attempts
+		   SET next_poll_at = NULL
+		 WHERE id = $1 AND status = 'DISPATCHED'`
+	affected, err := affectedRows(ctx, r.conn, "tool_attempts.ClearPoll", update, attemptID)
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case affected == 0:
+		return false, nil
+	case affected > 1:
+		return false, errUnexpectedRows("tool_attempts.ClearPoll", attemptID, affected)
+	}
+	return true, nil
+}
+
+// ListDuePolls discovers DISPATCHED Tool Attempts whose next poll is due, using the
+// partial due-poll index. It returns identities only; it claims nothing.
+func (r *toolAttemptRepository) ListDuePolls(ctx context.Context, now time.Time, limit int) ([]store.DueToolPoll, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres tool_attempts.ListDuePolls: limit must be positive, got %d", limit)
+	}
+
+	const query = `
+		SELECT id, action_id, poll_count
+		  FROM tool_attempts
+		 WHERE status = 'DISPATCHED'
+		   AND next_poll_at IS NOT NULL AND next_poll_at <= $1
+		 ORDER BY next_poll_at ASC, id ASC
+		 LIMIT $2`
+
+	rows, err := r.conn.Query(ctx, query, now, limit)
+	if err != nil {
+		return nil, mapError("tool_attempts.ListDuePolls", err)
+	}
+	defer rows.Close()
+
+	out := []store.DueToolPoll{}
+	for rows.Next() {
+		var due store.DueToolPoll
+		if err := rows.Scan(&due.AttemptID, &due.ActionID, &due.PollCount); err != nil {
+			return nil, mapError("tool_attempts.ListDuePolls", err)
+		}
+		out = append(out, due)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapError("tool_attempts.ListDuePolls", err)
+	}
+	return out, nil
+}
+
 // ListOrphanStarted lists the STARTED synchronous Tool Attempts another process created.
 // A NULL runner_id is never an orphan: which process wrote it is unknown. A callback
 // credential hash marks an asynchronous Tool's Attempt, whose claim always stores one, and
@@ -306,6 +435,7 @@ func scanToolAttempts(rows pgx.Rows) ([]domain.ToolAttempt, error) {
 			&attempt.StartedAt, &attempt.DispatchedAt, &attempt.CompletedAt, &errPayload,
 			&attempt.RunnerID, &attempt.Uncertain,
 			&costAmount, &costCurrency, &costSource,
+			&attempt.NextPollAt, &attempt.PollCount, &attempt.OperationKey, &attempt.OutcomeUnknownSince,
 		); err != nil {
 			return nil, err
 		}

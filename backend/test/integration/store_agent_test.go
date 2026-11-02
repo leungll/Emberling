@@ -646,7 +646,7 @@ func TestToolAttemptStore_CallbackResolvesDispatchedAttempt_LateWriteStale(t *te
 
 	for _, id := range []string{"tool_attempt_1", "tool_attempt_2"} {
 		if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-			return tx.ToolAttempts().MarkDispatched(ctx, id, fixtureTime)
+			return tx.ToolAttempts().MarkDispatched(ctx, id, fixtureTime, nil)
 		}); err != nil {
 			t.Fatalf("MarkDispatched %s: %v", id, err)
 		}

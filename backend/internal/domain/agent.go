@@ -183,6 +183,19 @@ type ToolAttempt struct {
 	// Cost is the charge the Provider reported for this call, written once with the
 	// SUCCEEDED result and never changed; nil when none was reported or the call failed.
 	Cost *Cost `json:"cost"`
+	// NextPollAt and PollCount are Provider polling scheduling facts of a DISPATCHED
+	// Attempt of an asynchronous Tool that declares a poll policy, not business state.
+	// NextPollAt is nil when no poll is scheduled: the registration declares no policy or
+	// the poll bound has been reached. Claiming a poll increments PollCount and writes no
+	// Event. They are internal recovery facts and never part of a response.
+	NextPollAt *time.Time `json:"-"`
+	PollCount  int        `json:"-"`
+	// OperationKey is the Provider-side identity of an external operation whose outcome
+	// the Runtime may query after the fact; unique across Attempts. OutcomeUnknownSince is
+	// when the Runtime stopped knowing whether that operation took effect. Both are written
+	// only by a release Tool's dispatch path and are nil for every other Attempt.
+	OperationKey        *string    `json:"-"`
+	OutcomeUnknownSince *time.Time `json:"-"`
 }
 
 // AgentContextVersion is one immutable entry of the message chain the next model call

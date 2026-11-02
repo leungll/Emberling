@@ -386,7 +386,7 @@ func TestToolAttemptStore_CountByAgentRunForTools_CountsEveryAttemptOfListedTool
 	// Move the generation Attempts through every status: STARTED stays, then
 	// DISPATCHED, SUCCEEDED and FAILED.
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		if err := tx.ToolAttempts().MarkDispatched(ctx, "tool_attempt_ar_1_2", fixtureTime); err != nil {
+		if err := tx.ToolAttempts().MarkDispatched(ctx, "tool_attempt_ar_1_2", fixtureTime, nil); err != nil {
 			return err
 		}
 		if err := tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_ar_1_3", domain.ToolAttemptStarted, fixtureTime,

@@ -340,7 +340,15 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 		// already closed it while the Tool was dispatching. This caller then writes
 		// nothing; the external task is left to the Provider, since Emberling promises no
 		// cancellation.
-		if err := tx.ToolAttempts().MarkDispatched(ctx, call.attemptID, now); err != nil {
+		// A registration that declares a poll policy schedules its first poll one
+		// interval after dispatch, as a scheduling fact in this same transaction; it
+		// carries no Event. Tools without a policy are never polled.
+		var firstPollAt *time.Time
+		if reg, ok := s.deps.Tools.Get(call.toolName); ok && reg.Metadata.Poll != nil {
+			first := now.Add(time.Duration(reg.Metadata.Poll.IntervalMs) * time.Millisecond)
+			firstPollAt = &first
+		}
+		if err := tx.ToolAttempts().MarkDispatched(ctx, call.attemptID, now, firstPollAt); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}
