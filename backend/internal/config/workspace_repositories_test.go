@@ -115,7 +115,11 @@ func TestConfig_Validate_WorkspaceRepositoriesAssembledInvalid_Rejected(t *testi
 		t.Fatalf("Load() error = %v", err)
 	}
 	cfg.WorkspaceRepositories = map[string]string{"Bad": "/srv/repos/bad"}
-	workspaceRepositoriesError(t, cfg.Validate())
+	if invalid := workspaceRepositoriesError(t, cfg.Validate()); !strings.Contains(invalid.Reason, "repository id must match") {
+		t.Errorf("Reason = %q, want the identifier rule", invalid.Reason)
+	}
 	cfg.WorkspaceRepositories = map[string]string{"demo": "relative/path"}
-	workspaceRepositoriesError(t, cfg.Validate())
+	if invalid := workspaceRepositoriesError(t, cfg.Validate()); !strings.Contains(invalid.Reason, "path must be absolute") {
+		t.Errorf("Reason = %q, want the absolute path rule", invalid.Reason)
+	}
 }

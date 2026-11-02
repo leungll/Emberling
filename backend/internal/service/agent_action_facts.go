@@ -134,10 +134,11 @@ const requirementCandidateLimit = 8
 // fact committed by a concurrent result transaction is either fully visible or not yet
 // there, and an unmet requirement is decided before anything external can happen.
 //
-// Requirements are evaluated in declaration order and the first unmet one is returned as
-// the PRECONDITION_UNMET ExecutionError the caller fails the Action with. Its details name
-// the fact type, the subject reference, the reason and the binding involved; they never
-// carry other argument values, which may hold signed URLs. Only persisted facts are
+// Requirements are evaluated in declaration order and the first unmet one is returned;
+// its ExecutionError is the PRECONDITION_UNMET error the caller fails the Action with, and
+// its fact type names what a Tool that returns the refusal tells the Agent. The details
+// name the fact type, the subject reference, the reason and the binding involved; they
+// never carry other argument values, which may hold signed URLs. Only persisted facts are
 // consulted: whether the Tool that produced them is still registered does not matter.
 // A Tool without requirements reads nothing.
 func (s *ExecutionService) unmetFactRequirementLocked(
@@ -146,7 +147,7 @@ func (s *ExecutionService) unmetFactRequirementLocked(
 	runID string,
 	requirements []domain.FactRequirement,
 	arguments json.RawMessage,
-) (*domain.ExecutionError, error) {
+) (*runtime.RequirementFailure, error) {
 	for _, requirement := range requirements {
 		// The matcher reads the subject and every compared argument before it looks at a
 		// single candidate. Asked with no candidates, it therefore reports either the
@@ -157,8 +158,7 @@ func (s *ExecutionService) unmetFactRequirementLocked(
 			return nil, fmt.Errorf("execution: requirement %q of run %s matched without any committed fact", requirement.FactType, runID)
 		}
 		if probe.Reason != runtime.RequirementNoFact {
-			unmet := probe.ExecutionError()
-			return &unmet, nil
+			return probe, nil
 		}
 		subject := probe.Subject
 
@@ -167,8 +167,7 @@ func (s *ExecutionService) unmetFactRequirementLocked(
 			return nil, fmt.Errorf("execution: list facts %q about %q of run %s: %w", requirement.FactType, subject, runID, err)
 		}
 		if _, failure := runtime.MatchRequirement(requirement, arguments, candidates); failure != nil {
-			unmet := failure.ExecutionError()
-			return &unmet, nil
+			return failure, nil
 		}
 	}
 	return nil, nil

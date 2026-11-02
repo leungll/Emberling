@@ -110,7 +110,7 @@ func (s *ExecutionService) resumeToolAttempt(ctx context.Context, req ResumeNode
 	src := asyncToolOutcome(req.Source, s.pendingToConsume(req), req.hash(), attempt.CallbackTokenHash)
 	outcome := ResumeOutcome{RunID: call.runID, NodeRunID: call.nodeRunID, AttemptID: attempt.ID}
 
-	execError, interpretErr := agentCallbackOutcome(output, cbErr, reg.Metadata.OutputSchema)
+	execError, interpretErr := agentCallbackOutcome(output, cbErr, reg.Metadata)
 	if interpretErr != nil {
 		// A payload the Executor cannot interpret is not evidence that the
 		// external task failed. Nothing is persisted and the Action keeps waiting.
@@ -142,11 +142,11 @@ func (s *ExecutionService) resumeToolAttempt(ctx context.Context, req ResumeNode
 
 // agentCallbackOutcome classifies what an async Tool's OnCallback returned. A
 // ProviderFailure is the Provider reporting its task failed and becomes the Action's
-// failure; a result that violates the registered OutputSchema fails the Action exactly as
-// an invalid synchronous result does (TOOL_RESULT_INVALID). Any other error means the
-// payload could not be interpreted and is returned as interpretErr, which must change no
-// state.
-func agentCallbackOutcome(result registry.ToolResult, cbErr error, outputSchema []byte) (execError *domain.ExecutionError, interpretErr error) {
+// failure; a result that violates the registered OutputSchema, or carries a record the
+// registration does not declare, fails the Action exactly as an invalid synchronous result
+// does (TOOL_RESULT_INVALID). Any other error means the payload could not be interpreted
+// and is returned as interpretErr, which must change no state.
+func agentCallbackOutcome(result registry.ToolResult, cbErr error, metadata domain.ToolMetadata) (execError *domain.ExecutionError, interpretErr error) {
 	if cbErr != nil {
 		var providerFailure *registry.ProviderFailure
 		if errors.As(cbErr, &providerFailure) {
@@ -155,7 +155,10 @@ func agentCallbackOutcome(result registry.ToolResult, cbErr error, outputSchema 
 		}
 		return nil, cbErr
 	}
-	if err := runtime.ValidateToolResult(result.Output, outputSchema); err != nil {
+	if err := runtime.ValidateToolResult(result.Output, metadata.OutputSchema); err != nil {
+		return &domain.ExecutionError{Code: "TOOL_RESULT_INVALID", Message: err.Error()}, nil
+	}
+	if err := validateDeclaredRecords(result, metadata.Records, metadata.Name); err != nil {
 		return &domain.ExecutionError{Code: "TOOL_RESULT_INVALID", Message: err.Error()}, nil
 	}
 	return nil, nil

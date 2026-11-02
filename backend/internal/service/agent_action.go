@@ -51,14 +51,17 @@ type agentActionCompletedPayload struct {
 	CompletionSource domain.CompletionSource `json:"completionSource"`
 }
 
-// agentActionFailedPayload is AGENT_ACTION_FAILED.
+// agentActionFailedPayload is AGENT_ACTION_FAILED. ReturnedToAgent is true only when the
+// failure is a definite refusal handed back to the Agent, which then continues in a new
+// Turn; it is omitted for every failure that ends the Agent Run.
 type agentActionFailedPayload struct {
-	AgentRunID    string                `json:"agentRunId"`
-	TurnID        string                `json:"turnId"`
-	ActionID      string                `json:"actionId"`
-	ToolAttemptID *string               `json:"toolAttemptId,omitempty"`
-	FailureSource domain.FailureSource  `json:"failureSource"`
-	Error         domain.ExecutionError `json:"error"`
+	AgentRunID      string                `json:"agentRunId"`
+	TurnID          string                `json:"turnId"`
+	ActionID        string                `json:"actionId"`
+	ToolAttemptID   *string               `json:"toolAttemptId,omitempty"`
+	FailureSource   domain.FailureSource  `json:"failureSource"`
+	Error           domain.ExecutionError `json:"error"`
+	ReturnedToAgent bool                  `json:"returnedToAgent,omitempty"`
 }
 
 // agentStateUpdatedPayload is AGENT_STATE_UPDATED (Event fields: turnId,
@@ -102,7 +105,10 @@ type agentToolCall struct {
 
 	executor     registry.ToolExecutor
 	outputSchema json.RawMessage
-	action       registry.ToolAction
+	// records are the record kinds the Tool's registration lets a result carry, read
+	// under the claim as outputSchema is.
+	records []domain.ToolRecordKind
+	action  registry.ToolAction
 	// async is the registered ExecutionKind read under the claim, never inferred from what
 	// the Executor returns (CLAUDE.md "Extensions and external calls").
 	async bool
@@ -192,15 +198,41 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 		artifacts = result.Result.Artifacts
 		outputErr = validateDeclaredArtifacts(artifacts, call.toolName)
 	}
+	if outputErr == nil {
+		outputErr = validateDeclaredRecords(*result.Result, call.records, call.toolName)
+	}
 	if outputErr != nil {
 		return s.failAgentToolCall(ctx, *call, domain.ExecutionError{
 			Code: "TOOL_RESULT_INVALID", Message: outputErr.Error(),
 		})
 	}
 
-	// The validated output, the declared artifacts and the reported charge commit
-	// together as the Attempt's result.
-	return s.completeAgentToolCall(ctx, *call, registry.ToolResult{Output: output, Artifacts: artifacts, Cost: result.Result.Cost})
+	// The validated output, the declared artifacts, the declared records and the
+	// reported charge commit together as the Attempt's result.
+	return s.completeAgentToolCall(ctx, *call, registry.ToolResult{
+		Output: output, Artifacts: artifacts, Cost: result.Result.Cost,
+		WorkspacePatch: result.Result.WorkspacePatch, ChangeRequest: result.Result.ChangeRequest,
+	})
+}
+
+// validateDeclaredRecords rejects a result that carries a record of a kind the Tool's
+// registration does not declare. Which records a Tool may produce is a registered fact,
+// never inferred from the result or the Tool Name, so an undeclared record is an invalid
+// result rather than something to persist or drop silently.
+func validateDeclaredRecords(result registry.ToolResult, declared []domain.ToolRecordKind, toolName string) error {
+	carried := []struct {
+		kind    domain.ToolRecordKind
+		present bool
+	}{
+		{domain.ToolRecordWorkspacePatch, result.WorkspacePatch != nil},
+		{domain.ToolRecordChangeRequest, result.ChangeRequest != nil},
+	}
+	for _, record := range carried {
+		if record.present && !slices.Contains(declared, record.kind) {
+			return fmt.Errorf("tool %q returned a %s record its registration does not declare", toolName, record.kind)
+		}
+	}
+	return nil
 }
 
 // validateDeclaredArtifacts rejects a declared Execution Artifact whose reference is not
@@ -398,6 +430,9 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 
 	var call *agentToolCall
 	var commit agentCommit
+	// nextTurnID is the READY Turn a refusal returned to the Agent created, offered to
+	// the work queue only after COMMIT.
+	var nextTurnID string
 
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		action, err := tx.AgentActions().Get(ctx, actionID)
@@ -490,15 +525,30 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		}
 
 		// A valid call of a Tool that requires committed facts is still not executable
-		// until those facts hold. An unmet requirement fails the Action exactly like an
-		// invalid Decision, before any Attempt exists, so no external call can follow.
+		// until those facts hold. An unmet requirement is decided before any Attempt
+		// exists, so no external call can follow. A Tool registered to return an unmet
+		// requirement hands the Agent a VERIFICATION_MISSING refusal naming the missing
+		// fact type, and the Agent decides the next step in a new Turn; every other Tool
+		// fails the Action exactly like an invalid Decision.
 		unmet, err := s.unmetFactRequirementLocked(ctx, tx, nodeRun.RunID, reg.Metadata.Requires, decision.Arguments)
 		if err != nil {
 			return err
 		}
+		if unmet != nil && reg.Metadata.ReturnUnmetRequirement {
+			turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
+				lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
+			}, domain.AgentActionRunning, domain.ReturnVerificationMissing, verificationMissingMessage(*unmet), now)
+			if err != nil {
+				return err
+			}
+			nextTurnID = turnID
+			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
+			return nil
+		}
 		if unmet != nil {
+			execError := unmet.ExecutionError()
 			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-				domain.FailureSyncExecution, domain.TerminationInvalidAction, *unmet, now); err != nil {
+				domain.FailureSyncExecution, domain.TerminationInvalidAction, execError, now); err != nil {
 				return err
 			}
 			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
@@ -626,6 +676,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			toolName:     toolName,
 			executor:     reg.Executor,
 			outputSchema: reg.Metadata.OutputSchema,
+			records:      reg.Metadata.Records,
 			action: registry.ToolAction{
 				RunID:         nodeRun.RunID,
 				AgentRunID:    agentRun.ID,
@@ -650,5 +701,9 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		return nil, err
 	}
 	s.wake(commit)
+	if nextTurnID != "" {
+		// The READY Turn is committed; a refused enqueue leaves it to the Reconciler.
+		s.enqueueAgentTurn(commit.runID, nextTurnID)
+	}
 	return call, nil
 }
