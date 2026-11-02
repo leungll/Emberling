@@ -530,9 +530,17 @@ func (s *ExecutionService) HandleCallback(ctx context.Context, req HandleCallbac
 	}
 
 	// The credential is Attempt-scoped: a valid token for another Attempt must not be able
-	// to complete this one.
+	// to complete this one. The one exception is an earlier Attempt of the same NodeRun of
+	// an EXTERNAL+KEYED node, whose task the Binding's Attempt took over by replaying the
+	// shared idempotency key after the earlier dispatch lost its response.
 	if claims.AttemptID != binding.TargetID {
-		return CallbackOutcome{}, ErrInvalidCallbackCredential
+		accepted, err := s.earlierCredentialRoutes(ctx, claims.AttemptID, binding)
+		if err != nil {
+			return CallbackOutcome{}, err
+		}
+		if !accepted {
+			return CallbackOutcome{}, ErrInvalidCallbackCredential
+		}
 	}
 
 	outcome, err := s.ResumeNode(ctx, ResumeNode{
@@ -549,6 +557,59 @@ func (s *ExecutionService) HandleCallback(ctx context.Context, req HandleCallbac
 		RunID:     outcome.RunID,
 		NodeRunID: outcome.NodeRunID,
 	}, nil
+}
+
+// earlierCredentialRoutes reports whether a verified credential issued to credentialID
+// may deliver to the Node Attempt binding routes to, under earlierAttemptCredentialAccepted.
+// It only reads: an unknown credential Attempt, a Tool Attempt Binding or a credential of
+// another NodeRun is a plain refusal, so the caller persists nothing.
+func (s *ExecutionService) earlierCredentialRoutes(ctx context.Context, credentialID string, binding domain.CallbackBinding) (bool, error) {
+	if binding.TargetType != domain.CallbackTargetNodeAttempt {
+		return false, nil
+	}
+	var accepted bool
+	err := s.deps.UoW.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		credential, err := tx.NodeAttempts().Get(ctx, credentialID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+		target, err := tx.NodeAttempts().Get(ctx, binding.TargetID)
+		if err != nil {
+			return err
+		}
+		if credential.NodeRunID != target.NodeRunID {
+			return nil
+		}
+		nodeRun, err := tx.NodeRuns().Get(ctx, target.NodeRunID)
+		if err != nil {
+			return err
+		}
+		side, _ := s.nodeRuntimeMetadata(nodeRun.NodeType)
+		accepted = earlierAttemptCredentialAccepted(credential, target, side)
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return accepted, nil
+}
+
+// earlierAttemptCredentialAccepted is the single rule that lets a callback credential
+// issued to one Node Attempt resume another. It holds only for an EXTERNAL+KEYED node and
+// only for an earlier Attempt of the same NodeRun: every Attempt of that NodeRun presents
+// the NodeRun id as its Provider idempotency key, so when an earlier dispatch lost its
+// response and a later one was answered with the replayed task, both Attempts name the same
+// external task, and that task's callback still carries the earlier credential. No
+// credential is copied or transferred, and signature and expiry are verified as for any
+// other delivery. A credential of another NodeRun, a later Attempt, or a node without an
+// idempotency key never qualifies.
+func earlierAttemptCredentialAccepted(credential, target domain.NodeAttempt, side domain.SideEffectPolicy) bool {
+	return hasIdempotencyKey(side) &&
+		credential.NodeRunID == target.NodeRunID &&
+		credential.AttemptNo < target.AttemptNo
 }
 
 // findCallbackBinding reads the Callback Binding of one external task, reporting false

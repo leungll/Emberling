@@ -112,7 +112,7 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 			return fmt.Errorf("execution: encode node output: %w", err)
 		}
 
-		if err := s.consumePendingCallback(ctx, tx, attempt.ID, attempt.CallbackTokenHash, p.consumePending, p.payloadHash, now); err != nil {
+		if err := s.consumePendingCallback(ctx, tx, attempt.ID, s.nodeAttemptCredentials(attempt, nodeRun.NodeType), p.consumePending, p.payloadHash, now); err != nil {
 			return err
 		}
 

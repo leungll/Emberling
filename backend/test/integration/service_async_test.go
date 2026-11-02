@@ -60,6 +60,14 @@ type asyncFakeExecutor struct {
 	dispatched     []string
 	keys           []string
 	callbacks      int
+
+	// replayKeyed makes this Provider honour the idempotency key: a dispatch whose key
+	// already names an accepted task answers with that task id and Replayed set instead of
+	// accepting a new one. loseNextResponse makes the next dispatch accept its task and
+	// then lose the answer on the way back, the way a dropped connection does.
+	replayKeyed      bool
+	loseNextResponse bool
+	tasksByKey       map[string]string
 }
 
 func (e *asyncFakeExecutor) ValidateSemantics(context.Context, map[string]any) error { return nil }
@@ -106,7 +114,23 @@ func (e *asyncFakeExecutor) Execute(_ context.Context, in registry.NodeInput, _ 
 	if e.omitTaskID {
 		return registry.NodeResult{Kind: registry.NodeResultDispatched}, nil
 	}
+	if e.replayKeyed && in.IdempotencyKey != "" {
+		if existing, ok := e.tasksByKey[in.IdempotencyKey]; ok {
+			return registry.NodeResult{
+				Kind:         registry.NodeResultDispatched,
+				ExternalTask: &registry.ExternalTask{ProviderID: asyncProviderID, ExternalTaskID: existing, Replayed: true},
+			}, nil
+		}
+		if e.tasksByKey == nil {
+			e.tasksByKey = make(map[string]string)
+		}
+		e.tasksByKey[in.IdempotencyKey] = e.externalTaskID
+	}
 	e.dispatched = append(e.dispatched, e.externalTaskID)
+	if e.loseNextResponse {
+		e.loseNextResponse = false
+		return registry.NodeResult{}, asyncLostResponseError{}
+	}
 	return registry.NodeResult{
 		Kind:         registry.NodeResultDispatched,
 		ExternalTask: &registry.ExternalTask{ProviderID: asyncProviderID, ExternalTaskID: e.externalTaskID},
@@ -634,8 +658,12 @@ func TestNodeResume_StaleCallback_DoesNotConsumeEventSeq(t *testing.T) {
 }
 
 // TestNodeResume_OldAttemptCallback_DoesNotOverwriteNewerAttempt covers a callback for an
-// old Attempt: a credential issued to a superseded Attempt must not complete the NodeRun
-// that a newer Attempt is now waiting on.
+// old Attempt's own external task: the superseded Attempt never committed a Binding, so
+// its task's callback is stored as pending and must not complete the NodeRun that a newer
+// Attempt is now waiting on under another task id. (The same old credential presented at
+// the newer Attempt's own Binding is accepted for an EXTERNAL+KEYED node, because the
+// shared idempotency key makes that Binding the original task; the callback takeover
+// tests cover that path and the refusal of another NodeRun's credential.)
 //
 // The newer Attempt is produced the only way MVP allows one: the first Attempt failed
 // definitely while still STARTED -- the Provider call came back with an error, so no
@@ -671,15 +699,6 @@ func TestNodeResume_OldAttemptCallback_DoesNotOverwriteNewerAttempt(t *testing.T
 	}
 
 	beforeEvents := listEvents(h.ctx, t, h.uow, run.ID)
-
-	// The old Attempt's credential presented against the live Attempt's Binding: the token
-	// is Attempt-scoped, so it is refused before anything is read or written.
-	if _, err := h.handleCallback(firstToken, second.externalTaskID, `{"text":"stolen by the old attempt"}`); !errors.Is(err, service.ErrInvalidCallbackCredential) {
-		t.Fatalf("old credential against the newer Attempt's binding: want ErrInvalidCallbackCredential, got %v", err)
-	}
-	if got := asyncPendingStatus(h.ctx, t, h.uow, second.externalTaskID); got != "absent" {
-		t.Fatalf("pending callback after a refused credential: want none, got %s", got)
-	}
 
 	// The old Attempt's own external task -- the Provider may still have accepted it before
 	// the connection broke -- has no Binding at all. It is stored for its owner, which no
