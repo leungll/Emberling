@@ -589,6 +589,14 @@ export const runs = {
       result: (what: string) => `Result: ${what}`,
       gap: 'The trace keeps only some tool arguments and results; results a tool saved are listed under its call.',
       notAllowed: 'not allowed',
+      materials: 'Materials',
+      materialVersion: {
+        STATE: (v: string) => `version ${v}`,
+        TOOL_RESULT: (v: string) => `attempt ${v}`,
+        WORKSPACE_FILE: (v: string) => `patch ${v}`,
+      } as Record<string, ((v: string) => string) | undefined>,
+      notIncluded: 'Not included: available by reference',
+      open: 'Open',
     },
   },
 

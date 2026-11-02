@@ -796,12 +796,7 @@ export interface WithheldToolField {
 
 /** What kind of material one Context Manifest item records. */
 export type ManifestItemKind =
-  | 'INSTRUCTIONS'
-  | 'TASK_INPUT'
-  | 'STATE'
-  | 'TOOL_RESULT'
-  | 'WORKSPACE_FILE'
-  | 'ARTIFACT';
+  'INSTRUCTIONS' | 'TASK_INPUT' | 'STATE' | 'TOOL_RESULT' | 'WORKSPACE_FILE' | 'ARTIFACT';
 
 /** Why an item's content was left out of the model request. */
 export type ManifestOmission = 'REFERENCE_ONLY';
