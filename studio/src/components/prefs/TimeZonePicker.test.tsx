@@ -1,15 +1,20 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TimeZonePicker } from './TimeZonePicker';
 import { Timestamp } from '@/components/time/Time';
 import { TZ_KEY, usePrefsStore } from '@/stores/prefs-store';
 
 beforeEach(() => {
+  // The picker reads each zone's offset at the moment the list opens, so the clock is pinned
+  // to a date inside US daylight time: Los Angeles is UTC-7 there and UTC-8 in winter.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-08T06:32:10Z'));
   usePrefsStore.setState({ timeZonePref: 'local', localZone: 'Asia/Shanghai' });
 });
 afterEach(() => {
+  vi.useRealTimers();
   localStorage.clear();
 });
 
