@@ -36,12 +36,12 @@ import (
 // ---------------------------------------------------------------------------
 
 // agentReconciler builds the Reconciler one restarted Backend runs: the same store, the
-// same injected clock and the same ExecutionService the live process would use. It holds
-// no Agent state of its own, which is the point -- everything it does must go through a
-// service use case.
+// same injected clock, the same ExecutionService and the same runner identity the live
+// process would use. It holds no Agent state of its own, which is the point -- everything
+// it does must go through a service use case.
 func agentReconciler(h *agentHarness) *reconciler.Reconciler {
 	return reconciler.New(reconciler.Config{
-		UoW: h.uow, Executor: h.svc, Clock: h.clock, BatchLimit: 100,
+		UoW: h.uow, Executor: h.svc, Clock: h.clock, BatchLimit: 100, RunnerID: h.runnerID,
 	})
 }
 

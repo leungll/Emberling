@@ -310,9 +310,10 @@ func (c crashAfterSave) Write(ctx context.Context, r io.Reader) (domain.Artifact
 }
 
 // TestArtifactSave_CrashAfterSave_RestartDoesNotResend covers a crash between the saved
-// binary and the result transaction. After the restart the Attempt is still STARTED: an
-// uncertain external call is never re-executed, so the Reconciler neither claims the
-// Action again nor reaches the Provider, and the saved object has no row.
+// binary and the result transaction. An uncertain external call is never re-executed: the
+// restarted Backend's Reconciler finds the STARTED Attempt orphaned and fails it
+// RESULT_UNCERTAIN without a result, so neither the Action nor the Provider is reached
+// again, and the saved object has no row.
 func TestArtifactSave_CrashAfterSave_RestartDoesNotResend(t *testing.T) {
 	p := newGenerationProvider(t)
 	stop := &agentStopNotifier{}
@@ -337,16 +338,18 @@ func TestArtifactSave_CrashAfterSave_RestartDoesNotResend(t *testing.T) {
 		Pool: h.pool, Clock: h.clock, Tools: []registry.ToolRegistration{registration},
 	})
 	report := agentRunOnce(restarted, agentReconciler(restarted))
-	if report.ExpiredAgentRunsFound != 0 {
-		t.Fatalf("report = %+v, want no expired Agent Run before the deadline", report)
+	if report.ExpiredAgentRunsFound != 0 || report.OrphanToolAttemptsFound != 1 || report.OrphanToolAttemptsHandled != 1 {
+		t.Fatalf("report = %+v, want the one orphaned Attempt handled before the deadline", report)
 	}
 
-	if got := getAgentAction(restarted.ctx, t, restarted.uow, action.ID).Status; got != domain.AgentActionRunning {
-		t.Errorf("action = %s, want still RUNNING", got)
+	if got := getAgentAction(restarted.ctx, t, restarted.uow, action.ID); got.Status != domain.AgentActionFailed ||
+		got.Error == nil || got.Error.Code != "RESULT_UNCERTAIN" {
+		t.Errorf("action = status %s error %+v, want FAILED RESULT_UNCERTAIN", got.Status, got.Error)
 	}
 	attempts := agentToolAttempts(restarted.ctx, t, restarted.uow, action.ID)
-	if len(attempts) != 1 || attempts[0].Status != domain.ToolAttemptStarted || len(attempts[0].Result) != 0 {
-		t.Fatalf("tool attempts = %+v, want exactly one STARTED without a result", attempts)
+	if len(attempts) != 1 || attempts[0].Status != domain.ToolAttemptFailed || len(attempts[0].Result) != 0 ||
+		attempts[0].Uncertain == nil || !*attempts[0].Uncertain {
+		t.Fatalf("tool attempts = %+v, want exactly one FAILED as uncertain without a result", attempts)
 	}
 	if got := executor.calls.Load(); got != 1 {
 		t.Errorf("generate_image executor calls = %d, want 1", got)

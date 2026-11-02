@@ -288,10 +288,12 @@ func assertAttemptStillStarted(t *testing.T, h *agentHarness, actionID string) {
 	}
 }
 
-// assertRestartDoesNotResend restarts the Backend over the same database and Provider and
-// drives the Reconciler: before the deadline it finds nothing to do, and once the
-// deadline has passed it ends the Agent Run as TIMEOUT. Neither pass sends the image
-// request again.
+// assertRestartDoesNotResend restarts the Backend over the same database and Provider --
+// a new process with a new runner identity -- and drives the Reconciler. Its first pass
+// finds the STARTED Attempt orphaned: it fails the Attempt RESULT_UNCERTAIN without calling
+// the Tool again and hands the uncertain outcome back to the Agent, whose next Decision
+// ends the Agent Run; a pass after the deadline finds nothing left to time out. No pass
+// sends the image request again.
 func assertRestartDoesNotResend(t *testing.T, h *agentHarness, wiring realImageWiring, upstream *realImageUpstream, runID, actionID string) {
 	t.Helper()
 	// The Provider stops holding, so a resent request would be answered at once and show
@@ -300,21 +302,26 @@ func assertRestartDoesNotResend(t *testing.T, h *agentHarness, wiring realImageW
 	restarted := newAgentHarness(t, wiring.options(agentHarnessOptions{Pool: h.pool, Clock: h.clock}))
 	callsBefore := wiring.executor.calls.Load()
 
-	if report := agentRunOnce(restarted, agentReconciler(restarted)); report.ExpiredAgentRunsFound != 0 {
-		t.Fatalf("report = %+v, want no expired Agent Run before the deadline", report)
-	}
-	assertAttemptStillStarted(t, restarted, actionID)
-
-	restarted.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
-	if report := agentRunOnce(restarted, agentReconciler(restarted)); report.ExpiredAgentRunsFound != 1 {
-		t.Fatalf("report = %+v, want the one expired Agent Run", report)
+	report := agentRunOnce(restarted, agentReconciler(restarted))
+	if report.ExpiredAgentRunsFound != 0 || report.OrphanToolAttemptsFound != 1 || report.OrphanToolAttemptsHandled != 1 {
+		t.Fatalf("report = %+v, want the one orphaned Attempt handled before the deadline", report)
 	}
 	attempts := agentToolAttempts(restarted.ctx, t, restarted.uow, actionID)
-	if len(attempts) != 1 || attempts[0].Status != domain.ToolAttemptFailed || attempts[0].Error == nil || attempts[0].Error.Code != "TIMEOUT" {
-		t.Fatalf("tool attempts after the deadline = %+v, want the one Attempt FAILED with TIMEOUT", attempts)
+	if len(attempts) != 1 || attempts[0].Status != domain.ToolAttemptFailed || attempts[0].Error == nil ||
+		attempts[0].Error.Code != "RESULT_UNCERTAIN" || attempts[0].Uncertain == nil || !*attempts[0].Uncertain || len(attempts[0].Result) != 0 {
+		t.Fatalf("tool attempts after the restart = %+v, want the one Attempt FAILED RESULT_UNCERTAIN without a result", attempts)
 	}
-	if got := agentRunRow(restarted.ctx, t, restarted.uow, runID).Status; got != domain.RunFailed {
-		t.Errorf("run status = %s, want FAILED", got)
+	failed := agentOnlyPayloadFor(t, listEvents(restarted.ctx, t, restarted.uow, runID), domain.EventAgentActionFailed, "actionId", actionID)
+	if failed["failureSource"] != string(domain.FailureRunnerLost) {
+		t.Errorf("AGENT_ACTION_FAILED failureSource = %v, want RUNNER_LOST", failed["failureSource"])
+	}
+
+	restarted.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
+	if report := agentRunOnce(restarted, agentReconciler(restarted)); report.ExpiredAgentRunsFound != 0 || report.OrphanToolAttemptsFound != 0 {
+		t.Fatalf("report after the deadline = %+v, want nothing left to time out or hand back", report)
+	}
+	if got := agentRunRow(restarted.ctx, t, restarted.uow, runID).Status; got != domain.RunCompleted {
+		t.Errorf("run status = %s, want COMPLETED by the Agent's next Decision", got)
 	}
 
 	if got := wiring.executor.calls.Load(); got != callsBefore {
@@ -455,9 +462,9 @@ func (c crashingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 // TestAgentAction_CrashDuringImageCall_AttemptStaysStartedNoResend covers the process
-// dying while the image call is in flight: the Attempt stays STARTED, and the restarted
-// Backend neither claims the Action again nor reaches the Provider; only the Agent
-// deadline ends the Agent Run.
+// dying while the image call is in flight: the Attempt stays STARTED until the restarted
+// Backend recognises it as orphaned and hands the uncertain outcome back to the Agent,
+// and that Backend neither claims the Action again nor reaches the Provider.
 func TestAgentAction_CrashDuringImageCall_AttemptStaysStartedNoResend(t *testing.T) {
 	upstream := newRealImageUpstream(t)
 	upstream.holdImages(t)
@@ -481,8 +488,8 @@ func TestAgentAction_CrashDuringImageCall_AttemptStaysStartedNoResend(t *testing
 
 // TestAgentAction_ShutdownDuringImageCall_NoResend covers a graceful shutdown while the
 // image call is in flight: cancelling the worker's context abandons the call without
-// committing an outcome, so the Attempt stays STARTED, and the restarted Backend never
-// sends the request again.
+// committing an outcome, so the Attempt stays STARTED, and the restarted Backend hands the
+// uncertain outcome back to the Agent without ever sending the request again.
 func TestAgentAction_ShutdownDuringImageCall_NoResend(t *testing.T) {
 	upstream := newRealImageUpstream(t)
 	upstream.holdImages(t)

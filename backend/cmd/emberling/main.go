@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
@@ -94,6 +95,10 @@ func run(logger *slog.Logger) error {
 	defer pool.Close()
 
 	clock := domain.SystemClock{}
+	// runnerID identifies this process instance for its whole lifetime. The service
+	// writes it onto every Tool Attempt it creates, and the Reconciler uses the same value
+	// to recognise synchronous calls a previous process left without an executor.
+	runnerID := uuid.NewString()
 
 	uow := postgres.NewUnitOfWork(pool)
 	nodeRegistry := registry.NewNodeRegistry()
@@ -121,6 +126,7 @@ func run(logger *slog.Logger) error {
 		Queue:           queue,
 		Notifier:        notifier,
 		Logger:          logger,
+		RunnerID:        runnerID,
 		Callback: service.CallbackConfig{
 			BaseURL:       cfg.Callback.BaseURL,
 			SigningSecret: []byte(cfg.Callback.SigningSecret.Reveal()),
@@ -144,6 +150,7 @@ func run(logger *slog.Logger) error {
 		Interval:   cfg.Reconciliation.Interval,
 		BatchLimit: cfg.Reconciliation.BatchSize,
 		Logger:     logger,
+		RunnerID:   runnerID,
 	})
 
 	// The Reconciler and the work Pool each own a long-running goroutine; both are
@@ -303,6 +310,7 @@ func run(logger *slog.Logger) error {
 
 	logger.Info("backend ready",
 		slog.String("http_addr", cfg.HTTP.Addr),
+		slog.String("runner_id", runnerID),
 		slog.Int("reconcile_batch_size", cfg.Reconciliation.BatchSize),
 		slog.Duration("reconcile_interval", cfg.Reconciliation.Interval),
 	)
