@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"sort"
+	"unicode/utf8"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
@@ -12,7 +13,7 @@ import (
 // ---- Agent Trace: Tool-call facts ----
 //
 // A Tool Attempt's input and result stay out of the Agent Trace as whole documents. The
-// projection below shows only the few members Studio names on a run card, for four Tools,
+// projection below shows only the few members Studio names on a run card, for five Tools,
 // keyed by their stable Tool Name. The Tool registration contract carries no display
 // declaration to drive this generically, so the table is fixed here; it only selects what
 // to show and never feeds a Runtime decision. Every member is type-checked: a Tool
@@ -26,6 +27,7 @@ import (
 // Tool Names whose calls this projection describes.
 const (
 	toolGenerateImage = "generate_image"
+	toolReviewAsset   = "review_asset"
 	toolGenerateVideo = "generate_video"
 	toolSandboxTest   = "sandbox_test"
 	toolDeploy        = "deploy"
@@ -45,6 +47,34 @@ type toolPhotoDTO struct {
 	Position     *int   `json:"position,omitempty"`
 	Count        *int   `json:"count,omitempty"`
 }
+
+// toolSettingsDTO is the generation settings a generate_image call asked for, from its
+// arguments: only the prompt, aspect ratio and resolution, each absent when the call did
+// not set it. The prompt is free text, so a long one is cut at maxProjectedPromptBytes on
+// a character boundary and PromptTruncated marks the cut.
+type toolSettingsDTO struct {
+	Prompt          *string `json:"prompt,omitempty"`
+	PromptTruncated bool    `json:"promptTruncated,omitempty"`
+	AspectRatio     *string `json:"aspectRatio,omitempty"`
+	Resolution      *string `json:"resolution,omitempty"`
+}
+
+// maxProjectedPromptBytes bounds the prompt shown for a generate_image call.
+const maxProjectedPromptBytes = 500
+
+// toolReviewDTO is a review_asset result's verdict and the reasons the review gave.
+// Reasons is absent when the review gave none or they do not have the bounded shape the
+// Tool declares.
+type toolReviewDTO struct {
+	Passed  bool     `json:"passed"`
+	Reasons []string `json:"reasons,omitempty"`
+}
+
+// Review reason bounds, matching what review_asset declares for its result.
+const (
+	maxProjectedReviewReasons = 3
+	maxProjectedReasonRunes   = 200
+)
 
 // toolTestDTO is a sandbox_test result's verdict and counts, as the runner reported them.
 type toolTestDTO struct {
@@ -84,6 +114,8 @@ type withheldFieldDTO struct {
 // toolAttemptView is the projection's output for one Tool Attempt.
 type toolAttemptView struct {
 	Photo      *toolPhotoDTO
+	Settings   *toolSettingsDTO
+	Review     *toolReviewDTO
 	Test       *toolTestDTO
 	Deployment *toolDeploymentDTO
 	Video      *toolVideoDTO
@@ -117,6 +149,9 @@ func (p toolViewProjector) project(attempt domain.ToolAttempt) toolAttemptView {
 			}
 			view.Photo = photo
 		}
+		view.Settings = p.projectSettings(&view, decodeObject(arguments["settings"]))
+	case toolReviewAsset:
+		view.Review = p.projectReview(&view, result)
 	case toolSandboxTest:
 		view.Test = projectTest(result)
 	case toolDeploy:
@@ -163,6 +198,85 @@ func (p toolViewProjector) boundedString(view *toolAttemptView, field string, ra
 		return "", false
 	}
 	return value, true
+}
+
+// projectSettings reads the named settings members of a generate_image call. Any other
+// settings member, such as a seed, is not shown.
+func (p toolViewProjector) projectSettings(view *toolAttemptView, settings map[string]json.RawMessage) *toolSettingsDTO {
+	if settings == nil {
+		return nil
+	}
+	projected := &toolSettingsDTO{}
+	if prompt, truncated, ok := p.truncatedString(view, "settings.prompt", settings["prompt"], maxProjectedPromptBytes); ok {
+		projected.Prompt, projected.PromptTruncated = &prompt, truncated
+	}
+	if aspectRatio, ok := p.boundedString(view, "settings.aspectRatio", settings["aspectRatio"]); ok {
+		projected.AspectRatio = &aspectRatio
+	}
+	if resolution, ok := p.boundedString(view, "settings.resolution", settings["resolution"]); ok {
+		projected.Resolution = &resolution
+	}
+	if projected.Prompt == nil && projected.AspectRatio == nil && projected.Resolution == nil {
+		return nil
+	}
+	return projected
+}
+
+// truncatedString reads raw as a non-empty JSON string cut to at most limit bytes on a
+// character boundary, reporting whether it was cut. The cut text is still subject to the
+// field bound and is withheld under field when its encoding exceeds it.
+func (p toolViewProjector) truncatedString(view *toolAttemptView, field string, raw json.RawMessage, limit int) (string, bool, bool) {
+	var value string
+	if raw == nil || json.Unmarshal(raw, &value) != nil || value == "" {
+		return "", false, false
+	}
+	truncated := false
+	if len(value) > limit {
+		cut := limit
+		for cut > 0 && !utf8.RuneStart(value[cut]) {
+			cut--
+		}
+		value, truncated = value[:cut], true
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", false, false
+	}
+	if len(encoded) > p.maxFieldBytes {
+		view.Withheld = append(view.Withheld, withheldFieldDTO{Field: field, Reason: withheldTooLarge})
+		return "", false, false
+	}
+	return value, truncated, true
+}
+
+// projectReview reads the verdict and reasons of a committed review_asset result. The
+// verdict must be a boolean or nothing is shown. Reasons are shown only as the bounded
+// list of strings the Tool declares; a reason whose encoding exceeds the field bound
+// withholds the list rather than cutting one reason or dropping it silently.
+func (p toolViewProjector) projectReview(view *toolAttemptView, result map[string]json.RawMessage) *toolReviewDTO {
+	var passed bool
+	if result == nil || json.Unmarshal(result["passed"], &passed) != nil {
+		return nil
+	}
+	review := &toolReviewDTO{Passed: passed}
+	var reasons []string
+	if raw := result["reasons"]; raw != nil && json.Unmarshal(raw, &reasons) == nil && len(reasons) <= maxProjectedReviewReasons {
+		for _, reason := range reasons {
+			if utf8.RuneCountInString(reason) > maxProjectedReasonRunes {
+				return review
+			}
+			encoded, err := json.Marshal(reason)
+			if err != nil {
+				return review
+			}
+			if len(encoded) > p.maxFieldBytes {
+				view.Withheld = append(view.Withheld, withheldFieldDTO{Field: "review.reasons", Reason: withheldTooLarge})
+				return review
+			}
+		}
+		review.Reasons = reasons
+	}
+	return review
 }
 
 // projectTest reads the verdict and counts of a committed sandbox_test result. Booleans

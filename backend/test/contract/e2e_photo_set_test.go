@@ -448,9 +448,15 @@ const photoSetObjectOutputSchema = `{
 				"additionalProperties": false
 			}
 		},
+		"settings": {
+			"type": "object",
+			"properties": {"prompt": {"type": "string"}},
+			"required": ["prompt"],
+			"additionalProperties": false
+		},
 		"settingsDigest": {"type": "string"}
 	},
-	"required": ["examples", "settingsDigest"],
+	"required": ["examples", "settings", "settingsDigest"],
 	"additionalProperties": false
 }`
 
@@ -494,7 +500,8 @@ func TestPhotoSet_ObjectFormFinal_MockPath_Accepted(t *testing.T) {
 	for _, example := range delivered.Examples {
 		parts = append(parts, `{"assetRef":"`+example.AssetRef+`","photoAssetId":"`+example.PhotoAssetID+`"}`)
 	}
-	want := `{"examples":[` + strings.Join(parts, ",") + `],"settingsDigest":"` + delivered.SettingsDigest + `"}`
+	want := `{"examples":[` + strings.Join(parts, ",") + `],"settings":{"prompt":"Warm film look with soft grain"},"settingsDigest":"` +
+		delivered.SettingsDigest + `"}`
 	if text != want {
 		t.Errorf("agent text port =\n  %s\nwant the canonical JSON text\n  %s", text, want)
 	}

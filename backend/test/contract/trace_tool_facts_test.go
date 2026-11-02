@@ -157,7 +157,9 @@ func TestTraceToolFacts_PhotoSetStory_ProjectsPhotoPositionsAndVideoURL(t *testi
 		t.Errorf("generate_video Attempt projects photo %+v, want none", videos[0].Photo)
 	}
 
-	for _, forbidden := range []string{`"settings"`, `"prompt"`, `"imageUrl"`, `"assetRef"`, `"arguments"`, `"result"`, `"sha256"`} {
+	// The generation settings are projected by name (see trace_tool_settings_test.go);
+	// nothing else of the arguments or results is.
+	for _, forbidden := range []string{`"imageUrl"`, `"assetRef"`, `"arguments"`, `"result"`, `"sha256"`, `"settingsDigest"`} {
 		if strings.Contains(raw, forbidden) {
 			t.Errorf("agent trace Tool Attempts contain %s, want only the projected members", forbidden)
 		}

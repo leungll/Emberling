@@ -49,7 +49,7 @@ func artifactFinal(t *testing.T) json.RawMessage {
 	for i, id := range testPhotos {
 		examples[i] = example{PhotoAssetID: id, AssetRef: generatedArtifact(id).ArtifactID}
 	}
-	doc, err := json.Marshal(map[string]any{"examples": examples, "settingsDigest": testDigest})
+	doc, err := json.Marshal(map[string]any{"examples": examples, "settings": testSettings, "settingsDigest": testDigest})
 	if err != nil {
 		t.Fatal(err)
 	}

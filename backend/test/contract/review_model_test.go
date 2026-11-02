@@ -146,6 +146,7 @@ func scriptGenerateReviewFinish(env *photoSetEnv, photoID *atomic.Value) {
 		default:
 			final, _ := json.Marshal(map[string]any{
 				"examples":       []any{map[string]any{"photoAssetId": id, "assetRef": results[0]["assetRef"]}},
+				"settings":       map[string]any{"prompt": "clay look"},
 				"settingsDigest": results[0]["settingsDigest"],
 			})
 			return &mockmodel.Scenario{Kind: mockmodel.ScenarioFinal, Output: string(final)}

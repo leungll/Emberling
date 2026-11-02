@@ -28,7 +28,7 @@
               "assetRef": "{{tool:0:/assetRef}}"
             }
           ],
-          "settingsDigest": "{{tool:0:/settingsDigest}}"
+          "settings": {"prompt": "Warm film look with strong grain"}, "settingsDigest": "{{tool:0:/settingsDigest}}"
         }
       }
     }
