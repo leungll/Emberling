@@ -103,12 +103,13 @@ func (t *fakeTx) ToolAttempts() store.ToolAttemptRepository {
 	return t.toolAttempts
 }
 
-func (t *fakeTx) NodeRuns() store.NodeRunRepository                 { return t.nodeRuns }
-func (t *fakeTx) NodeAttempts() store.NodeAttemptRepository         { return t.attempts }
-func (t *fakeTx) PendingCallbacks() store.PendingCallbackRepository { return t.pending }
-func (t *fakeTx) AgentTurns() store.AgentTurnRepository             { return t.agentTurns }
-func (t *fakeTx) AgentActions() store.AgentActionRepository         { return t.agentActions }
-func (t *fakeTx) AgentRuns() store.AgentRunRepository               { return t.agentRuns }
+func (t *fakeTx) NodeRuns() store.NodeRunRepository                     { return t.nodeRuns }
+func (t *fakeTx) NodeAttempts() store.NodeAttemptRepository             { return t.attempts }
+func (t *fakeTx) PendingCallbacks() store.PendingCallbackRepository     { return t.pending }
+func (t *fakeTx) AgentTurns() store.AgentTurnRepository                 { return t.agentTurns }
+func (t *fakeTx) AgentTurnManifests() store.AgentTurnManifestRepository { return nil }
+func (t *fakeTx) AgentActions() store.AgentActionRepository             { return t.agentActions }
+func (t *fakeTx) AgentRuns() store.AgentRunRepository                   { return t.agentRuns }
 
 // The three Agent scans of RunOnce need a lister each. Only the list methods are
 // implemented: the Reconciler is not allowed to change Agent state itself, so any other

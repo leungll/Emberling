@@ -800,6 +800,32 @@ export interface WithheldToolField {
   reason: 'TOO_LARGE' | 'UNSAFE_URL';
 }
 
+/** What kind of material one Context Manifest item records. */
+export type ManifestItemKind =
+  'INSTRUCTIONS' | 'TASK_INPUT' | 'STATE' | 'TOOL_RESULT' | 'WORKSPACE_FILE' | 'ARTIFACT';
+
+/** Why an item's content was left out of the model request. */
+export type ManifestOmission = 'REFERENCE_ONLY';
+
+/**
+ * One material of a Turn's model request: an identifier, a version, a digest and a
+ * length, never the material itself. For an included item `sha256` and `length` are those
+ * of the request bytes; for an omitted `ARTIFACT` they describe the referenced content and
+ * `ref` is the Artifact ID the artifact content route takes.
+ */
+export interface ManifestItem {
+  kind: ManifestItemKind;
+  label: string;
+  ref: string;
+  /** The source's version where it has one (state version, attempt number, patch sequence); `''` otherwise. */
+  version: string;
+  sha256: string;
+  length: number;
+  included: boolean;
+  /** `null` for an included item. */
+  omittedReason: ManifestOmission | null;
+}
+
 /** One Turn with its Decision, Action and Tool Attempts, as persisted. */
 export interface AgentTurnTrace {
   id: string;
@@ -819,6 +845,8 @@ export interface AgentTurnTrace {
   /** `null` for a Turn whose Decision created no Action. */
   action: AgentActionTrace | null;
   toolAttempts: ToolAttemptTrace[];
+  /** The Context Manifest written with the Turn's claim; `null` until the Turn was claimed. */
+  manifest: ManifestItem[] | null;
 }
 
 /**

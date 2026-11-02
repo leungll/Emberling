@@ -181,6 +181,7 @@ export function turn(
       (tool
         ? [toolAttempt(`ta_${String(turnNo)}`, tool, { startedAt: start, completedAt: start })]
         : []),
+    manifest: null,
     ...extra.turn,
   };
 }

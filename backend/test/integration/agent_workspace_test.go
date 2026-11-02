@@ -804,3 +804,63 @@ func TestAgentWorkspace_StartTransactionFails_LeavesNoWorkspaceRow(t *testing.T)
 		t.Errorf("agent_workspaces rows = %d, %v; want exactly 1", workspaces, err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Context Manifest
+// ---------------------------------------------------------------------------
+
+// TestAgentTurnManifest_ReadFileMessage_RecordedAsWorkspaceFileAtPatchSeq: the message a
+// real read_file call leaves in the context names the file and the patch sequence it was
+// read at, so the Manifest of the next Turn lists it as a WORKSPACE_FILE versioned by
+// that sequence, while the write_file message stays a TOOL_RESULT and list_files, which
+// names a directory rather than a file, stays a TOOL_RESULT too.
+func TestAgentTurnManifest_ReadFileMessage_RecordedAsWorkspaceFileAtPatchSeq(t *testing.T) {
+	repo := newWorkspaceRepo(t)
+	h := newWorkspaceHarness(t, workspaceHarnessOptions{repo: repo})
+	_, outcome := startWorkspaceRun(h, workspaceDefinition("wf-ws-manifest", repo.commit, true, wsAllTools...),
+		wsRead(wsTokenPath), wsWrite(wsTokenPath, wsNewToken), wsRead(wsTokenPath),
+		wsCall(workspace.ListFilesToolName, map[string]any{"dir": "internal/auth"}))
+	h.execute(outcome)
+	agentRunID := factAgentRunID(t, h, outcome)
+
+	// Turn 5 is the FINAL Turn; its request carries every tool message of Turns 1-4.
+	turns := listTurnsOfAgentRun(h.ctx, t, h.uow, agentRunID)
+	if len(turns) != 5 {
+		t.Fatalf("turns = %d, want 5", len(turns))
+	}
+	manifest, err := getManifest(h.ctx, t, h.uow, turns[4].ID)
+	if err != nil {
+		t.Fatalf("manifest of turn 5: %v", err)
+	}
+	files := manifestItemsOfKind(manifest.Items, domain.ManifestWorkspaceFile)
+	if len(files) != 2 {
+		t.Fatalf("WORKSPACE_FILE items = %+v, want the two read_file messages", files)
+	}
+	for i, want := range []string{"0", "1"} {
+		if files[i].Ref != wsTokenPath || files[i].Label != wsTokenPath || files[i].Version != want || !files[i].Included {
+			t.Errorf("WORKSPACE_FILE[%d] = %+v, want %s at patchSeq %s", i, files[i], wsTokenPath, want)
+		}
+	}
+	readAttempt := agentOnlyToolAttempt(t, h, wsActionOfTurn(t, h, agentRunID, 3).ID)
+	if files[1].SHA256 != sha256Hex(readAttempt.Result) || files[1].Length != len(readAttempt.Result) {
+		t.Errorf("WORKSPACE_FILE[1] digest/length = %s/%d, want those of the read_file result bytes", files[1].SHA256, files[1].Length)
+	}
+
+	results := manifestItemsOfKind(manifest.Items, domain.ManifestToolResult)
+	if len(results) != 2 {
+		t.Fatalf("TOOL_RESULT items = %+v, want write_file and list_files", results)
+	}
+	writeAttempt := agentOnlyToolAttempt(t, h, wsActionOfTurn(t, h, agentRunID, 2).ID)
+	listAttempt := agentOnlyToolAttempt(t, h, wsActionOfTurn(t, h, agentRunID, 4).ID)
+	if results[0].Ref != writeAttempt.ID || results[0].Label != workspace.WriteFileToolName+" result" {
+		t.Errorf("TOOL_RESULT[0] = %+v, want the write_file attempt %s", results[0], writeAttempt.ID)
+	}
+	if results[1].Ref != listAttempt.ID || results[1].Label != workspace.ListFilesToolName+" result" {
+		t.Errorf("TOOL_RESULT[1] = %+v, want the list_files attempt %s", results[1], listAttempt.ID)
+	}
+	for _, item := range manifest.Items {
+		if strings.Contains(item.Label, "Version = ") || strings.Contains(item.Ref, "Version = ") {
+			t.Errorf("manifest item copies file content: %+v", item)
+		}
+	}
+}

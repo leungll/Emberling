@@ -43,6 +43,7 @@ type Tx interface {
 	Events() EventRepository
 	AgentRuns() AgentRunRepository
 	AgentTurns() AgentTurnRepository
+	AgentTurnManifests() AgentTurnManifestRepository
 	AgentDecisions() AgentDecisionRepository
 	AgentActions() AgentActionRepository
 	ToolAttempts() ToolAttemptRepository
@@ -541,6 +542,24 @@ type AgentActionRepository interface {
 	// READY one no executor ever claimed. It reports false when the row had already
 	// reached a terminal status, which is not an error.
 	MarkTimedOut(ctx context.Context, actionID string, now time.Time, execErr domain.ExecutionError) (bool, error)
+}
+
+// AgentTurnManifestRepository persists one Context Manifest per Turn. It has no update
+// method: a Manifest records what one model request carried, and that request is never
+// re-issued.
+type AgentTurnManifestRepository interface {
+	// Create inserts a Turn's Manifest in the transaction that claimed the Turn. The
+	// PRIMARY KEY on turn_id yields domain.ErrConflict for a second Manifest of the same
+	// Turn, so only the claim winner's transaction can ever hold one.
+	Create(ctx context.Context, manifest domain.AgentTurnManifest) error
+
+	// GetByTurnID returns one Turn's Manifest, or domain.ErrNotFound while the Turn has
+	// not been claimed.
+	GetByTurnID(ctx context.Context, turnID string) (domain.AgentTurnManifest, error)
+
+	// ListByAgentRunID returns every Manifest of one Agent Run, oldest Turn first. It
+	// backs the read-only Agent Trace projection.
+	ListByAgentRunID(ctx context.Context, agentRunID string) ([]domain.AgentTurnManifest, error)
 }
 
 // ToolAttemptRepository preserves every real Tool call of a TOOL_CALL Action.

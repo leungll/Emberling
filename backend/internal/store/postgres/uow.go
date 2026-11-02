@@ -86,6 +86,7 @@ type tx struct {
 
 	agentRuns            *agentRunRepository
 	agentTurns           *agentTurnRepository
+	agentTurnManifests   *agentTurnManifestRepository
 	agentDecisions       *agentDecisionRepository
 	agentActions         *agentActionRepository
 	toolAttempts         *toolAttemptRepository
@@ -112,6 +113,7 @@ func newTx(conn pgx.Tx) *tx {
 
 		agentRuns:            &agentRunRepository{conn: conn},
 		agentTurns:           &agentTurnRepository{conn: conn},
+		agentTurnManifests:   &agentTurnManifestRepository{conn: conn},
 		agentDecisions:       &agentDecisionRepository{conn: conn},
 		agentActions:         &agentActionRepository{conn: conn},
 		toolAttempts:         &toolAttemptRepository{conn: conn},
@@ -136,8 +138,11 @@ func (t *tx) Events() store.EventRepository             { return t.events }
 func (t *tx) CallbackBindings() store.CallbackBindingRepository { return t.callbackBindings }
 func (t *tx) PendingCallbacks() store.PendingCallbackRepository { return t.pendingCallbacks }
 
-func (t *tx) AgentRuns() store.AgentRunRepository           { return t.agentRuns }
-func (t *tx) AgentTurns() store.AgentTurnRepository         { return t.agentTurns }
+func (t *tx) AgentRuns() store.AgentRunRepository   { return t.agentRuns }
+func (t *tx) AgentTurns() store.AgentTurnRepository { return t.agentTurns }
+func (t *tx) AgentTurnManifests() store.AgentTurnManifestRepository {
+	return t.agentTurnManifests
+}
 func (t *tx) AgentDecisions() store.AgentDecisionRepository { return t.agentDecisions }
 func (t *tx) AgentActions() store.AgentActionRepository     { return t.agentActions }
 func (t *tx) ToolAttempts() store.ToolAttemptRepository     { return t.toolAttempts }

@@ -117,11 +117,12 @@ func (t *cbTx) Events() store.EventRepository       { return &cbEventRepo{tx: t}
 
 // The callback use case never reads or writes Agent facts, so these accessors stay nil;
 // the Agent repositories are proved against a real database in test/integration.
-func (t *cbTx) AgentRuns() store.AgentRunRepository           { return nil }
-func (t *cbTx) AgentTurns() store.AgentTurnRepository         { return nil }
-func (t *cbTx) AgentDecisions() store.AgentDecisionRepository { return nil }
-func (t *cbTx) AgentActions() store.AgentActionRepository     { return nil }
-func (t *cbTx) ToolAttempts() store.ToolAttemptRepository     { return nil }
+func (t *cbTx) AgentRuns() store.AgentRunRepository                   { return nil }
+func (t *cbTx) AgentTurns() store.AgentTurnRepository                 { return nil }
+func (t *cbTx) AgentTurnManifests() store.AgentTurnManifestRepository { return nil }
+func (t *cbTx) AgentDecisions() store.AgentDecisionRepository         { return nil }
+func (t *cbTx) AgentActions() store.AgentActionRepository             { return nil }
+func (t *cbTx) ToolAttempts() store.ToolAttemptRepository             { return nil }
 
 func (t *cbTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *cbTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
