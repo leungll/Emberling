@@ -164,7 +164,13 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 		}
 	}
 
-	return registry.ExternalTask{ProviderID: ProviderID, ExternalTaskID: accepted.ExternalTaskID}, nil
+	// The Provider answers 202 Accepted when it creates a task and 200 OK when it replays
+	// the task it already accepted under the same idempotency key.
+	return registry.ExternalTask{
+		ProviderID:     ProviderID,
+		ExternalTaskID: accepted.ExternalTaskID,
+		Replayed:       response.StatusCode == http.StatusOK,
+	}, nil
 }
 
 // buildRequest converts the dispatch inputs into the Mock Provider's wire request. A

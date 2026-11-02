@@ -630,7 +630,7 @@ func assertRunOutputImageRef(t *testing.T, output map[string]any) string {
 // TestE2E_AIGC_ImageGenerationDispatchesThenCallbackCompletesRun is the AIGC acceptance
 // item itself: the Image Generation NodeRun walks RUNNING → WAITING_CALLBACK → SUCCEEDED,
 // its Attempt walks STARTED → DISPATCHED → SUCCEEDED, the Events record NODE_DISPATCHED
-// (attemptNo + callbackBindingId only), NODE_CALLBACK_RECEIVED and NODE_COMPLETED with
+// (attemptNo, callbackBindingId and replayed only), NODE_CALLBACK_RECEIVED and NODE_COMPLETED with
 // completionSource CALLBACK, and the Run ends COMPLETED with media_output's image and
 // caption.
 //
@@ -703,7 +703,7 @@ func TestE2E_AIGC_ImageGenerationDispatchesThenCallbackCompletesRun(t *testing.T
 		t.Fatalf("NODE_DISPATCHED events = %d, want 1", len(dispatched))
 	}
 	dispatchedPayload := payloadOf(t, dispatched[0])
-	if got, want := sortedKeys(dispatchedPayload), []string{"attemptNo", "callbackBindingId"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	if got, want := sortedKeys(dispatchedPayload), []string{"attemptNo", "callbackBindingId", "replayed"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("NODE_DISPATCHED payload keys = %v, want %v", got, want)
 	}
 	if got, _ := dispatchedPayload["attemptNo"].(float64); int(got) != 1 {
@@ -711,6 +711,10 @@ func TestE2E_AIGC_ImageGenerationDispatchesThenCallbackCompletesRun(t *testing.T
 	}
 	if got, _ := dispatchedPayload["callbackBindingId"].(string); got != bindingID {
 		t.Errorf("NODE_DISPATCHED callbackBindingId = %q, want the projected Binding id %q", got, bindingID)
+	}
+	// A first dispatch creates its task at the Provider, so it is not a replay.
+	if got, ok := dispatchedPayload["replayed"].(bool); !ok || got {
+		t.Errorf("NODE_DISPATCHED replayed = %v, want false for a task the Provider created", dispatchedPayload["replayed"])
 	}
 
 	// --- the execution slot was released, Caption is advancing, Run stays RUNNING.

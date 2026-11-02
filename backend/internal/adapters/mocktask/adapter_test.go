@@ -56,6 +56,40 @@ func TestMockTaskAdapter_Dispatch_ReturnsExternalTask(t *testing.T) {
 	}
 }
 
+// TestMockTaskAdapter_Dispatch_CreatedOrReplayed_ReportsReplayedOnlyForReplay pins how the
+// Provider's two accepting answers are told apart: 202 Accepted creates a task, 200 OK
+// replays the task already accepted under the same idempotency key. Both carry the task
+// id; only the replay sets Replayed.
+func TestMockTaskAdapter_Dispatch_CreatedOrReplayed_ReportsReplayedOnlyForReplay(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		status   int
+		replayed bool
+	}{
+		{name: "created", status: http.StatusAccepted, replayed: false},
+		{name: "replayed", status: http.StatusOK, replayed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(`{"externalTaskId":"provider_task_original"}`))
+			}))
+			t.Cleanup(server.Close)
+
+			task, err := New(server.URL, server.Client()).Dispatch(context.Background(), "prompt", nil, nil, testCallback(), "nr_1")
+			if err != nil {
+				t.Fatalf("Dispatch() error = %v, want nil", err)
+			}
+			if task.ExternalTaskID != "provider_task_original" {
+				t.Fatalf("ExternalTaskID = %q, want provider_task_original", task.ExternalTaskID)
+			}
+			if task.Replayed != tc.replayed {
+				t.Fatalf("Replayed = %v for status %d, want %v", task.Replayed, tc.status, tc.replayed)
+			}
+		})
+	}
+}
+
 // TestMockTaskAdapter_Dispatch_SuccessPayloadIsAnImageRef pins what the fabricated success
 // callback carries: a valid domain.ImageRef, never a Provider-private object. The
 // EXTERNAL branch's uri is the Mock Provider's own image route, so it is stable,

@@ -120,9 +120,13 @@ func isUncertainFailure(ctx context.Context, err error) bool {
 // nodeDispatchedPayload is the bounded record of a committed dispatch.
 // providerId and externalTaskId are deliberately absent:
 // they are projected from the Callback Binding and are not copied into Events.
+// Replayed records that the Provider answered with a task it had already accepted under
+// the same idempotency key, which is how a retry after a lost response shows that it took
+// over the original task instead of starting a new one.
 type nodeDispatchedPayload struct {
 	AttemptNo         int    `json:"attemptNo"`
 	CallbackBindingID string `json:"callbackBindingId"`
+	Replayed          bool   `json:"replayed"`
 }
 
 // errDispatchBindingConflict rolls the dispatch transaction back when the external task id
@@ -229,6 +233,7 @@ func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutc
 		if err := s.appendEvent(ctx, tx, lock, run.ID, &nodeRun.ID, domain.EventNodeDispatched, now, nodeDispatchedPayload{
 			AttemptNo:         attempt.AttemptNo,
 			CallbackBindingID: bindingID,
+			Replayed:          task.Replayed,
 		}); err != nil {
 			return err
 		}

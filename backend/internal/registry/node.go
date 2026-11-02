@@ -176,6 +176,11 @@ func CompletedResult(ports map[string]json.RawMessage) NodeResult {
 type ExternalTask struct {
 	ProviderID     string
 	ExternalTaskID string
+	// Replayed reports that the Provider answered with a task it had already accepted
+	// under the same idempotency key instead of creating a new one. It is set only by an
+	// Adapter whose Provider tells the two answers apart, and it is recorded, never used
+	// to route a callback.
+	Replayed bool
 }
 
 // NodeAsyncState is what the Runtime restores from committed facts before asking an
