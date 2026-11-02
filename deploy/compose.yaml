@@ -69,6 +69,9 @@ services:
     environment:
       MOCKPROVIDER_TEST_CONTROLS: "true"
       MOCKPROVIDER_RECORD_PATH: /var/lib/emberling/mockprovider/dispatch-record.jsonl
+      # In-flight task limit the dispatch record marks acceptances against and
+      # GET /control/inflight reports; the serving demo variants submit twenty users.
+      MOCKPROVIDER_INFLIGHT_LIMIT: ${EMBERLING_DEMO_PROVIDER_INFLIGHT_LIMIT:-20}
       # Must match the host side of the published port above for the browser to load it.
       EMBERLING_MOCKPROVIDER_PUBLIC_URL: ${EMBERLING_MOCKPROVIDER_PUBLIC_URL:-http://localhost:9101}
     volumes:

@@ -35,6 +35,21 @@
 #                                       no Event.
 #                 Each photo and delivery variant is followed by the invariant report as well.
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
+#                 The serving variants run only when named, or all seven with
+#                 EMBERLING_DEMO_VARIANT=serving. Each is serving.sh STORY, many users of
+#                 the photo effect serving template, followed by the invariant report of
+#                 every Run and the per-task ledger of all of them:
+#                   serving-burst           twenty users submit at once;
+#                   serving-crash-held      SIGKILL while dispatches are held before
+#                                           acceptance, then restart;
+#                   serving-crash-waiting   SIGKILL while every task waits for its
+#                                           callback; callbacks and polls complete them;
+#                   serving-duplicate       every callback delivered three times;
+#                   serving-version-switch  a new version saved while Runs are in flight;
+#                   serving-client-retry    concurrent resubmissions under one
+#                                           Idempotency-Key per user;
+#                   serving-response-lost   the Provider drops each acceptance answer and
+#                                           the keyed retry takes over the original task.
 #                 EMBERLING_DEMO_STUDIO=1 also builds and starts Studio, prints a Studio link
 #                 to every Run and pauses for Enter at the moments worth watching; the
 #                 stack and Studio keep running afterwards. EMBERLING_DEMO_PAUSE=0 keeps
@@ -72,7 +87,15 @@ run)
     delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery, delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery" ;;
+  serving)
+    variants=(serving-burst serving-crash-held serving-crash-waiting serving-duplicate
+      serving-version-switch serving-client-retry serving-response-lost)
+    ;;
+  serving-burst | serving-crash-held | serving-crash-waiting | serving-duplicate | \
+    serving-version-switch | serving-client-retry | serving-response-lost)
+    variants=("$EMBERLING_DEMO_VARIANT")
+    ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, serving or one serving-* variant" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -95,6 +118,7 @@ run)
     delivery-restart-during-test) script=delivery.sh story=restart ;;
     delivery-deploy-lost) script=delivery.sh story=deploy-lost ;;
     delivery-runner-redelivery) script=delivery.sh story=redelivery ;;
+    serving-*) script=serving.sh story=${variant#serving-} ;;
     esac
     printf '\n==== variant %s (%s%s) ====\n' "$variant" "$script" "${story:+ $story}"
     : >"$state"
@@ -105,6 +129,11 @@ run)
     record_after=$(sed -n 's/^RECORD_AFTER=//p' "$state")
     run_status=$(sed -n 's/^RUN_STATUS=//p' "$state")
     story_summary=$(sed -n 's/^SUMMARY=//p' "$state")
+    # A serving story lists all its Runs, comma-separated, and how many submissions the
+    # clients sent; its ledger also requires every Run to have completed.
+    submissions=$(sed -n 's/^SUBMISSIONS=//p' "$state")
+    require_completed=0
+    [[ "$variant" == serving-* ]] && require_completed=1
 
     # The fault scripts end with the invariant report; a photo or delivery story ends with its own
     # checks, so the invariant report runs here.
@@ -117,7 +146,8 @@ run)
     fi
 
     ledger_status=0
-    "$DEMO_ROOT/scripts/demo/ledger-vs-record.sh" "$run_id" "$record_after" || ledger_status=$?
+    LEDGER_SUBMISSIONS=$submissions LEDGER_REQUIRE_COMPLETED=$require_completed \
+      "$DEMO_ROOT/scripts/demo/ledger-vs-record.sh" "$run_id" "$record_after" || ledger_status=$?
 
     summary+=$(printf '\nvariant             %s\nrun                 %s\nrun status          %s\n' \
       "$variant" "$run_id" "$run_status")
