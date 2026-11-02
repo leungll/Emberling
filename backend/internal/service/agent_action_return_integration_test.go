@@ -51,10 +51,12 @@ func (c *returnClock) Advance(d time.Duration) {
 	c.mu.Unlock()
 }
 
-// recordingQueue records the Turns offered to it after COMMIT and refuses nothing.
+// recordingQueue records the Turns offered to it after COMMIT. It accepts them unless
+// refuse is set, which models a full work queue leaving the Turn to the Reconciler.
 type recordingQueue struct {
-	mu    sync.Mutex
-	turns []string
+	mu     sync.Mutex
+	turns  []string
+	refuse atomic.Bool
 }
 
 func (*recordingQueue) EnqueueAdvance(string) bool { return true }
@@ -63,7 +65,7 @@ func (q *recordingQueue) EnqueueAgentTurn(_, turnID string) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.turns = append(q.turns, turnID)
-	return true
+	return !q.refuse.Load()
 }
 
 func (q *recordingQueue) offered() []string {
@@ -111,6 +113,33 @@ func (recordingLookup) Execute(context.Context, registry.ToolAction) (registry.T
 		Output:         json.RawMessage(`{"key":"k","record":"r"}`),
 		WorkspacePatch: &registry.WorkspacePatch{Patch: "diff --git a/go.mod b/go.mod", PatchDigest: "sha256:0", TouchedPaths: []string{"go.mod"}},
 	}}, nil
+}
+
+// errInjectedAppend is the failure a failingEventsTx injects into one Event append.
+var errInjectedAppend = errors.New("injected: event append failed")
+
+// failingEventsTx is a store.Tx whose Event repository fails the append of one Event type,
+// so a test can make the return transaction fail after its first writes and prove the
+// whole transaction rolls back.
+type failingEventsTx struct {
+	store.Tx
+	failOn domain.EventType
+}
+
+func (f failingEventsTx) Events() store.EventRepository {
+	return failingEvents{EventRepository: f.Tx.Events(), failOn: f.failOn}
+}
+
+type failingEvents struct {
+	store.EventRepository
+	failOn domain.EventType
+}
+
+func (f failingEvents) Append(ctx context.Context, lock *store.RunLock, ev domain.Event) (domain.Event, error) {
+	if ev.Type == f.failOn {
+		return domain.Event{}, errInjectedAppend
+	}
+	return f.EventRepository.Append(ctx, lock, ev)
 }
 
 type returnHarnessOptions struct {
@@ -248,6 +277,21 @@ func (h *returnHarness) seedDecision(toolName string, arguments json.RawMessage,
 	now := h.clock.Now()
 	decisionID, actionID := "dec_"+h.agentRunID, "act_"+h.agentRunID
 	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		// A waiting Action pauses the Run exactly as the dispatch of an asynchronous Tool
+		// does: the Run and its plan are resolved before the lock, the Run is re-aggregated
+		// under it.
+		var run domain.Run
+		var plan *runtime.CompiledDefinition
+		if status == domain.AgentActionWaitingCallback {
+			var err error
+			if run, plan, err = h.svc.runPlan(ctx, tx, h.runID); err != nil {
+				return err
+			}
+		}
+		lock, err := tx.Runs().LockForUpdate(ctx, h.runID)
+		if err != nil {
+			return err
+		}
 		if won, err := tx.AgentTurns().ClaimReady(ctx, h.turnID, now); err != nil || !won {
 			return errors.Join(err, errors.New("turn 1 was not claimed"))
 		}
@@ -275,7 +319,10 @@ func (h *returnHarness) seedDecision(toolName string, arguments json.RawMessage,
 			if err := tx.AgentActions().MarkWaiting(ctx, actionID, now); err != nil {
 				return err
 			}
-			return tx.NodeRuns().MarkWaiting(ctx, h.nodeRunID, now)
+			if err := tx.NodeRuns().MarkWaiting(ctx, h.nodeRunID, now); err != nil {
+				return err
+			}
+			return h.svc.aggregateRunLocked(ctx, tx, lock, run, plan, now)
 		}
 		return nil
 	}); err != nil {
@@ -290,11 +337,28 @@ func (h *returnHarness) seedLookupDecision(status domain.AgentActionStatus) doma
 }
 
 // returnAction calls the locked use case inside one Unit of Work transaction and commits
-// it, exactly as a production path would at the end of its own decision.
+// it, exactly as a production path would at the end of its own decision: the Run and its
+// plan are resolved before the lock when the Action is waiting, and the rest under it.
 func (h *returnHarness) returnAction(action domain.AgentAction, from domain.AgentActionStatus, code domain.AgentReturnCode, message string) (string, error) {
+	h.t.Helper()
+	return h.returnActionWithTx(action, from, code, message, func(tx store.Tx) store.Tx { return tx })
+}
+
+// returnActionWithTx is returnAction over a transaction the test may wrap, so a write can
+// be made to fail after the first ones succeeded.
+func (h *returnHarness) returnActionWithTx(action domain.AgentAction, from domain.AgentActionStatus, code domain.AgentReturnCode, message string, wrap func(store.Tx) store.Tx) (string, error) {
 	h.t.Helper()
 	var nextTurnID string
 	err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		tx = wrap(tx)
+		var run domain.Run
+		var plan *runtime.CompiledDefinition
+		if from == domain.AgentActionWaitingCallback {
+			var err error
+			if run, plan, err = h.svc.runPlan(ctx, tx, h.runID); err != nil {
+				return err
+			}
+		}
 		lock, err := tx.Runs().LockForUpdate(ctx, h.runID)
 		if err != nil {
 			return err
@@ -311,7 +375,7 @@ func (h *returnHarness) returnAction(action domain.AgentAction, from domain.Agen
 		if err != nil {
 			return err
 		}
-		ret := agentActionReturn{lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: lookup.ToolName}
+		ret := agentActionReturn{lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: lookup.ToolName, run: run, plan: plan}
 		nextTurnID, err = h.svc.returnActionToAgentLocked(ctx, tx, ret, from, code, message, h.clock.Now())
 		return err
 	})
@@ -357,14 +421,29 @@ func (h *returnHarness) getNodeRun() domain.NodeRun {
 	return nodeRun
 }
 
-func (h *returnHarness) readyTurnNos() []int {
+func (h *returnHarness) getRun() domain.Run {
 	h.t.Helper()
-	var out []int
+	var run domain.Run
+	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		run, err = tx.Runs().Get(ctx, h.runID)
+		return err
+	}); err != nil {
+		h.t.Fatalf("get run: %v", err)
+	}
+	return run
+}
+
+// readyTurns returns this Agent Run's READY Turns as the Reconciler's rediscovery query
+// lists them.
+func (h *returnHarness) readyTurns() []domain.AgentTurn {
+	h.t.Helper()
+	var out []domain.AgentTurn
 	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
 		turns, err := tx.AgentTurns().ListReady(ctx, 10)
 		for _, turn := range turns {
 			if turn.AgentRunID == h.agentRunID {
-				out = append(out, turn.TurnNo)
+				out = append(out, turn)
 			}
 		}
 		return err
@@ -372,6 +451,27 @@ func (h *returnHarness) readyTurnNos() []int {
 		h.t.Fatalf("list READY turns: %v", err)
 	}
 	return out
+}
+
+func (h *returnHarness) readyTurnNos() []int {
+	h.t.Helper()
+	var out []int
+	for _, turn := range h.readyTurns() {
+		out = append(out, turn.TurnNo)
+	}
+	return out
+}
+
+// eventCount returns how many Events of typ the Run has.
+func (h *returnHarness) eventCount(typ domain.EventType) int {
+	h.t.Helper()
+	n := 0
+	for _, event := range h.events() {
+		if event.Type == typ {
+			n++
+		}
+	}
+	return n
 }
 
 func (h *returnHarness) events() []domain.Event {
@@ -559,11 +659,91 @@ func TestReturnActionToAgent_WaitingCallbackAction_ResumesNodeRunAndNewReadyTurn
 	if nodeRun := h.getNodeRun(); nodeRun.Status != domain.NodeRunWaitingCallback {
 		t.Fatalf("seeded node run = %s, want WAITING_CALLBACK", nodeRun.Status)
 	}
+	if run := h.getRun(); run.Status != domain.RunPaused {
+		t.Fatalf("seeded run = %s, want PAUSED while the Agent waits", run.Status)
+	}
+	resumedBefore := h.eventCount(domain.EventRunResumed)
+
 	nextTurnID, err := h.returnAction(action, domain.AgentActionWaitingCallback, domain.ReturnReleaseRefused, "production is outside its release window")
 	if err != nil {
 		t.Fatalf("return from WAITING_CALLBACK: %v", err)
 	}
 	assertReturned(t, h, action, domain.ReturnReleaseRefused, nextTurnID)
+	if run := h.getRun(); run.Status != domain.RunRunning {
+		t.Errorf("run = %s after the return, want RUNNING", run.Status)
+	}
+	if got := h.eventCount(domain.EventRunResumed); got != resumedBefore+1 {
+		t.Errorf("RUN_RESUMED events = %d, want %d (one written with the return)", got, resumedBefore+1)
+	}
+}
+
+func TestReturnActionToAgent_TimeoutWonFirst_WritesNothing(t *testing.T) {
+	h := newReturnHarness(t, returnHarnessOptions{})
+	action := h.seedLookupDecision(domain.AgentActionRunning)
+	// The deadline passes and the timeout commits first: it fails the Action and ends the
+	// Agent Run as TIMEOUT.
+	h.clock.Advance(601 * time.Second)
+	if err := h.svc.TimeoutAgentRun(h.ctx, h.agentRunID); err != nil {
+		t.Fatalf("timeout agent run: %v", err)
+	}
+	agentRunBefore := h.getAgentRun()
+	if agentRunBefore.Termination == nil || *agentRunBefore.Termination != domain.TerminationTimeout {
+		t.Fatalf("agent run termination = %v after the timeout, want TIMEOUT", agentRunBefore.Termination)
+	}
+	eventsBefore := len(h.events())
+	contextBefore := h.hasContextVersion(1)
+
+	nextTurnID, err := h.returnAction(action, domain.AgentActionRunning, domain.ReturnApprovalRejected, "the reviewer rejected the release")
+	if !errors.Is(err, errAgentTurnSuperseded) || nextTurnID != "" {
+		t.Fatalf("return after the timeout won = %q, %v, want errAgentTurnSuperseded and no turn", nextTurnID, err)
+	}
+	if failed := h.getAction(action.ID); failed.Status != domain.AgentActionFailed || failed.Error == nil || failed.Error.Code == string(domain.ReturnApprovalRejected) {
+		t.Errorf("action = %s %+v, want the timeout's FAILED left untouched", failed.Status, failed.Error)
+	}
+	if got := len(h.events()); got != eventsBefore {
+		t.Errorf("events = %d, want %d (nothing appended by the losing return)", got, eventsBefore)
+	}
+	if h.hasContextVersion(1) != contextBefore {
+		t.Errorf("context version 1 present = %v, want unchanged %v", !contextBefore, contextBefore)
+	}
+	agentRun := h.getAgentRun()
+	if agentRun.CurrentTurnNo != agentRunBefore.CurrentTurnNo || agentRun.CurrentContextVersion != agentRunBefore.CurrentContextVersion ||
+		agentRun.CurrentStateVersion != agentRunBefore.CurrentStateVersion || agentRun.Termination == nil || *agentRun.Termination != domain.TerminationTimeout {
+		t.Errorf("agent run = %+v, want the pointers and TIMEOUT termination of %+v", agentRun, agentRunBefore)
+	}
+	if nos := h.readyTurnNos(); len(nos) != 0 {
+		t.Errorf("READY turns = %v, want none", nos)
+	}
+}
+
+func TestReturnActionToAgent_WriteFailsBeforeCommit_RollsBackEverything(t *testing.T) {
+	h := newReturnHarness(t, returnHarnessOptions{})
+	action := h.seedLookupDecision(domain.AgentActionRunning)
+	eventsBefore := len(h.events())
+
+	// The Action is failed, AGENT_ACTION_FAILED and the Context Version are written, then
+	// the append of AGENT_TURN_READY for the new Turn fails: the transaction must leave no
+	// trace of any of them.
+	nextTurnID, err := h.returnActionWithTx(action, domain.AgentActionRunning, domain.ReturnScopeDenied, "path outside the allowed directories",
+		func(tx store.Tx) store.Tx { return failingEventsTx{Tx: tx, failOn: domain.EventAgentTurnReady} })
+	if !errors.Is(err, errInjectedAppend) || nextTurnID != "" {
+		t.Fatalf("return with a failing append = %q, %v, want the injected error and no turn", nextTurnID, err)
+	}
+	if got := h.getAction(action.ID); got.Status != domain.AgentActionRunning || got.Error != nil {
+		t.Errorf("action = %s %+v, want still RUNNING without an error", got.Status, got.Error)
+	}
+	if got := len(h.events()); got != eventsBefore {
+		t.Errorf("events = %d, want %d (the rolled back AGENT_ACTION_FAILED must not exist)", got, eventsBefore)
+	}
+	if h.hasContextVersion(1) {
+		t.Errorf("context version 1 exists, want it rolled back")
+	}
+	if nos := h.readyTurnNos(); len(nos) != 0 {
+		t.Errorf("READY turns = %v, want none", nos)
+	}
+	if run := h.getAgentRun(); run.CurrentTurnNo != 1 || run.CurrentContextVersion != 0 || run.Termination != nil {
+		t.Errorf("agent run = turn %d context %d termination %v, want untouched turn 1 context 0", run.CurrentTurnNo, run.CurrentContextVersion, run.Termination)
+	}
 }
 
 func TestReturnActionToAgent_DeadlinePassed_TerminatesTimeoutNoNewTurn(t *testing.T) {
@@ -705,13 +885,35 @@ func TestClaimAgentAction_ReturnUnmetRequirementOn_ReturnsVerificationMissingWit
 		t.Fatalf("turns offered to the queue after COMMIT = %v, want exactly the new Turn", offered)
 	}
 	h.assertNoAttempt(action.ID)
-	// The tool name of the seeded call is the guarded tool, not lookup.
-	assertReturnedWithTool(t, h, action, domain.ReturnVerificationMissing, offered[0])
+	assertReturned(t, h, action, domain.ReturnVerificationMissing, offered[0])
 	message := h.toolMessage(action.ID)
 	text, _ := message["message"].(string)
 	if !strings.Contains(text, `"`+guardedFactType+`"`) {
 		t.Errorf("tool message %q does not name the missing fact type %s", text, guardedFactType)
 	}
+}
+
+func TestClaimAgentAction_ReturnedTurnEnqueueRefused_TurnCommittedForReconciler(t *testing.T) {
+	executor := &guardedExecutor{}
+	h := newReturnHarness(t, returnHarnessOptions{tools: []registry.ToolRegistration{guardedToolRegistration(true, executor)}})
+	h.queue.refuse.Store(true)
+	action := h.seedDecision(guardedToolName, json.RawMessage(`{"patchDigest":"`+seededArgumentValue+`"}`), domain.AgentActionReady)
+
+	if err := h.svc.ExecuteAgentAction(h.ctx, action.ID, domain.ClaimImmediate); err != nil {
+		t.Fatalf("execute guarded action with a refusing queue: %v", err)
+	}
+	offered := h.queue.offered()
+	if len(offered) != 1 {
+		t.Fatalf("turns offered to the queue after COMMIT = %v, want the new Turn offered once and refused", offered)
+	}
+	// The refused Turn is committed, READY, and exactly what the Reconciler's rediscovery
+	// query returns.
+	ready := h.readyTurns()
+	if len(ready) != 1 || ready[0].ID != offered[0] || ready[0].TurnNo != 2 {
+		t.Fatalf("READY turns in the database = %+v, want exactly the refused turn %s as turn 2", ready, offered[0])
+	}
+	h.assertNoAttempt(action.ID)
+	assertReturned(t, h, action, domain.ReturnVerificationMissing, ready[0].ID)
 }
 
 func TestClaimAgentAction_ReturnUnmetRequirementOff_TerminatesPreconditionUnmet(t *testing.T) {
@@ -778,11 +980,4 @@ func (h *returnHarness) assertNoAttempt(actionID string) {
 	}); err != nil {
 		h.t.Fatalf("list attempts: %v", err)
 	}
-}
-
-// assertReturnedWithTool is assertReturned for an Action whose Decision names another
-// Tool than lookup; the tool message link is checked on the Action only.
-func assertReturnedWithTool(t *testing.T, h *returnHarness, action domain.AgentAction, code domain.AgentReturnCode, nextTurnID string) {
-	t.Helper()
-	assertReturned(t, h, action, code, nextTurnID)
 }

@@ -52,8 +52,11 @@ type agentActionCompletedPayload struct {
 }
 
 // agentActionFailedPayload is AGENT_ACTION_FAILED. ReturnedToAgent is true only when the
-// failure is a definite refusal handed back to the Agent, which then continues in a new
-// Turn; it is omitted for every failure that ends the Agent Run.
+// failure is a definite refusal handed back to the Agent on the return path; it is omitted
+// for every failure that ends the Agent Run directly. It says how the failure was handled,
+// not that a new Turn exists: when the round advancement in the same transaction then ends
+// the Agent Run as TIMEOUT or MAX_TURNS, no Turn receives the refusal message, so a Trace
+// reader pairs this Event with the termination Event that follows it.
 type agentActionFailedPayload struct {
 	AgentRunID      string                `json:"agentRunId"`
 	TurnID          string                `json:"turnId"`
@@ -458,6 +461,15 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		}
 		if lock.Status().IsTerminal() {
 			return nil
+		}
+		// Re-read what the lock now protects: the Agent Run's context and state pointers
+		// and the NodeRun status were read before the lock, and a result, a timeout or a
+		// returned refusal may have committed in between.
+		if agentRun, err = tx.AgentRuns().Get(ctx, agentRun.ID); err != nil {
+			return err
+		}
+		if nodeRun, err = tx.NodeRuns().Get(ctx, nodeRun.ID); err != nil {
+			return err
 		}
 		// A FINAL Action is left exactly as it was committed: READY, and therefore still
 		// recoverable work for the use case that owns it.

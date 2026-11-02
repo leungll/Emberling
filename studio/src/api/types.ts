@@ -324,7 +324,7 @@ export interface ToolMetadata {
    * The authorization the Tool's Actions need. Absent means LOW risk: the Backend treats an
    * undeclared authorization as LOW.
    */
-  authorization?: ToolAuthorization | null;
+  authorization?: ToolAuthorization;
   /** The records a result of this Tool may carry; a result carrying any other kind is invalid. */
   records: ToolRecordKind[];
   /** True when the Tool runs against the workspace bound on its Agent node. */

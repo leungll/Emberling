@@ -47,6 +47,12 @@ type returnToolMessage struct {
 // under the Run aggregate lock it already holds. attemptID names the Attempt the caller
 // already failed in the same transaction, or nil when the refusal came before any Attempt
 // existed.
+//
+// run and plan are required when the Action is returned from WAITING_CALLBACK: resuming
+// the Agent NodeRun re-derives the Run status from the compiled plan of the Run's immutable
+// Definition version. The caller resolves them before taking the Run lock, as every other
+// asynchronous resume does, because compiling a Definition is work no Run row lock may be
+// held across. A return from RUNNING leaves them empty.
 type agentActionReturn struct {
 	lock      *store.RunLock
 	nodeRun   domain.NodeRun
@@ -55,6 +61,8 @@ type agentActionReturn struct {
 	action    domain.AgentAction
 	attemptID *string
 	toolName  string
+	run       domain.Run
+	plan      *runtime.CompiledDefinition
 }
 
 // returnActionToAgentLocked hands a definite refusal back to the Agent inside a
@@ -88,6 +96,9 @@ func (s *ExecutionService) returnActionToAgentLocked(
 	}
 	if from != domain.AgentActionRunning && from != domain.AgentActionWaitingCallback {
 		return "", fmt.Errorf("execution: return action %s to agent from %s: only a RUNNING or WAITING_CALLBACK action can be returned", ret.action.ID, from)
+	}
+	if from == domain.AgentActionWaitingCallback && ret.plan == nil {
+		return "", fmt.Errorf("execution: return action %s to agent from %s: the caller must resolve the run and its plan before the lock", ret.action.ID, from)
 	}
 
 	content, err := buildReturnToolMessage(code, message)
@@ -135,17 +146,12 @@ func (s *ExecutionService) returnActionToAgentLocked(
 	}
 
 	// A refusal of a waiting Action resumes the Agent NodeRun from WAITING_CALLBACK, which
-	// re-derives the Run status and therefore needs the Run and its plan.
+	// re-derives the Run status from the Run and plan the caller resolved before the lock.
 	src := syncToolOutcome
-	var run domain.Run
-	var plan *runtime.CompiledDefinition
 	if from == domain.AgentActionWaitingCallback {
 		src = agentToolOutcomeSource{fromAction: from, failureSource: failureSource, resumesWaiting: true}
-		if run, plan, err = s.runPlan(ctx, tx, ret.nodeRun.RunID); err != nil {
-			return "", err
-		}
 	}
-	return s.advanceAgentRoundLocked(ctx, tx, ret.lock, ret.nodeRun, ret.agentRun, call, src, run, plan,
+	return s.advanceAgentRoundLocked(ctx, tx, ret.lock, ret.nodeRun, ret.agentRun, call, src, ret.run, ret.plan,
 		ret.agentRun.CurrentContextVersion+1, ret.agentRun.CurrentStateVersion, len(messages), now)
 }
 
