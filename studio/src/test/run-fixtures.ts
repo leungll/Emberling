@@ -106,6 +106,7 @@ export function nodeAttempt(attemptNo: number, extra: Partial<NodeAttempt> = {})
     error: null,
     uncertain: null,
     callbackBinding: null,
+    cost: null,
     ...extra,
   };
 }
@@ -125,6 +126,7 @@ export function toolAttempt(
     dispatchedAt: null,
     completedAt: T0,
     error: null,
+    cost: null,
     ...extra,
   };
 }
@@ -165,6 +167,7 @@ export function turn(
     completedAt: start,
     error: null,
     usage: null,
+    cost: null,
     claimSource: 'IMMEDIATE',
     decision: { kind: tool ? 'TOOL_CALL' : 'FINAL', tool, hasStatePatch: false },
     action: action(`act_${String(turnNo)}`, {

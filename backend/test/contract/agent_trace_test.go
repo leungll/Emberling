@@ -277,7 +277,7 @@ func TestAgentTrace_CompletedTwoRoundLoop_ProjectsTurnsInOrder(t *testing.T) {
 		t.Errorf("turns[0].toolAttempts[0].dispatchedAt = %v, want null for a synchronous Tool", attempt["dispatchedAt"])
 	}
 	for _, key := range []string{"id", "toolName", "attemptNo", "status", "callbackBinding",
-		"startedAt", "dispatchedAt", "completedAt", "error"} {
+		"startedAt", "dispatchedAt", "completedAt", "error", "cost"} {
 		if _, present := attempt[key]; !present {
 			t.Errorf("turns[0].toolAttempts[0] is missing the required key %q: %s", key, body)
 		}

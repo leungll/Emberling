@@ -87,6 +87,11 @@ type NodeAttempt struct {
 	// uncertain when it failed. It is written once with the failure and is nil on every
 	// other Attempt, and on Attempts that failed before the value was recorded.
 	Uncertain *bool `json:"uncertain"`
+	// Cost is the charge the Provider reported for this Attempt's external call, written
+	// once with the SUCCEEDED result and never changed. It is nil on a FAILED Attempt, on
+	// one whose Provider reported no charge, and on one that never made an external call;
+	// that absence is "unknown", never a zero.
+	Cost *Cost `json:"cost"`
 }
 
 // ExecutionError is the persisted failure summary. It carries no stack traces, database

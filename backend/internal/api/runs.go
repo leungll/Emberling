@@ -169,6 +169,9 @@ type nodeAttemptDTO struct {
 	// Attempt, null on any other Attempt and on one that failed before it was recorded.
 	Uncertain       *bool `json:"uncertain"`
 	CallbackBinding any   `json:"callbackBinding"`
+	// Cost is the charge the Provider reported for this Attempt, recorded with its
+	// result; null when none is known.
+	Cost *costDTO `json:"cost"`
 }
 
 // toNodeAttemptDTO projects a, together with its Callback Binding when one exists.
@@ -187,6 +190,7 @@ func toNodeAttemptDTO(a domain.NodeAttempt, binding *domain.CallbackBinding) nod
 		CompletedAt:  a.CompletedAt,
 		Error:        a.Error,
 		Uncertain:    a.Uncertain,
+		Cost:         toCostDTO(a.Cost),
 	}
 	if binding != nil {
 		dto.CallbackBinding = callbackBindingDTO{
@@ -297,6 +301,9 @@ type agentTraceTurnDTO struct {
 	// Usage is the Token usage this Turn's model call reported, null when the Provider
 	// reported none or the Turn has no committed model result.
 	Usage *domain.TokenUsage `json:"usage"`
+	// Cost is the charge the Provider reported for this Turn's model call, null when it
+	// reported none or the Turn has no committed model result.
+	Cost *costDTO `json:"cost"`
 	// ClaimSource is who claimed the Turn, read from its committed Event; null before the
 	// Turn was claimed.
 	ClaimSource  *domain.ClaimSource `json:"claimSource"`
@@ -342,6 +349,9 @@ type toolAttemptDTO struct {
 	DispatchedAt    *time.Time               `json:"dispatchedAt"`
 	CompletedAt     *time.Time               `json:"completedAt"`
 	Error           *domain.ExecutionError   `json:"error"`
+	// Cost is the charge the Provider reported for this Tool call, null when none is
+	// known. It is a tracing figure, not a Tool output member.
+	Cost *costDTO `json:"cost"`
 
 	// The keys below are the Tool-call facts of agent_trace_tool_view.go. Each is present
 	// only for the Tool it describes and only once the facts it shows are committed;
@@ -444,6 +454,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 		CompletedAt:  utcTimePtr(round.Turn.CompletedAt),
 		Error:        round.Turn.Error,
 		Usage:        round.Turn.TokenUsage,
+		Cost:         toCostDTO(round.Turn.Cost),
 		ClaimSource:  round.TurnClaimSource,
 		ToolAttempts: []toolAttemptDTO{},
 	}
@@ -478,6 +489,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 			DispatchedAt: utcTimePtr(attempt.DispatchedAt),
 			CompletedAt:  utcTimePtr(attempt.CompletedAt),
 			Error:        attempt.Error,
+			Cost:         toCostDTO(attempt.Cost),
 		}
 		if binding, ok := round.CallbackBindings[attempt.ID]; ok {
 			projected.CallbackBinding = agentCallbackBindingDTO{

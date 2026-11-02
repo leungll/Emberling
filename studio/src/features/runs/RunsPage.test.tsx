@@ -19,6 +19,7 @@ const RUN = {
   error: null,
   failedStep: null,
   waitingSteps: [],
+  cost: { totals: [{ amount: '0.04', currency: 'USD' }], unknownCalls: 1 },
 };
 
 function jsonResponse(body: unknown): Response {
@@ -86,5 +87,18 @@ describe('the Runs page’s status tabs', () => {
 
     expect(seen).not.toHaveLength(0);
     expect(seen.filter((s) => !s.includes('status=failed Failed'))).toEqual([]);
+  });
+});
+
+describe('the Runs page’s cost column', () => {
+  it('shows each run’s cost with the calls that reported no price', async () => {
+    const router = createMemoryRouter([{ path: '/runs', element: <RunsPage /> }], {
+      initialEntries: ['/runs'],
+    });
+    render(<RouterProvider router={router} />);
+    await screen.findByRole('link', { name: /Answer a brief/ });
+    expect(screen.getByRole('columnheader', { name: 'Cost' })).toBeInTheDocument();
+    expect(screen.getByText('$0.04')).toBeInTheDocument();
+    expect(screen.getByText('1 call not priced')).toBeInTheDocument();
   });
 });

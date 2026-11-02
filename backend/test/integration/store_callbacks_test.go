@@ -509,7 +509,7 @@ func TestNodeRuns_MarkSucceeded_FromWaitingCallback_ConcurrentCompleters_Exactly
 					return err
 				}
 				if err := tx.NodeAttempts().MarkSucceeded(ctx, attemptID,
-					domain.NodeAttemptDispatched, now, json.RawMessage(`{"imageUrl":"https://example.test/a.png"}`)); err != nil {
+					domain.NodeAttemptDispatched, now, json.RawMessage(`{"imageUrl":"https://example.test/a.png"}`), nil); err != nil {
 					return err
 				}
 				return tx.NodeRuns().MarkSucceeded(ctx, nodeRunID, domain.NodeRunWaitingCallback, now,
@@ -712,7 +712,7 @@ func seedToolAttempt(
 		if _, err := tx.AgentTurns().ClaimReady(ctx, turnID, fixtureTime); err != nil {
 			return err
 		}
-		if err := tx.AgentTurns().MarkCompleted(ctx, turnID, fixtureTime, json.RawMessage(`{"kind":"TOOL_CALL"}`), nil); err != nil {
+		if err := tx.AgentTurns().MarkCompleted(ctx, turnID, fixtureTime, json.RawMessage(`{"kind":"TOOL_CALL"}`), nil, nil); err != nil {
 			return err
 		}
 		if err := tx.AgentDecisions().Create(ctx, newAgentDecision(decisionID, turnID)); err != nil {

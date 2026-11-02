@@ -39,6 +39,16 @@ type chatRequest struct {
 	// Provider is nil unless the OpenRouter switch is on, so the request otherwise carries
 	// no Provider-specific member at all.
 	Provider *providerRouting `json:"provider,omitempty"`
+	// Usage asks the Provider to report the call's charge in usage.cost beside the token
+	// counts. A Provider that does not know the member ignores it; one that does answers
+	// with the actual charge, which is recorded on the Turn and never estimated here.
+	Usage usageAccounting `json:"usage"`
+}
+
+// usageAccounting is the request's usage accounting switch, always sent as
+// {"include": true}.
+type usageAccounting struct {
+	Include bool `json:"include"`
 }
 
 // providerRouting is OpenRouter's provider routing object, limited to the one member this
@@ -150,6 +160,7 @@ func (p *Provider) buildChatRequest(request registry.ModelRequest) (chatRequest,
 		},
 		Temperature: config.Temperature,
 		Provider:    routing,
+		Usage:       usageAccounting{Include: true},
 	}, nil
 }
 

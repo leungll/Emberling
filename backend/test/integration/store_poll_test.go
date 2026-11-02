@@ -91,7 +91,7 @@ func TestNodeAttempts_ClaimPoll_AttemptNotDispatched_ClaimsNothing(t *testing.T)
 	// status condition stops a late poll claim.
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.NodeAttempts().MarkSucceeded(ctx, attemptID, domain.NodeAttemptDispatched,
-			fixtureTime.Add(time.Second), json.RawMessage(`{"imageUrl":"https://example.test/a.png"}`))
+			fixtureTime.Add(time.Second), json.RawMessage(`{"imageUrl":"https://example.test/a.png"}`), nil)
 	}); err != nil {
 		t.Fatalf("MarkSucceeded: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestNodeAttempts_ClearPoll_Succeeded_ChangesNothing(t *testing.T) {
 	_, attemptID := seedPollAttempt(ctx, t, uow, f, "finished", &first)
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.NodeAttempts().MarkSucceeded(ctx, attemptID, domain.NodeAttemptDispatched,
-			fixtureTime.Add(time.Second), json.RawMessage(`{"imageUrl":"https://example.test/a.png"}`))
+			fixtureTime.Add(time.Second), json.RawMessage(`{"imageUrl":"https://example.test/a.png"}`), nil)
 	}); err != nil {
 		t.Fatalf("MarkSucceeded: %v", err)
 	}

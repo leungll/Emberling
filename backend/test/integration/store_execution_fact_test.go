@@ -390,7 +390,7 @@ func TestToolAttemptStore_CountByAgentRunForTools_CountsEveryAttemptOfListedTool
 			return err
 		}
 		if err := tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_ar_1_3", domain.ToolAttemptStarted, fixtureTime,
-			json.RawMessage(`{"assetId":"asset_out_3"}`)); err != nil {
+			json.RawMessage(`{"assetId":"asset_out_3"}`), nil); err != nil {
 			return err
 		}
 		return tx.ToolAttempts().MarkFailed(ctx, "tool_attempt_ar_1_4", domain.ToolAttemptStarted, fixtureTime,

@@ -20,6 +20,7 @@ import { notRetried } from './run-diagnosis';
 import { factImage, imageLabel, mediaItems, savedImageOf } from './run-media';
 import { attemptWord, toolSequence, type RunModel, type TraceElement } from './run-model';
 import type { ExecutionFactTrace } from '@/api/types';
+import { Money } from '@/components/cost/Cost';
 import { ThumbSet } from '@/components/media/Thumbs';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { copy as words, useCopy } from '@/lib/copy';
@@ -234,6 +235,7 @@ function TurnBlock({
               <>
                 <ElementTime model={ctx.model} el={dec} />
                 <Tokens usage={turn.usage} />
+                <Money cost={turn.cost} />
               </>
             }
           >

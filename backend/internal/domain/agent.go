@@ -68,6 +68,9 @@ type AgentTurn struct {
 	Request    json.RawMessage `json:"request"`
 	Response   json.RawMessage `json:"response"`
 	TokenUsage *TokenUsage     `json:"tokenUsage"`
+	// Cost is the charge the Provider reported for the model call, written once with the
+	// COMPLETED response; nil when none was reported or the Turn failed.
+	Cost *Cost `json:"cost"`
 	// StartedAt is empty while READY and stamped by the transaction that wins the model
 	// call, so a persisted Turn shows whether anybody already holds that right.
 	StartedAt   *time.Time      `json:"startedAt"`
@@ -177,6 +180,9 @@ type ToolAttempt struct {
 	// true when its external outcome is unknown, false when the call is known to be safe
 	// to repeat. Every other path leaves it nil.
 	Uncertain *bool `json:"uncertain"`
+	// Cost is the charge the Provider reported for this call, written once with the
+	// SUCCEEDED result and never changed; nil when none was reported or the call failed.
+	Cost *Cost `json:"cost"`
 }
 
 // AgentContextVersion is one immutable entry of the message chain the next model call

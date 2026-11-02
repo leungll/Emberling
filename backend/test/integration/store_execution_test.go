@@ -520,7 +520,7 @@ func TestNodeAttempts_MarkSucceeded_FromFailed_ReturnsInvalidStateTransition(t *
 
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.NodeAttempts().MarkSucceeded(ctx, attempt.ID, domain.NodeAttemptFailed, fixtureTime.Add(2*time.Minute),
-			json.RawMessage(`{"late":true}`))
+			json.RawMessage(`{"late":true}`), nil)
 	})
 	var invalid *domain.InvalidStateTransitionError
 	if !errors.As(err, &invalid) {

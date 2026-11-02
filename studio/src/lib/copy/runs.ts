@@ -48,8 +48,12 @@ export const runs = {
       status: 'Status',
       started: 'Started',
       duration: 'Duration',
+      cost: 'Cost',
       runId: 'Run ID',
     },
+    /** Finished calls whose charge the provider did not report. */
+    costUnknown: (n: number) => `${plural(n, 'call')} not priced`,
+    costNone: 'No cost reported',
     runIdLabel: 'run ID',
     rowLabel: (name: string, status: string, when: string) => `${name}, ${status}, started ${when}`,
     noun: ['run', 'runs'] as const,
@@ -420,6 +424,7 @@ export const runs = {
       started: 'Started',
       duration: 'Duration',
       tokens: 'Tokens',
+      cost: 'Cost',
       version: 'Workflow version',
       runId: 'Run ID',
       workflowId: 'Workflow ID',
@@ -473,6 +478,7 @@ export const runs = {
     tokens: (n: number) => plural(n, 'token'),
     tokensTip: (i: number, o: number) =>
       `Input ${i.toLocaleString('en-US')}, output ${o.toLocaleString('en-US')}`,
+    costTip: (source: string) => `Reported by ${source}`,
     didNotRunBecause: 'Did not run because',
     failedSuffix: 'failed.',
     stoppedEarlier: 'Did not run because the run stopped earlier.',

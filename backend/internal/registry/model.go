@@ -153,12 +153,13 @@ type ModelResponseSummary struct {
 	ResponseSHA256 string
 }
 
-// ModelResponse is what an Adapter returns for one Generate call. TokenUsage is nil when
-// the Provider reported none.
+// ModelResponse is what an Adapter returns for one Generate call. TokenUsage and Cost are
+// nil when the Provider reported none; neither is ever a fabricated zero.
 type ModelResponse struct {
 	Decision        ModelDecision
 	ResponseSummary ModelResponseSummary
 	TokenUsage      *domain.TokenUsage
+	Cost            *domain.Cost
 }
 
 // decisionSchema is the fixed Decision envelope. It constrains only the TOOL_CALL and

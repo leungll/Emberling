@@ -164,6 +164,10 @@ type NodeResult struct {
 // copies that object into Run.output.
 type NodeOutput struct {
 	Ports map[string]json.RawMessage
+	// Cost is the charge the Provider reported for the external call that produced this
+	// output, or nil when it reported none. The completion transaction records it on the
+	// Attempt beside the result; it takes no part in any execution decision.
+	Cost *domain.Cost
 }
 
 // CompletedResult is the common SYNC success shape.

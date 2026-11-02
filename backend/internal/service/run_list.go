@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
+	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
@@ -55,7 +56,8 @@ type RunStatusCounts struct {
 }
 
 // RunListItem is one Run list row. ErrorCode and FailedStep are set only for a FAILED
-// Run, WaitingSteps only for a PAUSED one. No input, output or error message is carried.
+// Run, WaitingSteps only for a PAUSED one. Cost is the Run's read-time cost, computed in
+// the same read as the row. No input, output or error message is carried.
 type RunListItem struct {
 	ID                string
 	WorkflowID        string
@@ -68,6 +70,7 @@ type RunListItem struct {
 	ErrorCode         string
 	FailedStep        *RunStep
 	WaitingSteps      []RunStep
+	Cost              RunCost
 }
 
 // RunStep names one node of the Definition version a Run is bound to. WaitingAt is set
@@ -159,7 +162,7 @@ func (s *QueryService) ListRuns(ctx context.Context, req ListRunsRequest) (RunLi
 		}
 		page.Counts = runStatusCountsOf(counts)
 
-		page.Items, err = runListItemsOf(ctx, repo, summaries)
+		page.Items, err = runListItemsOf(ctx, repo, s.deps.Tools, summaries)
 		return err
 	})
 	if err != nil {
@@ -241,10 +244,12 @@ func runStatusCountsOf(counts map[domain.RunStatus]int) RunStatusCounts {
 }
 
 // runListItemsOf completes each summary with its failed step (FAILED Runs) or waiting
-// steps (PAUSED Runs), reading both in one batch per kind.
-func runListItemsOf(ctx context.Context, repo store.RunListRepository, summaries []store.RunSummary) ([]RunListItem, error) {
+// steps (PAUSED Runs) and its cost, reading each in one batch.
+func runListItemsOf(ctx context.Context, repo store.RunListRepository, tools *registry.ToolRegistry, summaries []store.RunSummary) ([]RunListItem, error) {
 	var failedIDs, pausedIDs []string
-	for _, s := range summaries {
+	runIDs := make([]string, len(summaries))
+	for i, s := range summaries {
+		runIDs[i] = s.ID
 		if s.Status == domain.RunFailed {
 			failedIDs = append(failedIDs, s.ID)
 		}
@@ -263,9 +268,15 @@ func runListItemsOf(ctx context.Context, repo store.RunListRepository, summaries
 		}
 	}
 
+	costs, err := runCostsOf(ctx, repo, tools, runIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]RunListItem, len(summaries))
 	for i, s := range summaries {
 		item := RunListItem{
+			Cost:              costs[s.ID],
 			ID:                s.ID,
 			WorkflowID:        s.WorkflowID,
 			WorkflowName:      s.WorkflowName,

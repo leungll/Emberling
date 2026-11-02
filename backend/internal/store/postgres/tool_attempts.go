@@ -19,11 +19,15 @@ type toolAttemptRepository struct {
 const toolAttemptColumns = `id, action_id, attempt_no, tool_name, status, input, result,
 	callback_token_hash, started_at, dispatched_at, completed_at, error, runner_id, uncertain`
 
-// qualifiedToolAttemptColumns is toolAttemptColumns for a query that joins tool_attempts
-// as "ta".
+// toolAttemptSelectColumns is toolAttemptColumns followed by the cost columns, which are
+// written only by MarkSucceeded and therefore are not part of the INSERT list.
+const toolAttemptSelectColumns = toolAttemptColumns + `, ` + costColumns
+
+// qualifiedToolAttemptColumns is toolAttemptSelectColumns for a query that joins
+// tool_attempts as "ta".
 const qualifiedToolAttemptColumns = `ta.id, ta.action_id, ta.attempt_no, ta.tool_name, ta.status, ta.input,
 	ta.result, ta.callback_token_hash, ta.started_at, ta.dispatched_at, ta.completed_at, ta.error,
-	ta.runner_id, ta.uncertain`
+	ta.runner_id, ta.uncertain, ta.cost_amount::text, ta.cost_currency, ta.cost_source`
 
 // Create inserts the STARTED Attempt in the transaction that claimed the Action; the Tool
 // is called only after that transaction commits. UNIQUE (action_id, attempt_no) rejects a
@@ -50,7 +54,7 @@ func (r *toolAttemptRepository) Create(ctx context.Context, attempt domain.ToolA
 }
 
 func (r *toolAttemptRepository) Get(ctx context.Context, attemptID string) (domain.ToolAttempt, error) {
-	const query = `SELECT ` + toolAttemptColumns + ` FROM tool_attempts WHERE id = $1`
+	const query = `SELECT ` + toolAttemptSelectColumns + ` FROM tool_attempts WHERE id = $1`
 
 	rows, err := r.conn.Query(ctx, query, attemptID)
 	if err != nil {
@@ -67,7 +71,7 @@ func (r *toolAttemptRepository) Get(ctx context.Context, attemptID string) (doma
 }
 
 func (r *toolAttemptRepository) ListByActionID(ctx context.Context, actionID string) ([]domain.ToolAttempt, error) {
-	const query = `SELECT ` + toolAttemptColumns + `
+	const query = `SELECT ` + toolAttemptSelectColumns + `
 		  FROM tool_attempts WHERE action_id = $1 ORDER BY attempt_no ASC`
 
 	rows, err := r.conn.Query(ctx, query, actionID)
@@ -104,23 +108,29 @@ func (r *toolAttemptRepository) MarkDispatched(ctx context.Context, attemptID st
 }
 
 // MarkSucceeded conditionally moves an Attempt from the given status to SUCCEEDED and
-// writes its result: STARTED for a synchronous call, DISPATCHED for an asynchronous one
-// resumed by its callback. A duplicated or late result transaction finds the row no
-// longer in that status and loses here instead of overwriting the committed result.
-func (r *toolAttemptRepository) MarkSucceeded(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, result json.RawMessage) error {
+// writes its result and the Cost the Provider reported for the call, nil when it reported
+// none: STARTED for a synchronous call, DISPATCHED for an asynchronous one resumed by its
+// callback. A duplicated or late result transaction finds the row no longer in that
+// status and loses here instead of overwriting the committed result or charge.
+func (r *toolAttemptRepository) MarkSucceeded(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, result json.RawMessage, cost *domain.Cost) error {
 	if !from.CanTransitionTo(domain.ToolAttemptSucceeded) {
 		return &domain.InvalidStateTransitionError{
 			Entity: "ToolAttempt", ID: attemptID, From: string(from), To: string(domain.ToolAttemptSucceeded),
 		}
 	}
+	amount, currency, source, err := costParams(cost)
+	if err != nil {
+		return fmt.Errorf("store/postgres tool_attempts.MarkSucceeded: tool_attempt=%s: %w", attemptID, err)
+	}
 
 	const update = `
 		UPDATE tool_attempts
-		   SET status = 'SUCCEEDED', result = $3, completed_at = $4
+		   SET status = 'SUCCEEDED', result = $3, completed_at = $4,
+		       cost_amount = $5::numeric, cost_currency = $6, cost_source = $7
 		 WHERE id = $1 AND status = $2`
 
 	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkSucceeded", update,
-		attemptID, string(from), nullableJSON(result), now)
+		attemptID, string(from), nullableJSON(result), now, amount, currency, source)
 	if err != nil {
 		return err
 	}
@@ -282,16 +292,20 @@ func scanToolAttempts(rows pgx.Rows) ([]domain.ToolAttempt, error) {
 	out := []domain.ToolAttempt{}
 	for rows.Next() {
 		var (
-			attempt    domain.ToolAttempt
-			status     string
-			result     []byte
-			errPayload []byte
+			attempt      domain.ToolAttempt
+			status       string
+			result       []byte
+			errPayload   []byte
+			costAmount   *string
+			costCurrency *string
+			costSource   *string
 		)
 		if err := rows.Scan(
 			&attempt.ID, &attempt.ActionID, &attempt.AttemptNo, &attempt.ToolName, &status,
 			&attempt.Input, &result, &attempt.CallbackTokenHash,
 			&attempt.StartedAt, &attempt.DispatchedAt, &attempt.CompletedAt, &errPayload,
 			&attempt.RunnerID, &attempt.Uncertain,
+			&costAmount, &costCurrency, &costSource,
 		); err != nil {
 			return nil, err
 		}
@@ -301,6 +315,9 @@ func scanToolAttempts(rows pgx.Rows) ([]domain.ToolAttempt, error) {
 
 		var err error
 		if attempt.Error, err = unmarshalExecutionError(errPayload); err != nil {
+			return nil, fmt.Errorf("tool_attempt=%s: %w", attempt.ID, err)
+		}
+		if attempt.Cost, err = scanCost(costAmount, costCurrency, costSource); err != nil {
 			return nil, fmt.Errorf("tool_attempt=%s: %w", attempt.ID, err)
 		}
 		out = append(out, attempt)

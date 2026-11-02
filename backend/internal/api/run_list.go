@@ -63,6 +63,7 @@ type runListItemDTO struct {
 	Error             *runErrorCodeDTO    `json:"error"`
 	FailedStep        *runStepDTO         `json:"failedStep"`
 	WaitingSteps      []runWaitingStepDTO `json:"waitingSteps"`
+	Cost              runCostDTO          `json:"cost"`
 }
 
 func toRunErrorCodeDTO(status domain.RunStatus, code string) *runErrorCodeDTO {
@@ -97,6 +98,7 @@ func toRunListItemDTO(item service.RunListItem) runListItemDTO {
 		Error:             toRunErrorCodeDTO(item.Status, item.ErrorCode),
 		FailedStep:        toRunStepDTO(item.FailedStep),
 		WaitingSteps:      waiting,
+		Cost:              toRunCostDTO(item.Cost),
 	}
 }
 

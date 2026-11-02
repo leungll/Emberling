@@ -276,7 +276,7 @@ func seedGenerationTurn(t *testing.T, h *agentHarness, agentRunID string, turnNo
 		if _, err := tx.AgentTurns().ClaimReady(ctx, turnID, now); err != nil {
 			return err
 		}
-		if err := tx.AgentTurns().MarkCompleted(ctx, turnID, now, json.RawMessage(`{"kind":"TOOL_CALL"}`), nil); err != nil {
+		if err := tx.AgentTurns().MarkCompleted(ctx, turnID, now, json.RawMessage(`{"kind":"TOOL_CALL"}`), nil, nil); err != nil {
 			return err
 		}
 		decision := newAgentDecision(decisionID, turnID)
