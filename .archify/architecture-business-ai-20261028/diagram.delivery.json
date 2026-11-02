@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "497ecc19-3de0-4c59-a664-3e716c92e3b2",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/candidate.json",
+  "output": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+  "specification": {
+    "sha256": "be68367c9428fa2f1e018577adc5b890b16a3ad5050b6d1944e417037ef921fa",
+    "bytes": 4987
+  },
+  "artifact": {
+    "sha256": "7ae2e8b600d9c2faee225fb11d226a8a9c9228a55a0d17b339497b1822ab9392",
+    "bytes": 839859
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "title": "Async Workloads",
+  "subtitle": "A shared Runtime across services",
+  "description": "Define once. Run independently. Track delivery.",
+  "frames": [
+    "#539bf5"
+  ],
+  "badges": {
+    "runtime": {
+      "text": "Core",
+      "color": "#ffd36d",
+      "filled": true
+    },
+    "policy": {
+      "text": "Planned",
+      "color": "#fb7185",
+      "filled": false
+    }
+  },
+  "routes": {
+    "workflow-app": {
+      "points": [
+        [
+          195,
+          210
+        ],
+        [
+          195,
+          380
+        ]
+      ],
+      "label": [
+        "Workflow v1"
+      ],
+      "labelAt": [
+        265,
+        300
+      ],
+      "color": "#adbac7"
+    },
+    "app-runtime": {
+      "points": [
+        [
+          330,
+          430
+        ],
+        [
+          620,
+          430
+        ]
+      ],
+      "label": [
+        "Submit requests",
+        "Progress & result references"
+      ],
+      "labelAt": [
+        475,
+        400
+      ],
+      "color": "#adbac7",
+      "both": true
+    },
+    "policy-runtime": {
+      "points": [
+        [
+          770,
+          210
+        ],
+        [
+          770,
+          380
+        ]
+      ],
+      "label": [
+        "Capacity & policy"
+      ],
+      "labelAt": [
+        865,
+        300
+      ],
+      "color": "#fb7185",
+      "dashed": true
+    },
+    "runtime-services": {
+      "points": [
+        [
+          920,
+          430
+        ],
+        [
+          1210,
+          430
+        ]
+      ],
+      "label": [
+        "Dispatch operations",
+        "Callback / supported status lookup"
+      ],
+      "labelAt": [
+        1065,
+        395
+      ],
+      "color": "#adbac7",
+      "both": true
+    },
+    "runtime-records": {
+      "points": [
+        [
+          770,
+          480
+        ],
+        [
+          770,
+          640
+        ]
+      ],
+      "label": [
+        "Persist & recover"
+      ],
+      "labelAt": [
+        865,
+        565
+      ],
+      "color": "#adbac7",
+      "both": true
+    },
+    "runtime-outputs": {
+      "points": [
+        [
+          920,
+          460
+        ],
+        [
+          1210,
+          685
+        ]
+      ],
+      "curve": "M 920 460 C 1080 460 1050 685 1210 685",
+      "label": [
+        "Store / retrieve artifacts"
+      ],
+      "labelAt": [
+        1160,
+        565
+      ],
+      "color": "#adbac7",
+      "both": true
+    }
+  },
+  "footer_title": "What This Runtime Adds",
+  "columns": [
+    {
+      "x": 30,
+      "title": "Separate the Request from the Run",
+      "color": "#22d3ee",
+      "lines": [
+        "One Workflow can serve many independent requests",
+        "Execution continues beyond the original API request"
+      ]
+    },
+    {
+      "x": 600,
+      "title": "Retain Progress Across Waits",
+      "color": "#79b3fa",
+      "lines": [
+        "Keep execution facts, wait references and outputs",
+        "Resume eligible work using the bound Workflow version"
+      ]
+    },
+    {
+      "x": 1210,
+      "title": "Share Limited Capacity \u2014 Planned",
+      "color": "#fb7185",
+      "lines": [
+        "Admit work by priority, quota and service capacity",
+        "Account for resource needs, data location and budget"
+      ]
+    }
+  ],
+  "note": "Waiting may release unneeded local resources; accepted provider work can still consume capacity and budget.",
+  "legend": [
+    "Execution or result flow",
+    "Two-way service / state interaction",
+    "Scheduling policy"
+  ],
+  "footer_y": 800,
+  "heading_layout": "banner"
+}

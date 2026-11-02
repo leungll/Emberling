@@ -1,0 +1,489 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Agent Infra \u2014 Reference Architecture",
+    "locale": "en",
+    "output": ".archify/architecture-five-domains-20261026/diagram.html",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "frontend": {
+          "label": "Business & Applications"
+        },
+        "backend": {
+          "label": "Construction & Orchestration"
+        },
+        "cloud": {
+          "label": "Production Runtime"
+        },
+        "security": {
+          "label": "Governance & Control"
+        },
+        "database": {
+          "label": "Observability & Optimization"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "goals",
+      "type": "frontend",
+      "label": "Goals & Task Contract",
+      "sublabel": "Objectives \u00b7 Scope",
+      "tag": "Deliverables \u00b7 Acceptance Criteria",
+      "pos": [
+        430,
+        60
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "patterns",
+      "type": "frontend",
+      "label": "Application Patterns",
+      "sublabel": "Single-Agent \u00b7 Long-Horizon Agent",
+      "tag": "Multi-Agent \u00b7 Workflow + Agent",
+      "pos": [
+        730,
+        60
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "entry",
+      "type": "frontend",
+      "label": "Interaction & Triggers",
+      "sublabel": "User \u00b7 API \u00b7 Message",
+      "tag": "Event \u00b7 Schedule",
+      "pos": [
+        1030,
+        60
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "model",
+      "type": "backend",
+      "label": "Model",
+      "sublabel": "Reasoning \u00b7 Multimodal",
+      "tag": "Structured Output \u00b7 Tool Calling",
+      "pos": [
+        430,
+        311
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "harness",
+      "type": "backend",
+      "label": "Harness Orchestration",
+      "sublabel": "Agent Loop \u00b7 Planning \u00b7 Middleware",
+      "tag": "Human-in-the-Loop \u00b7 Verification",
+      "pos": [
+        730,
+        311
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "context",
+      "type": "backend",
+      "label": "Context & Capability Assets",
+      "sublabel": "Context \u00b7 Memory",
+      "tag": "Knowledge \u00b7 Skill",
+      "pos": [
+        1030,
+        251
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "tools",
+      "type": "backend",
+      "label": "Tools & Connectivity",
+      "sublabel": "Function Calling \u00b7 MCP",
+      "tag": "A2A \u00b7 API \u00b7 Connector",
+      "pos": [
+        1030,
+        371
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "state",
+      "type": "cloud",
+      "label": "State & Artifacts",
+      "sublabel": "Execution State \u00b7 Event Log",
+      "tag": "Workspace \u00b7 Artifact \u00b7 Snapshot",
+      "pos": [
+        430,
+        622
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "runtime",
+      "type": "cloud",
+      "label": "Execution Runtime",
+      "sublabel": "Session \u00b7 Task \u00b7 Queue \u00b7 Scheduling",
+      "tag": "Async Wait \u00b7 Checkpoint \u00b7 Recovery",
+      "pos": [
+        730,
+        622
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "sandbox",
+      "type": "cloud",
+      "label": "Sandbox / Execution Environment",
+      "sublabel": "Files \u00b7 Code \u00b7 Processes",
+      "tag": "Resource Isolation \u00b7 Network \u00b7 Secrets",
+      "pos": [
+        1030,
+        562
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "cloud",
+      "label": "AI Gateway",
+      "sublabel": "Model \u00b7 Tool \u00b7 Agent Traffic",
+      "tag": "Routing \u00b7 Rate Limits \u00b7 Access Control",
+      "pos": [
+        1030,
+        682
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "registry",
+      "type": "security",
+      "label": "Registry & Release Management",
+      "sublabel": "Capability Registry \u00b7 Version Binding",
+      "tag": "Deployment \u00b7 Release Gates \u00b7 Rollback",
+      "pos": [
+        30,
+        300
+      ],
+      "size": [
+        270,
+        80
+      ]
+    },
+    {
+      "id": "policy",
+      "type": "security",
+      "label": "Identity & Policy",
+      "sublabel": "Identity \u00b7 Tenant \u00b7 Permissions",
+      "tag": "Approval \u00b7 Budget \u00b7 Audit",
+      "pos": [
+        30,
+        440
+      ],
+      "size": [
+        270,
+        80
+      ]
+    },
+    {
+      "id": "facts",
+      "type": "database",
+      "label": "Execution Facts & Feedback",
+      "sublabel": "Trace \u00b7 Metrics \u00b7 Logs",
+      "tag": "Cost \u00b7 Outcome \u00b7 Feedback",
+      "pos": [
+        1450,
+        440
+      ],
+      "size": [
+        270,
+        80
+      ]
+    },
+    {
+      "id": "eval",
+      "type": "database",
+      "label": "Evaluation & Improvement",
+      "sublabel": "Evaluation \u00b7 Security Analysis",
+      "tag": "Simulation \u00b7 Experiments \u00b7 Version Comparison",
+      "pos": [
+        1450,
+        300
+      ],
+      "size": [
+        270,
+        80
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "goals-patterns",
+      "from": "goals",
+      "to": "patterns",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "patterns-entry",
+      "from": "patterns",
+      "to": "entry",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "patterns-harness",
+      "from": "patterns",
+      "to": "harness",
+      "label": "Task & Acceptance Criteria",
+      "variant": "default"
+    },
+    {
+      "id": "model-harness",
+      "from": "model",
+      "to": "harness",
+      "label": "Model interaction",
+      "variant": "default"
+    },
+    {
+      "id": "harness-context",
+      "from": "harness",
+      "to": "context",
+      "label": "Context",
+      "variant": "default"
+    },
+    {
+      "id": "harness-tools",
+      "from": "harness",
+      "to": "tools",
+      "label": "Capabilities",
+      "variant": "default"
+    },
+    {
+      "id": "harness-runtime",
+      "from": "harness",
+      "to": "runtime",
+      "label": "Task & Capability Requests",
+      "variant": "default",
+      "labelAt": [
+        780,
+        480
+      ]
+    },
+    {
+      "id": "runtime-harness",
+      "from": "runtime",
+      "to": "harness",
+      "label": "Results & Verification Feedback",
+      "variant": "default",
+      "labelAt": [
+        1020,
+        500
+      ]
+    },
+    {
+      "id": "state-runtime",
+      "from": "state",
+      "to": "runtime",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "runtime-sandbox",
+      "from": "runtime",
+      "to": "sandbox",
+      "label": "Execute",
+      "variant": "default"
+    },
+    {
+      "id": "runtime-gateway",
+      "from": "runtime",
+      "to": "gateway",
+      "label": "Route calls",
+      "variant": "default"
+    },
+    {
+      "id": "registry-harness",
+      "from": "registry",
+      "to": "harness",
+      "label": "Version Gates \u00b7 Policy \u00b7 Approval",
+      "variant": "security"
+    },
+    {
+      "id": "policy-runtime",
+      "from": "policy",
+      "to": "runtime",
+      "label": "Quotas \u00b7 Credentials \u00b7 Isolation \u00b7 Admission",
+      "variant": "security"
+    },
+    {
+      "id": "runtime-facts",
+      "from": "runtime",
+      "to": "facts",
+      "label": "Trace \u00b7 State \u00b7 Outcome \u00b7 Cost \u00b7 Incidents",
+      "variant": "default"
+    },
+    {
+      "id": "facts-eval",
+      "from": "facts",
+      "to": "eval",
+      "label": "Evaluate",
+      "variant": "default"
+    },
+    {
+      "id": "eval-context",
+      "from": "eval",
+      "to": "context",
+      "label": "Improvements & Verification Evidence",
+      "variant": "default"
+    },
+    {
+      "id": "model-harness-return",
+      "from": "harness",
+      "to": "model",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "harness-context-return",
+      "from": "context",
+      "to": "harness",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "harness-tools-return",
+      "from": "tools",
+      "to": "harness",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "state-runtime-return",
+      "from": "runtime",
+      "to": "state",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "runtime-gateway-return",
+      "from": "gateway",
+      "to": "runtime",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "runtime-sandbox-return",
+      "from": "sandbox",
+      "to": "runtime",
+      "label": "",
+      "variant": "default"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "1  Business & Applications",
+      "wraps": [
+        "goals",
+        "patterns",
+        "entry"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "2  Agent Construction & Orchestration",
+      "wraps": [
+        "model",
+        "harness",
+        "context",
+        "tools"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "3  Production Runtime",
+      "wraps": [
+        "state",
+        "runtime",
+        "sandbox",
+        "gateway"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "security-group",
+      "label": "4  Governance & Control",
+      "wraps": [
+        "registry",
+        "policy"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "5  Observability & Optimization",
+      "wraps": [
+        "facts",
+        "eval"
+      ],
+      "pad": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Task execution",
+      "items": [
+        "Applications define goals and acceptance criteria. Harness orchestrates model decisions; Runtime manages execution and recovery."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Feedback and control",
+      "items": [
+        "Governance constrains orchestration and execution. Verification feeds the current task; evaluation informs future versions."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "17beabf1-4c1f-4fdd-a241-a757e181cee9",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+  "output": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html",
+  "specification": {
+    "sha256": "352f03a18b59aae2f4981249a711008ce4b9c61132c10d035ae4315df316283c",
+    "bytes": 10283
+  },
+  "artifact": {
+    "sha256": "1169393aa6b1e09cf57311f5536263eb01ec9cbd2a28debcab12abd5bc326cfc",
+    "bytes": 873284
+  }
+}

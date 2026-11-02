@@ -1,0 +1,104 @@
+{
+  "title": "Emberling 的建设重点",
+  "subtitle": "围绕 Long-running Tasks，建设持久化执行、异步恢复与资源调度能力。",
+  "business": {
+    "title": "任务定义与业务编排",
+    "subtitle": "业务团队定义任务步骤与验收要求",
+    "patterns": [
+      {
+        "title": "Workflow",
+        "subtitle": "静态步骤编排与依赖关系",
+        "detail": "按预定义流程推进执行",
+        "icon": "layers"
+      },
+      {
+        "title": "Agent",
+        "subtitle": "基于中间结果的行动选择",
+        "detail": "模型决策与工具调用",
+        "icon": "spark"
+      }
+    ]
+  },
+  "runtime": {
+    "title": "durable Execution Runtime",
+    "subtitle": "支持长时间任务的持续执行、异步等待与状态恢复",
+    "duties": [
+      {
+        "title": "长时间任务执行",
+        "lines": [
+          "执行周期与请求连接解耦",
+          "Workflow 与 Agent 执行推进"
+        ],
+        "icon": "follow"
+      },
+      {
+        "title": "异步执行与恢复",
+        "lines": [
+          "异步等待时保留执行状态",
+          "结果回传后的执行恢复"
+        ],
+        "icon": "refresh"
+      },
+      {
+        "title": "执行状态持久化",
+        "lines": [
+          "步骤状态、执行结果与事件",
+          "外部任务标识与恢复信息"
+        ],
+        "icon": "database"
+      }
+    ],
+    "principle": "执行生命周期与请求连接解耦，执行状态由数据库持久化保存",
+    "boundary": "恢复能力取决于已保存的状态与调用策略；结果不确定的外部调用不得直接重试。"
+  },
+  "external": {
+    "title": "模型、工具和外部服务",
+    "items": [
+      {
+        "title": "模型",
+        "subtitle": "内容生成、语义理解与推理",
+        "icon": "spark"
+      },
+      {
+        "title": "工具",
+        "subtitle": "数据查询与系统操作",
+        "icon": "chip"
+      },
+      {
+        "title": "外部服务",
+        "subtitle": "异步任务执行与结果回传",
+        "icon": "cloud"
+      }
+    ]
+  },
+  "directions": [
+    {
+      "title": "长时间任务与异步执行",
+      "status": "当前建设重点",
+      "icon": "database",
+      "lines": [
+        "验证长时间任务的状态持久化、异步恢复，",
+        "以及多请求并发与结果关联。"
+      ]
+    },
+    {
+      "title": "资源调度",
+      "status": "后续建设",
+      "icon": "chip",
+      "lines": [
+        "按容量、优先级、配额与预算安排任务，",
+        "协调等待期间的资源释放与恢复后的资源分配。"
+      ]
+    },
+    {
+      "title": "Cloud Agent Workloads",
+      "status": "后续方向",
+      "icon": "cloud",
+      "lines": [
+        "支持 Agent 持续调用工具并根据结果推进任务，",
+        "在资源与操作约束下长期运行。"
+      ]
+    }
+  ],
+  "note": "当前验证长时间任务与异步恢复；完整资源调度为后续建设，外部生成仍可能消耗容量与预算。"
+}

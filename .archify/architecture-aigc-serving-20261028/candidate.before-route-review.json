@@ -1,0 +1,342 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "AIGC Serving \u2014 One Workflow, Independent Runs",
+    "locale": "en",
+    "output": ".archify/architecture-aigc-serving-20261028/diagram.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "definition",
+      "type": "frontend",
+      "label": "Generation Workflow \u00b7 v1",
+      "sublabel": "Input \u2192 Generate \u2192 Check \u2192 Deliver",
+      "tag": "A reusable, immutable definition",
+      "pos": [
+        430,
+        60
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "create",
+      "type": "frontend",
+      "label": "Create Independent Runs",
+      "sublabel": "Bind Workflow v1 \u00b7 Record input",
+      "tag": "One Run for each user request",
+      "pos": [
+        730,
+        60
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "requests",
+      "type": "frontend",
+      "label": "Concurrent User Requests",
+      "sublabel": "Different assets \u00b7 Different briefs",
+      "tag": "Shared Workflow \u00b7 Separate execution state",
+      "pos": [
+        1030,
+        60
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "run-a",
+      "type": "backend",
+      "label": "Run A \u2014 External Wait",
+      "sublabel": "Waiting for the generation result",
+      "tag": "Accepted job \u00b7 Saved wait reference",
+      "pos": [
+        430,
+        250
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "run-b",
+      "type": "backend",
+      "label": "Run B \u2014 Ready to Continue",
+      "sublabel": "Its next operation can be dispatched",
+      "tag": "Eligible work remains discoverable",
+      "pos": [
+        730,
+        250
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "run-c",
+      "type": "backend",
+      "label": "Run C \u2014 Completed",
+      "sublabel": "Media output is available",
+      "tag": "Output references retained for this Run",
+      "pos": [
+        1030,
+        250
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "provider",
+      "type": "cloud",
+      "label": "Generation Provider",
+      "sublabel": "Async job \u00b7 Delayed result",
+      "tag": "Callback or supported provider-status lookup",
+      "pos": [
+        430,
+        440
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "records",
+      "type": "database",
+      "label": "Records for All Runs",
+      "sublabel": "Progress \u00b7 Workflow version \u00b7 Wait refs",
+      "tag": "Events \u00b7 Results \u00b7 Artifact references",
+      "pos": [
+        730,
+        440
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "outputs",
+      "type": "cloud",
+      "label": "Media Outputs",
+      "sublabel": "Generated media \u00b7 Result metadata",
+      "tag": "Each output stays linked to its Run",
+      "pos": [
+        1030,
+        440
+      ],
+      "size": [
+        250,
+        80
+      ]
+    },
+    {
+      "id": "recovery",
+      "type": "backend",
+      "label": "Restart & Reconcile",
+      "sublabel": "Read saved progress and wait references",
+      "tag": "Resume eligible work \u00b7 Retain Workflow v1",
+      "pos": [
+        1450,
+        250
+      ],
+      "size": [
+        270,
+        80
+      ]
+    },
+    {
+      "id": "admission",
+      "type": "security",
+      "label": "Capacity-aware Admission",
+      "sublabel": "Service capacity \u00b7 Quota \u00b7 Budget",
+      "tag": "Decide which request can start next",
+      "pos": [
+        1450,
+        440
+      ],
+      "size": [
+        270,
+        80
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "definition-create",
+      "from": "definition",
+      "to": "create",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "requests-create",
+      "from": "requests",
+      "to": "create",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "create-a",
+      "from": "create",
+      "to": "run-a",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "create-b",
+      "from": "create",
+      "to": "run-b",
+      "label": "Each Run binds Workflow v1",
+      "variant": "default"
+    },
+    {
+      "id": "create-c",
+      "from": "create",
+      "to": "run-c",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "a-provider",
+      "from": "run-a",
+      "to": "provider",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "provider-a",
+      "from": "provider",
+      "to": "run-a",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "b-records",
+      "from": "run-b",
+      "to": "records",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "a-records",
+      "from": "run-a",
+      "to": "records",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "c-records",
+      "from": "run-c",
+      "to": "records",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "c-output",
+      "from": "run-c",
+      "to": "outputs",
+      "label": "",
+      "variant": "default"
+    },
+    {
+      "id": "records-recovery",
+      "from": "records",
+      "to": "recovery",
+      "label": "Saved progress",
+      "labelAt": [
+        1377,
+        275
+      ],
+      "variant": "default"
+    },
+    {
+      "id": "admission-runs",
+      "from": "admission",
+      "to": "run-b",
+      "label": "Admission policy",
+      "labelAt": [
+        1377,
+        385
+      ],
+      "variant": "security"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "1  One Workflow \u00b7 Concurrent Requests",
+      "wraps": [
+        "definition",
+        "create",
+        "requests"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "2  Independent Runs \u00b7 Persisted Progress",
+      "wraps": [
+        "run-a",
+        "run-b",
+        "run-c"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "3  Services, Execution Facts & Outputs",
+      "wraps": [
+        "provider",
+        "records",
+        "outputs"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "4  Fault Recovery",
+      "wraps": [
+        "recovery"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "5  Scheduling \u2014 Next Step",
+      "wraps": [
+        "admission"
+      ],
+      "pad": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Illustrative snapshot",
+      "items": [
+        "The three Runs show different stages at one point in time. Stage names are descriptive, not new persisted state enums."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Demo progression",
+      "items": [
+        "Prove concurrent execution, asynchronous waits, recovery of eligible work and bound-version continuity first. Capacity-aware admission is a later step."
+      ]
+    }
+  ]
+}

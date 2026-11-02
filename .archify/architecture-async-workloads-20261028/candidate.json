@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Async Workloads \u2014 A Shared Runtime Across Services",
+    "locale": "en",
+    "output": ".archify/architecture-async-workloads-20261028/diagram.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "workflow",
+      "type": "frontend",
+      "label": "Workflow Definition \u00b7 v1",
+      "sublabel": "Reusable steps and service dependencies",
+      "tag": "A version reference accompanies each request",
+      "pos": [
+        60,
+        120
+      ],
+      "size": [
+        270,
+        90
+      ]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "Business Application",
+      "sublabel": "Workflow reference \u00b7 User input",
+      "tag": "Submit work \u00b7 Query progress \u00b7 Receive results",
+      "pos": [
+        60,
+        380
+      ],
+      "size": [
+        270,
+        100
+      ]
+    },
+    {
+      "id": "runtime",
+      "type": "backend",
+      "label": "Emberling Execution Runtime",
+      "sublabel": "Execute \u00b7 Persist \u00b7 Wait \u00b7 Resume",
+      "tag": "State transitions \u00b7 Dispatch \u00b7 Recovery",
+      "pos": [
+        620,
+        380
+      ],
+      "size": [
+        300,
+        100
+      ]
+    },
+    {
+      "id": "policy",
+      "type": "security",
+      "label": "Scheduling & Resource Policy",
+      "sublabel": "Priority \u00b7 Quota \u00b7 Capacity \u00b7 Budget",
+      "tag": "Sandbox needs \u00b7 Data locality",
+      "pos": [
+        620,
+        120
+      ],
+      "size": [
+        300,
+        90
+      ]
+    },
+    {
+      "id": "records",
+      "type": "database",
+      "label": "Durable Run Records",
+      "sublabel": "Run state \u00b7 Events \u00b7 Bound Workflow version",
+      "tag": "Wait references \u00b7 Results \u00b7 Artifact references",
+      "pos": [
+        620,
+        640
+      ],
+      "size": [
+        300,
+        90
+      ]
+    },
+    {
+      "id": "services",
+      "type": "cloud",
+      "label": "Models & Execution Services",
+      "sublabel": "Image \u00b7 Video \u00b7 Tools \u00b7 Compute",
+      "tag": "Submit work \u00b7 Keep external job references",
+      "pos": [
+        1210,
+        380
+      ],
+      "size": [
+        290,
+        100
+      ]
+    },
+    {
+      "id": "outputs",
+      "type": "cloud",
+      "label": "Artifacts & Delivery",
+      "sublabel": "Input assets \u00b7 Generated media",
+      "tag": "Persist outputs \u00b7 Return addressable references",
+      "pos": [
+        1210,
+        640
+      ],
+      "size": [
+        290,
+        90
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "workflow-app",
+      "from": "workflow",
+      "to": "app",
+      "label": "Workflow version",
+      "variant": "default"
+    },
+    {
+      "id": "app-runtime",
+      "from": "app",
+      "to": "runtime",
+      "label": "Requests, progress & results",
+      "variant": "default"
+    },
+    {
+      "id": "policy-runtime",
+      "from": "policy",
+      "to": "runtime",
+      "label": "Scheduling policy",
+      "variant": "security"
+    },
+    {
+      "id": "runtime-services",
+      "from": "runtime",
+      "to": "services",
+      "label": "Dispatch & async completion",
+      "variant": "default"
+    },
+    {
+      "id": "runtime-records",
+      "from": "runtime",
+      "to": "records",
+      "label": "Execution facts",
+      "variant": "default"
+    },
+    {
+      "id": "runtime-outputs",
+      "from": "runtime",
+      "to": "outputs",
+      "label": "Outputs & references",
+      "variant": "default"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Emberling \u2014 Execution & Scheduling",
+      "wraps": [
+        "policy",
+        "runtime",
+        "records"
+      ],
+      "pad": 28
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Runtime ownership",
+      "items": [
+        "Each request creates its own Run, with a fixed Workflow version and persisted execution facts."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Resource scheduling",
+      "items": [
+        "Scheduling policies are planned. Waiting may release local execution resources; accepted provider work can still consume external capacity and budget."
+      ]
+    }
+  ]
+}

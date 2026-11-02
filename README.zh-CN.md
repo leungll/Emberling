@@ -34,7 +34,7 @@ flowchart LR
 
     FACTS --> RECOVERY["故障恢复"]
     FACTS --> TRACE["Trace"]
-    FACTS -. "Phase 2" .-> EVAL["Evaluation"]
+    FACTS -. "Phase 4" .-> EVAL["Evaluation"]
     FACTS -. "roadmap" .-> LEARN["Learning Runtime"]
 ```
 
@@ -152,33 +152,36 @@ MVP 的标志性里程碑很容易描述，却很难伪造：
 
 ## 演进路线
 
-隔离执行扩展 AI 应用能够完成的任务，同时将决定、动作和结果保留在 Emberling 的执行账本中。AX 接入仍属 roadmap 实验，尚未作为 MVP 能力交付。
-
-后续能力继续复用同一套 Execution Runtime。系统可以根据已完成的 Run 生成新的候选 Definition，但已经启动的 Run 始终使用创建时绑定的版本，不受后续配置变更影响。
+Emberling 已完成异步与长时任务执行的基础能力。后续将逐步完善故障下的可靠执行、完整任务交付、验证与评测，最终支持 Agent 持续承担长期职责。各阶段允许部分能力交叉推进。
 
 ```mermaid
 timeline
-    title Emberling Runtime 演进路线
-    MVP : Execution Foundation
-        : Waiting recovery
-        : 持久化 Agent Action
-        : Event-backed Trace
-    Phase 2 : Runtime Maturity
-            : 基于 Execution 记录的 Evaluation
-            : Human Review 与 cancellation
-    Phase 3 : Evaluation and Optimization
-            : 从评估结果生成优化建议
-            : 创建候选 Definition
-            : 在隔离环境运行回归测试
-    Phase 4 : Controlled Recursive Self-Improvement (RSI)
-            : 配额与策略校验
-            : Definition 版本化发布
-            : 失败时自动切回上一版本
+    MVP · 异步与长时任务执行（已完成） : Workflow 与 Agent 统一执行
+                 : 异步等待与重启续跑
+                 : 幂等回调与副作用重试控制
+                 : 决策持久化与全程追溯
+    Phase 2 · 故障下的可靠执行 : 多实例接管与外部结果对账
+            : 故障验证与超时取消传递
+            : 容量、优先级与预算排队
+            : 标准化追踪与成本统计
+    Phase 3 · 完整任务交付 : 外部 Agent 接入与并行委派
+            : 隔离沙箱、凭证与持久工作区
+            : 权限检查、审批与人工决策
+            : 测试与产物验收
+    Phase 4 · 验证与评测 : 依赖版本锁定与隔离重跑
+            : 批量评测、反馈与失败归因
+            : 版本对比、发布门禁与回退
+            : 工具风险分级与任务成本上限
+    Phase 5 · 长期职责 : 定时、事件触发与长期目标推进
+            : Agent 交接与逐级收窄授权预算
+            : 验证后的 Memory 与 Skill 沉淀
+            : 经评测把关的自我改进
 ```
 
-Recursive Self-Improvement（RSI）仍然走标准的版本化发布流程：每轮优化生成一个新的 Definition，使用独立 Execution 完成评估和回归测试，达标后只对新建 Run 生效；正在执行的 Run 继续使用原版本。
+后续能力继续复用同一套 Execution Runtime。改进后的版本只对新建 Run 生效；已经启动的 Run 始终使用创建时绑定的版本，不受后续配置变更影响。
 
 ---
 
-**项目阶段：** Runtime 设计合同已经完成，下一步进入实现。  
+**项目阶段：** MVP 已完成，下一阶段为故障下的可靠执行。
+
 **目标技术栈：** Go · PostgreSQL · React · TypeScript · React Flow

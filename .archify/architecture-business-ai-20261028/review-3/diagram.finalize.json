@@ -1,0 +1,378 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-29T05:41:58.048Z",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/candidate.json",
+    "sha256": "e474e12b4fbb0246fc8edefb5506e09ae9b2ae11eb6646b2a2aa6a09d41aaef0",
+    "bytes": 3791
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+    "sha256": "c12c56cdfb24d3dc394f49c3c550af2d55e530a1d02e90a7c97e68ab226a0c94",
+    "bytes": 836181
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "/opt/homebrew/Cellar/node/23.6.0/bin/node",
+        "/private/tmp/emberling-archify/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/candidate.json",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+        "--quality",
+        "showcase",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "e474e12b4fbb0246fc8edefb5506e09ae9b2ae11eb6646b2a2aa6a09d41aaef0",
+          "bytes": 3791
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 288,
+      "command": [
+        "/opt/homebrew/Cellar/node/23.6.0/bin/node",
+        "/private/tmp/emberling-archify/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/candidate.json",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+        "--quality",
+        "showcase",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "27b91aa5-1bed-4864-b926-a3cb8286225a",
+        "ok": true,
+        "command": "deliver",
+        "type": "architecture",
+        "input": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/candidate.json",
+        "output": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+        "specification": {
+          "sha256": "e474e12b4fbb0246fc8edefb5506e09ae9b2ae11eb6646b2a2aa6a09d41aaef0",
+          "bytes": 3791
+        },
+        "artifact": {
+          "sha256": "c12c56cdfb24d3dc394f49c3c550af2d55e530a1d02e90a7c97e68ab226a0c94",
+          "bytes": 836181
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 137,
+      "command": [
+        "/opt/homebrew/Cellar/node/23.6.0/bin/node",
+        "/private/tmp/emberling-archify/archify/bin/archify.mjs",
+        "check",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+        "artifact": {
+          "sha256": "c12c56cdfb24d3dc394f49c3c550af2d55e530a1d02e90a7c97e68ab226a0c94",
+          "bytes": 836181
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 0,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 113.3,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 7.5,
+            "maxBends": 0,
+            "routesOverSuggestedBends": 0,
+            "maxStretch": 1,
+            "routesOverSuggestedStretch": 0,
+            "minSegmentPx": 120,
+            "minInteriorSegmentPx": null,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [],
+            "detours": []
+          },
+          "leadingSpace": {
+            "measured": true,
+            "emptyTopPx": 45,
+            "emptyTopRatio": 0.077,
+            "occupiedTop": 45,
+            "viewBoxTop": 0,
+            "canvasHeight": 588,
+            "typicalNodeHeight": 90,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "recognized-declared-wide",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 1087.5,
+            "actualBudgetPx": 1087.5,
+            "actualReaderWidth": 1117.5,
+            "desiredReaderWidth": 1117.5,
+            "viewportCap": 1376,
+            "limit": "source-size",
+            "requestedTargetPx": 7.5,
+            "requestedTargetMet": true,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "edge",
+              "id": "feedback",
+              "from": "follow",
+              "to": "improve"
+            },
+            "minimumSourceTextPx": 8,
+            "minimumProjectedTextPx": 7.5,
+            "semanticTextCount": 19
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "27b91aa5-1bed-4864-b926-a3cb8286225a"
+      }
+    },
+    "browser-check": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": 108,
+      "command": [
+        "/opt/homebrew/Cellar/node/23.6.0/bin/node",
+        "/private/tmp/emberling-archify/archify/bin/archify.mjs",
+        "browser-check",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+        "--json",
+        "--require-provenance",
+        "--out-dir",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/review-3"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "fail",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "27b91aa5-1bed-4864-b926-a3cb8286225a",
+        "artifact": {
+          "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+          "sha256": "c12c56cdfb24d3dc394f49c3c550af2d55e530a1d02e90a7c97e68ab226a0c94",
+          "bytes": 836181
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "available",
+          "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        },
+        "diagnostics": [
+          {
+            "code": "viewer/browser-check-runtime",
+            "severity": "error",
+            "message": "browser-check could not complete its Chrome inspection.",
+            "subject": {
+              "artifact": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html"
+            },
+            "evidence": {
+              "reason": "Chrome DevTools read pipe failed: stream ended\nChrome process: still running.\nChrome transport: Node v23.6.0, libuv 1.52.1, darwin; pid=10267, exitCode=null, signalCode=null.\nChrome read pipe: readable=false, ended=true, destroyed=false, receivedBytes=0, messages=0, bufferedBytes=0.\nChrome write pipe: writable=true, ended=false, destroyed=false, completedWrites=1, writtenBytes=50, bufferedBytes=0."
+            },
+            "supportedFixes": [
+              "resolve the reported Chrome inspection error, then rerun browser-check"
+            ]
+          }
+        ],
+        "containment": {
+          "status": "fail",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": []
+        },
+        "themeStates": {
+          "status": "fail",
+          "viewports": []
+        },
+        "readability": {
+          "status": "fail",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": []
+        },
+        "viewerChrome": {
+          "status": "fail",
+          "viewports": []
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "directory": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/review-3",
+          "receipt": "diagram.browser-check.json",
+          "files": []
+        },
+        "error": "Chrome DevTools read pipe failed: stream ended\nChrome process: still running.\nChrome transport: Node v23.6.0, libuv 1.52.1, darwin; pid=10267, exitCode=null, signalCode=null.\nChrome read pipe: readable=false, ended=true, destroyed=false, receivedBytes=0, messages=0, bufferedBytes=0.\nChrome write pipe: writable=true, ended=false, destroyed=false, completedWrites=1, writtenBytes=50, bufferedBytes=0."
+      }
+    }
+  },
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/browser-check-runtime",
+      "severity": "error",
+      "message": "browser-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html"
+      },
+      "evidence": {
+        "reason": "Chrome DevTools read pipe failed: stream ended\nChrome process: still running.\nChrome transport: Node v23.6.0, libuv 1.52.1, darwin; pid=10267, exitCode=null, signalCode=null.\nChrome read pipe: readable=false, ended=true, destroyed=false, receivedBytes=0, messages=0, bufferedBytes=0.\nChrome write pipe: writable=true, ended=false, destroyed=false, completedWrites=1, writtenBytes=50, bufferedBytes=0."
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun browser-check"
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/review-3/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/review-3/diagram.finalize-summary.json",
+    "browserCheckReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/review-3/diagram.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "browser-check",
+  "finishedAt": "2026-10-29T05:41:58.727Z",
+  "durationMs": 679,
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  }
+}

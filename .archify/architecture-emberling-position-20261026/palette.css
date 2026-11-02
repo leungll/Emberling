@@ -1,0 +1,18 @@
+/* Shared palette for the interactive diagram and its SVG export. */
+svg .c-frontend { fill:#25364a !important; stroke:#6ba8ed !important; stroke-width:2 !important; }
+svg .c-backend { fill:#272e36 !important; stroke:#536d89 !important; stroke-width:1 !important; }
+svg .c-external { fill:#242a32 !important; stroke:#48515d !important; stroke-width:1 !important; }
+svg .t-frontend, svg .s-frontend { fill:#89b9ef !important; color:#89b9ef !important; }
+svg .t-backend, svg .s-backend { fill:#91a5bb !important; color:#91a5bb !important; }
+svg .s-external { color:#768390 !important; }
+svg .c-region { fill:none !important; stroke:none !important; }
+svg [data-boundary-label] { fill:#a5c9f2 !important; }
+svg [data-graph-role="structural-frame-label-mask"] { fill:#1c2128 !important; stroke:none !important; }
+svg .a-default, svg .a-emphasis, svg .a-security { stroke:#768390 !important; }
+svg .m-default, svg .m-emphasis, svg .m-security, svg .m-dashed { fill:#768390 !important; }
+svg .t-edge-default, svg .t-edge-emphasis, svg .t-edge-security { fill:#9ba7b5 !important; }
+svg .c-grid { stroke:#252c34 !important; }
+svg .c-mask { fill:#1c2128 !important; }
+svg .t-primary { fill:#cdd9e5 !important; }
+svg .t-muted { fill:#9ca9b8 !important; }
+svg { background:#1c2128 !important; }

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "adc294f8-2d65-4c93-8b03-efebacf3fbe7",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-agent-infra-20261026/candidate.json",
+  "output": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-agent-infra-20261026/diagram.html",
+  "specification": {
+    "sha256": "fd22d5bbe879c259ce4787b25e4f7e3fb0a9d5d192c14307075f3c0e706b6f8b",
+    "bytes": 6635
+  },
+  "artifact": {
+    "sha256": "ee59b096a5f95aa44853027d5171007abba5aa43ccbad9b01837e05f37f8be4a",
+    "bytes": 851772
+  }
+}

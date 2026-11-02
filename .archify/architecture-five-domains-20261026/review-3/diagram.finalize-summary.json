@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+    "sha256": "1586ee2140f6d7a94a400617a367cf0c2362ad5dbdcd04131d5cfb192f961c5d",
+    "bytes": 10305
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html"
+  },
+  "gates": {
+    "validate": "fail",
+    "deliver": "not-run",
+    "check": "not-run",
+    "browser-check": "not-run"
+  },
+  "failedStage": "validate",
+  "diagnostics": [
+    {
+      "code": "i18n/locale-fallback",
+      "severity": "warning",
+      "message": "meta.locale \"en-US\" has no bundled catalog and no usable meta.translations; the Viewer chrome and <html lang> fall back to English.",
+      "subject": {
+        "diagramType": "architecture",
+        "path": "/meta/locale"
+      },
+      "evidence": {
+        "locale": "en-US",
+        "bundledLocales": [
+          "en",
+          "zh-CN",
+          "zh-TW",
+          "es",
+          "ko",
+          "ar"
+        ]
+      },
+      "supportedFixes": [
+        "Supply meta.translations for this locale.",
+        "Use a bundled locale: en, zh-CN, zh-TW, es, ko, ar."
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[7] id \"runtime-harness\" \"runtime\" -> \"harness\" first segment 0 [943, 777.5] -> [967.6, 769.3] does not honor fromSide \"right\" — it must run horizontal rightward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 7,
+        "id": "runtime-harness",
+        "from": "runtime",
+        "to": "harness"
+      },
+      "evidence": {
+        "endpoint": "source",
+        "authoredField": "fromSide",
+        "sideOrigin": "authored",
+        "side": "right",
+        "segmentIndex": 0,
+        "from": [
+          943,
+          777.5
+        ],
+        "to": [
+          967.5999999999999,
+          769.25
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[11] id \"registry-harness\" \"registry\" -> \"harness\" first segment 0 [287, 352.5] -> [319.8, 344.3] does not honor fromSide \"right\" — it must run horizontal rightward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 11,
+        "id": "registry-harness",
+        "from": "registry",
+        "to": "harness"
+      },
+      "evidence": {
+        "endpoint": "source",
+        "authoredField": "fromSide",
+        "sideOrigin": "authored",
+        "side": "right",
+        "segmentIndex": 0,
+        "from": [
+          287,
+          352.5
+        ],
+        "to": [
+          319.79999999999995,
+          344.25
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[12] id \"policy-runtime\" \"policy\" -> \"runtime\" first segment 0 [287, 607.5] -> [319.8, 599.3] does not honor fromSide \"right\" — it must run horizontal rightward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 12,
+        "id": "policy-runtime",
+        "from": "policy",
+        "to": "runtime"
+      },
+      "evidence": {
+        "endpoint": "source",
+        "authoredField": "fromSide",
+        "sideOrigin": "authored",
+        "side": "right",
+        "segmentIndex": 0,
+        "from": [
+          287,
+          607.5
+        ],
+        "to": [
+          319.79999999999995,
+          599.25
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[7] id \"runtime-harness\" \"runtime\" -> \"harness\" final segment 2 [967.6, 395.3] -> [943, 403.5] does not honor toSide \"right\" — it must run horizontal leftward from the right; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 7,
+        "id": "runtime-harness",
+        "from": "runtime",
+        "to": "harness"
+      },
+      "evidence": {
+        "endpoint": "target",
+        "authoredField": "toSide",
+        "sideOrigin": "authored",
+        "side": "right",
+        "segmentIndex": 2,
+        "from": [
+          967.5999999999999,
+          395.25
+        ],
+        "to": [
+          943,
+          403.5
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "leftward from the right"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[11] id \"registry-harness\" \"registry\" -> \"harness\" final segment 4 [664.2, 395.3] -> [697, 403.5] does not honor toSide \"left\" — it must run horizontal rightward from the left; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 11,
+        "id": "registry-harness",
+        "from": "registry",
+        "to": "harness"
+      },
+      "evidence": {
+        "endpoint": "target",
+        "authoredField": "toSide",
+        "sideOrigin": "authored",
+        "side": "left",
+        "segmentIndex": 4,
+        "from": [
+          664.1999999999999,
+          395.25
+        ],
+        "to": [
+          697,
+          403.5
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward from the left"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[12] id \"policy-runtime\" \"policy\" -> \"runtime\" final segment 3 [664.2, 769.3] -> [697, 777.5] does not honor toSide \"left\" — it must run horizontal rightward from the left; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 12,
+        "id": "policy-runtime",
+        "from": "policy",
+        "to": "runtime"
+      },
+      "evidence": {
+        "endpoint": "target",
+        "authoredField": "toSide",
+        "sideOrigin": "authored",
+        "side": "left",
+        "segmentIndex": 3,
+        "from": [
+          664.1999999999999,
+          769.25
+        ],
+        "to": [
+          697,
+          777.5
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward from the left"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 7,
+    "shown": 7,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/review-3/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/review-3/diagram.finalize-summary.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-26T08:12:17.803Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 259,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "nextAction": {
+    "action": "edit-in-place",
+    "candidate": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+    "constraint": "Preserve all semantics and user-fixed geometry. Use references/architecture-layout-repair.md to choose a local repair or connected-scene reflow; edit the existing candidate.",
+    "then": "finalize-once"
+  }
+}
