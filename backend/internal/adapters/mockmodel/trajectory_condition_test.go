@@ -131,16 +131,68 @@ func TestProvider_Generate_ConditionalStatusOnEarlierMessage_DoesNotInsertAgain(
 	}
 }
 
+// The bounded tool message the Runtime hands the delivery Agent when the process running
+// its deploy call stopped. The deployment does not count toward the generation limit.
+const uncertainDeployMessage = `{"status":"RESULT_UNCERTAIN","message":"The deploy call was interrupted. It does not count toward the generation limit."}`
+
+const deliveryTestResult = `{"passed":true,"baseCommit":"fixture-v1","patchDigest":"sha256:p","resultDigest":"sha256:r","summary":{"total":12,"failed":0}}`
+
+// TestProvider_Generate_UncertainDeployment_InsertsFinalReportWithoutSecondDeploy plays the
+// deploy-lost trajectory: the deployment's outcome is reported uncertain and the script
+// answers with its inserted FINAL, a report naming the tested patch, instead of calling
+// deploy again or reading a deployment that never returned.
+func TestProvider_Generate_UncertainDeployment_InsertsFinalReportWithoutSecondDeploy(t *testing.T) {
+	const script = "software-delivery-deploy-lost"
+
+	final, err := NewProvider().Generate(context.Background(), scriptedDeliveryRequest(t, script, deliveryTestResult, uncertainDeployMessage))
+	if err != nil {
+		t.Fatalf("Generate() after the uncertain deployment error = %v", err)
+	}
+	var text string
+	if final.Decision.Kind != registry.DecisionFinal || json.Unmarshal(final.Decision.Output, &text) != nil {
+		t.Fatalf("final Decision = %+v, want FINAL with a JSON string output", final.Decision)
+	}
+	want := `{"baseCommit":"fixture-v1",` +
+		`"message":"The deploy call was interrupted and its outcome is unknown. It was not sent again; check production for this patch before deploying it again.",` +
+		`"patchDigest":"sha256:p","status":"DEPLOYMENT_UNCERTAIN"}`
+	if text != want {
+		t.Fatalf("FINAL text =\n%s\nwant\n%s", text, want)
+	}
+}
+
+// TestProvider_Generate_UncertainDeploymentTwice_FailsExplicitly bounds the inserted FINAL
+// like an inserted Tool call: RESULT_UNCERTAIN arriving a second time fails the Turn.
+func TestProvider_Generate_UncertainDeploymentTwice_FailsExplicitly(t *testing.T) {
+	_, err := NewProvider().Generate(context.Background(),
+		scriptedDeliveryRequest(t, "software-delivery-deploy-lost", deliveryTestResult, uncertainDeployMessage, uncertainDeployMessage))
+
+	if err == nil || !strings.Contains(err.Error(), `script "software-delivery-deploy-lost": tool status RESULT_UNCERTAIN arrived 2 times`) {
+		t.Fatalf("Generate() error = %v, want the second RESULT_UNCERTAIN refused", err)
+	}
+}
+
+// scriptedDeliveryRequest builds a request for a software-delivery script with the
+// delivery task and the given tool results, oldest first.
+func scriptedDeliveryRequest(t *testing.T, script string, toolResults ...string) registry.ModelRequest {
+	t.Helper()
+	request := scriptedRequest(t, script, toolResults...)
+	request.Messages[0] = userMessage(t, deliveryTask)
+	return request
+}
+
 func TestParseTrajectory_MalformedCondition_Rejected(t *testing.T) {
 	const turns = `"turns":[{"final":{"output":1}}]`
 	cases := map[string]string{
 		"no status":         `{` + turns + `,"onToolStatus":[{"status":"","toolCall":{"toolName":"t","arguments":{}}}]}`,
-		"no tool call":      `{` + turns + `,"onToolStatus":[{"status":"RESULT_UNCERTAIN"}]}`,
+		"no decision":       `{` + turns + `,"onToolStatus":[{"status":"RESULT_UNCERTAIN"}]}`,
 		"tool without name": `{` + turns + `,"onToolStatus":[{"status":"RESULT_UNCERTAIN","toolCall":{"toolName":"","arguments":{}}}]}`,
 		"duplicate status": `{` + turns + `,"onToolStatus":[` +
 			`{"status":"RESULT_UNCERTAIN","toolCall":{"toolName":"t","arguments":{}}},` +
 			`{"status":"RESULT_UNCERTAIN","toolCall":{"toolName":"u","arguments":{}}}]}`,
-		"unknown member": `{` + turns + `,"onToolStatus":[{"status":"RESULT_UNCERTAIN","toolCall":{"toolName":"t","arguments":{}},"final":{}}]}`,
+		"tool call and final":     `{` + turns + `,"onToolStatus":[{"status":"RESULT_UNCERTAIN","toolCall":{"toolName":"t","arguments":{}},"final":{"output":1}}]}`,
+		"final without output":    `{` + turns + `,"onToolStatus":[{"status":"RESULT_UNCERTAIN","final":{}}]}`,
+		"final with both outputs": `{` + turns + `,"onToolStatus":[{"status":"RESULT_UNCERTAIN","final":{"output":1,"outputText":{}}}]}`,
+		"unknown member":          `{` + turns + `,"onToolStatus":[{"status":"RESULT_UNCERTAIN","toolCall":{"toolName":"t","arguments":{}},"retry":true}]}`,
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {

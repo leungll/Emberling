@@ -1,0 +1,10 @@
+{
+  "turns": [
+    {"toolCall": {"toolName": "sandbox_test", "arguments": {"baseCommit": "{{task:/baseCommit}}", "patch": "{{task:/patch}}"}}},
+    {"toolCall": {"toolName": "deploy", "arguments": {"target": "{{task:/target}}", "baseCommit": "{{tool:0:/baseCommit}}", "patchDigest": "{{tool:0:/patchDigest}}", "parameters": {}}}},
+    {"final": {"outputText": {"operationId": "{{tool:1:/operationId}}", "version": "{{tool:1:/version}}", "patchDigest": "{{tool:0:/patchDigest}}"}}}
+  ],
+  "onToolStatus": [
+    {"status": "RESULT_UNCERTAIN", "final": {"outputText": {"status": "DEPLOYMENT_UNCERTAIN", "baseCommit": "{{tool:0:/baseCommit}}", "patchDigest": "{{tool:0:/patchDigest}}", "message": "The deploy call was interrupted and its outcome is unknown. It was not sent again; check production for this patch before deploying it again."}}}
+  ]
+}
