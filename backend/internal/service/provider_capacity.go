@@ -237,3 +237,32 @@ func (s *ExecutionService) releaseHandoff(ctx context.Context, providerID string
 		s.deps.Queue.EnqueueAdvance(runID)
 	}
 }
+
+// capacityWaitOf projects the queue position of a NodeRun that is READY and queued for a
+// Provider slot, from the same read transaction the NodeRun came from. Any other NodeRun
+// has no wait. The position uses the Run's own queue key, as admission does.
+func (s *QueryService) capacityWaitOf(ctx context.Context, tx store.Tx, nr domain.NodeRun) (*CapacityWait, error) {
+	if nr.Status != domain.NodeRunReady || nr.CapacityDeferredAt == nil || nr.CapacityProviderID == nil {
+		return nil, nil
+	}
+	providerID := *nr.CapacityProviderID
+	slots := tx.ProviderSlots()
+	held, err := slots.CountHeld(ctx, providerID)
+	if err != nil {
+		return nil, err
+	}
+	nodeRuns, err := tx.NodeRuns().ListByRun(ctx, nr.RunID)
+	if err != nil {
+		return nil, err
+	}
+	earlier, err := slots.CountEarlierDeferred(ctx, providerID, nr.RunID, runQueueKey(nodeRuns, nr, providerID))
+	if err != nil {
+		return nil, err
+	}
+	return &CapacityWait{
+		ProviderID: providerID,
+		Limit:      s.deps.ProviderCapacity[providerID],
+		Held:       held,
+		Position:   earlier + 1,
+	}, nil
+}

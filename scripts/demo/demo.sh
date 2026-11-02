@@ -43,7 +43,7 @@
 #                                       no Event.
 #                 Each photo and delivery variant is followed by the invariant report as well.
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
-#                 The serving variants run only when named, or all eight with
+#                 The serving variants run only when named, or all nine with
 #                 EMBERLING_DEMO_VARIANT=serving. Each is serving.sh STORY, many users of
 #                 the photo effect serving template, followed by the invariant report of
 #                 every Run and the per-task ledger of all of them:
@@ -61,7 +61,11 @@
 #                   serving-rollout         keyed requests split 10% to a slower version 2,
 #                                           then the ratio goes back to 0: replays return
 #                                           the original Runs, new requests go to version 1,
-#                                           in-flight version 2 Runs finish as version 2.
+#                                           in-flight version 2 Runs finish as version 2;
+#                   serving-capacity        the backend restarted with two slots on the
+#                                           image Provider: at most two image tasks are in
+#                                           flight, the rest queue as READY steps and all
+#                                           complete as the slots cycle.
 #                 scripts/demo/build-v1.sh builds the serving template from a tuning Run's
 #                 delivered settings, and scripts/demo/evidence-report.sh summarises the
 #                 fault-injection and real-flow evidence; both are run by hand.
@@ -104,10 +108,10 @@ run)
     ;;
   serving)
     variants=(serving-burst serving-crash-held serving-crash-waiting serving-duplicate
-      serving-version-switch serving-client-retry serving-response-lost serving-rollout)
+      serving-version-switch serving-client-retry serving-response-lost serving-rollout serving-capacity)
     ;;
   serving-burst | serving-crash-held | serving-crash-waiting | serving-duplicate | \
-    serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout)
+    serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout | serving-capacity)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
   *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, serving or one serving-* variant" ;;
@@ -149,6 +153,9 @@ run)
     # A serving story lists all its Runs, comma-separated, and how many submissions the
     # clients sent; its ledger also requires every Run to have completed.
     submissions=$(sed -n 's/^SUBMISSIONS=//p' "$state")
+    # The limit a capacity story ran with, so the invariant report checks the held
+    # slots against it; empty for every other variant.
+    provider_capacity=$(sed -n 's/^PROVIDER_CAPACITY=//p' "$state")
     require_completed=0
     [[ "$variant" == serving-* ]] && require_completed=1
 
@@ -159,7 +166,7 @@ run)
     if [[ -n "$story" ]]; then
       story_status=$script_status
       invariant_status=0
-      "$DEMO_ROOT/scripts/demo/invariants.sh" "$run_id" || invariant_status=$?
+      EMBERLING_PROVIDER_CAPACITY=$provider_capacity "$DEMO_ROOT/scripts/demo/invariants.sh" "$run_id" || invariant_status=$?
     fi
 
     ledger_status=0

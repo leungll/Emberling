@@ -16,6 +16,7 @@ const EVENT_TYPE_SET: Record<EventType, true> = {
   NODE_READY: true,
   NODE_STARTED: true,
   NODE_RETRYING: true,
+  NODE_WAITING_CAPACITY: true,
   NODE_DISPATCHED: true,
   NODE_CALLBACK_RECEIVED: true,
   NODE_COMPLETED: true,
