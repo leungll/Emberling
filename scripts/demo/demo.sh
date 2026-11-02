@@ -35,8 +35,9 @@
 #                                       twice, completes the original Attempt once;
 #                   delivery-deploy-lost
 #                                       delivery.sh deploy-lost: SIGKILL while production
-#                                       holds the deployment; the Agent times out without a
-#                                       second deployment;
+#                                       holds the deployment; the restarted Backend hands
+#                                       the call back to the Agent as RESULT_UNCERTAIN and
+#                                       the Agent reports instead of deploying again;
 #                   delivery-runner-redelivery
 #                                       delivery.sh redelivery: the restarted runner
 #                                       delivers a finished test again and the ledger gains

@@ -16,12 +16,18 @@
 #                the callback is released. Expects the original Attempt to complete once,
 #                both deliveries answered 200 with one callback completion in the ledger,
 #                no second test dispatch and one deployment.
-#   deploy-lost  runs with a short Agent deadline and holds the deployment request at
-#                production's barrier, then kills and restarts the Backend, so the request
-#                is abandoned and its answer is lost. Expects the Reconciler to end the
-#                Agent with TIMEOUT, the deploy Attempt and its Action FAILED, a FAILED Run,
-#                no second deploy Attempt and at most one production call for the
-#                operationId.
+#   deploy-lost  holds the deployment request at production's barrier, then kills and
+#                restarts the Backend, so the request is abandoned and its answer is lost.
+#                The deploy Attempt was committed as STARTED by the killed process, so the
+#                restarted Backend's Reconciler hands it back to the Agent within the Agent
+#                deadline instead of waiting for it: the Attempt and its Action fail with
+#                RESULT_UNCERTAIN and failureSource RUNNER_LOST, and the Agent's next Turn
+#                receives a bounded tool message saying the outcome is unknown. The
+#                scripted Agent (trajectory software-delivery-deploy-lost) answers with a
+#                report naming the tested patch and finishes. Expects a COMPLETED Run whose
+#                result reports DEPLOYMENT_UNCERTAIN, the Agent ended by its FINAL_RESPONSE,
+#                exactly one deploy Attempt, no second deploy and at most one production
+#                call for the operationId.
 #   redelivery   runs the main story, then restarts the sandbox runner, which delivers its
 #                stored result again. Expects a second delivery for the same testId
 #                answered 200, no Event after the Run's terminal Event and the Run still
@@ -42,10 +48,11 @@ case "$story" in
 main | redelivery) script=software-delivery ;;
 restart) script=software-delivery-duplicate-callback ;;
 deploy-lost)
-  script=software-delivery
-  # Long enough for the test and the held deployment to happen before the kill, short
-  # enough that the restarted Backend's Reconciler finds the deadline expired soon.
-  timeout_ms=${EMBERLING_DEMO_DELIVERY_TIMEOUT_MS:-20000}
+  script=software-delivery-deploy-lost
+  # The fixture's Agent deadline applies unless overridden. The orphaned deploy call is
+  # handed back to the Agent only while the deadline has not passed; once it has, the
+  # Reconciler ends the Agent with TIMEOUT instead, which is not this story.
+  timeout_ms=${EMBERLING_DEMO_DELIVERY_TIMEOUT_MS:-0}
   ;;
 *) die "usage: delivery.sh main|restart|deploy-lost|redelivery" ;;
 esac
@@ -139,7 +146,7 @@ else
 fi
 case "$story" in
 deploy-lost)
-  hold_note="Next: the sandbox test passes and the deployment is held at production. Keep every look until the kill under ~$((agent_deadline_s < 30 ? agent_deadline_s : 30))s in total (the ${agent_deadline_s}s Agent deadline; raise EMBERLING_DEMO_DELIVERY_TIMEOUT_MS up to 30000 for longer)"
+  hold_note="Next: the sandbox test passes and the deployment is held at production. Keep every look until the kill under ~$((agent_deadline_s < 30 ? agent_deadline_s : 30))s in total (the deploy Tool's 30s request timeout and the ${agent_deadline_s}s Agent deadline)"
   ;;
 *)
   hold_note="Next: sandbox_test is DISPATCHED and its callback held at the runner. Keep every look until its release well under ${agent_deadline_s}s in total (the Agent deadline)"
@@ -199,11 +206,12 @@ deploy-lost)
   }
   wait_until "the deployment request to be held by production" "$HELD_DEADLINE_S" deploy_held
   log "held at production: $(curl -fsS "$PRODUCTION_URL/control/barrier" | jq -c '[.held[] | {kind, operationId, arrivalSeq}]')"
-  demo_pause "deployment held at production while the deploy Attempt runs; next: SIGKILL the backend and start it again, so the answer is lost (continue within the ${agent_deadline_s}s Agent deadline)"
+  demo_pause "deployment held at production while the deploy Attempt is STARTED; next: SIGKILL the backend and start it again, so the answer is lost (continue within the ${agent_deadline_s}s Agent deadline)"
   kill_and_restart_backend
-  # The caller of the held deployment died with the old process, and the Agent deadline
-  # has a single outcome from here, so this look cannot change the story.
-  demo_pause "backend back with the deployment still held and its caller gone; next: wait for the Reconciler to end the Agent with TIMEOUT, then release the abandoned deployment"
+  # The caller of the held deployment died with the old process. The restarted Backend's
+  # Reconciler hands the STARTED Attempt back to the Agent on its next scan, so by the time
+  # this look ends the Agent may already have answered.
+  demo_pause "backend back with the deployment still held and its caller gone; next: the Reconciler hands the deploy call back to the Agent as RESULT_UNCERTAIN (failureSource RUNNER_LOST) and the Agent answers with a report instead of deploying again (the ${agent_deadline_s}s Agent deadline still applies)"
   ;;
 esac
 
@@ -214,7 +222,7 @@ run_terminal() {
 }
 wait_until "run $run_id to become COMPLETED or FAILED" "$TERMINAL_DEADLINE_S" run_terminal
 if [[ "$story" == deploy-lost ]]; then
-  demo_pause "run $run_id reached a terminal status; check the Agent's TIMEOUT and the FAILED deploy Attempt in Studio. Next: release the abandoned deployment held at production"
+  demo_pause "run $run_id reached a terminal status; check in Studio the deploy Action FAILED with RESULT_UNCERTAIN and RUNNER_LOST, the Agent's next Turn and its final report. Next: release the abandoned deployment held at production"
 fi
 release_barriers
 paused_urls=()
@@ -243,9 +251,9 @@ production=$(record_after "$production_after" "$PRODUCTION_URL" | jq -s '.')
 
 tests=$(jq -c '[.turns[] | .action as $a | .toolAttempts[] | select(.toolName == "sandbox_test")
     | {id, status, testId: (.callbackBinding.externalTaskId // null), provider: (.callbackBinding.providerId // null), actionStatus: $a.status}]' <<<"$trace")
-deploys=$(jq -c '[.turns[] | .action as $a | .toolAttempts[] | select(.toolName == "deploy")
-    | {id, status, attemptNo, actionId: $a.id, actionStatus: $a.status, actionError: ($a.error.code // null),
-       operationId: "op_\($a.id)_\(.attemptNo)"}]' <<<"$trace")
+deploys=$(jq -c '[.turns[] | .turnNo as $n | .action as $a | .toolAttempts[] | select(.toolName == "deploy")
+    | {id, status, attemptNo, turnNo: $n, actionId: $a.id, actionStatus: $a.status, actionError: ($a.error.code // null),
+       failureSource: ($a.failureSource // null), operationId: "op_\($a.id)_\(.attemptNo)"}]' <<<"$trace")
 test_id=$(jq -r 'first.testId // ""' <<<"$tests")
 operation_id=$(jq -r 'first.operationId // ""' <<<"$deploys")
 termination=$(jq -r '.agentRun.termination // "none"' <<<"$trace")
@@ -325,16 +333,38 @@ restart)
   ;;
 deploy-lost)
   abandoned=$(jq --arg op "$operation_id" '[.[] | select(.event == "abandoned" and .operationId == $op)] | length' <<<"$production")
-  deploy_timed_out() {
-    jq -e 'length == 1 and .[0].status == "FAILED" and .[0].attemptNo == 1
-      and .[0].actionStatus == "FAILED" and .[0].actionError == "TIMEOUT"' <<<"$deploys" >/dev/null
+  deploy_turn_no=$(jq -r 'first.turnNo // 0' <<<"$deploys")
+  next_turn=$(jq -c --argjson n "$deploy_turn_no" '[.turns[] | select(.turnNo == $n + 1)] | first
+      | {turnNo, decision: (.decision.kind // null), tool: (.decision.tool // null)}' <<<"$trace")
+  failed_event=$(jq -c '[.[] | select(.type == "AGENT_ACTION_FAILED")] | first
+      | {seq, failureSource: .payload.failureSource, code: .payload.error.code}' <<<"$events")
+  following=$(jq -c '(map(select(.type == "AGENT_ACTION_FAILED")) | first | .seq) as $s
+      | [.[] | select(.seq > $s and (.type == "AGENT_TURN_READY" or .type == "AGENT_DECISION_COMMITTED"))][0:2]
+      | map(.type)' <<<"$events")
+  printf 'evidence: orphaned deploy  %s\n' "$deploys"
+  printf 'evidence: failed event     %s\n' "$failed_event"
+  printf 'evidence: then             %s\n' "$following"
+  printf 'evidence: Agent decision   %s\n\n' "$next_turn"
+  deploy_result_uncertain() {
+    jq -e 'length == 1 and .[0].status == "FAILED" and .[0].attemptNo == 1 and .[0].actionStatus == "FAILED"
+      and .[0].actionError == "RESULT_UNCERTAIN" and .[0].failureSource == "RUNNER_LOST"' <<<"$deploys" >/dev/null &&
+      jq -e '.failureSource == "RUNNER_LOST" and .code == "RESULT_UNCERTAIN"' <<<"$failed_event" >/dev/null
   }
-  check run_failed "status=$run_status" test "$run_status" = FAILED
-  check agent_timed_out "termination=$termination" test "$termination" = TIMEOUT
-  check deploy_attempt_timed_out "deploys=$deploys" deploy_timed_out
+  agent_answered_with_report() {
+    jq -e '.decision == "FINAL"' <<<"$next_turn" >/dev/null &&
+      jq -e '. == ["AGENT_TURN_READY", "AGENT_DECISION_COMMITTED"]' <<<"$following" >/dev/null
+  }
+  result_reports_uncertainty() {
+    jq -e --argjson fact "$fact" '.status == "DEPLOYMENT_UNCERTAIN" and .patchDigest == $fact[0].subject' <<<"$result" >/dev/null
+  }
+  check run_completed "status=$run_status" test "$run_status" = COMPLETED
+  check agent_finished "termination=$termination" test "$termination" = FINAL_RESPONSE
+  check deploy_result_uncertain "deploys=$deploys event=$failed_event" deploy_result_uncertain
+  check agent_answered_with_report "next=$next_turn then=$following" agent_answered_with_report
+  check result_reports_uncertainty "result=$result" result_reports_uncertainty
   check at_most_one_production_call "operation=$operation_id arrivals=$production_op_arrivals all_arrivals=$production_arrivals deployed=$deployed_count abandoned=$abandoned" \
     test "$production_op_arrivals" -le 1 -a "$production_arrivals" -le 1 -a "$deployed_count" -le 1
-  summary="termination=$termination deploy=$operation_id attempts=$(jq 'length' <<<"$deploys") production_arrivals=$production_op_arrivals deployed=$deployed_count abandoned=$abandoned status=$run_status"
+  summary="termination=$termination deploy=$operation_id/$(jq -r 'first.actionError // "none"' <<<"$deploys") next=$(jq -r '.decision // "none"' <<<"$next_turn") attempts=$(jq 'length' <<<"$deploys") production_arrivals=$production_op_arrivals deployed=$deployed_count abandoned=$abandoned status=$run_status"
   ;;
 esac
 
