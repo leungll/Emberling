@@ -17,6 +17,7 @@ import {
   type TraceElement,
 } from './run-model';
 import type { ExecutionError, JsonValue } from '@/api/types';
+import { Money } from '@/components/cost/Cost';
 import { FactList, TechnicalDetails, type Fact } from '@/components/facts/FactList';
 import { IdChip } from '@/components/id/IdChip';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
@@ -559,6 +560,7 @@ function AttemptOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) 
                 ),
               },
               { label: f.duration, value: <ElementTime model={ctx.model} el={el} /> },
+              a.cost ? { label: f.cost, value: <Money cost={a.cost} /> } : null,
               a.deadlineAt
                 ? { label: f.timeLimit, value: duration(between(a.startedAt, a.deadlineAt)) }
                 : null,
@@ -617,6 +619,7 @@ function AttemptOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) 
               ),
             },
             { label: f.duration, value: <ElementTime model={ctx.model} el={el} /> },
+            a.cost ? { label: f.cost, value: <Money cost={a.cost} /> } : null,
             a.callbackBinding
               ? {
                   label: f.externalTask,
@@ -707,6 +710,7 @@ function TurnOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
                 }
               : null,
             turn.usage ? { label: f.tokens, value: <Tokens usage={turn.usage} /> } : null,
+            turn.cost ? { label: f.cost, value: <Money cost={turn.cost} /> } : null,
           ]}
         />
       </Section>
@@ -745,6 +749,7 @@ function DecisionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext })
             { label: f.started, value: <RunOffset model={ctx.model} iso={turn.startedAt} /> },
             { label: f.duration, value: <ElementTime model={ctx.model} el={el} /> },
             turn.usage ? { label: f.tokens, value: <Tokens usage={turn.usage} /> } : null,
+            turn.cost ? { label: f.cost, value: <Money cost={turn.cost} /> } : null,
             { label: f.agentState, value: decision.hasStatePatch ? f.updated : f.unchanged },
           ]}
         />

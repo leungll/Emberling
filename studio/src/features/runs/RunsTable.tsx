@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 
 import { runHref } from './runs-url';
 import type { RunListItem } from '@/api/types';
+import { RunCostValue } from '@/components/cost/Cost';
 import { IdChip } from '@/components/id/IdChip';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { statusInfo } from '@/components/status/status-info';
@@ -80,6 +81,9 @@ export function RunsTable({ items, busy }: { items: readonly RunListItem[]; busy
           <th scope="col" style={FIT} className={cn(HEAD, 'text-right whitespace-nowrap')}>
             {t.columns.duration}
           </th>
+          <th scope="col" style={FIT} className={cn(HEAD, 'text-right whitespace-nowrap')}>
+            {t.columns.cost}
+          </th>
           <th scope="col" style={FIT} className={cn(HEAD, 'whitespace-nowrap')}>
             {t.columns.runId}
           </th>
@@ -149,6 +153,12 @@ export function RunsTable({ items, busy }: { items: readonly RunListItem[]; busy
                 ) : (
                   <Duration ms={ms} />
                 )}
+              </td>
+              <td
+                style={FIT}
+                className={cn(CELL, 'text-right whitespace-nowrap text-fg-secondary')}
+              >
+                <RunCostValue cost={item.cost} />
               </td>
               <td style={FIT} className={cn(CELL, 'whitespace-nowrap')}>
                 <span data-row-controls>

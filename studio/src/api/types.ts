@@ -355,6 +355,34 @@ export interface TokenUsage {
   totalTokens: number;
 }
 
+/**
+ * The charge a Provider reported for one call, recorded with the call's result and never
+ * changed. `amount` is decimal text so no precision is lost; `currency` is the ISO 4217
+ * code the Provider bills in; `source` is the Model ID of the call. A call whose charge
+ * is not known carries `null` instead, never a zero.
+ */
+export interface Cost {
+  amount: string;
+  currency: string;
+  source: string;
+}
+
+/** The known charges of one currency summed, as decimal text. */
+export interface CostTotal {
+  amount: string;
+  currency: string;
+}
+
+/**
+ * A Run's read-time cost: its known charges summed per currency, and the number of
+ * finished external calls whose charge is not known. The two are never merged: an
+ * unknown charge is a count, not an estimate, and a reported zero is a known charge.
+ */
+export interface RunCost {
+  totals: CostTotal[];
+  unknownCalls: number;
+}
+
 export interface Run {
   id: string;
   workflowId: string;
@@ -415,6 +443,7 @@ export interface RunListItem {
   failedStep: RunStepRef | null;
   /** Filled only for a `PAUSED` Run, ordered by `waitingAt`; empty otherwise. */
   waitingSteps: RunWaitingStep[];
+  cost: RunCost;
 }
 
 /** Server-side counts for the current workflow, time and code filters, ignoring `status`. */
@@ -497,6 +526,8 @@ export interface NodeAttempt {
   uncertain: boolean | null;
   /** `null` for a synchronous Attempt. */
   callbackBinding: CallbackBindingSummary | null;
+  /** The charge the Provider reported for this Attempt; `null` when none is known. */
+  cost: Cost | null;
 }
 
 /**
@@ -596,6 +627,8 @@ export interface ToolAttemptTrace {
   dispatchedAt: string | null;
   completedAt: string | null;
   error: ExecutionError | null;
+  /** The charge the Provider reported for this Tool call; `null` when none is known. */
+  cost: Cost | null;
   /** `generate_image` only: the photo the call works on, from its arguments. */
   photo?: ToolPhotoTrace;
   /** `generate_image` only: the named generation settings, from its arguments. */
@@ -673,6 +706,8 @@ export interface AgentTurnTrace {
   error: ExecutionError | null;
   /** Usage the model reported for this Turn; `null` when unreported or not yet known. */
   usage: TokenUsage | null;
+  /** The charge the model reported for this Turn; `null` when unreported or not yet known. */
+  cost: Cost | null;
   /** Read from the Turn's committed Event; `null` until the Turn was claimed. */
   claimSource: ClaimSource | null;
   /** `null` before the Turn committed a Decision. */
