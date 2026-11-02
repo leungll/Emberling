@@ -300,105 +300,15 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			}
 		}
 
-		// The round and time limits are checked before the next Turn is created, so no Turn
-		// is ever left that nobody is allowed to execute.
-		nextTurnNo := agentRun.CurrentTurnNo + 1
-		termination := domain.AgentTermination("")
-		var execError domain.ExecutionError
-		switch {
-		case nextTurnNo > agentRun.MaxTurns:
-			termination = domain.TerminationMaxTurns
-			execError = domain.ExecutionError{
-				Code:    "MAX_TURNS",
-				Message: fmt.Sprintf("the agent reached its frozen bound of %d turns", agentRun.MaxTurns),
-			}
-		case !now.Before(agentRun.Deadline):
-			termination = domain.TerminationTimeout
-			execError = domain.ExecutionError{Code: "TIMEOUT", Message: "the agent deadline expired"}
-		}
-
-		from := store.AgentRunPointers{
-			CurrentTurnNo:         agentRun.CurrentTurnNo,
-			CurrentContextVersion: agentRun.CurrentContextVersion,
-			CurrentStateVersion:   agentRun.CurrentStateVersion,
-		}
-		to := store.AgentRunPointers{
-			CurrentTurnNo:         agentRun.CurrentTurnNo,
-			CurrentContextVersion: nextContextVersion,
-			CurrentStateVersion:   nextStateVersion,
-		}
-		if termination == "" {
-			to.CurrentTurnNo = nextTurnNo
-		}
-		advanced, err := tx.AgentRuns().AdvancePointers(ctx, agentRun.ID, from, to)
+		turnID, err := s.advanceAgentRoundLocked(ctx, tx, lock, nodeRun, agentRun, call, src, run, plan,
+			nextContextVersion, nextStateVersion, len(messages), now)
 		if err != nil {
 			return err
 		}
-		if !advanced {
-			// Another transaction already moved this Agent Run's recovery position, so it
-			// owns this round's outcome; nothing here may overwrite it.
-			return errAgentTurnSuperseded
-		}
-
-		if termination != "" {
-			if err := s.terminateAgentRunLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, termination, execError, now); err != nil {
-				return err
-			}
+		if turnID == "" {
 			commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq(), terminal: true}
 			return nil
 		}
-
-		if src.resumesWaiting {
-			// The loop continues, so the Agent NodeRun leaves WAITING_CALLBACK in the same
-			// transaction that creates the next Turn. A NodeRun no longer waiting
-			// means another path already resolved it.
-			if err := tx.NodeRuns().Transition(ctx, nodeRun.ID, domain.NodeRunWaitingCallback, domain.NodeRunRunning, now); err != nil {
-				if errors.Is(err, domain.ErrStaleClaim) {
-					return errAgentTurnSuperseded
-				}
-				return err
-			}
-		}
-
-		turnID := s.deps.IDs.NewID(domain.IDPrefixAgentTurn)
-		requestBytes, err := json.Marshal(agentTurnRequest{
-			ModelID:        agentRun.ModelID,
-			ContextVersion: nextContextVersion,
-			StateVersion:   nextStateVersion,
-			AllowedTools:   agentRun.AllowedTools,
-			MessageCount:   len(messages),
-		})
-		if err != nil {
-			return fmt.Errorf("execution: encode agent turn request for agent run %s: %w", agentRun.ID, err)
-		}
-		if err := tx.AgentTurns().Create(ctx, domain.AgentTurn{
-			ID:         turnID,
-			AgentRunID: agentRun.ID,
-			TurnNo:     nextTurnNo,
-			Status:     domain.AgentTurnReady,
-			Request:    requestBytes,
-		}); err != nil {
-			return err
-		}
-		if err := s.appendEvent(ctx, tx, lock, call.runID, &nodeRun.ID, domain.EventAgentTurnReady, now, agentTurnPayload{
-			AgentRunID:     agentRun.ID,
-			TurnID:         turnID,
-			TurnNo:         nextTurnNo,
-			ContextVersion: nextContextVersion,
-			StateVersion:   nextStateVersion,
-		}); err != nil {
-			return err
-		}
-		if src.resumesWaiting {
-			// With the Agent NodeRun RUNNING again, a PAUSED Run becomes RUNNING and
-			// RUN_RESUMED commits in the same transaction.
-			if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
-				return err
-			}
-		} else if err := tx.Runs().UpdateAggregate(ctx, lock, lock.Status(), now); err != nil {
-			return err
-		}
-
 		nextTurnID = turnID
 		commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq()}
 		return nil
@@ -411,6 +321,129 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 	}
 	s.wake(commit)
 	return agentToolCommit{committed: true, nextTurnID: nextTurnID}, nil
+}
+
+// advanceAgentRoundLocked is the shared tail of a round whose Context Version is already
+// appended: it checks the round and time limits, conditionally advances the Agent Run's
+// pointers to nextContextVersion and nextStateVersion, and either terminates the Agent Run
+// the limit demands or creates the next READY Turn with AGENT_TURN_READY and persists the
+// seq watermark. It runs under the Run aggregate lock the caller holds and returns the
+// next Turn's id, or "" when the Agent Run terminated. A pointer update that loses returns
+// errAgentTurnSuperseded, which rolls the caller's whole transaction back.
+//
+// run and plan are needed only when src resumes a waiting Agent NodeRun, which
+// re-derives the Run status.
+func (s *ExecutionService) advanceAgentRoundLocked(
+	ctx context.Context,
+	tx store.Tx,
+	lock *store.RunLock,
+	nodeRun domain.NodeRun,
+	agentRun domain.AgentRun,
+	call agentToolCall,
+	src agentToolOutcomeSource,
+	run domain.Run,
+	plan *runtime.CompiledDefinition,
+	nextContextVersion int,
+	nextStateVersion int,
+	messageCount int,
+	now time.Time,
+) (string, error) {
+	// The round and time limits are checked before the next Turn is created, so no Turn
+	// is ever left that nobody is allowed to execute.
+	nextTurnNo := agentRun.CurrentTurnNo + 1
+	termination := domain.AgentTermination("")
+	var execError domain.ExecutionError
+	switch {
+	case nextTurnNo > agentRun.MaxTurns:
+		termination = domain.TerminationMaxTurns
+		execError = domain.ExecutionError{
+			Code:    "MAX_TURNS",
+			Message: fmt.Sprintf("the agent reached its frozen bound of %d turns", agentRun.MaxTurns),
+		}
+	case !now.Before(agentRun.Deadline):
+		termination = domain.TerminationTimeout
+		execError = domain.ExecutionError{Code: "TIMEOUT", Message: "the agent deadline expired"}
+	}
+
+	from := store.AgentRunPointers{
+		CurrentTurnNo:         agentRun.CurrentTurnNo,
+		CurrentContextVersion: agentRun.CurrentContextVersion,
+		CurrentStateVersion:   agentRun.CurrentStateVersion,
+	}
+	to := store.AgentRunPointers{
+		CurrentTurnNo:         agentRun.CurrentTurnNo,
+		CurrentContextVersion: nextContextVersion,
+		CurrentStateVersion:   nextStateVersion,
+	}
+	if termination == "" {
+		to.CurrentTurnNo = nextTurnNo
+	}
+	advanced, err := tx.AgentRuns().AdvancePointers(ctx, agentRun.ID, from, to)
+	if err != nil {
+		return "", err
+	}
+	if !advanced {
+		// Another transaction already moved this Agent Run's recovery position, so it
+		// owns this round's outcome; nothing here may overwrite it.
+		return "", errAgentTurnSuperseded
+	}
+
+	if termination != "" {
+		return "", s.terminateAgentRunLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, termination, execError, now)
+	}
+
+	if src.resumesWaiting {
+		// The loop continues, so the Agent NodeRun leaves WAITING_CALLBACK in the same
+		// transaction that creates the next Turn. A NodeRun no longer waiting
+		// means another path already resolved it.
+		if err := tx.NodeRuns().Transition(ctx, nodeRun.ID, domain.NodeRunWaitingCallback, domain.NodeRunRunning, now); err != nil {
+			if errors.Is(err, domain.ErrStaleClaim) {
+				return "", errAgentTurnSuperseded
+			}
+			return "", err
+		}
+	}
+
+	turnID := s.deps.IDs.NewID(domain.IDPrefixAgentTurn)
+	requestBytes, err := json.Marshal(agentTurnRequest{
+		ModelID:        agentRun.ModelID,
+		ContextVersion: nextContextVersion,
+		StateVersion:   nextStateVersion,
+		AllowedTools:   agentRun.AllowedTools,
+		MessageCount:   messageCount,
+	})
+	if err != nil {
+		return "", fmt.Errorf("execution: encode agent turn request for agent run %s: %w", agentRun.ID, err)
+	}
+	if err := tx.AgentTurns().Create(ctx, domain.AgentTurn{
+		ID:         turnID,
+		AgentRunID: agentRun.ID,
+		TurnNo:     nextTurnNo,
+		Status:     domain.AgentTurnReady,
+		Request:    requestBytes,
+	}); err != nil {
+		return "", err
+	}
+	if err := s.appendEvent(ctx, tx, lock, call.runID, &nodeRun.ID, domain.EventAgentTurnReady, now, agentTurnPayload{
+		AgentRunID:     agentRun.ID,
+		TurnID:         turnID,
+		TurnNo:         nextTurnNo,
+		ContextVersion: nextContextVersion,
+		StateVersion:   nextStateVersion,
+	}); err != nil {
+		return "", err
+	}
+	if src.resumesWaiting {
+		// With the Agent NodeRun RUNNING again, a PAUSED Run becomes RUNNING and
+		// RUN_RESUMED commits in the same transaction.
+		if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
+			return "", err
+		}
+	} else if err := tx.Runs().UpdateAggregate(ctx, lock, lock.Status(), now); err != nil {
+		return "", err
+	}
+
+	return turnID, nil
 }
 
 // runPlan reads a Run and compiles the immutable Definition version it is bound to.

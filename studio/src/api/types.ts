@@ -562,8 +562,12 @@ export type ClaimSource = 'IMMEDIATE' | 'RECONCILER';
 /** The path that delivered an Action's successful result. */
 export type CompletionSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL';
 
-/** The path that failed an Action. */
-export type FailureSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL' | 'TIMEOUT';
+/**
+ * The path that failed an Action. `RUNNER_LOST` means the process running a synchronous
+ * Tool call stopped before the call returned.
+ */
+export type FailureSource =
+  'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL' | 'TIMEOUT' | 'RUNNER_LOST';
 
 export interface AgentActionTrace {
   id: string;

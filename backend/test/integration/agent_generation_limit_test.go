@@ -613,11 +613,11 @@ func countRunFacts(t *testing.T, h *agentHarness, runID string) int {
 // and STARTED Attempt but before the Provider request. Under a limit of 2 with one
 // generation already run, the claimed Attempt holds the last slot, so any second
 // evaluation of the claim-time checks would now reject with GENERATION_LIMIT_REACHED.
-// Recovery goes through the single existing path: a reconciler pass and a direct
-// re-entry leave the claimed Action alone, and the Agent deadline closes it as TIMEOUT.
-// Exactly one Attempt exists for the Action, the Run holds only the facts committed
-// before the claim, the calls used stay at the one claimed slot, and the Provider saw
-// only the first generation.
+// Recovery never re-evaluates the claim: the restarted Backend's reconciler pass finds
+// the Attempt orphaned and fails it RESULT_UNCERTAIN, handing the uncertain outcome back
+// to the Agent, and a direct re-entry of the Action changes nothing. Exactly one Attempt
+// exists for the Action, the Run holds only the facts committed before the claim, the
+// calls used stay at the one claimed slot, and the Provider saw only the first generation.
 func TestAgentGenerationLimit_CrashAfterClaim_RecoveryNeverDuplicatesFactOrSlot(t *testing.T) {
 	p := newGenerationProvider(t)
 	crashed, crashedExecutor := newGenerationHarness(t, p, nil)
@@ -667,31 +667,34 @@ func TestAgentGenerationLimit_CrashAfterClaim_RecoveryNeverDuplicatesFactOrSlot(
 
 	restarted, executor := newGenerationHarnessWith(t, p, agentHarnessOptions{Pool: crashed.pool, Clock: crashed.clock})
 	rec := agentReconciler(restarted)
-	agentRunOnce(restarted, rec)
+	if report := agentRunOnce(restarted, rec); report.OrphanToolAttemptsFound != 1 || report.OrphanToolAttemptsHandled != 1 {
+		t.Fatalf("report = %+v, want the one orphaned Attempt handled", report)
+	}
 	if err := restarted.svc.ExecuteAgentAction(restarted.ctx, action.ID, domain.ClaimReconciler); err != nil {
 		t.Fatalf("re-enter the claimed action: %v", err)
 	}
-	if got := getAgentAction(restarted.ctx, t, restarted.uow, action.ID); got.Status != domain.AgentActionRunning || got.Error != nil {
-		t.Fatalf("action before the deadline = status %s error %+v, want still RUNNING without error", got.Status, got.Error)
-	}
 
+	// Past the deadline nothing is left for the timeout to close.
 	restarted.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
-	agentRunOnce(restarted, rec)
+	if report := agentRunOnce(restarted, rec); report.ExpiredAgentRunsFound != 0 {
+		t.Errorf("report after the deadline = %+v, want no expired Agent Run", report)
+	}
 
 	closed := getAgentAction(restarted.ctx, t, restarted.uow, action.ID)
 	if closed.Status != domain.AgentActionFailed || closed.Error == nil {
-		t.Fatalf("action after the deadline = status %s error %+v, want FAILED by the timeout", closed.Status, closed.Error)
+		t.Fatalf("action after the restart = status %s error %+v, want FAILED", closed.Status, closed.Error)
 	}
-	if closed.Error.Code == runtime.CodeGenerationLimitReached || closed.Error.Code == runtime.CodePreconditionUnmet {
-		t.Errorf("action error = %+v, want the timeout, not a re-evaluated claim check", closed.Error)
+	if closed.Error.Code != "RESULT_UNCERTAIN" {
+		t.Errorf("action error = %+v, want RESULT_UNCERTAIN, not a re-evaluated claim check", closed.Error)
 	}
 	agentRun, _ := agentRunOfNodeRun(restarted.ctx, t, restarted.uow, outcome.NodeRunID)
-	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationTimeout {
-		t.Errorf("agent run termination = %s, want TIMEOUT", agentTermination(agentRun))
+	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationFinalResponse {
+		t.Errorf("agent run termination = %s, want FINAL_RESPONSE from the Agent's next Decision", agentTermination(agentRun))
 	}
 	final := agentToolAttempts(restarted.ctx, t, restarted.uow, action.ID)
-	if len(final) != 1 || final[0].ID != attempt.ID || final[0].Status != domain.ToolAttemptFailed {
-		t.Errorf("tool attempts = %+v, want only %s, closed FAILED", final, attempt.ID)
+	if len(final) != 1 || final[0].ID != attempt.ID || final[0].Status != domain.ToolAttemptFailed ||
+		final[0].Uncertain == nil || !*final[0].Uncertain {
+		t.Errorf("tool attempts = %+v, want only %s, closed FAILED as uncertain", final, attempt.ID)
 	}
 	if got := countRunFacts(t, restarted, run.ID); got != factsAtClaim {
 		t.Errorf("execution facts after recovery = %d, want the %d committed before the claim", got, factsAtClaim)
@@ -713,7 +716,7 @@ func TestAgentGenerationLimit_CrashAfterClaim_RecoveryNeverDuplicatesFactOrSlot(
 	events := listEvents(restarted.ctx, t, restarted.uow, run.ID)
 	agentOnlyPayloadFor(t, events, domain.EventAgentActionStarted, "actionId", action.ID)
 	failed := agentOnlyPayloadFor(t, events, domain.EventAgentActionFailed, "actionId", action.ID)
-	if failed["failureSource"] != string(domain.FailureTimeout) {
-		t.Errorf("AGENT_ACTION_FAILED failureSource = %v, want TIMEOUT", failed["failureSource"])
+	if failed["failureSource"] != string(domain.FailureRunnerLost) {
+		t.Errorf("AGENT_ACTION_FAILED failureSource = %v, want RUNNER_LOST", failed["failureSource"])
 	}
 }

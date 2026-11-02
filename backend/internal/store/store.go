@@ -564,6 +564,18 @@ type ToolAttemptRepository interface {
 	// lets a result that committed first keep its outcome.
 	MarkTimedOut(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) (bool, error)
 
+	// ListOrphanStarted returns STARTED synchronous Tool Attempts written by a runner other
+	// than currentRunnerID, of Agent Runs that have not terminated and whose deadline has
+	// not passed, oldest first and at most limit of them. An Attempt with no recorded
+	// runner is never returned. Read-only; the caller decides nothing from it except which
+	// use case to call.
+	ListOrphanStarted(ctx context.Context, currentRunnerID string, now time.Time, limit int) ([]domain.ToolAttempt, error)
+
+	// MarkInterrupted conditionally moves a STARTED Attempt to FAILED, writing its error,
+	// completed_at and the uncertain determination once. A row no longer STARTED returns
+	// domain.ErrStaleClaim.
+	MarkInterrupted(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError, uncertain bool) error
+
 	// CountByAgentRunForTools counts the Tool Attempts of one Agent Run whose Tool is
 	// one of toolNames, in every Attempt status. This is the number of generation calls
 	// already made: an Attempt exists only once its Action won the claim, and a started,

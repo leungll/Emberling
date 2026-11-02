@@ -17,11 +17,18 @@ type toolAttemptRepository struct {
 }
 
 const toolAttemptColumns = `id, action_id, attempt_no, tool_name, status, input, result,
-	callback_token_hash, started_at, dispatched_at, completed_at, error`
+	callback_token_hash, started_at, dispatched_at, completed_at, error, runner_id, uncertain`
+
+// qualifiedToolAttemptColumns is toolAttemptColumns for a query that joins tool_attempts
+// as "ta".
+const qualifiedToolAttemptColumns = `ta.id, ta.action_id, ta.attempt_no, ta.tool_name, ta.status, ta.input,
+	ta.result, ta.callback_token_hash, ta.started_at, ta.dispatched_at, ta.completed_at, ta.error,
+	ta.runner_id, ta.uncertain`
 
 // Create inserts the STARTED Attempt in the transaction that claimed the Action; the Tool
 // is called only after that transaction commits. UNIQUE (action_id, attempt_no) rejects a
-// duplicated dispatch of the same call.
+// duplicated dispatch of the same call. The runner_id of the claiming process is written
+// by this same INSERT, so no committed STARTED Attempt ever lacks the process that owns it.
 func (r *toolAttemptRepository) Create(ctx context.Context, attempt domain.ToolAttempt) error {
 	errPayload, err := marshalExecutionError(attempt.Error)
 	if err != nil {
@@ -30,11 +37,12 @@ func (r *toolAttemptRepository) Create(ctx context.Context, attempt domain.ToolA
 
 	const insert = `
 		INSERT INTO tool_attempts (` + toolAttemptColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 	if _, err := r.conn.Exec(ctx, insert,
 		attempt.ID, attempt.ActionID, attempt.AttemptNo, attempt.ToolName, string(attempt.Status),
 		attempt.Input, nullableJSON(attempt.Result), attempt.CallbackTokenHash,
 		attempt.StartedAt, attempt.DispatchedAt, attempt.CompletedAt, errPayload,
+		attempt.RunnerID, attempt.Uncertain,
 	); err != nil {
 		return mapError("tool_attempts.Create", err, attempt.ID, attempt.ActionID, attempt.AttemptNo)
 	}
@@ -183,6 +191,66 @@ func (r *toolAttemptRepository) MarkTimedOut(ctx context.Context, attemptID stri
 	return affected == 1, nil
 }
 
+// MarkInterrupted conditionally moves a STARTED Attempt whose process stopped to FAILED,
+// writing its error, completed_at and the uncertain determination once. Requiring STARTED
+// makes it lose to a result, a timeout or another handling of the same Attempt that
+// committed first.
+func (r *toolAttemptRepository) MarkInterrupted(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError, uncertain bool) error {
+	errPayload, err := marshalExecutionError(&execErr)
+	if err != nil {
+		return fmt.Errorf("store/postgres tool_attempts.MarkInterrupted: tool_attempt=%s: %w", attemptID, err)
+	}
+
+	const update = `
+		UPDATE tool_attempts
+		   SET status = 'FAILED', error = $2, completed_at = $3, uncertain = $4
+		 WHERE id = $1 AND status = 'STARTED'`
+	affected, err := affectedRows(ctx, r.conn, "tool_attempts.MarkInterrupted", update, attemptID, errPayload, now, uncertain)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres tool_attempts.MarkInterrupted: tool_attempt=%s STARTED -> FAILED: %w",
+			attemptID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("tool_attempts.MarkInterrupted", attemptID, affected)
+	}
+	return nil
+}
+
+// ListOrphanStarted lists the STARTED synchronous Tool Attempts another process created.
+// A NULL runner_id is never an orphan: which process wrote it is unknown. A callback
+// credential hash marks an asynchronous Tool's Attempt, whose claim always stores one, and
+// those are left to the deadline. Only Agent Runs that have not terminated and whose
+// deadline has not passed are scanned; an expired one belongs to the Agent timeout.
+func (r *toolAttemptRepository) ListOrphanStarted(ctx context.Context, currentRunnerID string, now time.Time, limit int) ([]domain.ToolAttempt, error) {
+	const query = `
+		SELECT ` + qualifiedToolAttemptColumns + `
+		  FROM tool_attempts ta
+		  JOIN agent_actions aa ON aa.id = ta.action_id
+		  JOIN agent_turns   t  ON t.id  = aa.turn_id
+		  JOIN agent_runs    ar ON ar.id = t.agent_run_id
+		 WHERE ta.status = 'STARTED'
+		   AND ta.runner_id IS NOT NULL
+		   AND ta.runner_id <> $1
+		   AND ta.callback_token_hash IS NULL
+		   AND ar.termination IS NULL
+		   AND ar.deadline > $2
+		 ORDER BY ta.started_at, ta.id
+		 LIMIT $3`
+
+	rows, err := r.conn.Query(ctx, query, currentRunnerID, now, limit)
+	if err != nil {
+		return nil, mapError("tool_attempts.ListOrphanStarted", err)
+	}
+	attempts, err := scanToolAttempts(rows)
+	if err != nil {
+		return nil, mapError("tool_attempts.ListOrphanStarted", err)
+	}
+	return attempts, nil
+}
+
 // CountByAgentRunForTools counts every Tool Attempt of the Agent Run whose Tool is in
 // toolNames, whatever its status. Attempts reach the Agent Run through their Action and
 // Turn. Counting Attempts rather than Actions is deliberate: an Action rejected at claim
@@ -223,6 +291,7 @@ func scanToolAttempts(rows pgx.Rows) ([]domain.ToolAttempt, error) {
 			&attempt.ID, &attempt.ActionID, &attempt.AttemptNo, &attempt.ToolName, &status,
 			&attempt.Input, &result, &attempt.CallbackTokenHash,
 			&attempt.StartedAt, &attempt.DispatchedAt, &attempt.CompletedAt, &errPayload,
+			&attempt.RunnerID, &attempt.Uncertain,
 		); err != nil {
 			return nil, err
 		}

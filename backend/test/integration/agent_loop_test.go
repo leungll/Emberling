@@ -17,6 +17,7 @@ import (
 	"errors"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -85,7 +86,14 @@ type agentHarnessOptions struct {
 	// so a test can hold one repository call at a barrier between two committed
 	// transactions. The harness's own read helpers keep the unwrapped one.
 	WrapUoW func(store.UnitOfWork) store.UnitOfWork
+	// RunnerID is this Backend process's identity, shared by its ExecutionService and its
+	// Reconciler as in cmd/emberling. Left empty, every harness gets a fresh one, so a
+	// harness built over an earlier one's Pool is a restarted process with a new identity.
+	RunnerID string
 }
+
+// agentRunnerSeq numbers the default runner identities of the harnesses of one test binary.
+var agentRunnerSeq atomic.Int64
 
 // agentInlineTurns is the harness's default WorkEnqueuer. A synchronous Tool round no
 // longer chains the next Turn on the same goroutine: it commits the READY Turn and offers
@@ -133,6 +141,9 @@ type agentHarness struct {
 	svc      *service.ExecutionService
 	// turns is the default inline enqueuer, or nil when opts.Queue replaced it.
 	turns *agentInlineTurns
+	// runnerID is the process identity the service writes onto every Tool Attempt and
+	// the harness's Reconciler compares against.
+	runnerID string
 }
 
 func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
@@ -198,6 +209,10 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		turns = &agentInlineTurns{}
 		queue = turns
 	}
+	runnerID := opts.RunnerID
+	if runnerID == "" {
+		runnerID = "runner-" + strconv.FormatInt(agentRunnerSeq.Add(1), 10)
+	}
 	serviceUoW := store.UnitOfWork(uow)
 	if opts.WrapUoW != nil {
 		serviceUoW = opts.WrapUoW(serviceUoW)
@@ -212,6 +227,7 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		IDs:      ids,
 		Notifier: opts.Notifier,
 		Queue:    queue,
+		RunnerID: runnerID,
 		// An ASYNC Tool's claim transaction issues an Attempt-scoped callback credential,
 		// which needs a signing secret and a callback origin.
 		Callback: service.CallbackConfig{
@@ -225,7 +241,7 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		t: t, ctx: ctx,
 		uow: uow, pool: pool, compiler: compiler,
 		clock: clock, ids: ids, provider: provider, svc: svc,
-		turns: turns,
+		turns: turns, runnerID: runnerID,
 	}
 }
 

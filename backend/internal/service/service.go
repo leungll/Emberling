@@ -12,6 +12,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/runtime"
@@ -69,6 +71,11 @@ type Deps struct {
 	// PollHooks lets a test stop or synchronize PollAttempt between its claim commit and
 	// the Provider query. The zero value installs no hook.
 	PollHooks PollHooks
+	// RunnerID identifies this process instance. It is generated once per process start
+	// and written onto every Tool Attempt this process creates, so a later process can
+	// tell that nobody is executing a STARTED Attempt any more. The process entry point
+	// passes the same value to the Reconciler; an empty value is replaced by a random one.
+	RunnerID string
 }
 
 // defaultPendingCallbackTTL bounds an early callback that arrived before its Callback
@@ -92,6 +99,11 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.Callback.PendingTTL <= 0 {
 		d.Callback.PendingTTL = defaultPendingCallbackTTL
+	}
+	if d.RunnerID == "" {
+		// Every new Tool Attempt carries a runner identity; an Attempt without one is
+		// never treated as orphaned, so leaving it empty would silently opt out.
+		d.RunnerID = uuid.NewString()
 	}
 	return d
 }
