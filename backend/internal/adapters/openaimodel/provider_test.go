@@ -731,7 +731,8 @@ func TestProvider_Generate_OpenRouterSwitchOn_SendsOnlyRequireParameters(t *test
 }
 
 // TestProvider_Generate_OpenRouterSwitchOff_SendsNoProviderMember keeps the request free
-// of every Provider-specific field when the switch is off.
+// of every routing field when the switch is off. The usage accounting request stays: it is
+// how the Provider is asked to report the call's charge, not a routing choice.
 func TestProvider_Generate_OpenRouterSwitchOff_SendsNoProviderMember(t *testing.T) {
 	content := `{"kind":"FINAL","tool":null,"arguments":null,"output":"ok","statePatch":null}`
 	server, seen := fakeProvider(t, http.StatusOK, completion(t, content, ""))
@@ -746,7 +747,7 @@ func TestProvider_Generate_OpenRouterSwitchOff_SendsNoProviderMember(t *testing.
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"messages", "model", "response_format", "temperature"}
+	want := []string{"messages", "model", "response_format", "temperature", "usage"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("request body members mismatch (-want +got):\n%s", diff)
 	}

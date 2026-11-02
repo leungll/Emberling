@@ -277,8 +277,23 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 	}
 	return registry.ToolExecutionResult{
 		Kind:   registry.ToolResultCompleted,
-		Result: &registry.ToolResult{Output: output, Artifacts: []domain.ArtifactRef{artifact}},
+		Result: &registry.ToolResult{Output: output, Artifacts: []domain.ArtifactRef{artifact}, Cost: callCost(generated.Cost, action.ImageModelID)},
 	}, nil
+}
+
+// callCost is the Cost the Runtime records for this call: the charge the generator
+// reported, in US dollars, attributed to the image Model ID the call used. A generator
+// that reported nothing, or a value outside the amount bounds, yields nil, so the Attempt
+// carries no Cost rather than a zero it did not report.
+func callCost(reported *float64, imageModelID string) *domain.Cost {
+	if reported == nil {
+		return nil
+	}
+	amount, ok := domain.CostAmountFromFloat(*reported)
+	if !ok {
+		return nil
+	}
+	return &domain.Cost{Amount: amount, Currency: domain.CurrencyUSD, Source: imageModelID}
 }
 
 // ArtifactContentPath is the site-relative path of the Run-scoped route that serves an

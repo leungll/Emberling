@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -274,8 +275,8 @@ func referenceImage(input registry.NodeInput) (*domain.ImageRef, error) {
 
 // callbackPayload is the part of the Provider's callback payload this node interprets.
 // `status` is the discriminator; `image` carries the Provider's image reference, which is
-// normalised into a domain.ImageRef before it reaches the output port, and `error`
-// describes a reported failure.
+// normalised into a domain.ImageRef before it reaches the output port, `error` describes
+// a reported failure, and `usage.cost` is the charge the Provider reports for the task.
 type callbackPayload struct {
 	Status string          `json:"status"`
 	Image  json.RawMessage `json:"image"`
@@ -283,6 +284,46 @@ type callbackPayload struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+	// Usage is kept raw so a member of an unexpected shape is dropped by reportedCost
+	// instead of failing a payload whose image is otherwise valid.
+	Usage json.RawMessage `json:"usage"`
+}
+
+// reportedCost maps a SUCCEEDED payload's usage.cost to the Cost the completion records:
+// a finite, non-negative JSON number is an amount in US dollars, the currency the task
+// protocol's usage.cost is denominated in, attributed to the Model ID the node config
+// selected. A payload without usage, or with a cost that is not such a number, yields nil:
+// the Provider reported no charge, and no charge is ever assumed.
+func reportedCost(body callbackPayload, config map[string]any) *domain.Cost {
+	var usage struct {
+		Cost json.RawMessage `json:"cost"`
+	}
+	if len(body.Usage) == 0 || json.Unmarshal(body.Usage, &usage) != nil || len(usage.Cost) == 0 {
+		return nil
+	}
+	modelID, _ := config["modelId"].(string)
+	if modelID == "" {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(usage.Cost))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil {
+		return nil
+	}
+	number, ok := value.(json.Number)
+	if !ok {
+		return nil
+	}
+	reported, err := strconv.ParseFloat(number.String(), 64)
+	if err != nil {
+		return nil
+	}
+	amount, ok := domain.CostAmountFromFloat(reported)
+	if !ok {
+		return nil
+	}
+	return &domain.Cost{Amount: amount, Currency: domain.CurrencyUSD, Source: modelID}
 }
 
 // OnCallback converts one Provider callback payload into the node's output.
@@ -366,7 +407,7 @@ func interpretTerminalPayload(state registry.NodeAsyncState, payload []byte) (re
 		if err != nil {
 			return registry.NodeOutput{}, fmt.Errorf("image_generation: callback payload for external task %s: encode %q reference: %w", state.ExternalTask.ExternalTaskID, imagePort, err)
 		}
-		return registry.NodeOutput{Ports: map[string]json.RawMessage{imagePort: encoded}}, nil
+		return registry.NodeOutput{Ports: map[string]json.RawMessage{imagePort: encoded}, Cost: reportedCost(body, state.Config)}, nil
 
 	case statusFailed:
 		code := defaultFailureCode

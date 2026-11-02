@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
@@ -203,6 +204,9 @@ type chatResponse struct {
 		PromptTokens     *int `json:"prompt_tokens"`
 		CompletionTokens *int `json:"completion_tokens"`
 		TotalTokens      *int `json:"total_tokens"`
+		// Cost is kept raw so a member of an unexpected type is dropped by reportedCost
+		// instead of failing the decode of an otherwise usable answer.
+		Cost json.RawMessage `json:"cost"`
 	} `json:"usage"`
 }
 
@@ -309,7 +313,37 @@ func (p *Provider) normalise(status int, raw []byte) (registry.ModelResponse, er
 		reason := bounded(*choice.FinishReason)
 		summary.FinishReason = &reason
 	}
-	return registry.ModelResponse{Decision: decision, ResponseSummary: summary, TokenUsage: usage}, nil
+	return registry.ModelResponse{Decision: decision, ResponseSummary: summary, TokenUsage: usage, Cost: p.reportedCost(answer)}, nil
+}
+
+// reportedCost maps usage.cost to the call's Cost: a finite, non-negative JSON number
+// becomes an amount in US dollars, which is what the Chat Completions usage accounting
+// reports, attributed to this Provider's Model ID. No usage, no cost member, or a value
+// that is not such a number is nil: the Provider reported no charge, which is never
+// turned into a zero.
+func (p *Provider) reportedCost(answer chatResponse) *domain.Cost {
+	if answer.Usage == nil || len(answer.Usage.Cost) == 0 {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(answer.Usage.Cost))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil {
+		return nil
+	}
+	number, ok := value.(json.Number)
+	if !ok {
+		return nil
+	}
+	reported, err := strconv.ParseFloat(number.String(), 64)
+	if err != nil {
+		return nil
+	}
+	amount, ok := domain.CostAmountFromFloat(reported)
+	if !ok {
+		return nil
+	}
+	return &domain.Cost{Amount: amount, Currency: domain.CurrencyUSD, Source: p.modelID}
 }
 
 // Stop reasons that end a call without a usable answer. finish_reason is the

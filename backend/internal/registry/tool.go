@@ -50,6 +50,10 @@ type ToolResult struct {
 	// result, so a result that never commits leaves only unreferenced content behind. A
 	// Tool that produces no binary leaves it nil.
 	Artifacts []domain.ArtifactRef
+	// Cost is the charge the Provider reported for this call, or nil when it reported
+	// none. It is recorded on the Tool Attempt in the transaction that commits the result
+	// and never read back into an execution decision.
+	Cost *domain.Cost
 }
 
 // ToolResultKind distinguishes a finished Tool call from a dispatch.
