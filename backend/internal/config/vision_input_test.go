@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/config"
@@ -33,6 +34,8 @@ func TestConfig_ImageModelListVisionInput_Fails(t *testing.T) {
 	if err == nil {
 		t.Fatal("Load: error = nil, want visionInput refused on an image model")
 	}
-	imageListError(t, err)
+	if invalid := imageListError(t, err); !strings.Contains(invalid.Reason, "visionInput") {
+		t.Errorf("reason = %q, want it to name visionInput", invalid.Reason)
+	}
 	assertNoImageValue(t, err, "vendor/upstream-seedream")
 }
