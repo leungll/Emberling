@@ -39,6 +39,8 @@ media result check, and the rejected answer stays visible in the Agent Trace. Th
 result check recomputes the digest of the delivered settings and refuses the delivery
 with `SETTINGS_MISMATCH` when it differs from `settingsDigest`, or when any delivered
 image was generated with other settings, such as an image kept from an earlier round.
+It also refuses the delivery with `STALE_EXAMPLE` when a delivered image did not pass
+review while a later image generated for the same photo did pass.
 Because the answer must name all three settings fields, the Agent is asked to set all
 three in every `generate_image` call, using `"3:4"` when the brief names no shape.
 
