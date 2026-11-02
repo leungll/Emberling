@@ -254,21 +254,51 @@ check-fast:
 
 .PHONY: demo demo-studio demo-down
 
-## demo: fault-injection, photo-set and software-delivery demo on the Compose stack. Builds
-## and starts postgres, the Mock Provider, the mock production service, the sandbox runner
-## and the Backend when needed, then runs each variant in turn. Two fault variants SIGKILL
-## the Backend while the image dispatch is held before the Provider accepts it, and after
-## the Provider accepted the task so its callback is lost and Provider polling must
-## complete the Attempt; each restarts the Backend. Three photo variants run the scripted
-## effect-template Agent over three photos: the reviewed main story, the review gate before
-## video, and the generation limit. Four delivery variants run the scripted delivery Agent
-## that tests a patch in the sandbox runner and deploys it: the main story, a SIGKILL while
-## the test waits for its callback, a SIGKILL while production holds the deployment so the
-## Agent is told the outcome is unknown and reports instead of deploying again, and a runner
-## restart that redelivers a finished test. Every variant ends with the invariant report and
-## the ledger-vs-record comparison. EMBERLING_DEMO_VARIANT=
-## held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery,
-## delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery runs one.
+## demo: fault-injection, photo-set, software-delivery and serving demo on the Compose
+## stack. Builds and starts postgres, the Mock Provider, the mock production service, the
+## sandbox runner and the Backend when needed, then runs each variant in turn. Every
+## variant ends with the invariant report and the ledger-vs-record comparison.
+## EMBERLING_DEMO_VARIANT=<name> runs one; unset, it runs every variant except the serving
+## ones, which run as a group with EMBERLING_DEMO_VARIANT=serving. Variants:
+##   held-before-accept    SIGKILL while the image dispatch is held before the Provider
+##                         accepts it; the restarted Backend retries under the same key.
+##   after-accept          SIGKILL after the Provider accepted the task, so its callback is
+##                         lost and Provider polling completes the Attempt.
+##   photo-set             the scripted effect-template Agent applies one template to
+##                         three photos in two reviewed rounds and renders one video.
+##   photo-gate            a video request for an unreviewed asset is rejected before
+##                         any dispatch.
+##   photo-limit           a generation past the frozen limit is rejected before any
+##                         dispatch.
+##   photo-sync-crash      SIGKILL while a synchronous generation is held at the Provider;
+##                         the restarted Backend reports RESULT_UNCERTAIN to the Agent,
+##                         which generates the photo again.
+##   photo-video-restart   SIGKILL while the Agent waits for the video callback; the
+##                         callback completes the original Action once, nothing re-sent.
+##   delivery              the scripted delivery Agent tests a patch in the sandbox
+##                         runner and deploys it once to the mock production service.
+##   delivery-restart-during-test
+##                         SIGKILL while the test waits for its callback; the callback,
+##                         delivered twice, completes the original Attempt once.
+##   delivery-deploy-lost  SIGKILL while production holds the deployment; the Agent is
+##                         told the outcome is unknown and reports instead of redeploying.
+##   delivery-runner-redelivery
+##                         the restarted runner redelivers a finished test; no new Event.
+##   serving-burst         twenty users submit the serving template at once.
+##   serving-crash-held    SIGKILL while dispatches are held before acceptance.
+##   serving-crash-waiting SIGKILL while every task waits for its callback; callbacks
+##                         and polls complete them.
+##   serving-duplicate     every callback delivered three times; no extra Event.
+##   serving-version-switch
+##                         a new version saved while Runs are in flight; each finishes
+##                         on the version it was bound to.
+##   serving-client-retry  concurrent resubmissions under one Idempotency-Key per user.
+##   serving-response-lost the Provider drops each acceptance answer; the keyed retry
+##                         takes over the original task.
+##   serving-rollout       traffic-split.sh sends 10% of keyed requests to a slower
+##                         version 2, then the ratio goes back to 0.
+##   serving-capacity      the Backend restarted with two slots on the image Provider;
+##                         at most two image tasks in flight, the rest queue as READY.
 ## EMBERLING_DEMO_STUDIO=1 turns on the Studio demo mode described under demo-studio.
 ## Needs Docker, curl and jq; deliberately not part of `check`.
 demo:

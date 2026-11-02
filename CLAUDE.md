@@ -44,6 +44,8 @@ Use this rule for every proposed change:
 
 Do not add Phase 2 or roadmap concepts to current schemas, enums, APIs, UI, migrations, configuration, or package structure. In particular, do not introduce cancellation, evaluation, learning, dynamic plugins, distributed workers, multi-tenancy, RBAC, SDKs, independent worker services, or an evaluation service unless the accepted scope changes first.
 
+A fixed in-flight slot limit per Provider is inside the current scope: it strengthens the execution layer by proving that slot accounting neither leaks nor over-admits across crashes, retries, and uncertain results. Priority, fairness, budgets, and scheduling across Providers remain excluded.
+
 ## Package boundaries
 
 Preserve the repository's established package layout and the dependency direction below.
