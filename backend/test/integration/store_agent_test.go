@@ -423,7 +423,7 @@ func TestAgentTurnStore_MarkCompleted_NotRunning_StaleClaim(t *testing.T) {
 	// The model result transaction may only complete the Turn it actually claimed.
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.AgentTurns().MarkCompleted(ctx, "turn_1", fixtureTime,
-			json.RawMessage(`{"kind":"FINAL"}`), &domain.TokenUsage{InputTokens: 3, OutputTokens: 2, TotalTokens: 5})
+			json.RawMessage(`{"kind":"FINAL"}`), &domain.TokenUsage{InputTokens: 3, OutputTokens: 2, TotalTokens: 5}, nil)
 	})
 	if !errors.Is(err, domain.ErrStaleClaim) {
 		t.Fatalf("MarkCompleted on a READY Turn: want domain.ErrStaleClaim, got %v", err)
@@ -432,7 +432,7 @@ func TestAgentTurnStore_MarkCompleted_NotRunning_StaleClaim(t *testing.T) {
 	claimTurn(ctx, t, uow, f.runID, "turn_1")
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.AgentTurns().MarkCompleted(ctx, "turn_1", fixtureTime,
-			json.RawMessage(`{"kind":"FINAL"}`), &domain.TokenUsage{InputTokens: 3, OutputTokens: 2, TotalTokens: 5})
+			json.RawMessage(`{"kind":"FINAL"}`), &domain.TokenUsage{InputTokens: 3, OutputTokens: 2, TotalTokens: 5}, nil)
 	}); err != nil {
 		t.Fatalf("MarkCompleted on the claimed Turn: %v", err)
 	}
@@ -596,7 +596,7 @@ func TestToolAttemptStore_MarkSucceeded_SecondWrite_StaleClaim(t *testing.T) {
 
 	result := json.RawMessage(`{"answer":"ember"}`)
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptStarted, fixtureTime, result)
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptStarted, fixtureTime, result, nil)
 	}); err != nil {
 		t.Fatalf("first MarkSucceeded: %v", err)
 	}
@@ -638,7 +638,7 @@ func TestToolAttemptStore_CallbackResolvesDispatchedAttempt_LateWriteStale(t *te
 	// STARTED: its dispatch has not committed, so there is nothing to resume yet.
 	err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptDispatched, fixtureTime,
-			json.RawMessage(`{"answer":"early"}`))
+			json.RawMessage(`{"answer":"early"}`), nil)
 	})
 	if !errors.Is(err, domain.ErrStaleClaim) {
 		t.Fatalf("MarkSucceeded(from DISPATCHED) on a STARTED Attempt: want domain.ErrStaleClaim, got %v", err)
@@ -654,7 +654,7 @@ func TestToolAttemptStore_CallbackResolvesDispatchedAttempt_LateWriteStale(t *te
 
 	result := json.RawMessage(`{"answer":"ember"}`)
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptDispatched, fixtureTime, result)
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptDispatched, fixtureTime, result, nil)
 	}); err != nil {
 		t.Fatalf("MarkSucceeded(from DISPATCHED): %v", err)
 	}
@@ -674,7 +674,7 @@ func TestToolAttemptStore_CallbackResolvesDispatchedAttempt_LateWriteStale(t *te
 		t.Fatalf("late MarkFailed after callback success: want domain.ErrStaleClaim, got %v", err)
 	}
 	err = uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_2", domain.ToolAttemptDispatched, fixtureTime, result)
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_2", domain.ToolAttemptDispatched, fixtureTime, result, nil)
 	})
 	if !errors.Is(err, domain.ErrStaleClaim) {
 		t.Fatalf("late MarkSucceeded after callback failure: want domain.ErrStaleClaim, got %v", err)
@@ -683,7 +683,7 @@ func TestToolAttemptStore_CallbackResolvesDispatchedAttempt_LateWriteStale(t *te
 	// A from-status that cannot reach the target is a programming error, not a lost race.
 	var invalid *domain.InvalidStateTransitionError
 	err = uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptSucceeded, fixtureTime, result)
+		return tx.ToolAttempts().MarkSucceeded(ctx, "tool_attempt_1", domain.ToolAttemptSucceeded, fixtureTime, result, nil)
 	})
 	if !errors.As(err, &invalid) {
 		t.Fatalf("MarkSucceeded(from SUCCEEDED): want InvalidStateTransitionError, got %v", err)
@@ -726,7 +726,7 @@ func TestAgentActionStore_WaitingActionResolvesOnce_LateWriteStale(t *testing.T)
 			return err
 		}
 		if err := tx.AgentTurns().MarkCompleted(ctx, "turn_2", fixtureTime,
-			json.RawMessage(`{"kind":"TOOL_CALL"}`), nil); err != nil {
+			json.RawMessage(`{"kind":"TOOL_CALL"}`), nil, nil); err != nil {
 			return err
 		}
 		if err := tx.AgentDecisions().Create(ctx, newAgentDecision("decision_2", "turn_2")); err != nil {
@@ -996,7 +996,7 @@ func seedDecidedTurn(ctx context.Context, t *testing.T, uow store.UnitOfWork, f 
 			return err
 		}
 		if err := tx.AgentTurns().MarkCompleted(ctx, turnID, fixtureTime,
-			json.RawMessage(`{"kind":"TOOL_CALL"}`), nil); err != nil {
+			json.RawMessage(`{"kind":"TOOL_CALL"}`), nil, nil); err != nil {
 			return err
 		}
 		if err := tx.AgentDecisions().Create(ctx, newAgentDecision(decisionID, turnID)); err != nil {

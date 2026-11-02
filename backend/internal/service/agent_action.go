@@ -198,7 +198,9 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 		})
 	}
 
-	return s.completeAgentToolCall(ctx, *call, output, artifacts)
+	// The validated output, the declared artifacts and the reported charge commit
+	// together as the Attempt's result.
+	return s.completeAgentToolCall(ctx, *call, registry.ToolResult{Output: output, Artifacts: artifacts, Cost: result.Result.Cost})
 }
 
 // validateDeclaredArtifacts rejects a declared Execution Artifact whose reference is not

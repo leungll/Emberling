@@ -129,7 +129,7 @@ func (s *ExecutionService) resumeToolAttempt(ctx context.Context, req ResumeNode
 	}
 
 	// An asynchronous result declares no Execution Artifacts: no async Tool saves content.
-	committed, err := s.commitAgentToolResult(ctx, call, src, output.Output, nil)
+	committed, err := s.commitAgentToolResult(ctx, call, src, registry.ToolResult{Output: output.Output, Cost: output.Cost})
 	if err != nil {
 		return ResumeOutcome{}, err
 	}

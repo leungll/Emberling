@@ -9,6 +9,7 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
+	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/store"
 )
@@ -20,8 +21,8 @@ import (
 // SUCCEEDED status, the appended Context Version, the new State Version when the Decision's
 // patch really changed the State, the Agent Run's pointers, and either the next READY Turn
 // or the termination the round or time limit demands.
-func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agentToolCall, result json.RawMessage, artifacts []domain.ArtifactRef) error {
-	outcome, err := s.commitAgentToolResult(ctx, call, syncToolOutcome, result, artifacts)
+func (s *ExecutionService) completeAgentToolCall(ctx context.Context, call agentToolCall, result registry.ToolResult) error {
+	outcome, err := s.commitAgentToolResult(ctx, call, syncToolOutcome, result)
 	if err != nil || outcome.nextTurnID == "" {
 		return err
 	}
@@ -153,11 +154,13 @@ func recordToolArtifacts(ctx context.Context, tx store.Tx, call agentToolCall, a
 // performs the post-COMMIT wake-up it owes. It does not chain the next Turn; the caller
 // decides that.
 //
-// artifacts are the Execution Artifacts the Tool declared with its result. Their content
-// is already in content storage; their metadata commits here, in the same transaction as
-// the result that references them, so a result that loses its race or rolls back leaves
-// no row behind - only unreferenced content for the offline sweeper.
-func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agentToolCall, src agentToolOutcomeSource, result json.RawMessage, artifacts []domain.ArtifactRef) (agentToolCommit, error) {
+// result.Artifacts are the Execution Artifacts the Tool declared with its result. Their
+// content is already in content storage; their metadata commits here, in the same
+// transaction as the result that references them, so a result that loses its race or
+// rolls back leaves no row behind - only unreferenced content for the offline sweeper.
+// result.Cost, the charge the Provider reported, commits on the Attempt in the same
+// transaction and is never written again.
+func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agentToolCall, src agentToolOutcomeSource, result registry.ToolResult) (agentToolCommit, error) {
 	var commit agentCommit
 	var nextTurnID string
 
@@ -198,12 +201,12 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
 			return err
 		}
-		if err := recordToolArtifacts(ctx, tx, call, artifacts, now); err != nil {
+		if err := recordToolArtifacts(ctx, tx, call, result.Artifacts, now); err != nil {
 			return err
 		}
 		// The conditional Attempt update is what decides that this caller, and not a stale
 		// duplicate of the same Tool call, a late callback or the timeout, owns the result.
-		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, result); err != nil {
+		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, result.Output, result.Cost); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}
@@ -238,7 +241,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		// to a successful round, so a result that cannot establish it commits the shared
 		// Action failure in place of the round: the Attempt keeps its result, no fact, patch
 		// or next Turn is written, and the failure keeps this delivery's source.
-		factErr, err := s.recordProducedFactLocked(ctx, tx, call, decision.Arguments, result, now)
+		factErr, err := s.recordProducedFactLocked(ctx, tx, call, decision.Arguments, result.Output, now)
 		if err != nil {
 			return err
 		}
@@ -269,7 +272,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return err
 		}
 
-		messages, err := s.appendToolRoundContext(ctx, tx, agentRun, call, decision, result, now)
+		messages, err := s.appendToolRoundContext(ctx, tx, agentRun, call, decision, result.Output, now)
 		if err != nil {
 			return err
 		}

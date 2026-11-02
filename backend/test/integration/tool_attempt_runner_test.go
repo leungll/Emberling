@@ -60,7 +60,7 @@ func seedOrphanScanRow(ctx context.Context, t *testing.T, uow store.UnitOfWork, 
 		if _, err := tx.AgentTurns().ClaimReady(ctx, turnID, fixtureTime); err != nil {
 			return err
 		}
-		if err := tx.AgentTurns().MarkCompleted(ctx, turnID, fixtureTime, json.RawMessage(`{"kind":"TOOL_CALL"}`), nil); err != nil {
+		if err := tx.AgentTurns().MarkCompleted(ctx, turnID, fixtureTime, json.RawMessage(`{"kind":"TOOL_CALL"}`), nil, nil); err != nil {
 			return err
 		}
 		if err := tx.AgentDecisions().Create(ctx, newAgentDecision("decision_"+row.suffix, turnID)); err != nil {
@@ -120,7 +120,7 @@ func TestToolAttemptStore_ListOrphanStarted_ExcludesCurrentRunnerNullRunnerAndAs
 	// A completed Attempt of another process is not STARTED, so it is no orphan either.
 	completed := seedOrphanScanRow(ctx, t, uow, f, orphanScanRow{suffix: "completed", runnerID: &previous}, now)
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.ToolAttempts().MarkSucceeded(ctx, completed, domain.ToolAttemptStarted, now, json.RawMessage(`{}`))
+		return tx.ToolAttempts().MarkSucceeded(ctx, completed, domain.ToolAttemptStarted, now, json.RawMessage(`{}`), nil)
 	}); err != nil {
 		t.Fatalf("complete attempt: %v", err)
 	}

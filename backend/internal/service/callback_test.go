@@ -350,7 +350,7 @@ func (r *cbNodeAttemptRepo) MarkDispatched(_ context.Context, attemptID string, 
 	r.tx.state.attempts[attemptID] = attempt
 	return nil
 }
-func (r *cbNodeAttemptRepo) MarkSucceeded(_ context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage) error {
+func (r *cbNodeAttemptRepo) MarkSucceeded(_ context.Context, attemptID string, from domain.NodeAttemptStatus, now time.Time, result json.RawMessage, _ *domain.Cost) error {
 	if !from.CanTransitionTo(domain.NodeAttemptSucceeded) {
 		return &domain.InvalidStateTransitionError{Entity: "NodeAttempt", ID: attemptID, From: string(from), To: string(domain.NodeAttemptSucceeded)}
 	}
