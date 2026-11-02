@@ -208,6 +208,8 @@ type fixtureOptions struct {
 	queueSize       int
 	imageStoreBytes int64
 	after           func(time.Duration) <-chan time.Time
+	// now overrides the gateway clock; nil means the fixed testNow.
+	now func() time.Time
 }
 
 func newGatewayFixture(t *testing.T, opts fixtureOptions) *gatewayFixture {
@@ -225,6 +227,9 @@ func newGatewayFixture(t *testing.T, opts fixtureOptions) *gatewayFixture {
 	}
 	if opts.imageStoreBytes == 0 {
 		opts.imageStoreBytes = 1 << 20
+	}
+	if opts.now == nil {
+		opts.now = func() time.Time { return testNow }
 	}
 	if opts.after == nil {
 		opts.after = func(time.Duration) <-chan time.Time {
@@ -246,7 +251,7 @@ func newGatewayFixture(t *testing.T, opts fixtureOptions) *gatewayFixture {
 		MaxImageBytes:   1 << 20,
 		ImageStoreBytes: opts.imageStoreBytes,
 		Logger:          slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
-		Now:             func() time.Time { return testNow },
+		Now:             opts.now,
 		After:           opts.after,
 		NewID:           sequentialIDs(),
 	})

@@ -362,8 +362,13 @@ func (s *Server) work() {
 
 // run executes one job under its deadline. When Shutdown interrupted it the task is left
 // unfinished: the gateway keeps no state across a restart, so no result is reported.
+//
+// The deadline was set on the gateway's clock, which a test may fix at any instant, so the
+// context is given the remaining duration measured on that clock rather than the deadline
+// itself: a context deadline is always compared against the wall clock. A deadline already
+// behind the gateway's clock yields a non-positive duration and expires the context at once.
 func (s *Server) run(j job) {
-	ctx, cancel := context.WithDeadline(s.workCtx, j.deadline)
+	ctx, cancel := context.WithTimeout(s.workCtx, j.deadline.Sub(s.now()))
 	defer cancel()
 
 	result := s.execute(ctx, j)
