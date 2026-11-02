@@ -331,7 +331,7 @@ func (r *toolAttemptRepository) ListDuePolls(ctx context.Context, now time.Time,
 	}
 
 	const query = `
-		SELECT id, action_id, poll_count
+		SELECT id, action_id
 		  FROM tool_attempts
 		 WHERE status = 'DISPATCHED'
 		   AND next_poll_at IS NOT NULL AND next_poll_at <= $1
@@ -347,7 +347,7 @@ func (r *toolAttemptRepository) ListDuePolls(ctx context.Context, now time.Time,
 	out := []store.DueToolPoll{}
 	for rows.Next() {
 		var due store.DueToolPoll
-		if err := rows.Scan(&due.AttemptID, &due.ActionID, &due.PollCount); err != nil {
+		if err := rows.Scan(&due.AttemptID, &due.ActionID); err != nil {
 			return nil, mapError("tool_attempts.ListDuePolls", err)
 		}
 		out = append(out, due)

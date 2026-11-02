@@ -106,9 +106,13 @@ func (s *ExecutionService) resumeToolAttempt(ctx context.Context, req ResumeNode
 			// nothing is written, and a later callback, poll or the deadline decides.
 			return outcome, nil
 		}
-		output, cbErr, err = polledToolOutcome(req.ExternalTaskID, req.Polled.Result)
+		var failure *registry.ProviderFailure
+		output, failure, err = polledToolOutcome(req.ExternalTaskID, req.Polled.Result)
 		if err != nil {
 			return ResumeOutcome{}, err
+		}
+		if failure != nil {
+			cbErr = failure
 		}
 	} else {
 		output, cbErr = executor.OnCallback(ctx, registry.ToolAsyncState{
@@ -157,9 +161,13 @@ func (s *ExecutionService) resumeToolAttempt(ctx context.Context, req ResumeNode
 
 // polledToolOutcome turns a final Tool poll result into what OnCallback would have
 // returned: the Tool result for SUCCEEDED, or the Provider-reported failure for FAILED, so
-// both deliveries are classified by the same rule. A SUCCEEDED result without ToolResult,
-// or a FAILED one without Error, is an Executor contract violation and changes nothing.
-func polledToolOutcome(externalTaskID string, result registry.PollResult) (registry.ToolResult, error, error) {
+// both deliveries are classified by the same rule. The failure is typed as the
+// ProviderFailure OnCallback returns for a task the Provider reports failed, and only that:
+// a poll never produces the "payload could not be interpreted" error a callback can, so
+// the caller turns a non-nil failure into the callback error and leaves nil as nil. A
+// SUCCEEDED result without ToolResult, or a FAILED one without Error, is an Executor
+// contract violation and changes nothing.
+func polledToolOutcome(externalTaskID string, result registry.PollResult) (registry.ToolResult, *registry.ProviderFailure, error) {
 	switch result.Status {
 	case registry.PollSucceeded:
 		if result.ToolResult == nil {

@@ -641,12 +641,12 @@ func TestReconciler_OrphanScan_SkippedWithoutRunnerID(t *testing.T) {
 func TestReconciler_DueToolPolls_OnlyCallsPollToolAttempt(t *testing.T) {
 	tx := emptyFakeTx()
 	tx.toolAttempts.duePolls = []store.DueToolPoll{
-		{AttemptID: "ta_running", ActionID: "act_1", PollCount: 0},
-		{AttemptID: "ta_broken", ActionID: "act_2", PollCount: 4},
-		{AttemptID: "ta_resumed", ActionID: "act_3", PollCount: 1},
-		{AttemptID: "ta_returned", ActionID: "act_4", PollCount: 1},
-		{AttemptID: "ta_duplicate", ActionID: "act_5", PollCount: 2},
-		{AttemptID: "ta_skipped", ActionID: "act_6", PollCount: 3},
+		{AttemptID: "ta_running", ActionID: "act_1"},
+		{AttemptID: "ta_broken", ActionID: "act_2"},
+		{AttemptID: "ta_resumed", ActionID: "act_3"},
+		{AttemptID: "ta_returned", ActionID: "act_4"},
+		{AttemptID: "ta_duplicate", ActionID: "act_5"},
+		{AttemptID: "ta_skipped", ActionID: "act_6"},
 	}
 	providerDown := errors.New("provider connection refused")
 	exec := &fakeExecutor{

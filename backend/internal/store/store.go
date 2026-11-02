@@ -332,7 +332,6 @@ type DuePoll struct {
 type DueToolPoll struct {
 	AttemptID string
 	ActionID  string
-	PollCount int
 }
 
 // CallbackBindingRepository persists the only authoritative route from an external task

@@ -252,7 +252,6 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 			actionID:   action.ID,
 			attemptID:  attempt.ID,
 			toolName:   attempt.ToolName,
-			deadline:   agentRun.Deadline,
 		}
 		// The same rule the orphan handling applies decides whether a call the Provider
 		// lost may simply be made again: no side effect, or a SAFE one.
