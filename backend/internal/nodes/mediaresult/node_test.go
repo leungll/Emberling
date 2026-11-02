@@ -9,12 +9,25 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 )
 
-const (
-	testDigest = "sha256:template"
-	testPolicy = "policy-v1"
+const testPolicy = "policy-v1"
+
+// testSettings is the template settings object every happy-path FINAL declares, and
+// testDigest is its digest as the Runtime computes it.
+var (
+	testSettings = json.RawMessage(`{"prompt":"ember sprites","resolution":"1K"}`)
+	testDigest   = mustSettingsDigest(testSettings)
 )
+
+func mustSettingsDigest(settings json.RawMessage) string {
+	digest, err := runtime.SettingsDigest(settings)
+	if err != nil {
+		panic(err)
+	}
+	return digest
+}
 
 var testPhotos = []string{"photo_a", "photo_b", "photo_c"}
 
@@ -48,7 +61,7 @@ func finalValue(t *testing.T, digest string, photoIDs ...string) json.RawMessage
 	for i, id := range photoIDs {
 		examples[i] = example{PhotoAssetID: id, AssetRef: "gen_" + id}
 	}
-	doc, err := json.Marshal(map[string]any{"examples": examples, "settingsDigest": digest, "summary": "three sprites"})
+	doc, err := json.Marshal(map[string]any{"examples": examples, "settings": testSettings, "settingsDigest": digest, "summary": "three sprites"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +210,7 @@ func TestMediaResult_FinalReportsItsOwnURL_IgnoredInFavourOfFact(t *testing.T) {
 	for i, id := range testPhotos {
 		examples[i] = map[string]string{"photoAssetId": id, "assetRef": "gen_" + id, "imageUrl": reported}
 	}
-	doc, err := json.Marshal(map[string]any{"examples": examples, "settingsDigest": testDigest, "imageUrl": reported, "coverUrl": reported})
+	doc, err := json.Marshal(map[string]any{"examples": examples, "settings": testSettings, "settingsDigest": testDigest, "imageUrl": reported, "coverUrl": reported})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +240,7 @@ func TestMediaResult_SameInput_ByteIdenticalCaption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `"{\"accepted\":true,\"notPassed\":[\"photo_c\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"policy-v1\",\"reasons\":[],\"settingsDigest\":\"sha256:template\"}"`
+	want := `"{\"accepted\":true,\"notPassed\":[\"photo_c\"],\"passedCount\":2,\"photoCount\":3,\"policyVersion\":\"policy-v1\",\"reasons\":[],\"settingsDigest\":\"` + testDigest + `\"}"`
 	if string(first.Output.Ports[captionPort]) != want || string(second.Output.Ports[captionPort]) != want {
 		t.Fatalf("caption = %s / %s, want %s", first.Output.Ports[captionPort], second.Output.Ports[captionPort], want)
 	}
@@ -337,7 +350,7 @@ func TestMediaResult_ManyFailures_ReasonsBounded(t *testing.T) {
 	for i := 0; i < 3*maxReasons; i++ {
 		examples = append(examples, example{PhotoAssetID: fmt.Sprintf("outside_%d", i), AssetRef: "x"})
 	}
-	doc, _ := json.Marshal(map[string]any{"examples": examples, "settingsDigest": testDigest})
+	doc, _ := json.Marshal(map[string]any{"examples": examples, "settings": testSettings, "settingsDigest": testDigest})
 	got, _ := runNode(t, textValue(t, string(doc)), nil, nil)
 	if len(got.Reasons) != maxReasons || got.Reasons[maxReasons-1].Code != reasonsTruncated {
 		t.Fatalf("len(reasons) = %d, want %d ending in %s", len(got.Reasons), maxReasons, reasonsTruncated)

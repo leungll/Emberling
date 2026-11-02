@@ -124,8 +124,8 @@ func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExample
 		t.Fatalf("turn %d Decision.Kind = %q, want FINAL", len(turns), final.Decision.Kind)
 	}
 	// The FINAL is one JSON string, as the Agent's text output requires, holding one
-	// second-round example per photo and the settings digest those examples share: the
-	// document the media result delivery check consumes.
+	// second-round example per photo, the second round's settings and the settings digest
+	// those examples share: the document the media result delivery check consumes.
 	var text string
 	if err := json.Unmarshal(final.Decision.Output, &text); err != nil {
 		t.Fatalf("FINAL Output %s is not a JSON string: %v", final.Decision.Output, err)
@@ -134,6 +134,7 @@ func TestProvider_Generate_PhotoSetTrajectory_TwoRoundsThenVideoThenFinalExample
 		`{"assetRef":"img_b1","photoAssetId":"asset_photo_1"},` +
 		`{"assetRef":"img_b2","photoAssetId":"asset_photo_2"},` +
 		`{"assetRef":"img_b3","photoAssetId":"asset_photo_3"}],` +
+		`"settings":{"prompt":"` + secondRoundPrompt + `"},` +
 		`"settingsDigest":"sha256:second"}`
 	if text != wantText {
 		t.Fatalf("FINAL text =\n%s\nwant\n%s", text, wantText)

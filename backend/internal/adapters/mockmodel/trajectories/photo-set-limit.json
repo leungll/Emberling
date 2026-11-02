@@ -5,6 +5,6 @@
     {"toolCall": {"toolName": "generate_image", "arguments": {"photoAssetId": "{{task:/photos/1/photoAssetId}}", "settings": {"prompt": "Warm film look with strong grain"}}}},
     {"toolCall": {"toolName": "review_asset", "arguments": {"assetRef": "{{tool:2:/assetRef}}", "photoAssetId": "{{task:/photos/1/photoAssetId}}", "styleRequirement": "Warm film look", "mock": "pass"}}},
     {"toolCall": {"toolName": "generate_image", "arguments": {"photoAssetId": "{{task:/photos/2/photoAssetId}}", "settings": {"prompt": "Warm film look with strong grain"}}}},
-    {"final": {"outputText": {"examples": [{"photoAssetId": "{{task:/photos/0/photoAssetId}}", "assetRef": "{{tool:0:/assetRef}}"}, {"photoAssetId": "{{task:/photos/1/photoAssetId}}", "assetRef": "{{tool:2:/assetRef}}"}, {"photoAssetId": "{{task:/photos/2/photoAssetId}}", "assetRef": "{{tool:4:/assetRef}}"}], "settingsDigest": "{{tool:0:/settingsDigest}}"}}}
+    {"final": {"outputText": {"examples": [{"photoAssetId": "{{task:/photos/0/photoAssetId}}", "assetRef": "{{tool:0:/assetRef}}"}, {"photoAssetId": "{{task:/photos/1/photoAssetId}}", "assetRef": "{{tool:2:/assetRef}}"}, {"photoAssetId": "{{task:/photos/2/photoAssetId}}", "assetRef": "{{tool:4:/assetRef}}"}], "settings": {"prompt": "Warm film look with strong grain"}, "settingsDigest": "{{tool:0:/settingsDigest}}"}}}
   ]
 }
