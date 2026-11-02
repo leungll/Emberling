@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func envOf(values map[string]string) func(string) string {
 	return func(key string) string { return values[key] }
@@ -86,6 +89,45 @@ func TestLoadConfig_InvalidPublicURL_IsRejected(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := loadConfig(envOf(map[string]string{publicURLEnv: raw})); err == nil {
+				t.Fatal("loadConfig() error = nil, want an error")
+			}
+		})
+	}
+}
+
+func TestLoadConfig_NoResponseDelayAndInFlightLimit_WithControls_AreRead(t *testing.T) {
+	cfg, err := loadConfig(envOf(map[string]string{
+		"MOCKPROVIDER_TEST_CONTROLS":        "true",
+		"MOCKPROVIDER_RECORD_PATH":          "/tmp/record.jsonl",
+		"MOCKPROVIDER_NO_RESPONSE_DELAY_MS": "2500",
+		"MOCKPROVIDER_INFLIGHT_LIMIT":       "5",
+	}))
+	if err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+	if cfg.noResponseDelay != 2500*time.Millisecond || cfg.inFlightLimit != 5 {
+		t.Fatalf("cfg = %+v, want a 2.5s no-response delay and an in-flight limit of 5", cfg)
+	}
+}
+
+func TestLoadConfig_NoResponseDelayAndInFlightLimit_Invalid_AreRejected(t *testing.T) {
+	controls := func(extra map[string]string) map[string]string {
+		env := map[string]string{"MOCKPROVIDER_TEST_CONTROLS": "true", "MOCKPROVIDER_RECORD_PATH": "/tmp/record.jsonl"}
+		for key, value := range extra {
+			env[key] = value
+		}
+		return env
+	}
+	for name, env := range map[string]map[string]string{
+		"delay without controls": {"MOCKPROVIDER_NO_RESPONSE_DELAY_MS": "100"},
+		"limit without controls": {"MOCKPROVIDER_INFLIGHT_LIMIT": "5"},
+		"negative delay":         controls(map[string]string{"MOCKPROVIDER_NO_RESPONSE_DELAY_MS": "-1"}),
+		"delay not a number":     controls(map[string]string{"MOCKPROVIDER_NO_RESPONSE_DELAY_MS": "soon"}),
+		"zero limit":             controls(map[string]string{"MOCKPROVIDER_INFLIGHT_LIMIT": "0"}),
+		"limit not a number":     controls(map[string]string{"MOCKPROVIDER_INFLIGHT_LIMIT": "five"}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := loadConfig(envOf(env)); err == nil {
 				t.Fatal("loadConfig() error = nil, want an error")
 			}
 		})
