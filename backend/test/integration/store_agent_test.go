@@ -1369,7 +1369,7 @@ func TestToolAttemptStore_ClearPoll_OnlyUnschedulesDispatchedAttempt(t *testing.
 		t.Fatalf("MarkFailed: %v", err)
 	}
 
-	clear := func(id string) bool {
+	clearPoll := func(id string) bool {
 		var cleared bool
 		if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 			var err error
@@ -1381,21 +1381,21 @@ func TestToolAttemptStore_ClearPoll_OnlyUnschedulesDispatchedAttempt(t *testing.
 		return cleared
 	}
 
-	if !clear("ta_dispatched") {
+	if !clearPoll("ta_dispatched") {
 		t.Error("ClearPoll on a scheduled DISPATCHED Attempt = false, want true")
 	}
 	if got := getToolAttemptRow(ctx, t, uow, "ta_dispatched"); got.NextPollAt != nil || got.Status != domain.ToolAttemptDispatched {
 		t.Errorf("after ClearPoll: next %v status %s, want no next poll and still DISPATCHED", got.NextPollAt, got.Status)
 	}
 	// Repeating the clear on the still DISPATCHED Attempt is harmless.
-	clear("ta_dispatched")
+	clearPoll("ta_dispatched")
 	if got := getToolAttemptRow(ctx, t, uow, "ta_dispatched"); got.NextPollAt != nil || got.Status != domain.ToolAttemptDispatched {
 		t.Errorf("after the repeated ClearPoll: next %v status %s, want no next poll and still DISPATCHED", got.NextPollAt, got.Status)
 	}
-	if clear("ta_started") {
+	if clearPoll("ta_started") {
 		t.Error("ClearPoll on a STARTED Attempt = true, want false")
 	}
-	if clear("ta_failed") {
+	if clearPoll("ta_failed") {
 		t.Error("ClearPoll on a FAILED Attempt = true, want false")
 	}
 	if got := getToolAttemptRow(ctx, t, uow, "ta_failed"); got.NextPollAt == nil || !got.NextPollAt.Equal(first) {
