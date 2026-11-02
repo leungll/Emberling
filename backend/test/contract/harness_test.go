@@ -199,6 +199,10 @@ type testEnvOptions struct {
 	ExtraNodeRegistrations []registry.NodeRegistration
 	ExtraToolRegistrations []registry.ToolRegistration
 
+	// RunnerID is this Backend process's identity. Left empty, the service generates one,
+	// so two Backends over the same Pool are two processes either way.
+	RunnerID string
+
 	// TraceMaxFieldBytes overrides api.Deps.TraceMaxFieldBytes when > 0, so a test can
 	// push a Tool-call member over the Trace field bound without a large Tool result.
 	TraceMaxFieldBytes int
@@ -392,6 +396,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		Queue:           queue,
 		Notifier:        serviceNotifier,
 		Logger:          opts.Logger,
+		RunnerID:        opts.RunnerID,
 		Callback: service.CallbackConfig{
 			BaseURL:       callbackBaseURL,
 			SigningSecret: []byte(testCallbackSigningSecret),

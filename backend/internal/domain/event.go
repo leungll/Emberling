@@ -105,7 +105,8 @@ func (s CompletionSource) IsValid() bool {
 }
 
 // FailureSource records which path produced a failure. It adds TIMEOUT to the completion
-// sources, because a deadline can fail work that no path ever completed.
+// sources, because a deadline can fail work that no path ever completed, and RUNNER_LOST,
+// because a synchronous call can be left without the process that was executing it.
 type FailureSource string
 
 const (
@@ -113,11 +114,12 @@ const (
 	FailureCallback      FailureSource = "CALLBACK"
 	FailureProviderPoll  FailureSource = "PROVIDER_POLL"
 	FailureTimeout       FailureSource = "TIMEOUT"
+	FailureRunnerLost    FailureSource = "RUNNER_LOST"
 )
 
 func (s FailureSource) IsValid() bool {
 	switch s {
-	case FailureSyncExecution, FailureCallback, FailureProviderPoll, FailureTimeout:
+	case FailureSyncExecution, FailureCallback, FailureProviderPoll, FailureTimeout, FailureRunnerLost:
 		return true
 	default:
 		return false
