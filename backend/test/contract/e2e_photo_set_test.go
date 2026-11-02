@@ -302,6 +302,16 @@ func TestE2E_PhotoSet_MainStory_DeliversOneReviewedExamplePerPhotoMatchingThePro
 		t.Errorf("generationBudget.generationCallsUsed = %d, want 6", trace.GenerationBudget.GenerationCallsUsed)
 	}
 
+	// The Runs list prices the mock path: six generations at the Mock Provider's fixed
+	// per-generation charge, the mock model's known zero per Turn, and no unpriced call
+	// except the video task, whose Tool records no charge because it has no Model ID to
+	// attribute one to.
+	runID, _ := snapshot["run"].(map[string]any)["id"].(string)
+	cost := runListCostOf(t, env.testEnv, runID)
+	if len(cost.Totals) != 1 || cost.Totals[0].Amount != "0.12" || cost.Totals[0].Currency != "USD" || cost.UnknownCalls != 1 {
+		t.Errorf("run list cost = %+v, want one USD total of 0.12 for six priced generations and one unpriced call (the video task)", cost)
+	}
+
 	var boundTasks []string
 	for _, turn := range trace.Turns {
 		for _, attempt := range turn.ToolAttempts {
@@ -326,7 +336,6 @@ func TestE2E_PhotoSet_MainStory_DeliversOneReviewedExamplePerPhotoMatchingThePro
 	if !slices.Contains(generatedSubjects, cover.ArtifactID) {
 		t.Fatalf("cover artifact %s is not a generation subject of this Run %v", cover.ArtifactID, generatedSubjects)
 	}
-	runID, _ := snapshot["run"].(map[string]any)["id"].(string)
 	resp, err := (&http.Client{Timeout: e2eHTTPTimeout}).Get(env.server.URL + generateimage.ArtifactContentPath(runID, cover.ArtifactID))
 	if err != nil {
 		t.Fatalf("GET cover content: %v", err)

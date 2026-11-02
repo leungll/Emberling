@@ -42,6 +42,12 @@ const maxImageRequestBytes = 16 << 10
 // generatedImageSide is the edge length, in pixels, of every generated image.
 const generatedImageSide = 16
 
+// generatedImageCost is the charge every successful POST /v1/assets answer reports in
+// usage.cost, in US dollars like a task result's usage.cost. It is one fixed amount per
+// generation, chosen apart from the task and Images API charges so a Run's total tells
+// the routes apart; a failed generation reports no charge.
+const generatedImageCost = 0.02
+
 // generatedIDPattern is the shape of a generated asset id, and therefore of the only
 // names GET /v1/assets/{name}.png serves.
 var generatedIDPattern = regexp.MustCompile(`^img_[0-9a-f]{16}$`)
@@ -60,8 +66,14 @@ type imageRequest struct {
 
 // imageResponse is the 200 answer to POST /v1/assets.
 type imageResponse struct {
-	AssetID  string `json:"assetId"`
-	ImageURL string `json:"imageUrl"`
+	AssetID  string     `json:"assetId"`
+	ImageURL string     `json:"imageUrl"`
+	Usage    imageUsage `json:"usage"`
+}
+
+// imageUsage is the usage member of a generation answer: the charge of that generation.
+type imageUsage struct {
+	Cost float64 `json:"cost"`
 }
 
 // handleGenerateImage simulates a synchronous external image generation. It answers with a
@@ -117,6 +129,7 @@ func (s *Server) handleGenerateImage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, imageResponse{
 		AssetID:  assetID,
 		ImageURL: s.imageBaseURL(r) + "/v1/assets/" + assetID + ".png",
+		Usage:    imageUsage{Cost: generatedImageCost},
 	})
 }
 

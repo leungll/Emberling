@@ -2,10 +2,12 @@ package mockprovider
 
 import "encoding/json"
 
-// fixedTaskCost is the cost every successful task result reports under test controls. It
-// is one constant rather than a price model: it exists so a caller's cost recording and
-// totals can be checked against a known value. Like an OpenRouter response's `usage.cost`,
-// it is a plain number in US dollars with no currency field of its own.
+// fixedTaskCost is the cost every successful task result reports, with or without test
+// controls. It is one constant rather than a price model: it exists so a caller's cost
+// recording and totals can be checked against a known value, and so a demo Run through
+// this Provider shows a priced call beside a real Provider's. Like an OpenRouter
+// response's `usage.cost`, it is a plain number in US dollars with no currency field of
+// its own.
 const fixedTaskCost = "0.04"
 
 // fixedUsage is the `usage` member withFixedCost adds.
