@@ -69,7 +69,10 @@ type FinishedCall struct {
 // RunListFilter narrows the Run list. A zero-valued field does not filter.
 type RunListFilter struct {
 	WorkflowID string
-	Status     domain.RunStatus
+	// DefinitionVersion keeps Runs bound to that version of WorkflowID. It is only
+	// meaningful with WorkflowID set; the service refuses it alone.
+	DefinitionVersion int
+	Status            domain.RunStatus
 	// StartedFrom keeps Runs whose started_at is at or after it.
 	StartedFrom *time.Time
 	// IDPrefix keeps Runs whose ID starts with it, compared byte-wise.

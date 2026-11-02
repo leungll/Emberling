@@ -87,8 +87,12 @@ func runListFilterDigest(filter store.RunListFilter) string {
 	if filter.StartedFrom != nil {
 		started = strconv.FormatInt(filter.StartedFrom.UnixMicro(), 10)
 	}
+	version := ""
+	if filter.DefinitionVersion != 0 {
+		version = strconv.Itoa(filter.DefinitionVersion)
+	}
 	sum := sha256.Sum256([]byte(strings.Join([]string{
-		filter.WorkflowID, string(filter.Status), started, filter.IDPrefix,
+		filter.WorkflowID, version, string(filter.Status), started, filter.IDPrefix,
 	}, "\x00")))
 	return hex.EncodeToString(sum[:8])
 }

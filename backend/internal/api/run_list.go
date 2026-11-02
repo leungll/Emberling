@@ -112,6 +112,14 @@ func (d Deps) listRuns(w http.ResponseWriter, r *http.Request) {
 		Code:       q.Get("code"),
 		Cursor:     q.Get("cursor"),
 	}
+	if raw := q.Get("definitionVersion"); raw != "" {
+		version, err := strconv.Atoi(raw)
+		if err != nil || version < 1 {
+			writeError(w, d.Logger, &badRequestError{message: "definitionVersion must be a positive integer"}, "")
+			return
+		}
+		req.DefinitionVersion = version
+	}
 	if raw := q.Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
 		if err != nil || limit < 1 {
