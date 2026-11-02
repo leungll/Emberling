@@ -15,3 +15,5 @@ studio/playwright-report/
 # Local environment files.
 .env
 .env.*
+# Local diagram and review captures; never published.
+.archify/
