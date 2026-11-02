@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ApiRequestError,
+  createRun,
   getAgentTrace,
   getNodeRunDetail,
   getReadiness,
@@ -300,5 +301,64 @@ describe('getReadiness', () => {
     controller.abort();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError')));
     await expect(getReadiness(controller.signal)).rejects.toThrow('aborted');
+  });
+});
+
+describe('createRun', () => {
+  const body = { workflowId: 'wf_123', definitionVersion: 2, input: { brief: 'ember' } };
+  const run = {
+    id: 'run_1',
+    workflowId: 'wf_123',
+    definitionVersion: 2,
+    status: 'RUNNING',
+    lastSeq: 2,
+  };
+
+  it('sends no Idempotency-Key without one and reports a created Run', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, run));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const created = await createRun(body);
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(init.headers).has('Idempotency-Key')).toBe(false);
+    expect(created).toEqual({ ...run, replayed: false });
+  });
+
+  it('sends the Idempotency-Key header and reports a replayed Run', async () => {
+    const replay = new Response(JSON.stringify({ ...run, status: 'COMPLETED' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Idempotent-Replayed': 'true' },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(replay);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await createRun(body, { idempotencyKey: 'order-42' });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(init.headers);
+    expect(headers.get('Idempotency-Key')).toBe('order-42');
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(result.replayed).toBe(true);
+    expect(result.status).toBe('COMPLETED');
+  });
+
+  it('surfaces IDEMPOTENCY_KEY_MISMATCH as an ApiRequestError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(409, {
+          error: { code: 'IDEMPOTENCY_KEY_MISMATCH', message: 'key already used' },
+        }),
+      ),
+    );
+
+    const failure = (await createRun(body, { idempotencyKey: 'order-42' }).catch(
+      (e: unknown) => e,
+    )) as ApiRequestError;
+
+    expect(failure).toBeInstanceOf(ApiRequestError);
+    expect(failure.status).toBe(409);
+    expect(failure.code).toBe('IDEMPOTENCY_KEY_MISMATCH');
   });
 });

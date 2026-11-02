@@ -30,24 +30,70 @@ type createRunResponseDTO struct {
 	LastSeq           int64            `json:"lastSeq"`
 }
 
+// Idempotency-Key request header and the response header that marks a replay.
+const (
+	headerIdempotencyKey     = "Idempotency-Key"
+	headerIdempotentReplayed = "Idempotent-Replayed"
+	maxIdempotencyKeyLength  = 128
+)
+
+// idempotencyKey reads the optional Idempotency-Key header. Absent means none. Present,
+// it must be one value of 1 to 128 printable ASCII characters (0x20 to 0x7E); anything
+// else is invalid request content and ok is false.
+func idempotencyKey(r *http.Request) (key string, ok bool) {
+	values := r.Header.Values(headerIdempotencyKey)
+	if len(values) == 0 {
+		return "", true
+	}
+	if len(values) != 1 {
+		return "", false
+	}
+	key = values[0]
+	if len(key) == 0 || len(key) > maxIdempotencyKeyLength {
+		return "", false
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x20 || key[i] > 0x7e {
+			return "", false
+		}
+	}
+	return key, true
+}
+
 // createRun serves POST /runs. It only starts the Run: NodeRun advancement happens after
 // this transaction commits, driven by the work queue/Reconciler this package never calls
-// directly (CLAUDE.md package boundaries).
+// directly (CLAUDE.md package boundaries). With an Idempotency-Key, a submission the key
+// already answered is replayed as 200 with the stored Run's current state and
+// Idempotent-Replayed: true.
 func (d Deps) createRun(w http.ResponseWriter, r *http.Request) {
+	key, ok := idempotencyKey(r)
+	if !ok {
+		writeError(w, d.Logger, &badRequestError{
+			message: "Idempotency-Key must be a single value of 1 to 128 printable ASCII characters",
+		}, "")
+		return
+	}
 	var req createRunRequest
 	if !decodeJSON(w, d.Logger, r, &req) {
 		return
 	}
-	run, err := d.Execution.CreateRun(r.Context(), service.CreateRun{
+	result, err := d.Execution.SubmitRun(r.Context(), service.CreateRun{
 		WorkflowID:        req.WorkflowID,
 		DefinitionVersion: req.DefinitionVersion,
 		Input:             req.Input,
+		IdempotencyKey:    key,
 	})
 	if err != nil {
 		writeError(w, d.Logger, err, codeDefinitionNotFound)
 		return
 	}
-	writeJSON(w, http.StatusCreated, createRunResponseDTO{
+	status := http.StatusCreated
+	if result.Replayed {
+		w.Header().Set(headerIdempotentReplayed, "true")
+		status = http.StatusOK
+	}
+	run := result.Run
+	writeJSON(w, status, createRunResponseDTO{
 		ID:                run.ID,
 		WorkflowID:        run.WorkflowID,
 		DefinitionVersion: run.DefinitionVersion,

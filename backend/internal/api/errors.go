@@ -20,6 +20,7 @@ const (
 	codeRunNotFound               = "RUN_NOT_FOUND"
 	codeNodeRunNotFound           = "NODE_RUN_NOT_FOUND"
 	codeVersionConflict           = "VERSION_CONFLICT"
+	codeIdempotencyKeyMismatch    = "IDEMPOTENCY_KEY_MISMATCH"
 	codeRuntimeBindingUnavailable = "RUNTIME_BINDING_UNAVAILABLE"
 	codePayloadTooLarge           = "PAYLOAD_TOO_LARGE"
 	codeDependencyUnavailable     = "DEPENDENCY_UNAVAILABLE"
@@ -136,6 +137,13 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error, notFoundC
 	var listErr *service.RunListQueryError
 	if errors.As(err, &listErr) {
 		writeErrorEnvelope(w, http.StatusBadRequest, codeValidationFailed, listErr.Message, nil)
+		return
+	}
+
+	var keyMismatchErr *service.IdempotencyKeyMismatchError
+	if errors.As(err, &keyMismatchErr) {
+		writeErrorEnvelope(w, http.StatusConflict, codeIdempotencyKeyMismatch,
+			"the Idempotency-Key was already used for a different submission to this workflow", nil)
 		return
 	}
 
