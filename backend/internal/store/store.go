@@ -328,6 +328,14 @@ type DuePoll struct {
 	PollCount int
 }
 
+// DueToolPoll identifies one persisted Tool Attempt whose Provider poll is due. ActionID is
+// what the discovering scan found and is used for logging only; the use case re-reads
+// every routing fact itself.
+type DueToolPoll struct {
+	AttemptID string
+	ActionID  string
+}
+
 // CallbackBindingRepository persists the only authoritative route from an external task
 // identity back to the Attempt that dispatched it. A binding is immutable:
 // there is no update method, because re-pointing an external identity at another Attempt
@@ -582,9 +590,37 @@ type ToolAttemptRepository interface {
 	MarkFailed(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, execErr domain.ExecutionError) error
 
 	// MarkDispatched conditionally moves a STARTED Attempt of an ASYNC Tool to DISPATCHED
-	// and stamps dispatched_at. It returns domain.ErrStaleClaim when the row is no longer
-	// STARTED, e.g. because the Agent timeout closed it while the Tool was dispatching.
-	MarkDispatched(ctx context.Context, attemptID string, now time.Time) error
+	// and stamps dispatched_at. In the same UPDATE it writes firstPollAt as the first
+	// next_poll_at; firstPollAt is nil when the registration declares no poll policy. It
+	// returns domain.ErrStaleClaim when the row is no longer STARTED, e.g. because the
+	// Agent timeout closed it while the Tool was dispatching.
+	MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error
+
+	// ClaimPoll conditionally claims one Provider poll of a DISPATCHED Attempt whose
+	// next_poll_at is due and whose poll_count is below maxPolls. It increments
+	// poll_count and schedules next_poll_at at now+interval, or clears it when this
+	// claim reaches maxPolls. The bounds come from the caller, which reads them from
+	// the current registration. A false result is not an error: the poll is not due,
+	// the bound was reached, the Attempt left DISPATCHED, or another claimer won.
+	// Claiming a poll is a scheduling fact; the caller writes no Event for it.
+	ClaimPoll(ctx context.Context, attemptID string, now time.Time, interval time.Duration, maxPolls int) (bool, error)
+
+	// ClearPoll unschedules polling of a DISPATCHED Attempt by setting next_poll_at to
+	// NULL, for a registration that no longer declares a usable poll policy or a Callback
+	// Binding that does not route a poll to the Attempt. A false result means the Attempt
+	// is no longer DISPATCHED and nothing changed.
+	ClearPoll(ctx context.Context, attemptID string) (bool, error)
+
+	// ListDuePolls returns DISPATCHED Tool Attempts whose next_poll_at is at or before
+	// now, oldest first, bounded by limit. It only discovers persisted work; claiming each
+	// poll is the caller's conditional update.
+	ListDuePolls(ctx context.Context, now time.Time, limit int) ([]DueToolPoll, error)
+
+	// MarkLost conditionally moves a DISPATCHED Attempt whose Provider no longer knows the
+	// dispatched task to FAILED, writing its error, completed_at and the uncertain
+	// determination once. A row no longer DISPATCHED returns domain.ErrStaleClaim, so a
+	// callback, a timeout or another poll that committed first keeps its outcome.
+	MarkLost(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError, uncertain bool) error
 
 	// MarkTimedOut conditionally fails an Attempt that is still STARTED or DISPATCHED.
 	// The Agent deadline covers the synchronous call and the wait for a callback alike,

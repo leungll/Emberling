@@ -728,7 +728,7 @@ func seedToolAttempt(
 			return err
 		}
 		if dispatched {
-			if err := tx.ToolAttempts().MarkDispatched(ctx, attemptID, fixtureTime); err != nil {
+			if err := tx.ToolAttempts().MarkDispatched(ctx, attemptID, fixtureTime, nil); err != nil {
 				return err
 			}
 		}

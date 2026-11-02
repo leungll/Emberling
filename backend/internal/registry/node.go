@@ -207,10 +207,16 @@ const (
 	PollSucceeded PollStatus = "SUCCEEDED"
 	PollFailed    PollStatus = "FAILED"
 	// PollStatusUnknown reports a query that produced no interpretable task state: the
-	// Provider does not know the task, answered a non-2xx status, or sent a body that
-	// cannot be read. It changes no Attempt state and is not a failure; a later
-	// callback, poll or the Attempt deadline still decides the outcome.
+	// Provider answered a non-2xx status or sent a body that cannot be read, so whether it
+	// still knows the task is itself unknown. It changes no Attempt state and is not a
+	// failure; a later callback, poll or the Attempt deadline still decides the outcome.
 	PollStatusUnknown PollStatus = "UNKNOWN"
+	// PollUnknownTask reports a definite answer that the Provider does not know the task
+	// it was asked about: the task was never recorded or the Provider lost it, as after a
+	// restart. Only a Tool Poll returns it. The Runtime decides from the Tool's registered
+	// side-effect policy whether the lost call is handed back to the Agent as safe to
+	// repeat or kept waiting for a later answer; the Executor never re-dispatches.
+	PollUnknownTask PollStatus = "UNKNOWN_TASK"
 )
 
 // PollResult is shared by the optional pollable Node and Tool Executors: Output is set

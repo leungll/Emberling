@@ -34,7 +34,8 @@ import (
 // PollAttempt is the Provider poll use case. The Reconciler hands it each Attempt whose
 // persisted poll time is due; the use case owns the conditional poll claim, the single
 // Provider query and the entry into ResumeNode, so the Reconciler never claims a poll,
-// queries a Provider or reschedules anything itself.
+// queries a Provider or reschedules anything itself. PollToolAttempt is the same use case
+// for the Attempt of an asynchronous Agent Tool that declares a poll policy.
 //
 // The Agent use cases are the same ones immediate advancement calls, entered with
 // domain.ClaimReconciler instead of domain.ClaimImmediate. Each one owns its own
@@ -50,6 +51,7 @@ type Advancer interface {
 	TimeoutAttempt(ctx context.Context, attemptID string) error
 	ResumeNode(ctx context.Context, req service.ResumeNode) (service.ResumeOutcome, error)
 	PollAttempt(ctx context.Context, req service.PollAttempt) (service.PollAttemptOutcome, error)
+	PollToolAttempt(ctx context.Context, req service.PollToolAttempt) (service.PollToolAttemptOutcome, error)
 	AdvanceAgentTurn(ctx context.Context, turnID string, claimSource domain.ClaimSource) error
 	ExecuteAgentAction(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
 	CompleteAgentFinal(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
@@ -142,6 +144,16 @@ type Report struct {
 	PollsResumed   int
 	PollsSkipped   int
 	PollsDuplicate int
+	// DueToolPollsFound is how many DISPATCHED Tool Attempts had a due poll, and the
+	// ToolPolls counts classify each PollToolAttempt outcome as the Node ones above do.
+	// ToolPollsReturned is the subset of claimed polls whose Provider no longer knew the
+	// task and whose call was handed back to the Agent.
+	DueToolPollsFound  int
+	ToolPollsClaimed   int
+	ToolPollsResumed   int
+	ToolPollsReturned  int
+	ToolPollsSkipped   int
+	ToolPollsDuplicate int
 	// ConsumablePendingFound is how many stored early callbacks
 	// ListConsumableForWaiting found routed to a still-waiting Attempt.
 	ConsumablePendingFound int
@@ -364,11 +376,20 @@ func (r *Reconciler) scanOrphanToolAttempts(ctx context.Context, now time.Time, 
 }
 
 // scanDuePolls hands every DISPATCHED Attempt whose persisted poll time is due to the
-// Provider poll use case. It runs after the timeout scan so an Attempt already past its
-// deadline is failed rather than polled, and before the Pending Callback replay, which
-// does not depend on it. A poll and a callback or timeout racing for the same Attempt are
-// decided by the use case's conditional updates; the Reconciler only discovers the work.
+// Provider poll use case: Node Attempts first, then the Attempts of asynchronous Agent
+// Tools. It runs after the timeout scans so an Attempt already past its deadline is failed
+// rather than polled, and before the Pending Callback replay, which does not depend on it.
+// A poll and a callback or timeout racing for the same Attempt are decided by the use
+// case's conditional updates; the Reconciler only discovers the work.
 func (r *Reconciler) scanDuePolls(ctx context.Context, now time.Time, report *Report) error {
+	if err := r.scanDueNodePolls(ctx, now, report); err != nil {
+		return err
+	}
+	return r.scanDueToolPolls(ctx, now, report)
+}
+
+// scanDueNodePolls is the Node Attempt row of the due-poll scan.
+func (r *Reconciler) scanDueNodePolls(ctx context.Context, now time.Time, report *Report) error {
 	var due []store.DuePoll
 	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		var err error
@@ -399,6 +420,47 @@ func (r *Reconciler) scanDuePolls(ctx context.Context, now time.Time, report *Re
 			report.PollsDuplicate++
 		default:
 			report.PollsSkipped++
+		}
+	}
+	return nil
+}
+
+// scanDueToolPolls is the Tool Attempt row of the due-poll scan. It only discovers the due
+// Attempts through the store and hands each to the Tool poll use case, which owns the
+// claim, the Provider query and every state change.
+func (r *Reconciler) scanDueToolPolls(ctx context.Context, now time.Time, report *Report) error {
+	var due []store.DueToolPoll
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		due, err = tx.ToolAttempts().ListDuePolls(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list due tool polls: %w", err)
+	}
+	report.DueToolPollsFound = len(due)
+
+	for _, row := range due {
+		outcome, err := r.cfg.Executor.PollToolAttempt(ctx, service.PollToolAttempt{
+			AttemptID: row.AttemptID,
+			ActionID:  row.ActionID,
+		})
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: poll tool attempt %s: %w", row.AttemptID, err))
+			continue
+		}
+		switch outcome.Kind {
+		case service.PollAttemptClaimedNotFinal:
+			report.ToolPollsClaimed++
+		case service.PollAttemptResumed:
+			report.ToolPollsClaimed++
+			report.ToolPollsResumed++
+		case service.PollAttemptReturned:
+			report.ToolPollsClaimed++
+			report.ToolPollsReturned++
+		case service.PollAttemptDuplicate:
+			report.ToolPollsDuplicate++
+		default:
+			report.ToolPollsSkipped++
 		}
 	}
 	return nil

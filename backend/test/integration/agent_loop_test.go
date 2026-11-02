@@ -90,6 +90,9 @@ type agentHarnessOptions struct {
 	// Reconciler as in cmd/emberling. Left empty, every harness gets a fresh one, so a
 	// harness built over an earlier one's Pool is a restarted process with a new identity.
 	RunnerID string
+	// PollHooks lets a test stop or synchronise a Provider poll between its claim commit
+	// and the Provider query. The zero value installs no hook.
+	PollHooks service.PollHooks
 	// WorkspaceRepositories are the repository identifiers the Compiler accepts in an agent
 	// node's workspace binding, as cmd/emberling hands it the configured set.
 	WorkspaceRepositories []string
@@ -221,16 +224,17 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		serviceUoW = opts.WrapUoW(serviceUoW)
 	}
 	svc := service.NewExecutionService(service.Deps{
-		UoW:      serviceUoW,
-		Nodes:    nodeRegistry,
-		Models:   modelRegistry,
-		Tools:    toolRegistry,
-		Compiler: compiler,
-		Clock:    clock,
-		IDs:      ids,
-		Notifier: opts.Notifier,
-		Queue:    queue,
-		RunnerID: runnerID,
+		UoW:       serviceUoW,
+		Nodes:     nodeRegistry,
+		Models:    modelRegistry,
+		Tools:     toolRegistry,
+		Compiler:  compiler,
+		Clock:     clock,
+		IDs:       ids,
+		Notifier:  opts.Notifier,
+		Queue:     queue,
+		RunnerID:  runnerID,
+		PollHooks: opts.PollHooks,
 		// An ASYNC Tool's claim transaction issues an Attempt-scoped callback credential,
 		// which needs a signing secret and a callback origin.
 		Callback: service.CallbackConfig{

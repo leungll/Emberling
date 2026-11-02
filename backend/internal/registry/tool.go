@@ -139,7 +139,11 @@ type AsyncToolExecutor interface {
 }
 
 // PollableAsyncToolExecutor is optional and only for async Tools whose Provider supports a
-// status query.
+// status query. Registering one requires a Poll policy in the Metadata, and the Runtime
+// polls only Tools that declare one. Poll is called outside every transaction and lock
+// with state restored from committed facts; it queries once and never re-dispatches. A
+// SUCCEEDED result carries ToolResult, a FAILED one carries Error, RUNNING and UNKNOWN
+// change nothing, and UNKNOWN_TASK says the Provider does not know the task.
 type PollableAsyncToolExecutor interface {
 	AsyncToolExecutor
 	Poll(ctx context.Context, state ToolAsyncState) (PollResult, error)
