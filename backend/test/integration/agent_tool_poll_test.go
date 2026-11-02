@@ -141,6 +141,7 @@ func newPollableHarness(t *testing.T, workflowID string, tool *pollableAgentTool
 	h := newAgentHarness(t, agentHarnessOptions{
 		Tools:     []registry.ToolRegistration{pollableRegistration(tool, side, maxPolls)},
 		Clock:     newExecClock(time.Now().UTC().Truncate(time.Millisecond)),
+		Queue:     opts.Queue,
 		WrapUoW:   opts.WrapUoW,
 		PollHooks: opts.PollHooks,
 	})
@@ -745,5 +746,468 @@ func TestToolAttemptPoll_ProviderQueryFails_OnlyReschedules(t *testing.T) {
 	}
 	if got := getToolAttempt(t, h, attempt.ID); got.Status != domain.ToolAttemptDispatched || got.PollCount != 2 {
 		t.Errorf("attempt after the second failure = status %s count %d, want DISPATCHED and 2", got.Status, got.PollCount)
+	}
+}
+
+// listDueToolPolls reads the due Tool polls exactly as the Reconciler's scan does.
+func listDueToolPolls(t *testing.T, h *agentHarness, now time.Time) []store.DueToolPoll {
+	t.Helper()
+	var due []store.DueToolPoll
+	if err := h.uow.WithinReadTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		due, err = tx.ToolAttempts().ListDuePolls(ctx, now, 100)
+		return err
+	}); err != nil {
+		t.Fatalf("list due tool polls: %v", err)
+	}
+	return due
+}
+
+// agentActionFailures counts the AGENT_ACTION_FAILED Events whose failure source is the
+// given one.
+func agentActionFailures(t *testing.T, events []domain.Event, source domain.FailureSource) int {
+	t.Helper()
+	n := 0
+	for _, ev := range events {
+		if ev.Type != domain.EventAgentActionFailed {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(ev.Payload, &payload); err != nil {
+			t.Fatalf("decode %s payload: %v", ev.Type, err)
+		}
+		if payload["failureSource"] == string(source) {
+			n++
+		}
+	}
+	return n
+}
+
+// assertLostTaskReturned proves the UNKNOWN_TASK handback committed exactly once: the
+// Attempt FAILED as safe to repeat, the Action FAILED, one PROVIDER_POLL AGENT_ACTION_FAILED
+// and exactly one next Turn.
+func assertLostTaskReturned(t *testing.T, h *agentHarness, run domain.Run, outcome service.AdvanceOutcome, attemptID string) {
+	t.Helper()
+	attempt := getToolAttempt(t, h, attemptID)
+	if attempt.Status != domain.ToolAttemptFailed || attempt.Error == nil || attempt.Error.Code != "EXECUTION_INTERRUPTED" {
+		t.Errorf("attempt = status %s error %+v, want FAILED with EXECUTION_INTERRUPTED", attempt.Status, attempt.Error)
+	}
+	if got := getAgentAction(h.ctx, t, h.uow, attempt.ActionID).Status; got != domain.AgentActionFailed {
+		t.Errorf("action status = %s, want FAILED", got)
+	}
+	agentRun, _ := agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
+	if agentRun.Termination != nil {
+		t.Errorf("agent run terminated as %s after the handback", *agentRun.Termination)
+	}
+	if got := readyTurnNos(t, h, agentRun.ID); len(got) != 1 || got[0] != 2 {
+		t.Errorf("ready turn numbers = %v, want exactly [2]", got)
+	}
+	events := listEvents(h.ctx, t, h.uow, run.ID)
+	assertContiguousSeq(t, events)
+	if got := agentActionFailures(t, events, domain.FailureProviderPoll); got != 1 {
+		t.Errorf("PROVIDER_POLL action failures = %d, want exactly 1", got)
+	}
+	if got := agentCountEventType(execEventTypes(events), domain.EventAgentActionCompleted); got != 0 {
+		t.Errorf("AGENT_ACTION_COMPLETED events = %d, want 0", got)
+	}
+}
+
+// TestToolAttemptPoll_ReturnRacesCallback_ExactlyOneWinner holds the UNKNOWN_TASK handback
+// transaction and the Provider's late SUCCEEDED callback at a barrier after both routed to
+// the DISPATCHED Attempt, and releases them together. The conditional update from
+// DISPATCHED elects exactly one: the loser changes neither Attempt, Action nor Event
+// stream, consumes no Event seq, and reports a duplicate.
+func TestToolAttemptPoll_ReturnRacesCallback_ExactlyOneWinner(t *testing.T) {
+	tool := newPollableTool(registry.PollResult{Status: registry.PollUnknownTask})
+	arrived := make(chan struct{})
+	release := make(chan struct{})
+	claimed := make(chan struct{})
+	var barrier *pollArmedBarrierUoW
+	h, run, outcome, attempt := pollableDispatched(t, "wf-tool-poll-return-race-callback", tool, pollableSafe, 5, agentHarnessOptions{
+		WrapUoW: func(inner store.UnitOfWork) store.UnitOfWork {
+			barrier = &pollArmedBarrierUoW{UnitOfWork: inner, arrived: arrived, release: release}
+			return barrier
+		},
+		PollHooks: service.PollHooks{AfterClaim: func(context.Context, string) error {
+			barrier.armed.Store(true)
+			close(claimed)
+			return nil
+		}},
+	})
+	token := tool.lastToken(t)
+	h.clock.Advance(pollableInterval)
+
+	var wg sync.WaitGroup
+	var pollOutcome service.PollToolAttemptOutcome
+	var callbackOutcome service.CallbackOutcome
+	var pollErr, callbackErr error
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		pollOutcome, pollErr = h.svc.PollToolAttempt(h.ctx, service.PollToolAttempt{AttemptID: attempt.ID, ActionID: attempt.ActionID})
+	}()
+	go func() {
+		defer wg.Done()
+		<-claimed
+		callbackOutcome, callbackErr = h.svc.HandleCallback(h.ctx, service.HandleCallback{
+			Token: token, ExternalTaskID: pollableExternalTaskID, Payload: json.RawMessage(agentCallbackSucceeded),
+		})
+	}()
+	<-arrived
+	<-arrived
+	barrier.armed.Store(false)
+	close(release)
+	wg.Wait()
+
+	if pollErr != nil || callbackErr != nil {
+		t.Fatalf("poll err = %v, callback err = %v, want neither", pollErr, callbackErr)
+	}
+	returnWon := pollOutcome.Kind == service.PollAttemptReturned
+	callbackWon := callbackOutcome.Accepted && !callbackOutcome.Duplicate
+	if returnWon == callbackWon {
+		t.Fatalf("poll outcome = %+v, callback outcome = %+v, want exactly one winner", pollOutcome, callbackOutcome)
+	}
+	if !returnWon && pollOutcome.Kind != service.PollAttemptDuplicate {
+		t.Errorf("losing poll outcome = %+v, want DUPLICATE", pollOutcome)
+	}
+
+	attempt = getToolAttempt(t, h, attempt.ID)
+	action := getAgentAction(h.ctx, t, h.uow, attempt.ActionID)
+	events := listEvents(h.ctx, t, h.uow, run.ID)
+	assertContiguousSeq(t, events)
+	failures := agentActionFailures(t, events, domain.FailureProviderPoll)
+	completions := agentPollCompletions(t, events, domain.CompletionCallback)
+	if returnWon {
+		if attempt.Status != domain.ToolAttemptFailed || attempt.Error == nil || attempt.Error.Code != "EXECUTION_INTERRUPTED" || action.Status != domain.AgentActionFailed {
+			t.Errorf("after the handback won: attempt %s %+v action %s, want FAILED/EXECUTION_INTERRUPTED and FAILED", attempt.Status, attempt.Error, action.Status)
+		}
+		if failures != 1 || completions != 0 {
+			t.Errorf("PROVIDER_POLL failures = %d, CALLBACK completions = %d, want 1 and 0", failures, completions)
+		}
+	} else {
+		if attempt.Status != domain.ToolAttemptSucceeded || attempt.Error != nil || action.Status != domain.AgentActionSucceeded {
+			t.Errorf("after the callback won: attempt %s %+v action %s, want SUCCEEDED and SUCCEEDED", attempt.Status, attempt.Error, action.Status)
+		}
+		if failures != 0 || completions != 1 {
+			t.Errorf("PROVIDER_POLL failures = %d, CALLBACK completions = %d, want 0 and 1", failures, completions)
+		}
+	}
+	if got := agentCountEventType(execEventTypes(events), domain.EventAgentActionFailed) +
+		agentCountEventType(execEventTypes(events), domain.EventAgentActionCompleted); got != 1 {
+		t.Errorf("action outcome events = %d, want exactly 1: the loser appends nothing", got)
+	}
+	agentRun, _ := agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
+	if agentRun.CurrentContextVersion != 1 {
+		t.Errorf("current context version = %d, want 1: exactly one tool round was appended", agentRun.CurrentContextVersion)
+	}
+	if !agentTurnNoExists(h.ctx, t, h.uow, agentRun.ID, 2) || agentTurnNoExists(h.ctx, t, h.uow, agentRun.ID, 3) {
+		t.Errorf("turns after the race: want exactly turn 2 created")
+	}
+}
+
+// TestToolAttemptPoll_ReturnAfterTimeoutCommitted_WritesNothing covers the handback racing
+// the Agent timeout past the deadline: the handback transaction is held after its claim,
+// the timeout commits first and owns the Attempt, the Action and the Agent Run, and the
+// released handback finds its conditional update affects no row, so it writes nothing,
+// consumes no Event seq and reports a duplicate.
+func TestToolAttemptPoll_ReturnAfterTimeoutCommitted_WritesNothing(t *testing.T) {
+	tool := newPollableTool(registry.PollResult{Status: registry.PollUnknownTask})
+	arrived := make(chan struct{})
+	release := make(chan struct{})
+	var barrier *pollArmedBarrierUoW
+	h, run, outcome, attempt := pollableDispatched(t, "wf-tool-poll-return-vs-timeout", tool, pollableSafe, 5, agentHarnessOptions{
+		WrapUoW: func(inner store.UnitOfWork) store.UnitOfWork {
+			barrier = &pollArmedBarrierUoW{UnitOfWork: inner, arrived: arrived, release: release}
+			return barrier
+		},
+		PollHooks: service.PollHooks{AfterClaim: func(context.Context, string) error {
+			barrier.armed.Store(true)
+			return nil
+		}},
+	})
+	h.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
+
+	var wg sync.WaitGroup
+	var pollOutcome service.PollToolAttemptOutcome
+	var pollErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		pollOutcome, pollErr = h.svc.PollToolAttempt(h.ctx, service.PollToolAttempt{AttemptID: attempt.ID, ActionID: attempt.ActionID})
+	}()
+	// The handback transaction is waiting; the timeout commits meanwhile.
+	<-arrived
+	barrier.armed.Store(false)
+	if err := h.svc.TimeoutAgentRun(h.ctx, outcome.AgentRunID); err != nil {
+		t.Fatalf("timeout agent run: %v", err)
+	}
+	eventsAfterTimeout := listEvents(h.ctx, t, h.uow, run.ID)
+	close(release)
+	wg.Wait()
+
+	if pollErr != nil {
+		t.Fatalf("poll: %v", pollErr)
+	}
+	if pollOutcome.Kind != service.PollAttemptDuplicate {
+		t.Errorf("poll outcome = %+v, want DUPLICATE: the timeout already owned the Attempt", pollOutcome)
+	}
+	attempt = getToolAttempt(t, h, attempt.ID)
+	if attempt.Status != domain.ToolAttemptFailed || attempt.Error == nil || attempt.Error.Code != "TIMEOUT" {
+		t.Errorf("attempt = status %s error %+v, want FAILED by the timeout", attempt.Status, attempt.Error)
+	}
+	if got := getAgentAction(h.ctx, t, h.uow, attempt.ActionID); got.Status != domain.AgentActionFailed || got.Error == nil || got.Error.Code != "TIMEOUT" {
+		t.Errorf("action = status %s error %+v, want FAILED by the timeout", got.Status, got.Error)
+	}
+	agentRun, _ := agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
+	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationTimeout {
+		t.Errorf("agent run termination = %s, want TIMEOUT", agentTermination(agentRun))
+	}
+	if agentRun.CurrentContextVersion != 0 || agentTurnNoExists(h.ctx, t, h.uow, agentRun.ID, 2) {
+		t.Errorf("context version = %d, turn 2 exists = %v, want 0 and false: the handback wrote nothing",
+			agentRun.CurrentContextVersion, agentTurnNoExists(h.ctx, t, h.uow, agentRun.ID, 2))
+	}
+	events := listEvents(h.ctx, t, h.uow, run.ID)
+	assertContiguousSeq(t, events)
+	if len(events) != len(eventsAfterTimeout) {
+		t.Errorf("events after the released handback = %d, want %d: nothing appended", len(events), len(eventsAfterTimeout))
+	}
+	if got := agentActionFailures(t, events, domain.FailureProviderPoll); got != 0 {
+		t.Errorf("PROVIDER_POLL action failures = %d, want 0", got)
+	}
+	if got := agentActionFailures(t, events, domain.FailureTimeout); got != 1 {
+		t.Errorf("TIMEOUT action failures = %d, want 1", got)
+	}
+}
+
+// TestToolAttemptPoll_ReturnTxFailsBeforeCommit_RolledBackAndCompletedByNextPoll places a
+// write failure inside the handback transaction after AGENT_ACTION_FAILED was appended, on
+// the Event the round advancement appends next. The whole transaction rolls back: the
+// Attempt stays DISPATCHED with only its poll schedule advanced, no Event, Context Version
+// or Turn survives, and the next due poll completes the handback.
+func TestToolAttemptPoll_ReturnTxFailsBeforeCommit_RolledBackAndCompletedByNextPoll(t *testing.T) {
+	tool := newPollableTool(registry.PollResult{Status: registry.PollUnknownTask})
+	h, run, outcome, attempt := pollableDispatched(t, "wf-tool-poll-return-rollback", tool, pollableSafe, 5, agentHarnessOptions{})
+
+	const collidingEventID = "ev_tool_poll_return_collision"
+	execAppendFixedEvent(h.ctx, t, h.uow, run.ID, collidingEventID, h.clock.Now())
+	before := agentSnapshot(t, h, run, outcome)
+	// The first Event the handback appends is AGENT_ACTION_FAILED; the collision lands on
+	// the one after it.
+	h.ids.ForceEventIDAfter(1, collidingEventID)
+
+	h.clock.Advance(pollableInterval)
+	polledAt := h.clock.Now()
+	_, err := h.svc.PollToolAttempt(h.ctx, service.PollToolAttempt{AttemptID: attempt.ID, ActionID: attempt.ActionID})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("poll with a colliding Event ID = %v, want a conflict from the duplicated Event ID", err)
+	}
+	if tool.pollCount() != 1 {
+		t.Fatalf("provider polls = %d, want 1", tool.pollCount())
+	}
+
+	attempt = getToolAttempt(t, h, attempt.ID)
+	if attempt.Status != domain.ToolAttemptDispatched || attempt.Error != nil || attempt.Uncertain != nil || attempt.CompletedAt != nil {
+		t.Errorf("attempt after the rollback = %+v, want still DISPATCHED without an outcome", attempt)
+	}
+	if attempt.PollCount != 1 || attempt.NextPollAt == nil || !attempt.NextPollAt.Equal(polledAt.Add(pollableInterval)) {
+		t.Errorf("poll schedule = count %d next %v, want 1 and %v: the claim committed on its own", attempt.PollCount, attempt.NextPollAt, polledAt.Add(pollableInterval))
+	}
+	if after := agentSnapshot(t, h, run, outcome); after != before {
+		t.Errorf("state after the rolled-back handback = %+v, want unchanged %+v", after, before)
+	}
+	agentRun, _ := agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
+	if agentRun.CurrentContextVersion != 0 || agentHasContextVersion(h.ctx, t, h.uow, agentRun.ID, 1) {
+		t.Errorf("a Context Version survived the rolled-back handback (current %d)", agentRun.CurrentContextVersion)
+	}
+	if agentTurnNoExists(h.ctx, t, h.uow, agentRun.ID, 2) {
+		t.Error("a Turn 2 survived the rolled-back handback")
+	}
+
+	// The next due poll repeats the handback and commits it.
+	h.clock.Advance(pollableInterval)
+	if got := pollToolAttempt(t, h, attempt); got.Kind != service.PollAttemptReturned {
+		t.Fatalf("second poll outcome = %+v, want RETURNED", got)
+	}
+	assertLostTaskReturned(t, h, run, outcome, attempt.ID)
+}
+
+// TestToolAttemptPoll_ReturnEnqueueRefused_ReconcilerAdvancesReadyTurn covers the
+// post-COMMIT boundary of the handback: the work queue refuses the next Turn, the READY
+// Turn is nevertheless committed, and the Reconciler rediscovers and advances it from the
+// persisted fact alone.
+func TestToolAttemptPoll_ReturnEnqueueRefused_ReconcilerAdvancesReadyTurn(t *testing.T) {
+	tool := newPollableTool(registry.PollResult{Status: registry.PollUnknownTask})
+	h, run, outcome, attempt := pollableDispatched(t, "wf-tool-poll-return-enqueue-refused", tool, pollableSafe, 5, agentHarnessOptions{
+		Queue: service.NoopEnqueuer{},
+	})
+
+	h.clock.Advance(pollableInterval)
+	if got := pollToolAttempt(t, h, attempt); got.Kind != service.PollAttemptReturned {
+		t.Fatalf("poll outcome = %+v, want RETURNED", got)
+	}
+	assertLostTaskReturned(t, h, run, outcome, attempt.ID)
+	agentRun, _ := agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
+	if turn2 := agentTurnByNo(h.ctx, t, h.uow, agentRun.ID, 2); turn2.Status != domain.AgentTurnReady {
+		t.Fatalf("turn 2 status = %s, want READY while the queue refused it", turn2.Status)
+	}
+
+	report := agentRunOnce(h, agentReconciler(h))
+	if report.ReadyAgentTurnsFound != 1 || report.AgentTurnsAdvanced != 1 {
+		t.Fatalf("report = %+v, want the refused READY Turn rediscovered and advanced", report)
+	}
+	agentRunOnceUntil(t, h, run.ID, domain.RunCompleted)
+	agentRun, _ = agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
+	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationFinalResponse {
+		t.Errorf("agent run termination = %s, want FINAL_RESPONSE from the next Decision", agentTermination(agentRun))
+	}
+	if tool.executeCount() != 1 {
+		t.Errorf("executes = %d, want 1: the lost call is not repeated by the Runtime", tool.executeCount())
+	}
+}
+
+// TestToolAttemptPoll_CrashAfterClaimBeforeProviderQuery_RestartContinuesSchedule covers
+// the process that dies between the committed claim and the Provider query: the claim's
+// poll_count and next_poll_at stay committed, the Provider was never asked, and a
+// restarted Backend's Reconciler continues from the persisted schedule and completes the
+// Attempt from the Provider's answer.
+func TestToolAttemptPoll_CrashAfterClaimBeforeProviderQuery_RestartContinuesSchedule(t *testing.T) {
+	crashedTool := newPollableTool(pollSucceededResult())
+	crashErr := errors.New("process died after the claim committed")
+	crashed, run, outcome, attempt := pollableDispatched(t, "wf-tool-poll-crash-after-claim", crashedTool, pollableSafe, 5, agentHarnessOptions{
+		PollHooks: service.PollHooks{AfterClaim: func(context.Context, string) error { return crashErr }},
+	})
+	before := agentSnapshot(t, crashed, run, outcome)
+
+	crashed.clock.Advance(pollableInterval)
+	claimedAt := crashed.clock.Now()
+	_, err := crashed.svc.PollToolAttempt(crashed.ctx, service.PollToolAttempt{AttemptID: attempt.ID, ActionID: attempt.ActionID})
+	if !errors.Is(err, crashErr) {
+		t.Fatalf("poll stopped after its claim = %v, want the injected crash", err)
+	}
+	if crashedTool.pollCount() != 0 {
+		t.Fatalf("provider polls before the crash = %d, want 0", crashedTool.pollCount())
+	}
+	attempt = getToolAttempt(t, crashed, attempt.ID)
+	if attempt.Status != domain.ToolAttemptDispatched || attempt.PollCount != 1 || attempt.NextPollAt == nil || !attempt.NextPollAt.Equal(claimedAt.Add(pollableInterval)) {
+		t.Fatalf("attempt after the crash = status %s count %d next %v, want DISPATCHED, 1 and %v",
+			attempt.Status, attempt.PollCount, attempt.NextPollAt, claimedAt.Add(pollableInterval))
+	}
+	if after := agentSnapshot(t, crashed, run, outcome); after != before {
+		t.Errorf("state after the crash = %+v, want unchanged %+v", after, before)
+	}
+	crashed.dropPendingTurns()
+
+	restartedTool := newPollableTool(pollSucceededResult())
+	restarted := pollableRestart(t, crashed, restartedTool, pollableSafe, 5)
+	// Not due yet: the restarted Reconciler honours the schedule the claim committed.
+	if report := agentRunOnce(restarted, agentReconciler(restarted)); report.DueToolPollsFound != 0 {
+		t.Errorf("report before the next poll time = %+v, want nothing due", report)
+	}
+	restarted.clock.Advance(pollableInterval)
+	report := agentRunOnce(restarted, agentReconciler(restarted))
+	if report.DueToolPollsFound != 1 || report.ToolPollsResumed != 1 {
+		t.Fatalf("report after restart = %+v, want the due tool poll discovered and resumed", report)
+	}
+	if restartedTool.pollCount() != 1 || restartedTool.executeCount() != 0 || crashedTool.pollCount() != 0 {
+		t.Errorf("restarted polls = %d executes = %d, crashed polls = %d, want 1, 0 and 0",
+			restartedTool.pollCount(), restartedTool.executeCount(), crashedTool.pollCount())
+	}
+	assertPollResumedOnce(t, restarted, run, outcome, attempt.ID)
+	if got := getToolAttempt(t, restarted, attempt.ID); got.PollCount != 2 {
+		t.Errorf("poll count after recovery = %d, want 2", got.PollCount)
+	}
+}
+
+// TestToolAttemptPoll_ReturnPastAgentDeadline_TerminatesTimeoutWithoutNewTurn covers the
+// handback of a lost task after the Agent deadline passed: the Attempt and Action still
+// fail with EXECUTION_INTERRUPTED, but the round advancement ends the Agent Run with
+// TIMEOUT instead of creating a next Turn.
+func TestToolAttemptPoll_ReturnPastAgentDeadline_TerminatesTimeoutWithoutNewTurn(t *testing.T) {
+	tool := newPollableTool(registry.PollResult{Status: registry.PollUnknownTask})
+	h, run, outcome, attempt := pollableDispatched(t, "wf-tool-poll-return-past-deadline", tool, pollableSafe, 5, agentHarnessOptions{})
+	eventsBefore := len(listEvents(h.ctx, t, h.uow, run.ID))
+
+	h.clock.Advance(agentTimeoutMs*time.Millisecond + time.Second)
+	got := pollToolAttempt(t, h, attempt)
+	if got.Kind != service.PollAttemptReturned || !got.Failed || got.FailureSource != domain.FailureProviderPoll {
+		t.Fatalf("poll outcome = %+v, want RETURNED with failure source PROVIDER_POLL", got)
+	}
+
+	attempt = getToolAttempt(t, h, attempt.ID)
+	if attempt.Status != domain.ToolAttemptFailed || attempt.Error == nil || attempt.Error.Code != "EXECUTION_INTERRUPTED" {
+		t.Errorf("attempt = status %s error %+v, want FAILED with EXECUTION_INTERRUPTED", attempt.Status, attempt.Error)
+	}
+	if action := getAgentAction(h.ctx, t, h.uow, attempt.ActionID); action.Status != domain.AgentActionFailed {
+		t.Errorf("action status = %s, want FAILED", action.Status)
+	}
+	agentRun, _ := agentRunOfNodeRun(h.ctx, t, h.uow, outcome.NodeRunID)
+	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationTimeout {
+		t.Errorf("agent run termination = %s, want TIMEOUT", agentTermination(agentRun))
+	}
+	if agentTurnNoExists(h.ctx, t, h.uow, agentRun.ID, 2) {
+		t.Error("a Turn 2 exists, want none past the deadline")
+	}
+	if nr := agentNodeRun(h.ctx, t, h.uow, run.ID); nr.Status != domain.NodeRunFailed {
+		t.Errorf("agent node run status = %s, want FAILED", nr.Status)
+	}
+	if persisted := agentRunRow(h.ctx, t, h.uow, run.ID); persisted.Status != domain.RunFailed {
+		t.Errorf("run status = %s, want FAILED", persisted.Status)
+	}
+	events := listEvents(h.ctx, t, h.uow, run.ID)
+	assertContiguousSeq(t, events)
+	tail := execEventTypes(events[eventsBefore:])
+	if agentCountEventType(tail, domain.EventAgentActionFailed) != 1 || agentCountEventType(tail, domain.EventAgentFailed) != 1 ||
+		agentCountEventType(tail, domain.EventAgentTurnReady) != 0 {
+		t.Errorf("events past the deadline = %v, want one AGENT_ACTION_FAILED, one AGENT_FAILED and no AGENT_TURN_READY", tail)
+	}
+}
+
+// TestToolAttemptPoll_BindingDoesNotRouteToAttempt_ClearsScheduleAndRefuses covers a
+// Callback Binding set that does not route to the Attempt: the poll is refused with the
+// binding mismatch, the poll schedule is cleared so the scan stops listing the Attempt,
+// the Provider is never queried, and the Attempt keeps waiting for its callback or the
+// deadline unchanged.
+func TestToolAttemptPoll_BindingDoesNotRouteToAttempt_ClearsScheduleAndRefuses(t *testing.T) {
+	tool := newPollableTool(pollSucceededResult())
+	h, run, outcome, attempt := pollableDispatched(t, "wf-tool-poll-binding-mismatch", tool, pollableSafe, 5, agentHarnessOptions{})
+	// A second Binding claiming the same Attempt for another external task: a poll could
+	// not tell which task to ask the Provider about, so nothing routes.
+	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.CallbackBindings().Create(ctx, domain.CallbackBinding{
+			ID: "cb_tool_poll_second_route", ProviderID: remotelookup.ProviderID, ExternalTaskID: "provider_task_other",
+			TargetType: domain.CallbackTargetToolAttempt, TargetID: attempt.ID, CreatedAt: h.clock.Now(),
+		})
+	}); err != nil {
+		t.Fatalf("create the second binding: %v", err)
+	}
+	before := agentSnapshot(t, h, run, outcome)
+
+	h.clock.Advance(pollableInterval)
+	if due := listDueToolPolls(t, h, h.clock.Now()); len(due) != 1 || due[0].AttemptID != attempt.ID {
+		t.Fatalf("due polls before the refused poll = %+v, want the attempt listed", due)
+	}
+	got, err := h.svc.PollToolAttempt(h.ctx, service.PollToolAttempt{AttemptID: attempt.ID, ActionID: attempt.ActionID})
+	if !errors.Is(err, service.ErrPollBindingMismatch) {
+		t.Fatalf("poll with a binding that does not route = %v, want ErrPollBindingMismatch", err)
+	}
+	if got.Kind != service.PollAttemptSkipped || got.SkipReason != service.PollSkipBindingMismatch {
+		t.Errorf("outcome = %+v, want SKIPPED with BINDING_MISMATCH", got)
+	}
+	if tool.pollCount() != 0 {
+		t.Errorf("provider polls = %d, want 0", tool.pollCount())
+	}
+
+	attempt = getToolAttempt(t, h, attempt.ID)
+	if attempt.Status != domain.ToolAttemptDispatched || attempt.NextPollAt != nil || attempt.PollCount != 0 {
+		t.Errorf("attempt = status %s next %v count %d, want DISPATCHED with the schedule cleared", attempt.Status, attempt.NextPollAt, attempt.PollCount)
+	}
+	if due := listDueToolPolls(t, h, h.clock.Now().Add(24*time.Hour)); len(due) != 0 {
+		t.Errorf("due polls after the cleared schedule = %+v, want none", due)
+	}
+	if report := agentRunOnce(h, agentReconciler(h)); report.DueToolPollsFound != 0 {
+		t.Errorf("reconciler report = %+v, want no due tool poll", report)
+	}
+	if after := agentSnapshot(t, h, run, outcome); after != before {
+		t.Errorf("state after the refused poll = %+v, want unchanged %+v", after, before)
 	}
 }

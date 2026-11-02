@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1179,5 +1180,272 @@ func assertSameJSON(t *testing.T, label string, want, got json.RawMessage) {
 	}
 	if string(wantEncoded) != string(gotEncoded) {
 		t.Fatalf("%s: want %s, got %s", label, wantEncoded, gotEncoded)
+	}
+}
+
+// dispatchToolAttemptAt commits one Tool Attempt and moves it to DISPATCHED with the given
+// first poll time (nil schedules no poll).
+func dispatchToolAttemptAt(ctx context.Context, t *testing.T, uow store.UnitOfWork, attempt domain.ToolAttempt, firstPollAt *time.Time) {
+	t.Helper()
+	createToolAttempt(ctx, t, uow, attempt)
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkDispatched(ctx, attempt.ID, fixtureTime, firstPollAt)
+	}); err != nil {
+		t.Fatalf("MarkDispatched %s: %v", attempt.ID, err)
+	}
+}
+
+func getToolAttemptRow(ctx context.Context, t *testing.T, uow store.UnitOfWork, attemptID string) domain.ToolAttempt {
+	t.Helper()
+	var attempt domain.ToolAttempt
+	if err := uow.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		attempt, err = tx.ToolAttempts().Get(ctx, attemptID)
+		return err
+	}); err != nil {
+		t.Fatalf("Get Tool Attempt %s: %v", attemptID, err)
+	}
+	return attempt
+}
+
+func listDueToolPollIDs(ctx context.Context, t *testing.T, uow store.UnitOfWork, now time.Time, limit int) []string {
+	t.Helper()
+	var ids []string
+	if err := uow.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		due, err := tx.ToolAttempts().ListDuePolls(ctx, now, limit)
+		if err != nil {
+			return err
+		}
+		for _, d := range due {
+			if d.ActionID != "action_1" {
+				t.Errorf("due poll %s names action %q, want action_1", d.AttemptID, d.ActionID)
+			}
+			ids = append(ids, d.AttemptID)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("ListDuePolls: %v", err)
+	}
+	return ids
+}
+
+// TestToolAttemptStore_ListDuePolls_OrdersDueDispatchedAttemptsAndBoundsBatch proves the
+// due-poll scan lists only DISPATCHED Attempts whose next_poll_at has passed, oldest first
+// with the id as tie-break, bounded by the limit, and rejects a non-positive limit. A
+// SUCCEEDED Attempt whose schedule was never cleared, an unscheduled one and one not yet due
+// are all left out.
+func TestToolAttemptStore_ListDuePolls_OrdersDueDispatchedAttemptsAndBoundsBatch(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_1", "turn_1", "decision_1", "action_1")
+	early := fixtureTime.Add(time.Minute)
+	late := fixtureTime.Add(2 * time.Minute)
+	future := fixtureTime.Add(time.Hour)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_due_b", "action_1", 1), &early)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_due_a", "action_1", 2), &early)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_due_late", "action_1", 3), &late)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_not_due", "action_1", 4), &future)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_unscheduled", "action_1", 5), nil)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_succeeded", "action_1", 6), &early)
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkSucceeded(ctx, "ta_succeeded", domain.ToolAttemptDispatched, fixtureTime,
+			json.RawMessage(`{"answer":"ember"}`), nil)
+	}); err != nil {
+		t.Fatalf("MarkSucceeded: %v", err)
+	}
+
+	got := listDueToolPollIDs(ctx, t, uow, late, 10)
+	want := []string{"ta_due_a", "ta_due_b", "ta_due_late"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("due polls = %v, want %v: oldest first, id as tie-break, only due DISPATCHED rows", got, want)
+	}
+	if got := listDueToolPollIDs(ctx, t, uow, late, 2); strings.Join(got, ",") != "ta_due_a,ta_due_b" {
+		t.Errorf("due polls with limit 2 = %v, want the two oldest", got)
+	}
+	if got := listDueToolPollIDs(ctx, t, uow, early, 10); strings.Join(got, ",") != "ta_due_a,ta_due_b" {
+		t.Errorf("due polls at %v = %v, want only the ones due by then", early, got)
+	}
+	if got := listDueToolPollIDs(ctx, t, uow, fixtureTime, 10); len(got) != 0 {
+		t.Errorf("due polls before any schedule = %v, want none", got)
+	}
+	err := uow.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		_, err := tx.ToolAttempts().ListDuePolls(ctx, late, 0)
+		return err
+	})
+	if err == nil {
+		t.Error("ListDuePolls with limit 0: want an error, got none")
+	}
+}
+
+// TestToolAttemptStore_ClaimPoll_AdvancesScheduleAndStopsAtBound proves the claim is a
+// conditional update: it rejects a non-positive interval or bound without writing, claims
+// nothing before the poll time, advances poll_count and next_poll_at by exactly one
+// interval per claim, clears next_poll_at on the claim that reaches the bound, and claims
+// nothing afterwards or on a non-DISPATCHED Attempt.
+func TestToolAttemptStore_ClaimPoll_AdvancesScheduleAndStopsAtBound(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_1", "turn_1", "decision_1", "action_1")
+	first := fixtureTime.Add(time.Minute)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_poll", "action_1", 1), &first)
+	createToolAttempt(ctx, t, uow, newToolAttempt("ta_started", "action_1", 2))
+	const interval = time.Minute
+	const maxPolls = 2
+
+	claim := func(id string, now time.Time, interval time.Duration, maxPolls int) (bool, error) {
+		var claimed bool
+		err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			var err error
+			claimed, err = tx.ToolAttempts().ClaimPoll(ctx, id, now, interval, maxPolls)
+			return err
+		})
+		return claimed, err
+	}
+
+	if _, err := claim("ta_poll", first, 0, maxPolls); err == nil {
+		t.Error("ClaimPoll with interval 0: want an error, got none")
+	}
+	if _, err := claim("ta_poll", first, interval, 0); err == nil {
+		t.Error("ClaimPoll with maxPolls 0: want an error, got none")
+	}
+	if claimed, err := claim("ta_poll", first.Add(-time.Second), interval, maxPolls); err != nil || claimed {
+		t.Errorf("ClaimPoll before the poll time = (%v, %v), want (false, nil)", claimed, err)
+	}
+	if got := getToolAttemptRow(ctx, t, uow, "ta_poll"); got.PollCount != 0 || got.NextPollAt == nil || !got.NextPollAt.Equal(first) {
+		t.Errorf("after the rejected claims: count %d next %v, want 0 and %v unchanged", got.PollCount, got.NextPollAt, first)
+	}
+
+	if claimed, err := claim("ta_poll", first, interval, maxPolls); err != nil || !claimed {
+		t.Fatalf("first due ClaimPoll = (%v, %v), want (true, nil)", claimed, err)
+	}
+	got := getToolAttemptRow(ctx, t, uow, "ta_poll")
+	if got.PollCount != 1 || got.NextPollAt == nil || !got.NextPollAt.Equal(first.Add(interval)) || got.Status != domain.ToolAttemptDispatched {
+		t.Errorf("after the first claim: count %d next %v status %s, want 1, %v and DISPATCHED", got.PollCount, got.NextPollAt, got.Status, first.Add(interval))
+	}
+	if claimed, err := claim("ta_poll", first, interval, maxPolls); err != nil || claimed {
+		t.Errorf("second ClaimPoll at the same time = (%v, %v), want (false, nil): the next poll is not due", claimed, err)
+	}
+
+	second := first.Add(interval)
+	if claimed, err := claim("ta_poll", second, interval, maxPolls); err != nil || !claimed {
+		t.Fatalf("claim reaching the bound = (%v, %v), want (true, nil)", claimed, err)
+	}
+	got = getToolAttemptRow(ctx, t, uow, "ta_poll")
+	if got.PollCount != maxPolls || got.NextPollAt != nil || got.Status != domain.ToolAttemptDispatched {
+		t.Errorf("at the bound: count %d next %v status %s, want %d, no next poll and DISPATCHED", got.PollCount, got.NextPollAt, got.Status, maxPolls)
+	}
+	if claimed, err := claim("ta_poll", second.Add(time.Hour), interval, maxPolls); err != nil || claimed {
+		t.Errorf("ClaimPoll past the bound = (%v, %v), want (false, nil)", claimed, err)
+	}
+	if claimed, err := claim("ta_started", first, interval, maxPolls); err != nil || claimed {
+		t.Errorf("ClaimPoll on a STARTED Attempt = (%v, %v), want (false, nil)", claimed, err)
+	}
+}
+
+// TestToolAttemptStore_ClearPoll_OnlyUnschedulesDispatchedAttempt proves ClearPoll
+// unschedules a DISPATCHED Attempt and reports it, and reports false without writing for a
+// STARTED or terminal Attempt.
+func TestToolAttemptStore_ClearPoll_OnlyUnschedulesDispatchedAttempt(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_1", "turn_1", "decision_1", "action_1")
+	first := fixtureTime.Add(time.Minute)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_dispatched", "action_1", 1), &first)
+	createToolAttempt(ctx, t, uow, newToolAttempt("ta_started", "action_1", 2))
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_failed", "action_1", 3), &first)
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.ToolAttempts().MarkFailed(ctx, "ta_failed", domain.ToolAttemptDispatched, fixtureTime,
+			domain.ExecutionError{Code: "TOOL_ERROR", Message: "provider failed"})
+	}); err != nil {
+		t.Fatalf("MarkFailed: %v", err)
+	}
+
+	clear := func(id string) bool {
+		var cleared bool
+		if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			var err error
+			cleared, err = tx.ToolAttempts().ClearPoll(ctx, id)
+			return err
+		}); err != nil {
+			t.Fatalf("ClearPoll %s: %v", id, err)
+		}
+		return cleared
+	}
+
+	if !clear("ta_dispatched") {
+		t.Error("ClearPoll on a scheduled DISPATCHED Attempt = false, want true")
+	}
+	if got := getToolAttemptRow(ctx, t, uow, "ta_dispatched"); got.NextPollAt != nil || got.Status != domain.ToolAttemptDispatched {
+		t.Errorf("after ClearPoll: next %v status %s, want no next poll and still DISPATCHED", got.NextPollAt, got.Status)
+	}
+	// Repeating the clear on the still DISPATCHED Attempt is harmless.
+	clear("ta_dispatched")
+	if got := getToolAttemptRow(ctx, t, uow, "ta_dispatched"); got.NextPollAt != nil || got.Status != domain.ToolAttemptDispatched {
+		t.Errorf("after the repeated ClearPoll: next %v status %s, want no next poll and still DISPATCHED", got.NextPollAt, got.Status)
+	}
+	if clear("ta_started") {
+		t.Error("ClearPoll on a STARTED Attempt = true, want false")
+	}
+	if clear("ta_failed") {
+		t.Error("ClearPoll on a FAILED Attempt = true, want false")
+	}
+	if got := getToolAttemptRow(ctx, t, uow, "ta_failed"); got.NextPollAt == nil || !got.NextPollAt.Equal(first) {
+		t.Errorf("terminal Attempt next_poll_at = %v, want %v untouched", got.NextPollAt, first)
+	}
+	if got := listDueToolPollIDs(ctx, t, uow, first.Add(time.Hour), 10); len(got) != 0 {
+		t.Errorf("due polls after clearing = %v, want none", got)
+	}
+}
+
+// TestToolAttemptStore_MarkLost_OnlyResolvesDispatchedAttempt proves the lost-task outcome
+// is a conditional update from DISPATCHED: it fails the Attempt once with its error,
+// completed_at and uncertainty, and loses with domain.ErrStaleClaim, writing nothing, on a
+// STARTED Attempt and on one already resolved.
+func TestToolAttemptStore_MarkLost_OnlyResolvesDispatchedAttempt(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_1", "turn_1", "decision_1", "action_1")
+	first := fixtureTime.Add(time.Minute)
+	dispatchToolAttemptAt(ctx, t, uow, newToolAttempt("ta_dispatched", "action_1", 1), &first)
+	createToolAttempt(ctx, t, uow, newToolAttempt("ta_started", "action_1", 2))
+	lost := domain.ExecutionError{Code: "EXECUTION_INTERRUPTED", Message: "the external service no longer knows the task"}
+	markLost := func(id string, uncertain bool) error {
+		return uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			return tx.ToolAttempts().MarkLost(ctx, id, fixtureTime.Add(2*time.Minute), lost, uncertain)
+		})
+	}
+
+	if err := markLost("ta_started", false); !errors.Is(err, domain.ErrStaleClaim) {
+		t.Errorf("MarkLost on a STARTED Attempt = %v, want domain.ErrStaleClaim", err)
+	}
+	if got := getToolAttemptRow(ctx, t, uow, "ta_started"); got.Status != domain.ToolAttemptStarted || got.Error != nil || got.CompletedAt != nil || got.Uncertain != nil {
+		t.Errorf("STARTED Attempt after the lost MarkLost = %+v, want untouched", got)
+	}
+
+	if err := markLost("ta_dispatched", false); err != nil {
+		t.Fatalf("MarkLost on a DISPATCHED Attempt: %v", err)
+	}
+	got := getToolAttemptRow(ctx, t, uow, "ta_dispatched")
+	if got.Status != domain.ToolAttemptFailed || got.Error == nil || got.Error.Code != lost.Code || got.CompletedAt == nil ||
+		got.Uncertain == nil || *got.Uncertain || len(got.Result) != 0 {
+		t.Errorf("Attempt after MarkLost = %+v, want FAILED with the lost error, completed_at, uncertain=false and no result", got)
+	}
+	if err := markLost("ta_dispatched", true); !errors.Is(err, domain.ErrStaleClaim) {
+		t.Errorf("second MarkLost = %v, want domain.ErrStaleClaim", err)
+	}
+	if again := getToolAttemptRow(ctx, t, uow, "ta_dispatched"); again.Uncertain == nil || *again.Uncertain || !again.CompletedAt.Equal(*got.CompletedAt) {
+		t.Errorf("Attempt after the losing MarkLost = %+v, want the first outcome kept", again)
 	}
 }
