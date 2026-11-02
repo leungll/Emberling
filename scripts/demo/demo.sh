@@ -68,8 +68,11 @@
 #                                           flight, the rest queue as READY steps and all
 #                                           complete as the slots cycle.
 #                 scripts/demo/build-v1.sh builds the serving template from a tuning Run's
-#                 delivered settings, and scripts/demo/evidence-report.sh summarises the
-#                 fault-injection and real-flow evidence; both are run by hand.
+#                 delivered settings, scripts/demo/traffic-split.sh splits keyed requests
+#                 between two versions (serving-rollout runs it; it can also be run by
+#                 hand), and scripts/demo/evidence-report.sh summarises the
+#                 fault-injection and real-flow evidence; build-v1.sh and
+#                 evidence-report.sh are run by hand.
 #                 EMBERLING_DEMO_STUDIO=1 also builds and starts Studio, prints a Studio link
 #                 to every Run and pauses for Enter at the moments worth watching; the
 #                 stack and Studio keep running afterwards. EMBERLING_DEMO_PAUSE=0 keeps
