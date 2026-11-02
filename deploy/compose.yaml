@@ -144,6 +144,39 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - emberling-sandboxrunner-record:/var/lib/emberling/sandboxrunner
 
+  # DEMO ONLY, OFF BY DEFAULT. The task gateway serves real image models behind one
+  # Images API endpoint as asynchronous tasks, over the same task protocol as the Mock
+  # Provider, so a workflow image_generation node can select a real model by its
+  # gateway- id. It is stateless: accepted tasks, idempotency keys and staged images live
+  # in memory and are lost on restart. Start it with `--profile gateway` and set the same
+  # EMBERLING_TASK_GATEWAY_MODELS value for both services, plus
+  # EMBERLING_TASK_GATEWAY_BASE_URL=http://taskgateway:9104 for the backend. The upstream
+  # endpoint and key are the image group's own keys, which the backend also reads for
+  # generate_image, so set EMBERLING_IMAGE_MODELS with them. The key comes from the
+  # developer's own environment, is never committed, and never reaches a gateway callback
+  # or log; without the image endpoint, key and gateway model list the gateway refuses to
+  # start and names the missing keys.
+  taskgateway:
+    profiles: ["gateway"]
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+      args:
+        CMD: taskgateway
+    ports:
+      - "9104:9104"
+    environment:
+      EMBERLING_IMAGE_BASE_URL: ${EMBERLING_IMAGE_BASE_URL:-}
+      EMBERLING_IMAGE_API_KEY: ${EMBERLING_IMAGE_API_KEY:-}
+      EMBERLING_IMAGE_TIMEOUT: ${EMBERLING_IMAGE_TIMEOUT:-}
+      EMBERLING_TASK_GATEWAY_MODELS: ${EMBERLING_TASK_GATEWAY_MODELS:-}
+      # Reference photos are read from the backend's Asset content route, container to
+      # container.
+      EMBERLING_BASE_URL: http://backend:8080
+      # Generated image URLs start with this browser-reachable origin; it must match the
+      # host side of the published port above.
+      EMBERLING_TASK_GATEWAY_PUBLIC_URL: ${EMBERLING_TASK_GATEWAY_PUBLIC_URL:-http://localhost:9104}
+
   backend:
     build:
       context: ../backend
@@ -199,6 +232,13 @@ services:
       EMBERLING_IMAGE_BASE_URL: ${EMBERLING_IMAGE_BASE_URL:-}
       EMBERLING_IMAGE_API_KEY: ${EMBERLING_IMAGE_API_KEY:-}
       EMBERLING_IMAGE_TIMEOUT: ${EMBERLING_IMAGE_TIMEOUT:-}
+      # Optional task gateway path for workflow image generation, used only with the
+      # gateway profile. Both are empty by default, so no gateway model is registered;
+      # set both or neither, or the backend refuses to start. The model list has the same
+      # entry shape as EMBERLING_IMAGE_MODELS, every id starts with "gateway-", and the
+      # taskgateway service must be given the same value.
+      EMBERLING_TASK_GATEWAY_BASE_URL: ${EMBERLING_TASK_GATEWAY_BASE_URL:-}
+      EMBERLING_TASK_GATEWAY_MODELS: ${EMBERLING_TASK_GATEWAY_MODELS:-}
       # Reachable from the mockprovider container as the compose service name, not
       # "localhost": a callback is delivered container-to-container, never through the
       # host loopback.
