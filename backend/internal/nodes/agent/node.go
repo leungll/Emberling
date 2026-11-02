@@ -17,10 +17,12 @@ const nodeType = "agent"
 // configSchema is the fixed `agent` Node config shape:
 // modelId, maxTurns and timeoutMs are mandatory; instructions, modelConfig, allowedTools,
 // the three frozen Schemas, the generation limit maxGenerationCalls, the image model
-// imageModelId and the review model reviewModelId are optional. It
-// matches runtime.AgentNodeConfig field for field so the ConfigSchema stage and the
-// Semantics stage (runtime.ParseAgentNodeConfig) never disagree about which top-level
-// fields exist.
+// imageModelId, the review model reviewModelId, the workspace binding, the goal pointer
+// and the human and release wait bounds are optional. It matches runtime.AgentNodeConfig
+// field for field so the ConfigSchema stage and the Semantics stage
+// (runtime.ParseAgentNodeConfig) never disagree about which top-level fields exist; the
+// finer workspace rules (commit format, path shape, registered repository) belong to the
+// Semantics stage.
 const configSchema = `{
   "type": "object",
   "properties": {
@@ -35,7 +37,32 @@ const configSchema = `{
     "timeoutMs": {"type": "integer", "minimum": 1},
     "maxGenerationCalls": {"type": "integer", "minimum": 1},
     "imageModelId": {"type": "string", "minLength": 1, "title": "Image model"},
-    "reviewModelId": {"type": "string", "minLength": 1, "title": "Review model"}
+    "reviewModelId": {"type": "string", "minLength": 1, "title": "Review model"},
+    "workspace": {
+      "type": "object",
+      "properties": {
+        "repositoryId": {"type": "string", "minLength": 1},
+        "baseCommit": {"type": "string", "minLength": 1},
+        "allowedPaths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "deployTarget": {
+          "type": "object",
+          "properties": {
+            "service": {"type": "string", "minLength": 1},
+            "environment": {"type": "string", "minLength": 1}
+          },
+          "required": ["service", "environment"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["repositoryId", "baseCommit", "allowedPaths"],
+      "additionalProperties": false
+    },
+    "goalPointer": {"type": "string", "minLength": 1},
+    "approvalTimeoutMs": {"type": "integer", "minimum": 1},
+    "releaseConfirmTimeoutMs": {"type": "integer", "minimum": 1},
+    "voidGraceMs": {"type": "integer", "minimum": 1},
+    "maxReleaseRetries": {"type": "integer", "minimum": 1},
+    "humanWaitTimeoutMs": {"type": "integer", "minimum": 1}
   },
   "required": ["modelId", "maxTurns", "timeoutMs"],
   "additionalProperties": false

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
@@ -22,7 +23,7 @@ import (
 // compilability, stateSchema accepting {}, outputSchema taking the text or the object
 // output form) are enforced here directly, inside pure runtime, rather than through the
 // Registry seam.
-func validateSemantics(ctx context.Context, def domain.Definition, catalog NodeCatalog) []ValidationError {
+func validateSemantics(ctx context.Context, def domain.Definition, catalog NodeCatalog, repositories map[string]struct{}) []ValidationError {
 	var errs []ValidationError
 	for _, node := range def.Nodes {
 		if _, ok := catalog.NodeMetadata(node.Type); !ok {
@@ -30,7 +31,7 @@ func validateSemantics(ctx context.Context, def domain.Definition, catalog NodeC
 		}
 
 		if node.Type == NodeTypeAgent {
-			if err := validateAgentNodeSemantics(node.ID, node.Config); err != nil {
+			if err := validateAgentNodeSemantics(node.ID, node.Config, repositories); err != nil {
 				errs = append(errs, *err)
 			}
 			continue
@@ -54,9 +55,15 @@ func validateSemantics(ctx context.Context, def domain.Definition, catalog NodeC
 
 // validateAgentNodeSemantics converts a ParseAgentNodeConfig failure into the Compiler's
 // ValidationError shape, appending the offending field (when named) to Path so it points
-// at the same location a ConfigSchema violation would.
-func validateAgentNodeSemantics(nodeID string, config json.RawMessage) *ValidationError {
-	_, err := ParseAgentNodeConfig(config)
+// at the same location a ConfigSchema violation would. A workspace that names a repository
+// outside the registered set fails here too: the shape check cannot know the set.
+func validateAgentNodeSemantics(nodeID string, config json.RawMessage, repositories map[string]struct{}) *ValidationError {
+	cfg, err := ParseAgentNodeConfig(config)
+	if err == nil && cfg.Workspace != nil {
+		if _, registered := repositories[cfg.Workspace.RepositoryID]; !registered {
+			err = &AgentConfigError{Field: "workspace", Message: fmt.Sprintf("workspace.repositoryId %q is not a registered repository", cfg.Workspace.RepositoryID)}
+		}
+	}
 	if err == nil {
 		return nil
 	}

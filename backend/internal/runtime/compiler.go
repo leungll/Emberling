@@ -58,20 +58,42 @@ type CompiledDefinition struct {
 type Compiler struct {
 	catalog NodeCatalog
 	clock   domain.Clock
+	// workspaceRepositories is the set of repository identifiers the assembly layer
+	// registered from configuration. An Agent node's workspace must name one of them;
+	// the Compiler never reads a repository itself.
+	workspaceRepositories map[string]struct{}
 
 	mu          sync.Mutex
 	schemaCache map[string]*jsonschema.Schema
 }
 
+// CompilerOption adjusts a Compiler at construction.
+type CompilerOption func(*Compiler)
+
+// WithWorkspaceRepositories hands the Compiler the registered repository identifiers an
+// Agent node's workspace.repositoryId may name. Without it no workspace compiles.
+func WithWorkspaceRepositories(ids []string) CompilerOption {
+	return func(c *Compiler) {
+		c.workspaceRepositories = make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			c.workspaceRepositories[id] = struct{}{}
+		}
+	}
+}
+
 // NewCompiler builds a Compiler backed by catalog (the Node Type registration seam) and
 // clock (used only to stamp Validation.ValidatedAt on a successful compile, so that
 // timestamp stays testable rather than calling time.Now() directly).
-func NewCompiler(catalog NodeCatalog, clock domain.Clock) *Compiler {
-	return &Compiler{
+func NewCompiler(catalog NodeCatalog, clock domain.Clock, opts ...CompilerOption) *Compiler {
+	c := &Compiler{
 		catalog:     catalog,
 		clock:       clock,
 		schemaCache: make(map[string]*jsonschema.Schema),
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 // Compile runs the full validation chain against def and, on success, returns the
@@ -83,7 +105,7 @@ func (c *Compiler) Compile(ctx context.Context, def domain.Definition) (*Compile
 	if errs := c.validateConfigSchema(def); len(errs) > 0 {
 		return nil, newCompileError(StageConfigSchema, errs, def)
 	}
-	if errs := validateSemantics(ctx, def, c.catalog); len(errs) > 0 {
+	if errs := validateSemantics(ctx, def, c.catalog, c.workspaceRepositories); len(errs) > 0 {
 		return nil, newCompileError(StageSemantics, errs, def)
 	}
 	outputNodeID, errs := validateGraph(def, c.catalog)
