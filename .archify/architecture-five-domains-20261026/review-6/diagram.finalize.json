@@ -1,0 +1,419 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-26T18:36:03.181Z",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+    "sha256": "fdd09a73560911d2084bbb645cd9e929909128947e5a787266d4b8f56ac25d8a",
+    "bytes": 10856
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html",
+    "sha256": "f8ef0793153bd80c48d7d1b6c52481d2a2a6d9e3dc689d85b4a07c0535192512",
+    "bytes": 870971
+  },
+  "stages": {
+    "validate": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": null,
+      "command": [
+        "/opt/homebrew/Cellar/node/23.6.0/bin/node",
+        "/private/tmp/emberling-archify/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html",
+        "--quality",
+        "showcase",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "deliver",
+        "receiptId": "d314fb49-d0e3-4887-9e08-a3d15e73331d",
+        "stage": "render",
+        "type": "architecture",
+        "input": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+        "output": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html",
+        "error": "Architecture layout validation failed:\n- Label \"Model interaction\" has only 57px between \"model\" and \"harness\"; it needs at least 108px to stay beside its route — increase that clear gap or place the connected nodes on another readable row, preserving the label.\n- Label \"Execution facts\" has only 57px between \"state\" and \"runtime\"; it needs at least 98px to stay beside its route — increase that clear gap or place the connected nodes on another readable row, preserving the label.\n- [composition/label-route-clearance] showcase architecture label \"Model interaction\" on connections[3] id \"model-harness\" \"model\" -> \"harness\" label \"Model interaction\" is 0px from connections[11] id \"registry-harness\" \"registry\" -> \"harness\" label \"Version Gates · Policy · Approval\" segment 3 [664.2, 210] -> [664.2, 403.5] (label rect [623, 384, 92, 14]; minimum 4px) — if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.\n- [composition/label-route-clearance] showcase architecture label \"Execution facts\" on connections[8] id \"state-runtime\" \"state\" -> \"runtime\" label \"Execution facts\" is 0px from connections[12] id \"policy-runtime\" \"policy\" -> \"runtime\" label \"Authorization · Isolation · Quotas\" segment 1 [664.2, 607.5] -> [664.2, 777.5] (label rect [627, 758, 82, 14]; minimum 4px) — if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+        "diagnostics": [
+          {
+            "code": "composition/label-route-clearance",
+            "severity": "error",
+            "message": "[composition/label-route-clearance] showcase architecture label \"Model interaction\" on connections[3] id \"model-harness\" \"model\" -> \"harness\" label \"Model interaction\" is 0px from connections[11] id \"registry-harness\" \"registry\" -> \"harness\" label \"Version Gates · Policy · Approval\" segment 3 [664.2, 210] -> [664.2, 403.5] (label rect [623, 384, 92, 14]; minimum 4px) — if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+            "subject": {
+              "diagramType": "architecture",
+              "collection": "connections",
+              "index": 3,
+              "id": "model-harness",
+              "from": "model",
+              "to": "harness"
+            },
+            "evidence": {
+              "label": "Model interaction",
+              "otherRelationship": {
+                "diagramType": "architecture",
+                "collection": "connections",
+                "index": 11,
+                "id": "registry-harness",
+                "from": "registry",
+                "to": "harness"
+              },
+              "segmentIndex": 3,
+              "clearancePx": 0,
+              "minimumPx": 4,
+              "labelRect": {
+                "relation": {
+                  "id": "model-harness",
+                  "from": "model",
+                  "to": "harness",
+                  "label": "Model interaction",
+                  "variant": "default",
+                  "fromSide": "right",
+                  "toSide": "left"
+                },
+                "relationIndex": 3,
+                "label": "Model interaction",
+                "x": 622.5,
+                "y": 383.5,
+                "width": 91.6,
+                "height": 14,
+                "lx": 668.3,
+                "ly": 393.5
+              },
+              "from": [
+                664.1999999999999,
+                210
+              ],
+              "to": [
+                664.1999999999999,
+                403.5
+              ]
+            },
+            "supportedFixes": [
+              "if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+            ]
+          },
+          {
+            "code": "composition/label-route-clearance",
+            "severity": "error",
+            "message": "[composition/label-route-clearance] showcase architecture label \"Execution facts\" on connections[8] id \"state-runtime\" \"state\" -> \"runtime\" label \"Execution facts\" is 0px from connections[12] id \"policy-runtime\" \"policy\" -> \"runtime\" label \"Authorization · Isolation · Quotas\" segment 1 [664.2, 607.5] -> [664.2, 777.5] (label rect [627, 758, 82, 14]; minimum 4px) — if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+            "subject": {
+              "diagramType": "architecture",
+              "collection": "connections",
+              "index": 8,
+              "id": "state-runtime",
+              "from": "state",
+              "to": "runtime"
+            },
+            "evidence": {
+              "label": "Execution facts",
+              "otherRelationship": {
+                "diagramType": "architecture",
+                "collection": "connections",
+                "index": 12,
+                "id": "policy-runtime",
+                "from": "policy",
+                "to": "runtime"
+              },
+              "segmentIndex": 1,
+              "clearancePx": 0,
+              "minimumPx": 4,
+              "labelRect": {
+                "relation": {
+                  "id": "state-runtime",
+                  "from": "state",
+                  "to": "runtime",
+                  "label": "Execution facts",
+                  "variant": "default",
+                  "fromSide": "right",
+                  "toSide": "left"
+                },
+                "relationIndex": 8,
+                "label": "Execution facts",
+                "x": 627.3,
+                "y": 757.5,
+                "width": 82,
+                "height": 14,
+                "lx": 668.3,
+                "ly": 767.5
+              },
+              "from": [
+                664.1999999999999,
+                607.5
+              ],
+              "to": [
+                664.1999999999999,
+                777.5
+              ]
+            },
+            "supportedFixes": [
+              "if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+            ]
+          },
+          {
+            "code": "composition/label-gap",
+            "severity": "error",
+            "message": "Label \"Model interaction\" has only 57px between \"model\" and \"harness\"; it needs at least 108px to stay beside its route — increase that clear gap or place the connected nodes on another readable row, preserving the label.",
+            "subject": {
+              "diagramType": "architecture",
+              "collection": "connections",
+              "id": "model-harness",
+              "from": "model",
+              "to": "harness"
+            },
+            "evidence": {
+              "clearGapPx": 57.40000000000009,
+              "minimumGapPx": 108,
+              "labelWidthPx": 91.6,
+              "obstacles": [
+                "model",
+                "harness"
+              ]
+            },
+            "supportedFixes": [
+              "increase the clear gap between the connected nodes to at least 108px",
+              "reposition the connected nodes together while preserving the full relationship label"
+            ]
+          },
+          {
+            "code": "composition/label-gap",
+            "severity": "error",
+            "message": "Label \"Execution facts\" has only 57px between \"state\" and \"runtime\"; it needs at least 98px to stay beside its route — increase that clear gap or place the connected nodes on another readable row, preserving the label.",
+            "subject": {
+              "diagramType": "architecture",
+              "collection": "connections",
+              "id": "state-runtime",
+              "from": "state",
+              "to": "runtime"
+            },
+            "evidence": {
+              "clearGapPx": 57.40000000000009,
+              "minimumGapPx": 98,
+              "labelWidthPx": 82,
+              "obstacles": [
+                "state",
+                "runtime"
+              ]
+            },
+            "supportedFixes": [
+              "increase the clear gap between the connected nodes to at least 98px",
+              "reposition the connected nodes together while preserving the full relationship label"
+            ]
+          }
+        ],
+        "provenance": "failed",
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      },
+      "execution": "embedded-in-deliver"
+    },
+    "deliver": {
+      "status": "not-run",
+      "execution": "blocked-by-validate"
+    }
+  },
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "diagnostics": [
+    {
+      "code": "composition/label-route-clearance",
+      "severity": "error",
+      "message": "[composition/label-route-clearance] showcase architecture label \"Model interaction\" on connections[3] id \"model-harness\" \"model\" -> \"harness\" label \"Model interaction\" is 0px from connections[11] id \"registry-harness\" \"registry\" -> \"harness\" label \"Version Gates · Policy · Approval\" segment 3 [664.2, 210] -> [664.2, 403.5] (label rect [623, 384, 92, 14]; minimum 4px) — if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 3,
+        "id": "model-harness",
+        "from": "model",
+        "to": "harness"
+      },
+      "evidence": {
+        "label": "Model interaction",
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 11,
+          "id": "registry-harness",
+          "from": "registry",
+          "to": "harness"
+        },
+        "segmentIndex": 3,
+        "clearancePx": 0,
+        "minimumPx": 4,
+        "labelRect": {
+          "relation": {
+            "id": "model-harness",
+            "from": "model",
+            "to": "harness",
+            "label": "Model interaction",
+            "variant": "default",
+            "fromSide": "right",
+            "toSide": "left"
+          },
+          "relationIndex": 3,
+          "label": "Model interaction",
+          "x": 622.5,
+          "y": 383.5,
+          "width": 91.6,
+          "height": 14,
+          "lx": 668.3,
+          "ly": 393.5
+        },
+        "from": [
+          664.1999999999999,
+          210
+        ],
+        "to": [
+          664.1999999999999,
+          403.5
+        ]
+      },
+      "supportedFixes": [
+        "if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+      ]
+    },
+    {
+      "code": "composition/label-route-clearance",
+      "severity": "error",
+      "message": "[composition/label-route-clearance] showcase architecture label \"Execution facts\" on connections[8] id \"state-runtime\" \"state\" -> \"runtime\" label \"Execution facts\" is 0px from connections[12] id \"policy-runtime\" \"policy\" -> \"runtime\" label \"Authorization · Isolation · Quotas\" segment 1 [664.2, 607.5] -> [664.2, 777.5] (label rect [627, 758, 82, 14]; minimum 4px) — if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 8,
+        "id": "state-runtime",
+        "from": "state",
+        "to": "runtime"
+      },
+      "evidence": {
+        "label": "Execution facts",
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 12,
+          "id": "policy-runtime",
+          "from": "policy",
+          "to": "runtime"
+        },
+        "segmentIndex": 1,
+        "clearancePx": 0,
+        "minimumPx": 4,
+        "labelRect": {
+          "relation": {
+            "id": "state-runtime",
+            "from": "state",
+            "to": "runtime",
+            "label": "Execution facts",
+            "variant": "default",
+            "fromSide": "right",
+            "toSide": "left"
+          },
+          "relationIndex": 8,
+          "label": "Execution facts",
+          "x": 627.3,
+          "y": 757.5,
+          "width": 82,
+          "height": 14,
+          "lx": 668.3,
+          "ly": 767.5
+        },
+        "from": [
+          664.1999999999999,
+          607.5
+        ],
+        "to": [
+          664.1999999999999,
+          777.5
+        ]
+      },
+      "supportedFixes": [
+        "if the authored fromSide/toSide/via/labelAt are not required by the user, remove them so the renderer can re-plan; otherwise preserve that intent and adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+      ]
+    },
+    {
+      "code": "composition/label-gap",
+      "severity": "error",
+      "message": "Label \"Model interaction\" has only 57px between \"model\" and \"harness\"; it needs at least 108px to stay beside its route — increase that clear gap or place the connected nodes on another readable row, preserving the label.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "id": "model-harness",
+        "from": "model",
+        "to": "harness"
+      },
+      "evidence": {
+        "clearGapPx": 57.40000000000009,
+        "minimumGapPx": 108,
+        "labelWidthPx": 91.6,
+        "obstacles": [
+          "model",
+          "harness"
+        ]
+      },
+      "supportedFixes": [
+        "increase the clear gap between the connected nodes to at least 108px",
+        "reposition the connected nodes together while preserving the full relationship label"
+      ]
+    },
+    {
+      "code": "composition/label-gap",
+      "severity": "error",
+      "message": "Label \"Execution facts\" has only 57px between \"state\" and \"runtime\"; it needs at least 98px to stay beside its route — increase that clear gap or place the connected nodes on another readable row, preserving the label.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "id": "state-runtime",
+        "from": "state",
+        "to": "runtime"
+      },
+      "evidence": {
+        "clearGapPx": 57.40000000000009,
+        "minimumGapPx": 98,
+        "labelWidthPx": 82,
+        "obstacles": [
+          "state",
+          "runtime"
+        ]
+      },
+      "supportedFixes": [
+        "increase the clear gap between the connected nodes to at least 98px",
+        "reposition the connected nodes together while preserving the full relationship label"
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/review-6/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/review-6/diagram.finalize-summary.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "validate",
+  "finishedAt": "2026-10-26T18:36:03.404Z",
+  "durationMs": 223,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-26T08:12:17.803Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

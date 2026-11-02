@@ -1,0 +1,238 @@
+{
+  "title": "AIGC Serving",
+  "subtitle": "One Workflow, Independent Runs",
+  "description": "Different stages at one point in time.",
+  "frames": [
+    "#22d3ee",
+    "#539bf5",
+    "#fbbf24",
+    "#539bf5",
+    "#fb7185"
+  ],
+  "badges": {
+    "admission": {
+      "text": "Planned",
+      "color": "#fb7185",
+      "filled": false
+    }
+  },
+  "routes": {
+    "definition-create": {
+      "points": [
+        [
+          680,
+          100
+        ],
+        [
+          730,
+          100
+        ]
+      ],
+      "label": [],
+      "labelAt": [
+        0,
+        0
+      ],
+      "color": "#adbac7",
+      "both": false
+    },
+    "requests-create": {
+      "points": [
+        [
+          1030,
+          100
+        ],
+        [
+          980,
+          100
+        ]
+      ],
+      "label": [],
+      "labelAt": [
+        0,
+        0
+      ],
+      "color": "#adbac7",
+      "both": false
+    },
+    "create-a": {
+      "hide": true
+    },
+    "create-c": {
+      "hide": true
+    },
+    "create-b": {
+      "points": [
+        [
+          855,
+          160
+        ],
+        [
+          855,
+          223
+        ]
+      ],
+      "label": [
+        "Every Run binds Workflow v1"
+      ],
+      "labelAt": [
+        1035,
+        194
+      ],
+      "color": "#adbac7",
+      "both": false
+    },
+    "a-provider": {
+      "points": [
+        [
+          555,
+          350
+        ],
+        [
+          555,
+          413
+        ]
+      ],
+      "label": [
+        "Async job & result"
+      ],
+      "labelAt": [
+        450,
+        385
+      ],
+      "color": "#adbac7",
+      "both": true
+    },
+    "provider-a": {
+      "hide": true
+    },
+    "b-records": {
+      "points": [
+        [
+          855,
+          350
+        ],
+        [
+          855,
+          413
+        ]
+      ],
+      "label": [
+        "All Runs"
+      ],
+      "labelAt": [
+        920,
+        385
+      ],
+      "color": "#adbac7",
+      "both": true
+    },
+    "a-records": {
+      "hide": true
+    },
+    "c-records": {
+      "hide": true
+    },
+    "c-output": {
+      "points": [
+        [
+          1155,
+          350
+        ],
+        [
+          1155,
+          413
+        ]
+      ],
+      "label": [
+        "Delivered output"
+      ],
+      "labelAt": [
+        1270,
+        385
+      ],
+      "color": "#adbac7",
+      "both": false
+    },
+    "records-recovery": {
+      "points": [
+        [
+          1304,
+          290
+        ],
+        [
+          1426,
+          290
+        ]
+      ],
+      "label": [
+        "Saved progress"
+      ],
+      "labelAt": [
+        1365,
+        275
+      ],
+      "color": "#adbac7",
+      "both": true
+    },
+    "admission-runs": {
+      "points": [
+        [
+          324,
+          290
+        ],
+        [
+          406,
+          290
+        ]
+      ],
+      "label": [
+        "Admission",
+        "policy"
+      ],
+      "labelAt": [
+        365,
+        260
+      ],
+      "color": "#fb7185",
+      "both": false,
+      "dashed": true
+    }
+  },
+  "footer_title": "What the Demo Demonstrates",
+  "columns": [
+    {
+      "x": 30,
+      "title": "Independent Progress",
+      "color": "#22d3ee",
+      "lines": [
+        "Reuse one Workflow version across concurrent requests",
+        "Keep inputs, progress and outputs separate for each Run"
+      ]
+    },
+    {
+      "x": 600,
+      "title": "Fault Recovery",
+      "color": "#79b3fa",
+      "lines": [
+        "Keep recorded progress and external wait references",
+        "Resume eligible work while retaining its Workflow version"
+      ]
+    },
+    {
+      "x": 1210,
+      "title": "Next: Capacity-aware Scheduling",
+      "color": "#fb7185",
+      "lines": [
+        "Admit work within service capacity and quota limits",
+        "Examine waiting time, resource use and cost"
+      ]
+    }
+  ],
+  "note": "Concurrency and failure correctness come first; capacity and quota policies are a later construction direction.",
+  "legend": [
+    "Data, execution or result relationship",
+    "Two-way service or state interaction",
+    "Policy & admission decisions"
+  ]
+}

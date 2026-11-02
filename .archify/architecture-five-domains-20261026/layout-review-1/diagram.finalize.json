@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-26T18:40:04.088Z",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+    "sha256": "1508f57e7558a16a7866fb57b294e4dc5d9b118c731d65ec6dd08faf58b4732e",
+    "bytes": 10207
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html",
+    "sha256": "4a98297df42855521e96530b05d7d0ee5fe006ae23cccfe4fdfc691bceb02b79",
+    "bytes": 871184
+  },
+  "stages": {
+    "validate": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": null,
+      "command": [
+        "/opt/homebrew/Cellar/node/23.6.0/bin/node",
+        "/private/tmp/emberling-archify/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+        "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html",
+        "--quality",
+        "showcase",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "deliver",
+        "receiptId": "63990115-06b4-4e6b-b210-9178637eb6ef",
+        "stage": "render",
+        "type": "architecture",
+        "input": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+        "output": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html",
+        "error": "Architecture layout validation failed:\n- Label \"Results & Verification Feedback\" overlaps component \"sandbox\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [863, 731, 159, 14]\n  component \"sandbox\" rect: [1000, 685, 246, 85]\n  Suggested fix: set labelAt [942, 677] or set labelDy -64 (above)",
+        "diagnostics": [
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"Results & Verification Feedback\" overlaps component \"sandbox\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [863, 731, 159, 14]\n  component \"sandbox\" rect: [1000, 685, 246, 85]\n  Suggested fix: set labelAt [942, 677] or set labelDy -64 (above)",
+            "subject": {
+              "diagramType": "architecture"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          }
+        ],
+        "provenance": "failed",
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      },
+      "execution": "embedded-in-deliver"
+    },
+    "deliver": {
+      "status": "not-run",
+      "execution": "blocked-by-validate"
+    }
+  },
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "diagnostics": [
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"Results & Verification Feedback\" overlaps component \"sandbox\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [863, 731, 159, 14]\n  component \"sandbox\" rect: [1000, 685, 246, 85]\n  Suggested fix: set labelAt [942, 677] or set labelDy -64 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    }
+  ],
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/layout-review-1/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/layout-review-1/diagram.finalize-summary.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "validate",
+  "finishedAt": "2026-10-26T18:40:04.319Z",
+  "durationMs": 230,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-26T08:12:17.803Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

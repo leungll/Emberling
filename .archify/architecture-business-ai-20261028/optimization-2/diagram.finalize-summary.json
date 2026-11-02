@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/candidate.json",
+    "sha256": "515215a58c1c9338b9893984ffe9f362d76bfad50bae75d17f67280eb7a2ae32",
+    "bytes": 4802
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+    "sha256": "f22634946591e90b9c2b1d2ada7d1519d609a0aa18a694def16a6c46b1ddeb52",
+    "bytes": 839092
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/optimization-2/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/optimization-2/diagram.finalize-summary.json",
+    "browserCheckReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/optimization-2/diagram.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-29T05:47:21.525Z",
+    "source": "network",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2176,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  }
+}

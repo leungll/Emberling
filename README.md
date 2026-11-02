@@ -34,7 +34,7 @@ flowchart LR
 
     FACTS --> RECOVERY["Recovery"]
     FACTS --> TRACE["Trace"]
-    FACTS -. "Phase 2" .-> EVAL["Evaluation"]
+    FACTS -. "Phase 4" .-> EVAL["Evaluation"]
     FACTS -. "Roadmap" .-> LEARN["Learning Runtime"]
 ```
 
@@ -152,33 +152,36 @@ This is waiting recovery with explicit side-effect boundaries—not a claim of g
 
 ## Evolution roadmap
 
-Isolated execution extends what AI applications can do while keeping their Decisions, Actions and results in Emberling's execution ledger. The AX integration remains a roadmap experiment, not a shipped MVP capability.
-
-Later capabilities continue to build on the same Execution Runtime. The system may use completed Runs to produce candidate Definitions, but a Run remains bound to the version selected when it was created.
+Emberling has completed its foundation for asynchronous and long-running task execution. The next phases focus on reliable execution under failure, end-to-end task delivery, validation and evaluation, and ongoing agent responsibilities. Work across phases may overlap.
 
 ```mermaid
 timeline
-    title Emberling Runtime evolution
-    MVP : Execution Foundation
-        : Waiting recovery
-        : Persisted Agent Actions
-        : Event-backed Trace
-    Phase 2 : Runtime Maturity
-            : Evaluation from Execution records
-            : Human Review and cancellation
-    Phase 3 : Evaluation and Optimization
-            : Generate optimization proposals
-            : Create candidate Definitions
-            : Run regression tests in isolation
-    Phase 4 : Controlled Recursive Self-Improvement (RSI)
-            : Quota and policy checks
-            : Versioned Definition releases
-            : Automatic rollback on failure
+    MVP · Async and Long-Running Execution (Completed) : Unified workflow and agent execution
+                    : Async waits and recovery after restart
+                    : Idempotent callbacks and side-effect-aware retries
+                    : Persisted decisions and full execution history
+    Phase 2 · Reliable Execution Under Failure : Multi-instance failover and external result reconciliation
+            : Fault injection and timeout and cancellation propagation
+            : Queueing by capacity, priority and budget
+            : Standardized tracing and cost accounting
+    Phase 3 · End-to-End Task Delivery : External agents and parallel delegation
+            : Isolated sandboxes, credentials and persistent workspaces
+            : Permission checks, approvals and human decisions
+            : Acceptance based on tests and artifacts
+    Phase 4 · Validation and Evaluation : Pinned dependencies and isolated reruns
+            : Batch evaluation, feedback and failure attribution
+            : Version comparison, release gates and rollback
+            : Tool risk tiers and per-task cost limits
+    Phase 5 · Ongoing Responsibilities : Scheduled and event-driven work toward long-term goals
+            : Agent handoffs with narrower permissions and budgets
+            : Validated experience captured as Memory and Skills
+            : Evaluation-gated self-improvement
 ```
 
-Recursive Self-Improvement (RSI) follows the same versioned release process: each optimization produces a new Definition, validates it through isolated Executions and regression tests, and applies it only to newly created Runs after it passes. Runs already in progress remain on their original version.
+Later capabilities continue to build on the same Execution Runtime. Improved versions apply only to newly created Runs; Runs already in progress remain bound to the version selected when they were created, regardless of later configuration changes.
 
 ---
 
-**Project stage:** Runtime design contracts are complete; implementation is next.  
+**Project stage:** MVP complete; reliable execution under failure is next.
+
 **Target stack:** Go · PostgreSQL · React · TypeScript · React Flow

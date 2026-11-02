@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/candidate.json",
+    "sha256": "41df9349ca3288d005c13feb39e9b04f6c07fdb65c0441c23433416f8de047c5",
+    "bytes": 2339
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html",
+    "sha256": "d21fe2cc1886b4c031cadacc5aeefb9a7b70b7ab48be1467e44e26121bcb96e3",
+    "bytes": 834923
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "fail"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/browser-check-runtime",
+      "severity": "error",
+      "message": "browser-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.html"
+      },
+      "evidence": {
+        "reason": "Chrome DevTools read pipe failed: stream ended\nChrome process: still running.\nChrome transport: Node v23.6.0, libuv 1.52.1, darwin; pid=8044, exitCode=null, signalCode=null.\nChrome read pipe: readable=false, ended=true, destroyed=false, receivedBytes=0, messages=0, bufferedBytes=0.\nChrome write pipe: writable=true, ended=false, destroyed=false, completedWrites=1, writtenBytes=50, bufferedBytes=0."
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.finalize-summary.json",
+    "browserCheckReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-business-ai-20261028/diagram.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 5959,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  }
+}

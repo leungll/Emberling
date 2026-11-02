@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+    "sha256": "1508f57e7558a16a7866fb57b294e4dc5d9b118c731d65ec6dd08faf58b4732e",
+    "bytes": 10207
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html",
+    "sha256": "4a98297df42855521e96530b05d7d0ee5fe006ae23cccfe4fdfc691bceb02b79",
+    "bytes": 871184
+  },
+  "gates": {
+    "validate": "fail",
+    "deliver": "not-run",
+    "check": "not-run",
+    "browser-check": "not-run"
+  },
+  "failedStage": "validate",
+  "diagnostics": [
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"Results & Verification Feedback\" overlaps component \"sandbox\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [863, 731, 159, 14]\n  component \"sandbox\" rect: [1000, 685, 246, 85]\n  Suggested fix: set labelAt [942, 677] or set labelDy -64 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      }
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/layout-review-1/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/layout-review-1/diagram.finalize-summary.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-26T08:12:17.803Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 230,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "nextAction": {
+    "action": "edit-in-place",
+    "candidate": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+    "constraint": "Preserve unaffected semantics and geometry; apply each diagnostic's supportedFixes, or the fix its message names, and do not replace the whole candidate.",
+    "then": "finalize-once"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+    "sha256": "d1b9d6a9d327ee5e4232088d0f1caf38786251faeb171d5b17b4cf732332115a",
+    "bytes": 10296
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/diagram.html"
+  },
+  "gates": {
+    "validate": "fail",
+    "deliver": "not-run",
+    "check": "not-run",
+    "browser-check": "not-run"
+  },
+  "failedStage": "validate",
+  "diagnostics": [
+    {
+      "code": "artifact/orthogonal-arrows",
+      "severity": "error",
+      "message": "path 13 segment 2: expected an orthogonal segment or an explicitly authored direct straight route; <path data-edge-from=\"policy\" data-edge-to=\"runtime\" data-edge-label=\"Authorization · Isolation · Quotas\" data-edge-key=\"12\" data-edge-id=\"policy-runtime\" data-composition-points=\"287,607.5;319.79999999999995,607.5;664.1999999999999,599.25;664.1999999999999,777.5;697,777.5\" d=\"M 287 607.5 L 311.79999999999995 607.5 Q 319.79999999999995 607.5 327.7977056760201 607.3084173291894 L 656.2022943239798 599.4415826708106 Q 664.1999999999999 599.25 664.1999999999999 607.25 L 664.1999999999999 769.5 Q 664.1999999999999 777.5 672.1999999999999 777.5 L 697 777.5\" class=\"a-security\" data-animate=\"edge\" style=\"--step:12\" stroke-width=\"1.5\" marker-end=\"url(#arrowhead-security)\"/>",
+      "subject": {
+        "check": "orthogonal_arrows"
+      },
+      "evidence": {
+        "details": [
+          "path 13 segment 2: expected an orthogonal segment or an explicitly authored direct straight route; <path data-edge-from=\"policy\" data-edge-to=\"runtime\" data-edge-label=\"Authorization · Isolation · Quotas\" data-edge-key=\"12\" data-edge-id=\"policy-runtime\" data-composition-points=\"287,607.5;319.79999999999995,607.5;664.1999999999999,599.25;664.1999999999999,777.5;697,777.5\" d=\"M 287 607.5 L 311.79999999999995 607.5 Q 319.79999999999995 607.5 327.7977056760201 607.3084173291894 L 656.2022943239798 599.4415826708106 Q 664.1999999999999 599.25 664.1999999999999 607.25 L 664.1999999999999 769.5 Q 664.1999999999999 777.5 672.1999999999999 777.5 L 697 777.5\" class=\"a-security\" data-animate=\"edge\" style=\"--step:12\" stroke-width=\"1.5\" marker-end=\"url(#arrowhead-security)\"/>"
+        ]
+      },
+      "supportedFixes": [
+        "use renderer-supported orthogonal routing controls"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/review-4/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/review-4/diagram.finalize-summary.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-26T08:12:17.803Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 337,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "nextAction": {
+    "action": "edit-in-place",
+    "candidate": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-five-domains-20261026/candidate.json",
+    "constraint": "Preserve unaffected semantics and geometry; apply each diagnostic's supportedFixes, or the fix its message names, and do not replace the whole candidate.",
+    "then": "finalize-once"
+  }
+}

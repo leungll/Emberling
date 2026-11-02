@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-agent-infra-20261026/candidate.json",
+    "sha256": "60b88edf6b82b1bd79521d0fe642a6de5dbd0319d8bec0b8776c431557e4c810",
+    "bytes": 5794
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-agent-infra-20261026/diagram.html",
+    "sha256": "bccd346be061f0ed6b39823927e4ee2f38a77be8fc0ed085cca7543554d5265d",
+    "bytes": 852184
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-agent-infra-20261026/review-3/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-agent-infra-20261026/review-3/diagram.finalize-summary.json",
+    "browserCheckReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-agent-infra-20261026/review-3/diagram.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-26T08:12:17.803Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2369,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 4,
+      "routesOverSuggestedBends": 2,
+      "routesOverSuggestedStretch": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "environment-verification",
+            "from": "environment",
+            "to": "verification",
+            "label": "产物与结果",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "right": {
+            "id": "verification-harness",
+            "from": "verification",
+            "to": "harness",
+            "label": "反馈修正",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "point": [
+            796,
+            307
+          ],
+          "sharedNode": "verification"
+        },
+        {
+          "left": {
+            "id": "environment-verification",
+            "from": "environment",
+            "to": "verification",
+            "label": "产物与结果",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "right": {
+            "id": "runtime-evaluation",
+            "from": "runtime",
+            "to": "evaluation",
+            "label": "运行记录",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "point": [
+            796,
+            500
+          ]
+        },
+        {
+          "left": {
+            "id": "environment-verification",
+            "from": "environment",
+            "to": "verification",
+            "label": "产物与结果",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "right": {
+            "id": "evaluation-release",
+            "from": "evaluation",
+            "to": "release",
+            "label": "评测后采用",
+            "collectionIndex": 10,
+            "artifactIndex": 11
+          },
+          "point": [
+            817,
+            293
+          ]
+        },
+        {
+          "left": {
+            "id": "verification-harness",
+            "from": "verification",
+            "to": "harness",
+            "label": "反馈修正",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "right": {
+            "id": "evaluation-release",
+            "from": "evaluation",
+            "to": "release",
+            "label": "评测后采用",
+            "collectionIndex": 10,
+            "artifactIndex": 11
+          },
+          "point": [
+            817,
+            307
+          ]
+        }
+      ],
+      "detours": [
+        {
+          "relationship": {
+            "id": "environment-verification",
+            "from": "environment",
+            "to": "verification",
+            "label": "产物与结果",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "bends": 3,
+          "stretch": 1
+        },
+        {
+          "relationship": {
+            "id": "evaluation-release",
+            "from": "evaluation",
+            "to": "release",
+            "label": "评测后采用",
+            "collectionIndex": 10,
+            "artifactIndex": 11
+          },
+          "bends": 4,
+          "stretch": 1.709,
+          "directCorridorBlockers": [
+            {
+              "id": "verification",
+              "label": "结果验证",
+              "box": [
+                820,
+                260,
+                240,
+                80
+              ]
+            }
+          ]
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "environment → verification and verification → harness cross next to verification: move node environment or harness so the two reach verification from different sides (for example one level with it, one directly above or below it).",
+      "environment → verification crosses runtime → evaluation: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "environment → verification crosses evaluation → release: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "verification → harness crosses evaluation → release: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "environment → verification needs 3 bends: move node environment or verification so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

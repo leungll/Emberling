@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-aigc-serving-20261028/candidate.json",
+    "sha256": "7d7d343234c95846dedacbdb60b870babce52d15bbbe216b3d92797f3ff8d61e",
+    "bytes": 5732
+  },
+  "artifact": {
+    "path": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-aigc-serving-20261028/diagram.html",
+    "sha256": "b899d28807f9b46a24f016c4c3eee71375f40fafd795289585e1e48d20d19030",
+    "bytes": 848987
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-aigc-serving-20261028/review-1/diagram.finalize.json",
+    "summaryReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-aigc-serving-20261028/review-1/diagram.finalize-summary.json",
+    "browserCheckReceipt": "/Users/ll_leung/Development/GitHub/Emberling/.archify/architecture-aigc-serving-20261028/review-1/diagram.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-27T18:32:09.058Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 3048,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  }
+}

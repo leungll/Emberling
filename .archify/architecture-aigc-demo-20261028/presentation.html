@@ -1,0 +1,144 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AIGC Demo：独立请求、异步生成与验证</title><style>*{box-sizing:border-box}body{margin:0;background:#171c23;color:#cdd9e5;font:14px -apple-system,sans-serif}nav{padding:14px 24px;display:flex;gap:12px;align-items:center;border-bottom:1px solid #444c56}nav strong{margin-right:auto}a,button{color:#adbac7;background:#22272e;border:1px solid #444c56;border-radius:7px;padding:8px 12px;text-decoration:none;cursor:pointer}main{overflow:auto;padding:20px}svg{display:block;width:100%;min-width:1000px;height:auto;margin:auto;max-width:1920px}</style><nav><strong>AIGC Demo：独立请求、异步生成与验证</strong><button onclick="document.querySelector('svg').style.width='140%'">放大</button><button onclick="document.querySelector('svg').style.width='100%'">适应宽度</button><a href="diagram.html">查看关系与编辑结构</a><a href="candidate.json" download>下载图源</a><a href="../../docs/assets/aigc-demo-requests.svg" download>下载 SVG</a></nav><main><svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img">
+<defs>
+  <linearGradient id="canvas" x2="1" y2="1"><stop stop-color="#22272e"/><stop offset="1" stop-color="#171c23"/></linearGradient>
+  <linearGradient id="card" x2="1" y2="1"><stop stop-color="#303741"/><stop offset="1" stop-color="#272e37"/></linearGradient>
+  <linearGradient id="core" x2="1" y2="1"><stop stop-color="#2b3543"/><stop offset="1" stop-color="#222a35"/></linearGradient>
+  <filter id="shadow" x="-20%" y="-25%" width="140%" height="160%"><feDropShadow dx="0" dy="7" stdDeviation="10" flood-color="#080b10" flood-opacity=".25"/></filter>
+  <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#536171" opacity=".2"/></pattern>
+  <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8" fill="#768390"/></marker>
+  <marker id="feedback" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8" fill="#986ee2"/></marker>
+  </defs><style>text{font-family:"PingFang SC","Microsoft YaHei",sans-serif} .route{fill:none;stroke:#768390;stroke-width:2;stroke-linejoin:round;stroke-linecap:round} .return{stroke:#986ee2;stroke-dasharray:7 6} </style>
+<rect x="0" y="0" width="1600" height="1080" rx="0" fill="url(#canvas)" stroke="none" />
+<rect width="1600" height="1080" fill="url(#dots)"/>
+<rect x="46" y="43" width="4" height="56" rx="2" fill="#539bf5" stroke="none" />
+<text x="64" y="56" font-size="12" fill="#539bf5" font-weight="600" text-anchor="start" letter-spacing="2">AIGC DEMO  /  02</text>
+<text x="64" y="95" font-size="30" fill="#cdd9e5" font-weight="650" text-anchor="start" >多个请求，独立推进</text>
+<text x="64" y="127" font-size="15" fill="#adbac7" font-weight="400" text-anchor="start" >以模拟图像生成，验证异步等待、故障恢复、结果归属与版本绑定。</text>
+<text x="60" y="194" font-size="15" fill="#cdd9e5" font-weight="600" text-anchor="start" >用户请求</text>
+<text x="520" y="194" font-size="15" fill="#cdd9e5" font-weight="600" text-anchor="start" >持久化执行</text>
+<text x="1180" y="194" font-size="15" fill="#cdd9e5" font-weight="600" text-anchor="start" >外部生成与结果交付</text>
+<rect x="60" y="230" width="300" height="118" rx="12" fill="url(#card)" stroke="#444c56" filter="url(#shadow)"/>
+<rect x="61" y="246" width="3" height="86" rx="2" fill="#539bf5" stroke="none" />
+<rect x="77" y="247" width="40" height="40" rx="10" fill="#22272e" stroke="none" />
+<g transform="translate(84 254) scale(0.9)" fill="none" stroke="#539bf5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4 H25 V24 H3 Z M3 18 10 11 16 17 20 13 25 18 M19 8 h.1"/></g>
+<text x="130" y="267" font-size="18" fill="#cdd9e5" font-weight="600" text-anchor="start" >请求 A</text>
+<text x="130" y="291" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >创作要求 A</text>
+<path d="M80 306 H340" class="route" style="stroke:#444c56"/>
+<text x="80" y="329" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >等待外部结果</text>
+<rect x="284" y="247" width="52" height="26" rx="13" fill="#22272e" stroke="#539bf5" stroke-opacity=".4"/>
+<text x="310.0" y="265" font-size="12" fill="#539bf5" font-weight="500" text-anchor="middle" >v1</text>
+<path d="M360 288 H516" class="route" marker-end="url(#arrow)"/>
+<rect x="409" y="273" width="65" height="26" rx="13" fill="#22272e" stroke="#539bf5" stroke-opacity=".4"/>
+<text x="441.5" y="291" font-size="12" fill="#539bf5" font-weight="500" text-anchor="middle" >Run A</text>
+<rect x="60" y="385" width="300" height="118" rx="12" fill="url(#card)" stroke="#444c56" filter="url(#shadow)"/>
+<rect x="61" y="401" width="3" height="86" rx="2" fill="#539bf5" stroke="none" />
+<rect x="77" y="402" width="40" height="40" rx="10" fill="#22272e" stroke="none" />
+<g transform="translate(84 409) scale(0.9)" fill="none" stroke="#539bf5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4 H25 V24 H3 Z M3 18 10 11 16 17 20 13 25 18 M19 8 h.1"/></g>
+<text x="130" y="422" font-size="18" fill="#cdd9e5" font-weight="600" text-anchor="start" >请求 B</text>
+<text x="130" y="446" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >创作要求 B</text>
+<path d="M80 461 H340" class="route" style="stroke:#444c56"/>
+<text x="80" y="484" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >等待外部结果</text>
+<rect x="284" y="402" width="52" height="26" rx="13" fill="#22272e" stroke="#539bf5" stroke-opacity=".4"/>
+<text x="310.0" y="420" font-size="12" fill="#539bf5" font-weight="500" text-anchor="middle" >v1</text>
+<path d="M360 443 H516" class="route" marker-end="url(#arrow)"/>
+<rect x="409" y="428" width="65" height="26" rx="13" fill="#22272e" stroke="#539bf5" stroke-opacity=".4"/>
+<text x="441.5" y="446" font-size="12" fill="#539bf5" font-weight="500" text-anchor="middle" >Run B</text>
+<rect x="60" y="540" width="300" height="118" rx="12" fill="url(#card)" stroke="#444c56" filter="url(#shadow)"/>
+<rect x="61" y="556" width="3" height="86" rx="2" fill="#c69026" stroke="none" />
+<rect x="77" y="557" width="40" height="40" rx="10" fill="#22272e" stroke="none" />
+<g transform="translate(84 564) scale(0.9)" fill="none" stroke="#c69026" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M25 14 A11 11 0 1 1 3 14 A11 11 0 1 1 25 14 M14 7 V14 L19 17"/></g>
+<text x="130" y="577" font-size="18" fill="#cdd9e5" font-weight="600" text-anchor="start" >请求 C</text>
+<text x="130" y="601" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >创作要求 C</text>
+<path d="M80 616 H340" class="route" style="stroke:#444c56"/>
+<text x="80" y="639" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >已保存，生成节点尚未执行</text>
+<rect x="284" y="557" width="52" height="26" rx="13" fill="#22272e" stroke="#539bf5" stroke-opacity=".4"/>
+<text x="310.0" y="575" font-size="12" fill="#539bf5" font-weight="500" text-anchor="middle" >v1</text>
+<path d="M360 598 H516" class="route" marker-end="url(#arrow)"/>
+<rect x="409" y="583" width="65" height="26" rx="13" fill="#22272e" stroke="#539bf5" stroke-opacity=".4"/>
+<text x="441.5" y="601" font-size="12" fill="#539bf5" font-weight="500" text-anchor="middle" >Run C</text>
+<rect x="520" y="218" width="520" height="475" rx="20" fill="url(#core)" stroke="#539bf5" filter="url(#shadow)" stroke-opacity=".65"/>
+<rect x="541" y="240" width="48" height="48" rx="12" fill="#22272e" stroke="none" />
+<g transform="translate(551 250) scale(1)" fill="none" stroke="#539bf5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6 H22 V22 H6 Z M10 10 H18 V18 H10 Z M10 1 V6 M18 1 V6 M10 22 V27 M18 22 V27 M1 10 H6 M1 18 H6 M22 10 H27 M22 18 H27"/></g>
+<text x="608" y="263" font-size="25" fill="#cdd9e5" font-weight="650" text-anchor="start" >Emberling</text>
+<text x="608" y="286" font-size="14" fill="#adbac7" font-weight="400" text-anchor="start" >Execution Runtime</text>
+<rect x="883" y="249" width="130" height="26" rx="13" fill="#22272e" stroke="#539bf5" stroke-opacity=".4"/>
+<text x="948.0" y="267" font-size="12" fill="#539bf5" font-weight="500" text-anchor="middle" >独立 Run</text>
+<text x="548" y="329" font-size="14" fill="#cdd9e5" font-weight="400" text-anchor="start" >每个请求保存自己的进度与绑定版本</text>
+<rect x="544" y="350" width="472" height="170" rx="12" fill="#22272e" stroke="#444c56" />
+<text x="563" y="376" font-size="11" fill="#adbac7" font-weight="600" text-anchor="start" >请求</text>
+<text x="665" y="376" font-size="11" fill="#adbac7" font-weight="600" text-anchor="start" >生成节点</text>
+<text x="892" y="376" font-size="11" fill="#adbac7" font-weight="600" text-anchor="start" >版本</text>
+<text x="563" y="409" font-size="14" fill="#cdd9e5" font-weight="600" text-anchor="start" >Run A</text>
+<circle cx="671" cy="404" r="3.5" fill="#539bf5"/>
+<text x="684" y="409" font-size="13" fill="#539bf5" font-weight="400" text-anchor="start" >等待外部结果</text>
+<text x="910" y="409" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >v1</text>
+<path d="M561 428 H997" class="route" style="stroke:#3b444f"/>
+<text x="563" y="452" font-size="14" fill="#cdd9e5" font-weight="600" text-anchor="start" >Run B</text>
+<circle cx="671" cy="447" r="3.5" fill="#539bf5"/>
+<text x="684" y="452" font-size="13" fill="#539bf5" font-weight="400" text-anchor="start" >等待外部结果</text>
+<text x="910" y="452" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >v1</text>
+<path d="M561 471 H997" class="route" style="stroke:#3b444f"/>
+<text x="563" y="495" font-size="14" fill="#cdd9e5" font-weight="600" text-anchor="start" >Run C</text>
+<circle cx="671" cy="490" r="3.5" fill="#c69026"/>
+<text x="684" y="495" font-size="13" fill="#c69026" font-weight="400" text-anchor="start" >尚未开始执行</text>
+<text x="910" y="495" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >v1</text>
+<rect x="544" y="544" width="472" height="124" rx="12" fill="#22272e" stroke="#444c56" />
+<g transform="translate(563 566) scale(1)" fill="none" stroke="#986ee2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6 C3 0 25 0 25 6 C25 12 3 12 3 6 V22 C3 28 25 28 25 22 V6 M3 14 C3 20 25 20 25 14"/></g>
+<text x="608" y="584" font-size="17" fill="#cdd9e5" font-weight="600" text-anchor="start" >PostgreSQL · 执行事实</text>
+<text x="608" y="610" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >状态 · 绑定版本 · 外部任务关联</text>
+<text x="564" y="645" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >保存执行事实，重启后重新发现可处理工作</text>
+<rect x="1180" y="230" width="350" height="166" rx="12" fill="url(#card)" stroke="#444c56" filter="url(#shadow)"/>
+<rect x="1181" y="246" width="3" height="134" rx="2" fill="#57ab5a" stroke="none" />
+<rect x="1197" y="247" width="40" height="40" rx="10" fill="#22272e" stroke="none" />
+<g transform="translate(1204 254) scale(0.9)" fill="none" stroke="#57ab5a" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 23 H23 A6 6 0 0 0 24 11 A9 9 0 0 0 7 9 A7 7 0 0 0 7 23"/></g>
+<text x="1250" y="267" font-size="18" fill="#cdd9e5" font-weight="600" text-anchor="start" >Mock Provider</text>
+<text x="1250" y="291" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >模拟外部图像生成</text>
+<path d="M1200 306 H1510" class="route" style="stroke:#444c56"/>
+<text x="1200" y="329" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >A、B 已派发；C 尚未派发</text>
+<rect x="1200" y="358" width="242" height="26" rx="13" fill="#22272e" stroke="#57ab5a" stroke-opacity=".4"/>
+<text x="1321.0" y="376" font-size="12" fill="#57ab5a" font-weight="500" text-anchor="middle" >返回时携带外部任务标识</text>
+<path d="M1040 284 H1176" class="route" marker-end="url(#arrow)"/>
+<text x="1108" y="268" font-size="12" fill="#adbac7" font-weight="400" text-anchor="middle" >提交任务</text>
+<path d="M1180 337 H1044" class="route" marker-end="url(#arrow)"/>
+<text x="1110" y="361" font-size="11" fill="#adbac7" font-weight="400" text-anchor="middle" >Callback / Poll</text>
+<rect x="1180" y="480" width="350" height="180" rx="12" fill="url(#card)" stroke="#444c56" filter="url(#shadow)"/>
+<rect x="1181" y="496" width="3" height="148" rx="2" fill="#c69026" stroke="none" />
+<rect x="1197" y="497" width="40" height="40" rx="10" fill="#22272e" stroke="none" />
+<g transform="translate(1204 504) scale(0.9)" fill="none" stroke="#c69026" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4 H25 V24 H3 Z M8 14 12 18 21 9"/></g>
+<text x="1250" y="517" font-size="18" fill="#cdd9e5" font-weight="600" text-anchor="start" >交付各自的结果</text>
+<text x="1250" y="541" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >按请求关联，不按完成顺序关联</text>
+<path d="M1200 556 H1510" class="route" style="stroke:#444c56"/>
+<text x="1200" y="579" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >C 完成生成后，交付结果 C</text>
+<rect x="1200" y="611" width="135" height="26" rx="13" fill="#22272e" stroke="#c69026" stroke-opacity=".4"/>
+<text x="1267.5" y="629" font-size="12" fill="#c69026" font-weight="500" text-anchor="middle" >A → 结果 A</text>
+<rect x="1350" y="611" width="135" height="26" rx="13" fill="#22272e" stroke="#c69026" stroke-opacity=".4"/>
+<text x="1417.5" y="629" font-size="12" fill="#c69026" font-weight="500" text-anchor="middle" >B → 结果 B</text>
+<path d="M1040 567 H1176" class="route" marker-end="url(#arrow)"/>
+<text x="1110" y="549" font-size="12" fill="#adbac7" font-weight="400" text-anchor="middle" >关联结果</text>
+<rect x="60" y="729" width="1470" height="67" rx="12" fill="#22272e" stroke="#444c56" />
+<g transform="translate(80 748) scale(1)" fill="none" stroke="#986ee2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3 V25 M5 8 C5 17 23 10 23 20 M2 3 A3 3 0 1 0 8 3 A3 3 0 1 0 2 3 M20 24 A3 3 0 1 0 26 24 A3 3 0 1 0 20 24"/></g>
+<text x="124" y="758" font-size="16" fill="#cdd9e5" font-weight="600" text-anchor="start" >执行期间发布 v2</text>
+<text x="124" y="781" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >已有 Run 保持 v1；新请求可选择 v2。</text>
+<rect x="1040" y="749" width="184" height="26" rx="13" fill="#22272e" stroke="#539bf5" stroke-opacity=".4"/>
+<text x="1132.0" y="767" font-size="12" fill="#539bf5" font-weight="500" text-anchor="middle" >已有 Run · v1</text>
+<path d="M1240 762 H1280" class="route" style="stroke:#444c56"/>
+<rect x="1300" y="749" width="204" height="26" rx="13" fill="#22272e" stroke="#986ee2" stroke-opacity=".4"/>
+<text x="1402.0" y="767" font-size="12" fill="#986ee2" font-weight="500" text-anchor="middle" >新请求 · 可选 v2</text>
+<text x="50" y="853" font-size="18" fill="#cdd9e5" font-weight="600" text-anchor="start" >Demo 的三个验证点</text>
+<rect x="50" y="875" width="486" height="140" rx="14" fill="#22272e" stroke="#444c56" />
+<g transform="translate(70 895) scale(0.9)" fill="none" stroke="#539bf5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 10 A10 10 0 0 0 5 6 L2 10 M2 3 V10 H9 M5 18 A10 10 0 0 0 23 22 L26 18 M19 18 H26 V25"/></g>
+<text x="112" y="914" font-size="17" fill="#cdd9e5" font-weight="600" text-anchor="start" >验证 01 · 故障恢复</text>
+<text x="70" y="949" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >等待中的 A、B：保留外部任务关联并接收结果。</text>
+<text x="70" y="974" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >尚未执行的 C：重启后重新发现并继续执行。</text>
+<rect x="557" y="875" width="486" height="140" rx="14" fill="#22272e" stroke="#444c56" />
+<g transform="translate(577 895) scale(0.9)" fill="none" stroke="#986ee2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8 14 2 26 8 14 14 Z M2 14 14 20 26 14 M2 20 14 26 26 20"/></g>
+<text x="619" y="914" font-size="17" fill="#cdd9e5" font-weight="600" text-anchor="start" >验证 02 · 并发与归属</text>
+<text x="577" y="949" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >多个 Run 独立推进，不要求按提交顺序完成。</text>
+<text x="577" y="974" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >结果关联到原请求；重复返回不重复推进。</text>
+<rect x="1064" y="875" width="486" height="140" rx="14" fill="#22272e" stroke="#444c56" />
+<g transform="translate(1084 895) scale(0.9)" fill="none" stroke="#c69026" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3 V25 M5 8 C5 17 23 10 23 20 M2 3 A3 3 0 1 0 8 3 A3 3 0 1 0 2 3 M20 24 A3 3 0 1 0 26 24 A3 3 0 1 0 20 24"/></g>
+<text x="1126" y="914" font-size="17" fill="#cdd9e5" font-weight="600" text-anchor="start" >验证 03 · 版本绑定</text>
+<text x="1084" y="949" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >A、B、C 继续使用各自绑定的 Definition v1。</text>
+<text x="1084" y="974" font-size="13" fill="#adbac7" font-weight="400" text-anchor="start" >发布 v2 后，新请求可选择 v2，不改写旧 Run。</text>
+<text x="50" y="1052" font-size="12" fill="#adbac7" font-weight="400" text-anchor="start" >示意场景：A、B 已派发，C 的生成节点尚未执行；三个请求均绑定 Definition v1。</text>
+</svg></main></html>
