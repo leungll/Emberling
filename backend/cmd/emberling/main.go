@@ -104,7 +104,9 @@ func run(logger *slog.Logger) error {
 	nodeRegistry := registry.NewNodeRegistry()
 	modelRegistry := registry.NewModelRegistry()
 	toolRegistry := registry.NewToolRegistry()
-	compiler := runtime.NewCompiler(nodeRegistry, clock)
+	// The Compiler validates an agent node's workspace against the repositories registered
+	// here; it never reads a repository itself.
+	compiler := runtime.NewCompiler(nodeRegistry, clock, runtime.WithWorkspaceRepositories(cfg.WorkspaceRepositoryIDs()))
 
 	queue := work.NewQueue(0)
 	notifier := api.NewHub()

@@ -88,6 +88,9 @@ type Config struct {
 	// ProviderCapacity is the in-flight task limit per asynchronous Provider id; a
 	// Provider absent from it is not limited.
 	ProviderCapacity map[string]int
+	// WorkspaceRepositories maps each registered repository identifier to its absolute
+	// path. Empty means no Agent workspace can be configured.
+	WorkspaceRepositories map[string]string
 }
 
 // Database addresses PostgreSQL, the authority for Emberling-owned execution facts.
@@ -268,7 +271,8 @@ func Load(env func(string) string) (Config, error) {
 		HTTP: HTTP{
 			Addr: l.optional(KeyHTTPAddr, DefaultHTTPAddr),
 		},
-		ProviderCapacity: l.providerCapacity(),
+		ProviderCapacity:      l.providerCapacity(),
+		WorkspaceRepositories: l.workspaceRepositories(),
 	}
 
 	if err := l.err(); err != nil {
@@ -370,6 +374,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := validateProviderCapacity(c.ProviderCapacity); err != nil {
+		return err
+	}
+	if err := validateWorkspaceRepositories(c.WorkspaceRepositories); err != nil {
 		return err
 	}
 	return c.TaskGateway.validate(c.OpenAIModel, c.ImageModel)
