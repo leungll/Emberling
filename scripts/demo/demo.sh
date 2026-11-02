@@ -18,6 +18,10 @@
 #                                       asset is rejected before any dispatch;
 #                   photo-limit         photo-set.sh limit: a generation past the frozen
 #                                       limit is rejected before any dispatch;
+#                   photo-sync-crash    photo-sync-crash.sh: SIGKILL while the first
+#                                       synchronous generation is held at the Provider; the
+#                                       restarted Backend reports RESULT_UNCERTAIN to the
+#                                       Agent, which generates the photo again;
 #                   delivery            delivery.sh main: an Agent tests a patch in the
 #                                       sandbox runner, answered by callback, then deploys
 #                                       it once to the mock production service;
@@ -65,14 +69,14 @@ run)
 
   case "${EMBERLING_DEMO_VARIANT:-all}" in
   all)
-    variants=(held-before-accept after-accept photo-set photo-gate photo-limit
+    variants=(held-before-accept after-accept photo-set photo-gate photo-limit photo-sync-crash
       delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery)
     ;;
-  held-before-accept | after-accept | photo-set | photo-gate | photo-limit | delivery | \
+  held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | delivery | \
     delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, delivery, delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery" ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, delivery, delivery-restart-during-test, delivery-deploy-lost or delivery-runner-redelivery" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -91,6 +95,7 @@ run)
     photo-set) script=photo-set.sh story=main ;;
     photo-gate) script=photo-set.sh story=gate ;;
     photo-limit) script=photo-set.sh story=limit ;;
+    photo-sync-crash) script=photo-sync-crash.sh ;;
     delivery) script=delivery.sh story=main ;;
     delivery-restart-during-test) script=delivery.sh story=restart ;;
     delivery-deploy-lost) script=delivery.sh story=deploy-lost ;;
