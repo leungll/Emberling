@@ -187,6 +187,16 @@ func run(logger *slog.Logger) error {
 				return err
 			}
 			taskClient := &http.Client{Timeout: defaultTaskDispatchTimeout}
+			// Each image model's tasks go to the Provider its registration names: the Mock
+			// Provider always, and the task gateway when it is configured.
+			taskProviders := []imagegeneration.TaskProvider{mocktask.New(cfg.ModelProvider.BaseURL, taskClient)}
+			gatewayTasks, err := registerTaskGateway(ctx, modelRegistry, cfg.TaskGateway, taskClient)
+			if err != nil {
+				return err
+			}
+			if gatewayTasks != nil {
+				taskProviders = append(taskProviders, gatewayTasks)
+			}
 			// TODO: Move built-in node registration into a dedicated package or helper so adding
 			// new node types does not require editing the process entry point.
 			registrations := []registry.NodeRegistration{
@@ -198,7 +208,7 @@ func run(logger *slog.Logger) error {
 				mediaoutput.Registration(),
 				mediaresult.Registration(),
 				textgeneration.Registration(modelRegistry),
-				imagegeneration.Registration(modelRegistry, mocktask.New(cfg.ModelProvider.BaseURL, taskClient)),
+				imagegeneration.Registration(modelRegistry, taskProviders...),
 				agent.Registration(),
 			}
 			for _, reg := range registrations {

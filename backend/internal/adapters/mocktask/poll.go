@@ -53,17 +53,17 @@ func (e *PollError) Unwrap() error { return e.err }
 // query is identified by the external task id alone.
 func (a *Adapter) Poll(ctx context.Context, externalTaskID string) (registry.PollStatus, json.RawMessage, error) {
 	if strings.TrimSpace(externalTaskID) == "" {
-		return "", nil, &PollError{ProviderID: ProviderID, err: errors.New("externalTaskId is required")}
+		return "", nil, &PollError{ProviderID: a.providerID, err: errors.New("externalTaskId is required")}
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, a.baseURL+tasksPath+"/"+url.PathEscape(externalTaskID), nil)
 	if err != nil {
-		return "", nil, &PollError{ProviderID: ProviderID, ExternalTaskID: externalTaskID, err: err}
+		return "", nil, &PollError{ProviderID: a.providerID, ExternalTaskID: externalTaskID, err: err}
 	}
 
 	response, err := a.httpClient.Do(request)
 	if err != nil {
-		return "", nil, &PollError{ProviderID: ProviderID, ExternalTaskID: externalTaskID, err: err}
+		return "", nil, &PollError{ProviderID: a.providerID, ExternalTaskID: externalTaskID, err: err}
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))

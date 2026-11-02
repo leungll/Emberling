@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,12 +28,28 @@ func (s stubResolver) Get(string) (registry.ModelRegistration, registry.ModelPro
 	return s.model, nil, true
 }
 
+func (s stubResolver) ProviderID(modelID string) (string, error) {
+	if !s.ok {
+		return "", fmt.Errorf("model %q: %w", modelID, registry.ErrModelNotRegistered)
+	}
+	if s.model.ProviderID == "" {
+		return "", fmt.Errorf("model %q: %w", modelID, registry.ErrModelProviderNotDeclared)
+	}
+	return s.model.ProviderID, nil
+}
+
+// newTestExecutor builds the Executor through Registration, as the process does.
+func newTestExecutor(resolver ModelResolver, providers ...TaskProvider) Executor {
+	return Registration(resolver, providers...).Binding.(registry.ExecutorBinding).Executor.(Executor)
+}
+
 func imageModel() registry.ModelRegistration {
 	return registry.ModelRegistration{ModelMetadata: domain.ModelMetadata{
 		ID:           "image-model-v1",
 		DisplayName:  "Image Model v1",
 		Capabilities: []string{domain.ModelCapabilityImageGeneration},
 		ConfigSchema: json.RawMessage(`{"type": "object"}`),
+		ProviderID:   mocktask.ProviderID,
 	}}
 }
 
@@ -58,8 +75,10 @@ func (d *recordingDispatcher) Dispatch(_ context.Context, prompt string, referen
 	return d.task, d.err
 }
 
-// Poll lets recordingDispatcher stand in for the whole TaskProvider in Registration; the
-// tests that use it never poll.
+// ProviderID and Poll let recordingDispatcher stand in for the whole TaskProvider in
+// Registration, as the Mock Provider's instance; the tests that use it never poll.
+func (d *recordingDispatcher) ProviderID() string { return mocktask.ProviderID }
+
 func (d *recordingDispatcher) Poll(context.Context, string) (registry.PollStatus, json.RawMessage, error) {
 	return registry.PollStatusUnknown, nil, nil
 }
@@ -142,7 +161,7 @@ func TestRegistration_Validate_Passes(t *testing.T) {
 }
 
 func TestImageGenerationExecutor_ValidateSemantics_UnknownModelFails(t *testing.T) {
-	e := Executor{resolver: stubResolver{ok: false}, dispatcher: &recordingDispatcher{}}
+	e := newTestExecutor(stubResolver{ok: false}, &recordingDispatcher{})
 	if err := e.ValidateSemantics(context.Background(), validConfig()); err == nil {
 		t.Fatal("ValidateSemantics() error = nil, want error for unregistered model")
 	}
@@ -151,7 +170,7 @@ func TestImageGenerationExecutor_ValidateSemantics_UnknownModelFails(t *testing.
 func TestImageGenerationExecutor_ValidateSemantics_MissingCapabilityFails(t *testing.T) {
 	model := imageModel()
 	model.Capabilities = []string{domain.ModelCapabilityTextGeneration}
-	e := Executor{resolver: stubResolver{model: model, ok: true}, dispatcher: &recordingDispatcher{}}
+	e := newTestExecutor(stubResolver{model: model, ok: true}, &recordingDispatcher{})
 	if err := e.ValidateSemantics(context.Background(), validConfig()); err == nil {
 		t.Fatal("ValidateSemantics() error = nil, want error for a model without image_generation capability")
 	}
@@ -162,7 +181,7 @@ func TestImageGenerationExecutor_ValidateSemantics_MissingCapabilityFails(t *tes
 // so Execute must fail loudly instead of dispatching a task nobody can report back on.
 func TestImageGenerationNode_Execute_WithoutCallbackContext_Fails(t *testing.T) {
 	dispatcher := &recordingDispatcher{task: registry.ExternalTask{ProviderID: "p", ExternalTaskID: "t"}}
-	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: dispatcher}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, dispatcher)
 
 	result, err := e.Execute(context.Background(), promptInput(nil, "nr_1"), validConfig())
 	if err == nil {
@@ -193,10 +212,7 @@ func TestImageGenerationNode_Execute_ForwardsIdempotencyKeyAndReturnsDispatched(
 	}))
 	t.Cleanup(server.Close)
 
-	e := Executor{
-		resolver:   stubResolver{model: imageModel(), ok: true},
-		dispatcher: mocktask.New(server.URL, server.Client()),
-	}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, mocktask.New(server.URL, server.Client()))
 	callback := registry.CallbackContext{URL: "http://emberling.test/callbacks/attempt_1", Token: "plaintext-callback-token"}
 
 	result, err := e.Execute(context.Background(), promptInput(&callback, "nr_1"), validConfig())
@@ -242,7 +258,7 @@ func TestImageGenerationNode_Execute_EmptyIdempotencyKeyIsNotInvented(t *testing
 	}))
 	t.Cleanup(server.Close)
 
-	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: mocktask.New(server.URL, server.Client())}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, mocktask.New(server.URL, server.Client()))
 	callback := registry.CallbackContext{URL: "http://emberling.test/callbacks/attempt_1", Token: "plaintext-callback-token"}
 	if _, err := e.Execute(context.Background(), promptInput(&callback, ""), validConfig()); err != nil {
 		t.Fatalf("Execute() error = %v, want nil", err)
@@ -257,7 +273,7 @@ func TestImageGenerationNode_Execute_EmptyIdempotencyKeyIsNotInvented(t *testing
 // Provider's bytes. Re-encoding is what guarantees a downstream node sees one shape and
 // that nothing the Provider added alongside the reference can ride along.
 func TestImageGenerationNode_OnCallback_SucceededPayload_ProducesNormalisedImageRef(t *testing.T) {
-	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: &recordingDispatcher{}}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, &recordingDispatcher{})
 	cases := map[string]struct{ image, want string }{
 		"external": {
 			image: `{"mediaType":"image/png","width":1024,"uri":"http://provider.test/v1/images/abc.png","source":"EXTERNAL"}`,
@@ -298,7 +314,7 @@ func TestImageGenerationNode_OnCallback_SucceededPayload_ProducesNormalisedImage
 // `image` port. It is a payload this node cannot interpret, so it stays a plain error and
 // the NodeRun stays WAITING_CALLBACK.
 func TestImageGenerationNode_OnCallback_ImageIsNotAnImageRef_ReturnsPlainError(t *testing.T) {
-	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: &recordingDispatcher{}}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, &recordingDispatcher{})
 	cases := map[string]string{
 		"legacy url shape":      `{"url":"http://provider.test/v1/images/abc.png","mediaType":"image/png","width":1024}`,
 		"no source":             `{"uri":"http://provider.test/v1/images/abc.png","mediaType":"image/png"}`,
@@ -328,7 +344,7 @@ func TestImageGenerationNode_OnCallback_ImageIsNotAnImageRef_ReturnsPlainError(t
 }
 
 func TestImageGenerationNode_OnCallback_FailedPayload_ReturnsProviderFailure(t *testing.T) {
-	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: &recordingDispatcher{}}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, &recordingDispatcher{})
 	payload := []byte(`{"status":"FAILED","error":{"code":"PROVIDER_TASK_FAILED","message":"mock provider: task failed by scenario"}}`)
 
 	output, err := e.OnCallback(context.Background(), asyncState(), payload)
@@ -351,7 +367,7 @@ func TestImageGenerationNode_OnCallback_FailedPayload_ReturnsProviderFailure(t *
 // cannot be interpreted is not a Provider-reported task failure. It must stay a plain
 // error, which leaves the NodeRun WAITING_CALLBACK (registry.AsyncNodeExecutor contract).
 func TestImageGenerationNode_OnCallback_MalformedPayload_ReturnsPlainError(t *testing.T) {
-	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: &recordingDispatcher{}}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, &recordingDispatcher{})
 	cases := map[string]string{
 		"not json":             `}{`,
 		"unknown status":       `{"status":"RUNNING"}`,
@@ -391,7 +407,7 @@ const assetReferencePort = `{"source":"ASSET","asset":{"assetId":"asset_123","me
 // name the source image.
 func TestImageGenerationNode_Execute_ReferenceImageRefReachesTheDispatcher(t *testing.T) {
 	dispatcher := &recordingDispatcher{task: registry.ExternalTask{ProviderID: "p", ExternalTaskID: "t"}}
-	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: dispatcher}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, dispatcher)
 	callback := registry.CallbackContext{URL: "http://emberling.test/callbacks/attempt_1", Token: "plaintext-callback-token"}
 	input := promptInput(&callback, "nr_1")
 	input.Ports["reference"] = json.RawMessage(assetReferencePort)
@@ -421,7 +437,7 @@ func TestImageGenerationNode_Execute_AbsentReferenceDispatchesWithoutOne(t *test
 	} {
 		t.Run(name, func(t *testing.T) {
 			dispatcher := &recordingDispatcher{task: registry.ExternalTask{ProviderID: "p", ExternalTaskID: "t"}}
-			e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: dispatcher}
+			e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, dispatcher)
 			callback := registry.CallbackContext{URL: "http://emberling.test/callbacks/attempt_1", Token: "plaintext-callback-token"}
 			input := promptInput(&callback, "nr_1")
 			for port, value := range ports {
@@ -443,7 +459,7 @@ func TestImageGenerationNode_Execute_AbsentReferenceDispatchesWithoutOne(t *test
 // this node can normalise.
 func TestImageGenerationNode_Execute_ReferenceIsNotAnImageRef_DoesNotDispatch(t *testing.T) {
 	dispatcher := &recordingDispatcher{task: registry.ExternalTask{ProviderID: "p", ExternalTaskID: "t"}}
-	e := Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: dispatcher}
+	e := newTestExecutor(stubResolver{model: imageModel(), ok: true}, dispatcher)
 	callback := registry.CallbackContext{URL: "http://emberling.test/callbacks/attempt_1", Token: "plaintext-callback-token"}
 	input := promptInput(&callback, "nr_1")
 	input.Ports["reference"] = json.RawMessage(`{"source":"ASSET"}`)

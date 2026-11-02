@@ -1,7 +1,9 @@
 // Package mocktask normalises the deterministic HTTP Mock Provider's (cmd/mockprovider)
 // asynchronous task interactions, one request per call: POST /v1/tasks accepts one task
 // whose result is reported later as a callback, and GET /v1/tasks/{externalTaskId}
-// answers one status query for an accepted task.
+// answers one status query for an accepted task. An instance created with WithProviderID
+// and WithoutMockScenarios talks to another Provider speaking the same protocol, such as
+// the task gateway, under that Provider's own identity.
 //
 // It converts Emberling's dispatch inputs into that Provider's wire format and the
 // Provider's answer back into a registry.ExternalTask or a normalised poll status. It
@@ -36,8 +38,9 @@ import (
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
 
-// ProviderID is the stable identifier of the Provider this Adapter talks to. It is
-// persisted in the Callback Binding and shown in Trace; it is not a credential.
+// ProviderID is the stable identifier of the Mock Provider, and the Provider ID an Adapter
+// reports unless WithProviderID names another. It is persisted in the Callback Binding and
+// shown in Trace; it is not a credential.
 const ProviderID = "mock-task-provider-v1"
 
 // tasksPath is the Mock Provider's asynchronous task endpoint.
@@ -66,21 +69,50 @@ const mediaType = "image/png"
 // way an integration test can reach its failure, duplicate and lost-callback scenarios.
 const directivePrefix = "mock:"
 
-// Adapter dispatches one task per call to the Mock Provider at baseURL.
+// Adapter dispatches one task per call to the task Provider at baseURL: the Mock
+// Provider, or another Provider speaking the same task protocol.
 type Adapter struct {
 	baseURL    string
 	httpClient *http.Client
+	providerID string
+	// mockScenarios enables the `mock:` prompt directives and the fabricated success
+	// payload, which only the Mock Provider understands.
+	mockScenarios bool
 }
 
-// New returns an Adapter that talks to the Mock Provider at baseURL. A nil client means a
+// Option configures one Adapter instance.
+type Option func(*Adapter)
+
+// WithProviderID makes the instance report id, instead of ProviderID, in every external
+// task identity and error, so a Callback Binding records which Provider ran the task.
+func WithProviderID(id string) Option {
+	return func(a *Adapter) { a.providerID = id }
+}
+
+// WithoutMockScenarios makes the instance talk to a real Provider: the prompt is
+// forwarded verbatim, never read as a `mock:` directive, and no fabricated payload,
+// outcome or delay is sent, so a real Provider never receives a result it did not produce.
+func WithoutMockScenarios() Option {
+	return func(a *Adapter) { a.mockScenarios = false }
+}
+
+// New returns an Adapter that talks to the task Provider at baseURL. A nil client means a
 // default client bounded by defaultTimeout; callers that own a configured client (an
-// httptest server's client, a deployment-wide client) inject it here.
-func New(baseURL string, client *http.Client) *Adapter {
+// httptest server's client, a deployment-wide client) inject it here. Without options the
+// Adapter is the Mock Provider's: it reports ProviderID and honours `mock:` directives.
+func New(baseURL string, client *http.Client, opts ...Option) *Adapter {
 	if client == nil {
 		client = &http.Client{Timeout: defaultTimeout}
 	}
-	return &Adapter{baseURL: strings.TrimRight(baseURL, "/"), httpClient: client}
+	a := &Adapter{baseURL: strings.TrimRight(baseURL, "/"), httpClient: client, providerID: ProviderID, mockScenarios: true}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
+
+// ProviderID is the stable identifier this instance reports.
+func (a *Adapter) ProviderID() string { return a.providerID }
 
 // Dispatch sends one task to the Provider and returns the accepted external task identity.
 //
@@ -99,27 +131,33 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 	if strings.TrimSpace(callback.URL) == "" || strings.TrimSpace(callback.Token) == "" {
 		// Nothing has been sent, so the Provider cannot have accepted a task: definite.
 		return registry.ExternalTask{}, &DispatchError{
-			ProviderID: ProviderID,
+			ProviderID: a.providerID,
 			Op:         "build request",
 			reason:     "callback URL and token are both required for an asynchronous dispatch",
 		}
 	}
 
-	body, err := json.Marshal(a.buildRequest(prompt, reference, options, callback, idempotencyKey))
+	wire := a.buildRequest(prompt, reference, options, callback, idempotencyKey)
+	if deadline, ok := ctx.Deadline(); ok {
+		// The Attempt deadline, so the Provider can bound its own work and its callback
+		// retries by the time after which Emberling no longer waits for the result.
+		wire.Deadline = deadline.UTC().Format(time.RFC3339Nano)
+	}
+	body, err := json.Marshal(wire)
 	if err != nil {
-		return registry.ExternalTask{}, &DispatchError{ProviderID: ProviderID, Op: "build request", reason: "request body could not be encoded"}
+		return registry.ExternalTask{}, &DispatchError{ProviderID: a.providerID, Op: "build request", reason: "request body could not be encoded"}
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+tasksPath, bytes.NewReader(body))
 	if err != nil {
-		return registry.ExternalTask{}, &DispatchError{ProviderID: ProviderID, Op: "build request", reason: "request could not be created", err: err}
+		return registry.ExternalTask{}, &DispatchError{ProviderID: a.providerID, Op: "build request", reason: "request could not be created", err: err}
 	}
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := a.httpClient.Do(request)
 	if err != nil {
 		return registry.ExternalTask{}, &DispatchError{
-			ProviderID: ProviderID,
+			ProviderID: a.providerID,
 			Op:         "send request",
 			uncertain:  sendFailureIsUncertain(err),
 			reason:     sendFailureReason(ctx, err),
@@ -135,7 +173,7 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 		// The body is deliberately not read into the error: a Provider may echo the
 		// request - including the callback token - back inside its own error body.
 		return registry.ExternalTask{}, &DispatchError{
-			ProviderID: ProviderID,
+			ProviderID: a.providerID,
 			Op:         "provider rejected the dispatch",
 			StatusCode: response.StatusCode,
 			uncertain:  statusIsUncertain(response.StatusCode),
@@ -147,7 +185,7 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 	if err := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes)).Decode(&accepted); err != nil {
 		// The Provider answered 2xx, so the task exists; its identity is what was lost.
 		return registry.ExternalTask{}, &DispatchError{
-			ProviderID: ProviderID,
+			ProviderID: a.providerID,
 			Op:         "decode response",
 			StatusCode: response.StatusCode,
 			uncertain:  true,
@@ -156,7 +194,7 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 	}
 	if accepted.ExternalTaskID == "" {
 		return registry.ExternalTask{}, &DispatchError{
-			ProviderID: ProviderID,
+			ProviderID: a.providerID,
 			Op:         "decode response",
 			StatusCode: response.StatusCode,
 			uncertain:  true,
@@ -164,13 +202,14 @@ func (a *Adapter) Dispatch(ctx context.Context, prompt string, reference *domain
 		}
 	}
 
-	return registry.ExternalTask{ProviderID: ProviderID, ExternalTaskID: accepted.ExternalTaskID}, nil
+	return registry.ExternalTask{ProviderID: a.providerID, ExternalTaskID: accepted.ExternalTaskID}, nil
 }
 
-// buildRequest converts the dispatch inputs into the Mock Provider's wire request. A
-// `mock:` directive in prompt selects one of the Provider's own scenarios; any other
-// prompt asks for the deterministic success payload, which is what carries the image
-// reference back in the callback.
+// buildRequest converts the dispatch inputs into the task Provider's wire request. For
+// the Mock Provider, a `mock:` directive in prompt selects one of the Provider's own
+// scenarios and any other prompt asks for the deterministic success payload, which is
+// what carries the image reference back in the callback. Without mock scenarios the
+// request carries the inputs alone.
 func (a *Adapter) buildRequest(prompt string, reference *domain.ImageRef, options map[string]any, callback registry.CallbackContext, idempotencyKey string) taskRequest {
 	request := taskRequest{
 		CallbackURL:    callback.URL,
@@ -179,6 +218,9 @@ func (a *Adapter) buildRequest(prompt string, reference *domain.ImageRef, option
 		Prompt:         prompt,
 		Reference:      reference,
 		Options:        options,
+	}
+	if !a.mockScenarios {
+		return request
 	}
 
 	directive, isDirective := strings.CutPrefix(prompt, directivePrefix)
@@ -272,6 +314,9 @@ type taskRequest struct {
 	Payload        json.RawMessage  `json:"payload,omitempty"`
 	Outcome        string           `json:"outcome,omitempty"`
 	DelayMs        any              `json:"delayMs,omitempty"`
+	// Deadline is the Attempt deadline in RFC 3339 UTC, omitted when the dispatch has
+	// none. The Mock Provider ignores it, as it ignores every member it does not use.
+	Deadline string `json:"deadline,omitempty"`
 }
 
 // taskResponse is the Mock Provider's synchronous answer to an accepted dispatch.

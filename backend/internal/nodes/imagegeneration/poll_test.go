@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
 )
@@ -29,8 +30,16 @@ func (p *stubPoller) Poll(_ context.Context, externalTaskID string) (registry.Po
 	return p.status, p.payload, p.err
 }
 
+// pollingProvider is the Mock Provider's instance with a stubbed status query.
+type pollingProvider struct {
+	TaskDispatcher
+	TaskPoller
+}
+
+func (pollingProvider) ProviderID() string { return mocktask.ProviderID }
+
 func pollingExecutor(poller TaskPoller) Executor {
-	return Executor{resolver: stubResolver{model: imageModel(), ok: true}, dispatcher: &recordingDispatcher{}, poller: poller}
+	return newTestExecutor(stubResolver{model: imageModel(), ok: true}, pollingProvider{TaskDispatcher: &recordingDispatcher{}, TaskPoller: poller})
 }
 
 // TestImageGenerationNode_PollSucceeded_OutputEqualsOnCallbackOutput: a SUCCEEDED poll
