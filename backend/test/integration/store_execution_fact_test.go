@@ -458,7 +458,7 @@ func TestMigrations_ExecutionFacts_AppliesOnTopOfExistingAgentRuns(t *testing.T)
 	}
 
 	uow := postgres.NewUnitOfWork(pool)
-	f := seedRun(ctx, t, uow)
+	f := seedLegacyRun(ctx, t, pool, uow)
 	// Raw SQL: the Store already maps max_generation_calls, which does not exist yet here.
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO agent_runs (id, node_run_id, instructions, model_id, model_config, allowed_tools,
