@@ -21,6 +21,12 @@ type Run struct {
 	StartedAt   time.Time  `json:"startedAt"`
 	CompletedAt *time.Time `json:"completedAt"`
 	UpdatedAt   time.Time  `json:"-"`
+	// IdempotencyKey and IdempotencyDigest are the client submission key and the digest
+	// of the request it first accompanied, both empty for a Run created without a key.
+	// They are written once with the Run and never change. Neither is part of any Run
+	// projection.
+	IdempotencyKey    string `json:"-"`
+	IdempotencyDigest string `json:"-"`
 }
 
 // NodeRun is one Definition node executing inside one Run. It owns the node's overall

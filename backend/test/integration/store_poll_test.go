@@ -353,7 +353,7 @@ func TestMigrations_NodeAttemptPolling_AppliesOnTopOfInitialSchema(t *testing.T)
 	}
 
 	uow := postgres.NewUnitOfWork(pool)
-	f := seedRun(ctx, t, uow)
+	f := seedLegacyRun(ctx, t, pool, uow)
 	// Raw SQL: the Store already maps the new columns, which do not exist yet here.
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO node_attempts (id, node_run_id, attempt_no, status, input, started_at, dispatched_at)

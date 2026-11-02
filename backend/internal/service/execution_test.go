@@ -242,6 +242,10 @@ func (r *execFakeRunRepo) SetOutput(context.Context, *store.RunLock, json.RawMes
 func (r *execFakeRunRepo) SetError(context.Context, *store.RunLock, domain.ExecutionError) error {
 	return errExecFakeNotImplemented
 }
+func (r *execFakeRunRepo) GetByIdempotencyKey(context.Context, string, string) (domain.Run, error) {
+	return domain.Run{}, errExecFakeNotImplemented
+}
+
 func (r *execFakeRunRepo) LatestByWorkflow(context.Context, string) (*domain.Run, error) {
 	return nil, errExecFakeNotImplemented
 }

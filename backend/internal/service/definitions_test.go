@@ -285,6 +285,10 @@ func (r *defsFakeRunRepo) SetError(context.Context, *store.RunLock, domain.Execu
 	return errDefsFakeNotImplemented
 }
 
+func (r *defsFakeRunRepo) GetByIdempotencyKey(context.Context, string, string) (domain.Run, error) {
+	return domain.Run{}, errDefsFakeNotImplemented
+}
+
 func (r *defsFakeRunRepo) LatestByWorkflow(ctx context.Context, workflowID string) (*domain.Run, error) {
 	return r.byWorkflow[workflowID], nil
 }

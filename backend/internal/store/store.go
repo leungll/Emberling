@@ -150,6 +150,12 @@ type RunRepository interface {
 	Create(ctx context.Context, run domain.Run) error
 	Get(ctx context.Context, runID string) (domain.Run, error)
 
+	// GetByIdempotencyKey returns the Run of workflowID created with the given submission
+	// key, or domain.ErrNotFound when no Run of that Workflow holds it. Create reports a
+	// key already held by another Run of the same Workflow as
+	// domain.ErrRunIdempotencyKeyInUse.
+	GetByIdempotencyKey(ctx context.Context, workflowID, key string) (domain.Run, error)
+
 	// LockForUpdate takes the Run aggregate lock with SELECT ... FOR UPDATE. Every
 	// transaction that touches execution facts of this Run must hold it before updating
 	// a NodeRun, an Attempt or Agent facts, and before allocating Event seq.

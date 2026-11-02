@@ -18,6 +18,11 @@ var (
 	// versions are immutable, so the caller must create a new version instead.
 	ErrVersionConflict = fmt.Errorf("emberling: definition version conflict: %w", ErrConflict)
 
+	// ErrRunIdempotencyKeyInUse is returned when a Run insert loses to another Run of the
+	// same Workflow that already holds its submission key. The losing transaction must
+	// roll back whole; the caller then reads the winning Run by that key.
+	ErrRunIdempotencyKeyInUse = fmt.Errorf("emberling: run idempotency key already in use in this workflow: %w", ErrConflict)
+
 	// ErrStaleClaim is returned when a conditional update affected zero rows. The caller
 	// lost the race: another claimant, a callback, a timeout or the Reconciler already
 	// advanced this fact. It is an expected outcome, not a failure to report upward.

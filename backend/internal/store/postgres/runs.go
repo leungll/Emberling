@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/store"
@@ -25,22 +26,86 @@ func (r *runRepository) Create(ctx context.Context, run domain.Run) error {
 
 	const insert = `
 		INSERT INTO runs (id, workflow_id, definition_version, status, input, output, error,
-		                  last_seq, started_at, completed_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+		                  last_seq, started_at, completed_at, updated_at,
+		                  idempotency_key, idempotency_digest)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 	if _, err := r.conn.Exec(ctx, insert,
 		run.ID, run.WorkflowID, run.DefinitionVersion, string(run.Status),
 		run.Input, nullableJSON(run.Output), errPayload,
 		run.LastSeq, run.StartedAt, run.CompletedAt, run.UpdatedAt,
+		nullableText(run.IdempotencyKey), nullableText(run.IdempotencyDigest),
 	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == sqlStateUniqueViolation &&
+			pgErr.ConstraintName == runIdempotencyKeyConstraint {
+			// The key is named by its Workflow only: the key value itself is client
+			// input and stays out of error text.
+			return fmt.Errorf("store/postgres runs.Create [%s %s]: %w", run.ID, run.WorkflowID, domain.ErrRunIdempotencyKeyInUse)
+		}
 		return mapError("runs.Create", err, run.ID)
 	}
 	return nil
 }
 
+// runIdempotencyKeyConstraint is the partial unique index that gives each Workflow its
+// own submission-key space.
+const runIdempotencyKeyConstraint = "runs_workflow_idempotency_key_uq"
+
+// nullableText stores an empty string as NULL, for optional text columns whose absence
+// is NULL rather than an empty value.
+func nullableText(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+// GetByIdempotencyKey reads the Run of a Workflow that holds a submission key, through
+// the partial unique index that also enforces the key's uniqueness.
+func (r *runRepository) GetByIdempotencyKey(ctx context.Context, workflowID, key string) (domain.Run, error) {
+	const query = `
+		SELECT id, workflow_id, definition_version, status, input, output, error,
+		       last_seq, started_at, completed_at, updated_at,
+		       idempotency_key, idempotency_digest
+		  FROM runs WHERE workflow_id = $1 AND idempotency_key = $2`
+
+	var (
+		run        domain.Run
+		status     string
+		output     []byte
+		errPayload []byte
+		idemKey    *string
+		idemDigest *string
+	)
+	err := r.conn.QueryRow(ctx, query, workflowID, key).Scan(
+		&run.ID, &run.WorkflowID, &run.DefinitionVersion, &status, &run.Input, &output, &errPayload,
+		&run.LastSeq, &run.StartedAt, &run.CompletedAt, &run.UpdatedAt, &idemKey, &idemDigest)
+	if err != nil {
+		return domain.Run{}, mapError("runs.GetByIdempotencyKey", err, workflowID)
+	}
+
+	run.Status = domain.RunStatus(status)
+	run.Output = json.RawMessage(output)
+	run.IdempotencyKey, run.IdempotencyDigest = textValue(idemKey), textValue(idemDigest)
+	if run.Error, err = unmarshalExecutionError(errPayload); err != nil {
+		return domain.Run{}, fmt.Errorf("store/postgres runs.GetByIdempotencyKey: run=%s: %w", run.ID, err)
+	}
+	return run, nil
+}
+
+// textValue reads an optional text column back, NULL as the empty string.
+func textValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
 func (r *runRepository) Get(ctx context.Context, runID string) (domain.Run, error) {
 	const query = `
 		SELECT id, workflow_id, definition_version, status, input, output, error,
-		       last_seq, started_at, completed_at, updated_at
+		       last_seq, started_at, completed_at, updated_at,
+		       idempotency_key, idempotency_digest
 		  FROM runs WHERE id = $1`
 
 	var (
@@ -48,16 +113,19 @@ func (r *runRepository) Get(ctx context.Context, runID string) (domain.Run, erro
 		status     string
 		output     []byte
 		errPayload []byte
+		idemKey    *string
+		idemDigest *string
 	)
 	err := r.conn.QueryRow(ctx, query, runID).Scan(
 		&run.ID, &run.WorkflowID, &run.DefinitionVersion, &status, &run.Input, &output, &errPayload,
-		&run.LastSeq, &run.StartedAt, &run.CompletedAt, &run.UpdatedAt)
+		&run.LastSeq, &run.StartedAt, &run.CompletedAt, &run.UpdatedAt, &idemKey, &idemDigest)
 	if err != nil {
 		return domain.Run{}, mapError("runs.Get", err, runID)
 	}
 
 	run.Status = domain.RunStatus(status)
 	run.Output = json.RawMessage(output)
+	run.IdempotencyKey, run.IdempotencyDigest = textValue(idemKey), textValue(idemDigest)
 	if run.Error, err = unmarshalExecutionError(errPayload); err != nil {
 		return domain.Run{}, fmt.Errorf("store/postgres runs.Get: run=%s: %w", runID, err)
 	}

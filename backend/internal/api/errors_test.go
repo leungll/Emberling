@@ -61,6 +61,12 @@ func TestWriteError_MapsEachClassifiedErrorToItsDocumentedStatusAndCode(t *testi
 			wantCode:   codeRuntimeBindingUnavailable,
 		},
 		{
+			name:       "IdempotencyKeyMismatchError maps to 409 IDEMPOTENCY_KEY_MISMATCH",
+			err:        &service.IdempotencyKeyMismatchError{WorkflowID: "wf_1", RunID: "run_1"},
+			wantStatus: 409,
+			wantCode:   codeIdempotencyKeyMismatch,
+		},
+		{
 			name:       "domain.ErrVersionConflict maps to 409 VERSION_CONFLICT",
 			err:        domain.ErrVersionConflict,
 			wantStatus: 409,

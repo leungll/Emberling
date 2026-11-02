@@ -786,6 +786,23 @@ export interface CreateRunResponse {
   lastSeq: number;
 }
 
+/**
+ * Optional request settings for `POST /runs`. `idempotencyKey` is sent as the
+ * `Idempotency-Key` header: 1 to 128 printable ASCII characters, scoped to the Workflow.
+ */
+export interface CreateRunOptions {
+  idempotencyKey?: string;
+}
+
+/**
+ * `CreateRunResponse` plus whether the Backend answered with an existing Run (200 with
+ * `Idempotent-Replayed: true`) instead of creating one (201). On a replay the body reports
+ * that Run's current status.
+ */
+export interface CreateRunResult extends CreateRunResponse {
+  replayed: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -800,6 +817,7 @@ export type ErrorCode =
   | 'NODE_RUN_NOT_FOUND'
   | 'INVALID_STATE_TRANSITION'
   | 'VERSION_CONFLICT'
+  | 'IDEMPOTENCY_KEY_MISMATCH'
   | 'RUNTIME_BINDING_UNAVAILABLE'
   | 'PAYLOAD_TOO_LARGE'
   | 'DAG_HAS_CYCLE'
