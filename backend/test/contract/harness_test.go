@@ -174,6 +174,11 @@ type testEnvOptions struct {
 	// volume, so an Asset uploaded before it stays readable after it.
 	AssetStorageRoot string
 
+	// WorkspaceRepositories are the repository identifiers the Compiler accepts in an agent
+	// node's workspace.repositoryId, standing in for the registered repository list the
+	// binary reads from its configuration. Empty means no workspace compiles.
+	WorkspaceRepositories []string
+
 	// SkipLookupTool, when true, leaves the "lookup" Tool unregistered in this Backend's
 	// Tool Registry. Combined with Pool (a second Backend reopened over the same
 	// database), this reproduces the one scenario CreateRun's own Agent re-resolution
@@ -407,7 +412,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		t.Fatalf("validate fact declarations: %v", err)
 	}
 
-	compiler := runtime.NewCompiler(nodeRegistry, clock)
+	compiler := runtime.NewCompiler(nodeRegistry, clock, runtime.WithWorkspaceRepositories(opts.WorkspaceRepositories))
 	queue := work.NewQueue(0)
 	notifier := api.NewHub()
 

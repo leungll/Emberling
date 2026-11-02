@@ -96,6 +96,49 @@ export interface Validation {
  */
 export type RunInputSchema = JsonSchema;
 
+/** The deployment target an agent node's workspace releases to. */
+export interface AgentDeployTarget {
+  service: string;
+  environment: string;
+}
+
+/** The repository binding of an agent node. The Backend validates it against the registered repositories. */
+export interface AgentWorkspaceConfig {
+  repositoryId: string;
+  /** Full 40-character lowercase commit hash the workspace starts from. */
+  baseCommit: string;
+  /** Relative paths inside the repository the Agent may change; no leading slash, no `..`. */
+  allowedPaths: string[];
+  deployTarget?: AgentDeployTarget;
+}
+
+/** How far an Agent Run may take a repair: prepare the patch only, or also deploy it. */
+export type AgentGoal = 'PREPARE_ONLY' | 'FIX_AND_DEPLOY';
+
+/**
+ * The agent node config keys Studio knows about. Studio stores a node's config as a
+ * JsonObject and never drops keys it does not render, so a Definition saved from the
+ * editor keeps every one of these as the Backend returned it.
+ */
+export interface AgentNodeConfig {
+  instructions: string;
+  modelId: string;
+  allowedTools: string[];
+  maxTurns: number;
+  timeoutMs: number;
+  modelConfig?: JsonObject;
+  imageModelId?: string;
+  reviewModelId?: string;
+  workspace?: AgentWorkspaceConfig;
+  /** JSON Pointer into the node input that selects the AgentGoal. */
+  goalPointer?: string;
+  approvalTimeoutMs?: number;
+  releaseConfirmTimeoutMs?: number;
+  voidGraceMs?: number;
+  maxReleaseRetries?: number;
+  humanWaitTimeoutMs?: number;
+}
+
 export interface Definition {
   workflowId: string;
   version: number;
@@ -277,7 +320,32 @@ export interface ToolMetadata {
    * (`reviewModelId`); without a selection it applies the mock review policy.
    */
   usesReviewModel: boolean;
+  /**
+   * The authorization the Tool's Actions need. Absent means LOW risk: the Backend treats an
+   * undeclared authorization as LOW.
+   */
+  authorization?: ToolAuthorization | null;
+  /** The records a result of this Tool may carry; a result carrying any other kind is invalid. */
+  records: ToolRecordKind[];
+  /** True when the Tool runs against the workspace bound on its Agent node. */
+  usesWorkspace: boolean;
+  /** True when an uncertain asynchronous result of this Tool is reconciled by polling. */
+  reconcilable: boolean;
+  /**
+   * True when an unmet fact requirement is returned to the Agent as a REJECTED tool message
+   * instead of ending the Agent Run.
+   */
+  returnUnmetRequirement: boolean;
 }
+
+export type ToolAuthorizationRisk = 'LOW' | 'PRODUCTION';
+
+export interface ToolAuthorization {
+  risk: ToolAuthorizationRisk;
+  reversible: boolean;
+}
+
+export type ToolRecordKind = 'WORKSPACE_PATCH' | 'CHANGE_REQUEST';
 
 export interface NodeTypeListResponse {
   items: NodeMetadata[];
@@ -621,7 +689,14 @@ export type CompletionSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL';
  * Tool call stopped before the call returned.
  */
 export type FailureSource =
-  'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL' | 'TIMEOUT' | 'RUNNER_LOST';
+  | 'SYNC_EXECUTION'
+  | 'CALLBACK'
+  | 'PROVIDER_POLL'
+  | 'TIMEOUT'
+  | 'RUNNER_LOST'
+  | 'AUTHORIZATION'
+  | 'HUMAN'
+  | 'PROVIDER_REFUSAL';
 
 export interface AgentActionTrace {
   id: string;

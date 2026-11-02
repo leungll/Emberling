@@ -72,6 +72,13 @@ export const NODE_TYPES: NodeMetadata[] = [
       maxGenerationCalls: int(1),
       imageModelId: str,
       reviewModelId: str,
+      workspace: { type: 'object' },
+      goalPointer: str,
+      approvalTimeoutMs: int(1),
+      releaseConfirmTimeoutMs: int(1),
+      voidGraceMs: int(1),
+      maxReleaseRetries: int(1),
+      humanWaitTimeoutMs: int(1),
     },
     ['modelId', 'maxTurns', 'timeoutMs'],
     [
@@ -226,6 +233,10 @@ const tool = (
   countsTowardGenerationLimit: false,
   usesImageModel: false,
   usesReviewModel: false,
+  records: [],
+  usesWorkspace: false,
+  reconcilable: false,
+  returnUnmetRequirement: false,
   ...extra,
 });
 
