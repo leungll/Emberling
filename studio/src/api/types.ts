@@ -594,6 +594,10 @@ export interface ToolAttemptTrace {
   error: ExecutionError | null;
   /** `generate_image` only: the photo the call works on, from its arguments. */
   photo?: ToolPhotoTrace;
+  /** `generate_image` only: the named generation settings, from its arguments. */
+  settings?: ToolSettingsTrace;
+  /** `review_asset` only, once the Attempt `SUCCEEDED`: the verdict and its reasons. */
+  review?: ToolReviewTrace;
   /** `sandbox_test` only, once the Attempt `SUCCEEDED`: the runner's verdict and counts. */
   test?: ToolTestTrace;
   /** `deploy` only: the target from its arguments, the version once it `SUCCEEDED`. */
@@ -612,6 +616,23 @@ export interface ToolPhotoTrace {
   photoAssetId: string;
   position?: number;
   count?: number;
+}
+
+/**
+ * The generation settings a `generate_image` call asked for. Each member is absent when
+ * the call did not set it. A prompt over 500 bytes is cut and `promptTruncated` is true.
+ */
+export interface ToolSettingsTrace {
+  prompt?: string;
+  promptTruncated?: boolean;
+  aspectRatio?: string;
+  resolution?: string;
+}
+
+/** A `review_asset` verdict. `reasons` is absent when the review gave none. */
+export interface ToolReviewTrace {
+  passed: boolean;
+  reasons?: string[];
 }
 
 export interface ToolTestTrace {

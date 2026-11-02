@@ -518,6 +518,49 @@ describe('a tool call’s arguments and result in the details pane', () => {
     });
   });
 
+  it('lists the settings a generate_image call asked for', () => {
+    const settings = { prompt: 'Clay look', aspectRatio: '3:4', resolution: '1K' };
+    expect(
+      callArguments(
+        actionEl(callModel('generate_image', { photo: { photoAssetId: 'asset_2' }, settings })),
+      ),
+    ).toMatchObject({ photo: { photoAssetId: 'asset_2' }, settings });
+    expect(
+      callArguments(actionEl(callModel('generate_image', { photo: { photoAssetId: 'asset_2' } }))),
+    ).toMatchObject({ settings: null });
+    // A withheld prompt is an argument; a withheld reason belongs to the result.
+    const withheld = callArguments(
+      actionEl(
+        callModel('generate_image', {
+          withheld: [
+            { field: 'settings.prompt', reason: 'TOO_LARGE' },
+            { field: 'review.reasons', reason: 'TOO_LARGE' },
+          ],
+        }),
+      ),
+    );
+    expect(withheld?.withheld).toEqual([{ field: 'settings.prompt', reason: 'TOO_LARGE' }]);
+  });
+
+  it('carries a finished review’s verdict and reasons into the result', () => {
+    const review = { passed: false, reasons: ['Face lost its likeness'] };
+    const m = callModel('review_asset', { review });
+    expect(callSaved(m, actionEl(m))).toMatchObject({ review });
+    const running = model({
+      snapshot: snapshot('RUNNING', [nodeRun('agent', 'agent', { status: 'RUNNING' })]),
+      definition: FLOW,
+      traces: {
+        nr_agent: agentTrace([
+          turn(1, 'review_asset', 1, {
+            action: { status: 'RUNNING', completedAt: null },
+            attempts: [toolAttempt('ta_1', 'review_asset', { status: 'STARTED', review })],
+          }),
+        ]),
+      },
+    });
+    expect(callSaved(running, actionEl(running))?.review ?? null).toBeNull();
+  });
+
   it('gives a Turns row the result of a call that saved no image or review', () => {
     const m = callModel('sandbox_test', {
       test: { passed: true, summary: { total: 12, failed: 0 } },
