@@ -237,8 +237,8 @@ func TestE2E_PhotoAgent_SyncGenerationCrash_ResultUncertainThenAgentContinues(t 
 		t.Fatalf("tool status messages the Agent received = %v, want one RESULT_UNCERTAIN", notices)
 	}
 	calls, _ := notices[0]["generationCalls"].(map[string]any)
-	if calls["used"] != float64(1) || calls["limit"] != float64(12) {
-		t.Errorf("generationCalls in the notice = %v, want 1 of 12 used", calls)
+	if calls["used"] != float64(1) || calls["limit"] != float64(10) {
+		t.Errorf("generationCalls in the notice = %v, want 1 of 10 used", calls)
 	}
 	if message, _ := notices[0]["message"].(string); !strings.Contains(message, "not retried automatically") {
 		t.Errorf("notice message = %q, want it to say the call was not retried", message)

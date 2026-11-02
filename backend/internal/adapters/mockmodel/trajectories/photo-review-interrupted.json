@@ -2,7 +2,7 @@
   "turns": [
     {"toolCall": {"toolName": "generate_image", "arguments": {"photoAssetId": "{{task:/photos/0/photoAssetId}}", "settings": {"prompt": "Warm film look with strong grain"}}}},
     {"toolCall": {"toolName": "review_asset", "arguments": {"assetRef": "{{tool:0:/assetRef}}", "photoAssetId": "{{task:/photos/0/photoAssetId}}", "styleRequirement": "Warm film look"}}},
-    {"final": {"outputText": {"examples": [{"photoAssetId": "{{task:/photos/0/photoAssetId}}", "assetRef": "{{tool:0:/assetRef}}"}], "settingsDigest": "{{tool:0:/settingsDigest}}"}}}
+    {"final": {"outputText": {"examples": [{"photoAssetId": "{{task:/photos/0/photoAssetId}}", "assetRef": "{{tool:0:/assetRef}}"}], "settings": {"prompt": "Warm film look with strong grain"}, "settingsDigest": "{{tool:0:/settingsDigest}}"}}}
   ],
   "onToolStatus": [
     {"status": "EXECUTION_INTERRUPTED", "toolCall": {"toolName": "review_asset", "arguments": {"assetRef": "{{tool:0:/assetRef}}", "photoAssetId": "{{task:/photos/0/photoAssetId}}", "styleRequirement": "Warm film look"}}}

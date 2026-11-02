@@ -63,6 +63,7 @@ func TestProvider_Generate_UncertainGeneration_InsertsRegenerationThenResumesScr
 		`{"assetRef":"img_r1","photoAssetId":"asset_photo_1"},` +
 		`{"assetRef":"img_a2","photoAssetId":"asset_photo_2"},` +
 		`{"assetRef":"img_a3","photoAssetId":"asset_photo_3"}],` +
+		`"settings":{"prompt":"` + firstRoundPrompt + `"},` +
 		`"settingsDigest":"sha256:first"}`
 	if text != wantText {
 		t.Fatalf("FINAL text =\n%s\nwant\n%s", text, wantText)
@@ -90,7 +91,7 @@ func TestProvider_Generate_InterruptedReview_InsertsSameReviewThenFinishes(t *te
 	if final.Decision.Kind != registry.DecisionFinal || json.Unmarshal(final.Decision.Output, &text) != nil {
 		t.Fatalf("final Decision = %+v, want FINAL with a JSON string output", final.Decision)
 	}
-	if want := `{"examples":[{"assetRef":"img_a1","photoAssetId":"asset_photo_1"}],"settingsDigest":"sha256:first"}`; text != want {
+	if want := `{"examples":[{"assetRef":"img_a1","photoAssetId":"asset_photo_1"}],"settings":{"prompt":"` + firstRoundPrompt + `"},"settingsDigest":"sha256:first"}`; text != want {
 		t.Fatalf("FINAL text =\n%s\nwant\n%s", text, want)
 	}
 }
