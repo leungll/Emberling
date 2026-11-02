@@ -202,7 +202,9 @@ func (m NodeMetadata) Validate() error {
 // Agent model must declare ModelCapabilityStructuredDecision, meaning it can return fixed
 // JSON for the DecisionSchema. ModelCapabilityReferenceImageGeneration means the model
 // synchronously generates one image from one input image and a prompt; an Agent node's
-// imageModelId must declare it. A capability names the result Emberling needs, not a
+// imageModelId must declare it. ModelCapabilityVisionInput means the model accepts inline
+// image parts in a user message and answers with the strict structured output every
+// Agent model uses; an Agent node's reviewModelId must declare it. A capability names the result Emberling needs, not a
 // Provider-native API. The list stays open: an Adapter may declare a capability this
 // package does not name.
 const (
@@ -210,6 +212,7 @@ const (
 	ModelCapabilityImageGeneration          = "image_generation"
 	ModelCapabilityStructuredDecision       = "structured_decision"
 	ModelCapabilityReferenceImageGeneration = "reference_image_generation"
+	ModelCapabilityVisionInput              = "vision_input"
 )
 
 // ModelMetadata is the registered description of one stable Model ID. ConfigSchema is the

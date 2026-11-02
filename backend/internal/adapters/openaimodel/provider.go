@@ -68,6 +68,10 @@ type Config struct {
 	// so OpenRouter routes only to upstreams that honour strict structured output. It adds
 	// no other routing field: model routing and fallback are not this Adapter's to choose.
 	OpenRouterRequireParameters bool
+	// VisionInput declares that the configured model accepts inline image parts, so the
+	// model is registered with domain.ModelCapabilityVisionInput. It changes nothing in a
+	// request without image parts.
+	VisionInput bool
 }
 
 // Provider is the OpenAI-compatible registry.ModelProvider.
@@ -82,6 +86,7 @@ type Provider struct {
 	decision    strictDecision
 	// requireParameters mirrors Config.OpenRouterRequireParameters.
 	requireParameters bool
+	visionInput       bool
 }
 
 var (
@@ -132,6 +137,7 @@ func New(cfg Config) (*Provider, error) {
 		decision:    decision,
 
 		requireParameters: cfg.OpenRouterRequireParameters,
+		visionInput:       cfg.VisionInput,
 	}, nil
 }
 
@@ -146,11 +152,15 @@ func (p *Provider) LogValue() slog.Value { return slog.StringValue(p.String()) }
 
 // Models returns the single model this Provider serves, under its configured ID.
 func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error) {
+	capabilities := []string{domain.ModelCapabilityTextGeneration, domain.ModelCapabilityStructuredDecision}
+	if p.visionInput {
+		capabilities = append(capabilities, domain.ModelCapabilityVisionInput)
+	}
 	return []registry.ModelRegistration{{ModelMetadata: domain.ModelMetadata{
 		ID:           p.modelID,
 		DisplayName:  p.displayName,
 		Description:  p.description,
-		Capabilities: []string{domain.ModelCapabilityTextGeneration, domain.ModelCapabilityStructuredDecision},
+		Capabilities: capabilities,
 		ConfigSchema: json.RawMessage(configSchema),
 	}}}, nil
 }
