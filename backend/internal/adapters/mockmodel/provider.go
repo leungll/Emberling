@@ -363,12 +363,15 @@ func lastToolMessageContent(messages []registry.ModelMessage) string {
 
 // lastUserMessageText decodes the most recent `user` message as plain text. A message
 // whose Content is not a JSON string decodes to its raw bytes so a directive is never
-// silently dropped.
+// silently dropped; a message carried as content parts decodes to its text parts.
 func lastUserMessageText(request registry.ModelRequest) string {
 	for i := len(request.Messages) - 1; i >= 0; i-- {
 		message := request.Messages[i]
 		if message.Role != "user" {
 			continue
+		}
+		if len(message.Parts) > 0 {
+			return partsText(message.Parts)
 		}
 		var text string
 		if err := json.Unmarshal(message.Content, &text); err == nil {
@@ -377,6 +380,18 @@ func lastUserMessageText(request registry.ModelRequest) string {
 		return string(message.Content)
 	}
 	return ""
+}
+
+// partsText joins the text parts of a part-array message with newlines. Image parts
+// contribute nothing: this fixture never reads or records image bytes as text.
+func partsText(parts []registry.ContentPart) string {
+	texts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.Type == registry.ContentPartText {
+			texts = append(texts, part.Text)
+		}
+	}
+	return strings.Join(texts, "\n")
 }
 
 // record appends request to the bounded recording, dropping the oldest entry once the

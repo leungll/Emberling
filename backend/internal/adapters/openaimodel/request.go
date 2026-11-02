@@ -2,6 +2,7 @@ package openaimodel
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,11 +47,25 @@ type providerRouting struct {
 	RequireParameters bool `json:"require_parameters"`
 }
 
+// chatMessage is one Chat Completions message. Content is a string, or for a user
+// message built from content parts, a []chatContentPart.
 type chatMessage struct {
 	Role       string         `json:"role"`
-	Content    string         `json:"content"`
+	Content    any            `json:"content"`
 	ToolCalls  []chatToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
+}
+
+// chatContentPart is one block of a part-array content: a text block, or an image_url
+// block whose URL is a data URL holding the image inline.
+type chatContentPart struct {
+	Type     string        `json:"type"`
+	Text     string        `json:"text,omitempty"`
+	ImageURL *chatImageURL `json:"image_url,omitempty"`
+}
+
+type chatImageURL struct {
+	URL string `json:"url"`
 }
 
 type chatToolCall struct {
@@ -182,6 +197,9 @@ func systemPrompt(request registry.ModelRequest) (string, error) {
 // TOOL_CALL is paired with the following tool message through the Action ID, so the
 // Provider sees the call and its result as one exchange.
 func chatMessageFor(message registry.ModelMessage) (chatMessage, error) {
+	if len(message.Parts) > 0 {
+		return partsMessage(message)
+	}
 	switch message.Role {
 	case roleUser:
 		return chatMessage{Role: roleUser, Content: contentText(message.Content)}, nil
@@ -206,6 +224,33 @@ func chatMessageFor(message registry.ModelMessage) (chatMessage, error) {
 	default:
 		return chatMessage{}, fmt.Errorf("unknown role %q", message.Role)
 	}
+}
+
+// partsMessage maps a user message whose content is a part array. Errors name the part
+// index and the problem only, never the part's text or image bytes.
+func partsMessage(message registry.ModelMessage) (chatMessage, error) {
+	if message.Role != roleUser {
+		return chatMessage{}, fmt.Errorf("content parts are only accepted on a user message, not %q", message.Role)
+	}
+	if present(message.Content) {
+		return chatMessage{}, errors.New("message carries both content and content parts")
+	}
+	parts := make([]chatContentPart, 0, len(message.Parts))
+	for i, part := range message.Parts {
+		switch part.Type {
+		case registry.ContentPartText:
+			parts = append(parts, chatContentPart{Type: "text", Text: part.Text})
+		case registry.ContentPartImage:
+			if part.Image == nil || len(part.Image.Data) == 0 || strings.TrimSpace(part.Image.MediaType) == "" {
+				return chatMessage{}, fmt.Errorf("content part %d: image part has no media type or no bytes", i)
+			}
+			url := "data:" + part.Image.MediaType + ";base64," + base64.StdEncoding.EncodeToString(part.Image.Data)
+			parts = append(parts, chatContentPart{Type: "image_url", ImageURL: &chatImageURL{URL: url}})
+		default:
+			return chatMessage{}, fmt.Errorf("content part %d: unknown part type", i)
+		}
+	}
+	return chatMessage{Role: roleUser, Content: parts}, nil
 }
 
 // contentText sends a JSON string as its text and any other JSON value as its JSON text.

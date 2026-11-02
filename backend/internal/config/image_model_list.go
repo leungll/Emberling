@@ -112,6 +112,11 @@ func (m ImageModel) validate(decision OpenAIModel) error {
 		if first, taken := decisionIndex[model.ID]; taken && model.ID != "" {
 			problems = append(problems, fmt.Sprintf("entry %d: id duplicates %s entry %d", i, KeyModels, first))
 		}
+		// An image model is called through the Images API, never with image parts, so it
+		// cannot declare vision input.
+		if model.VisionInput {
+			problems = append(problems, fmt.Sprintf("entry %d: visionInput is accepted only in %s", i, KeyModels))
+		}
 	}
 	if len(problems) > 0 {
 		return &InvalidConfigError{Key: KeyImageModels, Reason: strings.Join(problems, "; ")}

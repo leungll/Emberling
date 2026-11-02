@@ -32,6 +32,11 @@ type ToolAction struct {
 	// transaction, for a Tool whose Metadata declares UsesImageModel; empty otherwise. The
 	// Tool uses it verbatim and never selects a model of its own.
 	ImageModelID string
+	// ReviewModelID is the Agent Run's frozen review Model ID, resolved in the claim
+	// transaction, for a Tool whose Metadata declares UsesReviewModel; empty when the
+	// Tool does not declare it or the Agent Run froze no review model. The Tool uses it
+	// verbatim: empty selects its deterministic mock policy, never another model.
+	ReviewModelID string
 	// Callback is set only for an ASYNC Tool dispatch.
 	Callback *CallbackContext
 }

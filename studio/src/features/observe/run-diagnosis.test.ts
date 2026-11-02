@@ -26,6 +26,7 @@ const deploy: ToolMetadata = {
   requires: [],
   countsTowardGenerationLimit: false,
   usesImageModel: false,
+  usesReviewModel: false,
 };
 
 describe('failureOf', () => {

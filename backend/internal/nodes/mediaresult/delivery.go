@@ -26,7 +26,9 @@ const (
 	// reasonSettingsMismatch: an example was generated with settings other than the
 	// declared template settings.
 	reasonSettingsMismatch = "SETTINGS_MISMATCH"
-	// reasonPolicyMismatch: the examples were reviewed under more than one policy version.
+	// reasonPolicyMismatch: the examples were reviewed under more than one policy version
+	// or by more than one review model, such as the mock policy for some and a vision
+	// model for others.
 	reasonPolicyMismatch = "POLICY_MISMATCH"
 	// reasonsTruncated closes a reason list that reached maxReasons.
 	reasonsTruncated = "REASONS_TRUNCATED"
@@ -78,9 +80,11 @@ type generation struct {
 	SettingsDigest string `json:"settingsDigest"`
 }
 
+// ReviewModelID is empty on a fact recorded before reviews bound their review model.
 type review struct {
 	PhotoAssetID  string `json:"photoAssetId"`
 	PolicyVersion string `json:"policyVersion"`
+	ReviewModelID string `json:"reviewModelId"`
 	passed        bool
 }
 
@@ -167,15 +171,18 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 		}
 	}
 
-	// The examples' reviews share one policy version, and the pass count comes from their
-	// newest review verdicts. An example never reviewed has not passed.
+	// The examples' reviews share one policy version and one review model, and the pass
+	// count comes from their newest review verdicts. An example never reviewed has not
+	// passed.
 	policies := make(map[string]bool)
+	reviewModels := make(map[string]bool)
 	out := summary{PhotoCount: len(photos), NotPassed: []string{}}
 	for _, p := range photos {
 		assetRef, ok := exampleOf[p.PhotoAssetID]
 		r, reviewedOK := reviews[assetRef]
 		if ok && reviewedOK && r.PhotoAssetID == p.PhotoAssetID {
 			policies[r.PolicyVersion] = true
+			reviewModels[r.ReviewModelID] = true
 			if r.passed {
 				out.PassedCount++
 				continue
@@ -183,7 +190,7 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 		}
 		out.NotPassed = append(out.NotPassed, p.PhotoAssetID)
 	}
-	if len(policies) > 1 {
+	if len(policies) > 1 || len(reviewModels) > 1 {
 		reasons.add(reasonPolicyMismatch, "", "")
 	}
 

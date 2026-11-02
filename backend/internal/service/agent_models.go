@@ -8,11 +8,13 @@ import (
 	"github.com/leungll/Emberling/backend/internal/runtime"
 )
 
-// This file owns the capability rules of an Agent node's two model selections. The
-// decision model (modelId) must declare structured_decision. The image model
-// (imageModelId) is required exactly when the frozen allowlist holds a Tool whose
-// registered Metadata declares UsesImageModel, and must declare reference image
-// generation. The rules come from registered Model capabilities and Tool Metadata only,
+// This file owns the capability rules of an Agent node's model selections. The decision
+// model (modelId) must declare structured_decision. The image model (imageModelId) is
+// required exactly when the frozen allowlist holds a Tool whose registered Metadata
+// declares UsesImageModel, and must declare reference image generation. The review model
+// (reviewModelId) is optional and, when set, must resolve and declare vision input; a
+// selection that does not is an error, never a silent fall back to the mock review
+// policy, which applies only when no review model is selected. The rules come from registered Model capabilities and Tool Metadata only,
 // never from a Model ID, a Provider type or a Tool Name.
 //
 // Saving a Definition and creating a Run report violations as validation errors. Agent
@@ -80,12 +82,31 @@ func agentModelSelectionErrors(models *registry.ModelRegistry, tools *registry.T
 			})
 		}
 	}
+	if cfg.ReviewModelID != "" {
+		reviewPath := pathPrefix + "reviewModelId"
+		reviewReg, _, ok := models.Get(cfg.ReviewModelID)
+		if !ok {
+			errs = append(errs, runtime.ValidationError{
+				Code:    runtime.CodeModelNotFound,
+				NodeID:  nodeID,
+				Path:    reviewPath,
+				Message: fmt.Sprintf("model %q is not registered", cfg.ReviewModelID),
+			})
+		} else if !reviewReg.HasCapability(domain.ModelCapabilityVisionInput) {
+			errs = append(errs, runtime.ValidationError{
+				Code:    runtime.CodeSemanticValidationFailed,
+				NodeID:  nodeID,
+				Path:    reviewPath,
+				Message: fmt.Sprintf("model %q does not declare %s", cfg.ReviewModelID, domain.ModelCapabilityVisionInput),
+			})
+		}
+	}
 	return errs
 }
 
 // unusableModel re-resolves one frozen Model ID against the current Model Registry and
 // reports why it can no longer serve the named capability, or nil when it can. role names
-// the selection ("decision model" or "image model") in the error message.
+// the selection ("decision model", "image model" or "review model") in the error message.
 func unusableModel(models *registry.ModelRegistry, role, modelID, capability string) *domain.ExecutionError {
 	if modelID == "" {
 		return &domain.ExecutionError{
@@ -115,4 +136,13 @@ func frozenImageModel(agentRun domain.AgentRun) string {
 		return ""
 	}
 	return *agentRun.ImageModelID
+}
+
+// frozenReviewModel returns the review Model ID an Agent Run froze, or "" when it froze
+// none.
+func frozenReviewModel(agentRun domain.AgentRun) string {
+	if agentRun.ReviewModelID == nil {
+		return ""
+	}
+	return *agentRun.ReviewModelID
 }

@@ -100,7 +100,7 @@ func scriptGenerateReviewGenerate(env *testEnv) {
 				Kind:     mockmodel.ScenarioToolCall,
 				ToolName: reviewasset.ToolName,
 				ToolArguments: json.RawMessage(`{"assetRef":"` + assetRef + `","photoAssetId":"` +
-					traceFactsPhotoA + `","mock":"pass"}`),
+					traceFactsPhotoA + `","styleRequirement":"Warm film look","mock":"pass"}`),
 			}
 		case 3:
 			return traceFactsGeneration(traceFactsPhotoB)

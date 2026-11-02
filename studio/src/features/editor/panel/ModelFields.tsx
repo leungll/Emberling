@@ -20,10 +20,13 @@ export function ModelField({
   models,
   capability,
   hint,
+  noneLabel,
 }: FieldProps & {
   models: ReadonlyMap<string, ModelMetadata>;
   capability?: string;
   hint?: string;
+  /** For an optional selection: the first option, which clears the field. */
+  noneLabel?: string;
 }) {
   const copy = useCopy();
   const f = copy.editor.fields;
@@ -35,6 +38,7 @@ export function ModelField({
     .filter((x) => !capability || x.capabilities.includes(capability))
     .map((x) => ({ value: x.id, label: x.displayName, description: x.description, search: x.id }));
   if (cur && !m) options.unshift({ value: cur, label: f.notAvailable(cur), mono: true });
+  if (noneLabel) options.unshift({ value: '', label: noneLabel });
   const edit = configEdit(node.id);
   return (
     <FieldBlock
@@ -53,7 +57,7 @@ export function ModelField({
           placeholder={f.chooseModel}
           search={f.searchModels}
           noMatch={f.noModels}
-          onChange={(v) => edit.set(field, v)}
+          onChange={(v) => edit.set(field, v === '' ? undefined : v)}
           className="w-full"
         />
       )}

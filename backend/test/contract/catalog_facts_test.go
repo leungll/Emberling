@@ -128,7 +128,7 @@ func TestAPI_ToolsCatalog_FactDeclarations_SerialisedInDTOShape(t *testing.T) {
 		},
 		{
 			name:         "review_asset",
-			produces:     `{"factType":"asset_reviewed","subjectPointer":{"source":"ARGUMENTS","pointer":"/assetRef"},"bindArguments":{"photoAssetId":{"source":"ARGUMENTS","pointer":"/photoAssetId"},"policyVersion":{"source":"RESULT","pointer":"/policyVersion"}},"verdictPointer":{"source":"RESULT","pointer":"/passed"},"basisFactType":"image_generated"}`,
+			produces:     `{"factType":"asset_reviewed","subjectPointer":{"source":"ARGUMENTS","pointer":"/assetRef"},"bindArguments":{"photoAssetId":{"source":"ARGUMENTS","pointer":"/photoAssetId"},"policyVersion":{"source":"RESULT","pointer":"/policyVersion"},"reviewModelId":{"source":"RESULT","pointer":"/reviewModelId"},"styleDigest":{"source":"RESULT","pointer":"/styleDigest"}},"verdictPointer":{"source":"RESULT","pointer":"/passed"},"basisFactType":"image_generated"}`,
 			requires:     `[{"factType":"image_generated","subjectArgument":"/assetRef","matchBindings":["photoAssetId"]}]`,
 			countsToward: `false`,
 		},

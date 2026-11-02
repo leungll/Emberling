@@ -134,12 +134,15 @@ type OpenAIModel struct {
 // OpenAIModelEntry is one registered model. ID is the stable Model ID a Definition
 // stores; Model is the Provider-side model name, which never enters a Definition;
 // DisplayName is what Studio shows. Description is the optional one-line note Studio shows
-// with the model; empty means none.
+// with the model; empty means none. VisionInput declares that the model accepts inline
+// images, so it may serve as an Agent node's review model; it is accepted only on a
+// decision model entry.
 type OpenAIModelEntry struct {
 	ID          string
 	Model       string
 	DisplayName string
 	Description string
+	VisionInput bool
 }
 
 // Enabled reports whether the OpenAI-compatible Model Adapter is configured.

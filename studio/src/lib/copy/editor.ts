@@ -424,6 +424,10 @@ export const editor = {
     model: 'Model',
     imageModel: 'Image model',
     imageModelHint: (tools: string) => `Used when the agent calls ${tools}.`,
+    reviewModel: 'Review model',
+    reviewModelHint: (tools: string) =>
+      `Reviews images when the agent calls ${tools}. Without one, reviews use the mock policy.`,
+    reviewModelNone: 'Mock review policy',
     chooseModel: 'Choose a model',
     searchModels: 'Search models',
     noModels: (q: string) => `No models match “${q}”.`,

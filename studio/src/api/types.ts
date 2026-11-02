@@ -272,6 +272,11 @@ export interface ToolMetadata {
    * (`imageModelId`); the Backend then requires that selection on Save.
    */
   usesImageModel: boolean;
+  /**
+   * True when the Tool reviews with the vision model optionally selected on its Agent node
+   * (`reviewModelId`); without a selection it applies the mock review policy.
+   */
+  usesReviewModel: boolean;
 }
 
 export interface NodeTypeListResponse {

@@ -71,11 +71,13 @@ export const NODE_TYPES: NodeMetadata[] = [
       timeoutMs: int(1),
       maxGenerationCalls: int(1),
       imageModelId: str,
+      reviewModelId: str,
     },
     ['modelId', 'maxTurns', 'timeoutMs'],
     [
       { path: 'modelId', widget: 'MODEL_SELECTOR', capability: 'structured_decision' },
       { path: 'imageModelId', widget: 'MODEL_SELECTOR', capability: 'reference_image_generation' },
+      { path: 'reviewModelId', widget: 'MODEL_SELECTOR', capability: 'vision_input' },
     ],
   ),
   meta(
@@ -189,6 +191,12 @@ export const MODELS: ModelMetadata[] = [
     },
   },
   {
+    id: 'vision-model-v1',
+    displayName: 'Vision Review Model',
+    capabilities: ['text_generation', 'structured_decision', 'vision_input'],
+    configSchema: { type: 'object', additionalProperties: false, properties: {} },
+  },
+  {
     id: 'text-model-v1',
     displayName: 'Mock Text Model v1',
     capabilities: ['text_generation', 'structured_decision'],
@@ -217,6 +225,7 @@ const tool = (
   requires: [],
   countsTowardGenerationLimit: false,
   usesImageModel: false,
+  usesReviewModel: false,
   ...extra,
 });
 
@@ -226,6 +235,7 @@ export const TOOLS: ToolMetadata[] = [
     countsTowardGenerationLimit: true,
     usesImageModel: true,
   }),
+  tool('review_asset', 'Review a generated image asset', { usesReviewModel: true }),
 ];
 
 export function step(

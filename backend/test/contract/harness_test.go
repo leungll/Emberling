@@ -122,6 +122,9 @@ type testEnv struct {
 // testEnvOptions customizes newTestEnvWithOptions for the handful of tests that need
 // something other than the fast-default wiring newTestEnv gives every other test.
 type testEnvOptions struct {
+	// ReviewMaxImageBytes overrides the inline image bound of review_asset when > 0.
+	ReviewMaxImageBytes int64
+
 	// PollInterval overrides defaultTestPollInterval when > 0.
 	PollInterval time.Duration
 
@@ -340,6 +343,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	artifactStore := asset.NewArtifactStore(assetRoot, defaultTestArtifactMaxBytes)
 
 	photos := &assetPhotos{}
+	artifactsRef := &lateArtifacts{}
 	if !opts.SkipLookupTool {
 		if err := toolRegistry.Register(lookup.Registration()); err != nil {
 			t.Fatalf("register tool %s: %v", lookup.ToolName, err)
@@ -352,7 +356,12 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		// The mock image model addresses a photo by its id; a real one reads the photo's
 		// bytes through the photo port, which the Asset service backs once it exists.
 		generateimage.Registration(imageGenerators, photos, artifactStore),
-		reviewasset.Registration(),
+		reviewasset.Registration(reviewasset.Ports{
+			Photos:        reviewPhotos{assets: photos},
+			Artifacts:     reviewArtifacts{env: artifactsRef},
+			Models:        modelRegistry,
+			MaxImageBytes: reviewImageMaxBytes(opts.ReviewMaxImageBytes),
+		}),
 		generatevideo.Registration(mockTaskBaseURL, opts.TaskClient),
 	} {
 		if err := toolRegistry.Register(reg); err != nil {
@@ -406,6 +415,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	assetService := service.NewAssetService(deps)
 	photos.assets = assetService
 	artifactService := service.NewArtifactService(deps)
+	artifactsRef.svc = artifactService
 
 	workPool := work.NewPool(queue, executionService, 4, opts.WorkHooks, opts.Logger)
 
