@@ -217,6 +217,15 @@ func TestToolMetadata_Validate_RejectsInvalidRegistration(t *testing.T) {
 		{"malformed output schema", func(m *ToolMetadata) { m.OutputSchema = json.RawMessage(`nope`) }, "outputSchema is not valid JSON"},
 		{"unknown side effect kind", func(m *ToolMetadata) { m.SideEffect.Kind = "" }, `sideEffect.kind ""`},
 		{"unknown idempotency mode", func(m *ToolMetadata) { m.SideEffect.Idempotency = "BEST_EFFORT" }, `sideEffect.idempotency "BEST_EFFORT"`},
+		{"write path without a pointer", func(m *ToolMetadata) {
+			m.UsesWorkspace, m.Records, m.WorkspaceWritePath = true, []ToolRecordKind{ToolRecordWorkspacePatch}, "path"
+		}, `workspaceWritePath must be a JSON Pointer`},
+		{"write path without the patch record", func(m *ToolMetadata) {
+			m.UsesWorkspace, m.WorkspaceWritePath = true, "/path"
+		}, `workspaceWritePath is only allowed`},
+		{"write path without the workspace", func(m *ToolMetadata) {
+			m.Records, m.WorkspaceWritePath = []ToolRecordKind{ToolRecordWorkspacePatch}, "/path"
+		}, `workspaceWritePath is only allowed`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

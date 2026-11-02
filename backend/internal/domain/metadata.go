@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Extension metadata is the single shared description of a registered Node, Model or
@@ -331,6 +332,14 @@ type ToolMetadata struct {
 	Records []ToolRecordKind `json:"records"`
 	// UsesWorkspace marks a Tool whose calls receive the Agent Run's frozen workspace view.
 	UsesWorkspace bool `json:"usesWorkspace"`
+	// WorkspaceWritePath is a JSON Pointer into the call's arguments naming the repository
+	// path a call of this Tool writes, for a Tool that records a WORKSPACE_PATCH. The
+	// Runtime checks that path against the Agent Run's frozen allowed paths before any
+	// Attempt exists and returns a SCOPE_DENIED refusal to the Agent when it falls outside
+	// them. Empty means the Tool declares no single written path; the recorded patch's
+	// touched paths are still checked in the result transaction. Omitted on the wire when
+	// undeclared.
+	WorkspaceWritePath string `json:"workspaceWritePath,omitempty"`
 	// Reconcilable marks an ASYNC Tool whose uncertain or lost external operation the
 	// Runtime may query for an authoritative result after the fact. It requires a Poll
 	// declaration: reconciliation is a status query, never a resend.
@@ -421,6 +430,14 @@ func (m ToolMetadata) Validate() error {
 	errs = append(errs, validateToolRecords(m.Records)...)
 	if m.Reconcilable && (m.ExecutionKind != ToolExecutionAsync || m.Poll == nil) {
 		errs = append(errs, errors.New("reconcilable is only allowed on an ASYNC tool that declares poll"))
+	}
+	if m.WorkspaceWritePath != "" {
+		if err := ValidateJSONPointer(m.WorkspaceWritePath); err != nil || !strings.HasPrefix(m.WorkspaceWritePath, "/") {
+			errs = append(errs, errors.New("workspaceWritePath must be a JSON Pointer starting with \"/\""))
+		}
+		if !m.UsesWorkspace || !m.DeclaresRecord(ToolRecordWorkspacePatch) {
+			errs = append(errs, errors.New("workspaceWritePath is only allowed on a tool that uses the workspace and records WORKSPACE_PATCH"))
+		}
 	}
 
 	if len(errs) == 0 {

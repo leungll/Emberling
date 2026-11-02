@@ -58,6 +58,10 @@ type WorkspaceView struct {
 	// requires the latest patch compares digests, never patch text.
 	Patch       string
 	PatchDigest string
+	// PatchSeq is the sequence number of that patch, 0 while the workspace is unchanged. A
+	// Tool reports it with the file content it read, so the material a model saw can be
+	// named by path and workspace version.
+	PatchSeq int
 	// AllowedPaths are normalised relative path prefixes inside the repository.
 	AllowedPaths []string
 }

@@ -51,6 +51,8 @@ type Tx interface {
 	AgentStateVersions() AgentStateVersionRepository
 	ExecutionFacts() ExecutionFactRepository
 	ProviderSlots() ProviderSlotRepository
+	AgentWorkspaces() AgentWorkspaceRepository
+	WorkspacePatches() WorkspacePatchRepository
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
@@ -741,6 +743,37 @@ type ProviderSlotRepository interface {
 	// NextDeferredRun returns the Run of the earliest READY, already-refused NodeRun of
 	// providerID whose Run is still RUNNING or PAUSED.
 	NextDeferredRun(ctx context.Context, providerID string) (runID string, found bool, err error)
+}
+
+// AgentWorkspaceRepository persists the repository binding frozen onto an Agent Run.
+type AgentWorkspaceRepository interface {
+	// Create inserts the workspace in the transaction that creates its Agent Run. The
+	// primary key on agent_run_id makes a second binding of the same Agent Run lose in
+	// the database.
+	Create(ctx context.Context, workspace domain.AgentWorkspace) error
+
+	// GetByAgentRunID returns the frozen workspace, or domain.ErrNotFound for an Agent Run
+	// started without one.
+	GetByAgentRunID(ctx context.Context, agentRunID string) (domain.AgentWorkspace, error)
+}
+
+// WorkspacePatchRepository persists the cumulative patches of an Agent Run's workspace.
+type WorkspacePatchRepository interface {
+	// Append inserts one patch in the Tool result transaction that accepted it. The caller
+	// allocates Seq under the Run aggregate lock as the latest Seq plus one; UNIQUE
+	// (agent_run_id, seq) and UNIQUE (tool_attempt_id) make a duplicated transaction lose
+	// with domain.ErrConflict, as does a patch over the stored length bound.
+	Append(ctx context.Context, patch domain.WorkspacePatch) error
+
+	// Latest returns the newest patch of the Agent Run, text included, or nil when the
+	// workspace has not been written yet.
+	Latest(ctx context.Context, agentRunID string) (*domain.WorkspacePatch, error)
+
+	// ListSummariesByAgentRun returns up to limit patches of the Agent Run in Seq order
+	// without their text, for Trace projection. A caller that needs to know whether more
+	// exist asks for one more than it shows. A non-positive limit is an error rather than
+	// an unbounded read.
+	ListSummariesByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.WorkspacePatch, error)
 }
 
 // QueueKey orders queued NodeRuns of one Provider: ready_at first, NodeRun id as the

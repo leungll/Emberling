@@ -40,6 +40,7 @@ const (
 	manifestArtifactSize   = 4096
 	manifestReadPatchSeq   = 1
 	manifestLongPathPrefix = "src/"
+	manifestRepositoryID   = "manifest-fixture"
 )
 
 // manifestLongPath is a workspace path longer than the label bound, so the WORKSPACE_FILE
@@ -109,13 +110,28 @@ func manifestToolRegistrations() []registry.ToolRegistration {
 }
 
 // manifestDefinition is the fixture graph with the two Manifest Tools allowed and an
-// instruction that carries a secret-looking token.
+// instruction that carries a secret-looking token. The read Tool declares that it uses the
+// workspace, and a workspace Tool is only admitted on an Agent Run that froze a workspace
+// binding, so the Agent node binds one; the read double never touches the repository.
 func manifestDefinition(workflowID string) domain.Definition {
 	def := factDefinition(workflowID, manifestReportTool, manifestReadTool)
 	for i, node := range def.Nodes {
 		if node.ID == "node_agent" {
-			def.Nodes[i].Config = json.RawMessage(strings.Replace(string(node.Config),
-				agentInstructions, "Use the token "+manifestInstructionSecret+" when calling the service.", 1))
+			var config map[string]any
+			if err := json.Unmarshal(node.Config, &config); err != nil {
+				panic(err)
+			}
+			config["instructions"] = "Use the token " + manifestInstructionSecret + " when calling the service."
+			config["workspace"] = map[string]any{
+				"repositoryId": manifestRepositoryID,
+				"baseCommit":   strings.Repeat("a", 40),
+				"allowedPaths": []string{"go.mod", "src/"},
+			}
+			encoded, err := json.Marshal(config)
+			if err != nil {
+				panic(err)
+			}
+			def.Nodes[i].Config = encoded
 		}
 	}
 	return def
@@ -146,7 +162,7 @@ func scriptManifestLoop(h *agentHarness) {
 // runManifestLoop drives the four-round loop to completion and returns the Agent Run.
 func runManifestLoop(t *testing.T, workflowID string) (*agentHarness, domain.Run, domain.AgentRun) {
 	t.Helper()
-	h := newAgentHarness(t, agentHarnessOptions{Tools: manifestToolRegistrations()})
+	h := newAgentHarness(t, agentHarnessOptions{Tools: manifestToolRegistrations(), WorkspaceRepositories: []string{manifestRepositoryID}})
 	scriptManifestLoop(h)
 	def := h.saveDefinition(manifestDefinition(workflowID))
 	run := h.createRun(def.WorkflowID, def.Version, `{"question":"`+agentQuestion+`"}`)

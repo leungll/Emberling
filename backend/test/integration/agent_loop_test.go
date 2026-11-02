@@ -93,6 +93,9 @@ type agentHarnessOptions struct {
 	// PollHooks lets a test stop or synchronise a Provider poll between its claim commit
 	// and the Provider query. The zero value installs no hook.
 	PollHooks service.PollHooks
+	// WorkspaceRepositories are the repository identifiers the Compiler accepts in an agent
+	// node's workspace binding, as cmd/emberling hands it the configured set.
+	WorkspaceRepositories []string
 }
 
 // agentRunnerSeq numbers the default runner identities of the harnesses of one test binary.
@@ -203,7 +206,7 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		// must start at wall-clock time, not the fixed fixtureTime constant.
 		clock = newExecClock(execDeadlineClockStart())
 	}
-	compiler := runtime.NewCompiler(nodeRegistry, clock)
+	compiler := runtime.NewCompiler(nodeRegistry, clock, runtime.WithWorkspaceRepositories(opts.WorkspaceRepositories))
 
 	ids := newExecForcedIDs()
 	var turns *agentInlineTurns

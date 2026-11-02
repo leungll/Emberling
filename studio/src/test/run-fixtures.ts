@@ -206,6 +206,7 @@ export function agentTrace(
     turns,
     facts: { items: [], truncated: false },
     generationBudget: { maxGenerationCalls: null, generationCallsUsed: 0 },
+    workspace: null,
   };
 }
 

@@ -128,6 +128,8 @@ func (t *cbTx) AgentContextVersions() store.AgentContextVersionRepository { retu
 func (t *cbTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *cbTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
 func (t *cbTx) ProviderSlots() store.ProviderSlotRepository               { return noSlotsRepo{} }
+func (t *cbTx) AgentWorkspaces() store.AgentWorkspaceRepository           { return nil }
+func (t *cbTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
 
 type cbDefinitionRepo struct{ tx *cbTx }
 
