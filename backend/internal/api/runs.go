@@ -329,6 +329,25 @@ type agentTraceTurnDTO struct {
 	Decision     *agentDecisionDTO   `json:"decision"`
 	Action       *agentActionDTO     `json:"action"`
 	ToolAttempts []toolAttemptDTO    `json:"toolAttempts"`
+	// Manifest is the Turn's Context Manifest: the materials its model request carried
+	// and left out, as identifiers, versions, digests and lengths. It serialises null
+	// until the Turn has been claimed, and never carries the material itself.
+	Manifest []manifestItemDTO `json:"manifest"`
+}
+
+// manifestItemDTO projects one Context Manifest item. For an included item the digest and
+// length are those of the request bytes; for an omitted ARTIFACT they describe the
+// referenced content, and `ref` is the Artifact ID the artifact content route takes.
+type manifestItemDTO struct {
+	Kind     domain.ManifestItemKind `json:"kind"`
+	Label    string                  `json:"label"`
+	Ref      string                  `json:"ref"`
+	Version  string                  `json:"version"`
+	SHA256   string                  `json:"sha256"`
+	Length   int                     `json:"length"`
+	Included bool                    `json:"included"`
+	// OmittedReason is null for an included item.
+	OmittedReason *domain.ManifestOmission `json:"omittedReason"`
 }
 
 // agentDecisionDTO says what the model committed to, without saying what it said: the
@@ -476,6 +495,21 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 		Cost:         toCostDTO(round.Turn.Cost),
 		ClaimSource:  round.TurnClaimSource,
 		ToolAttempts: []toolAttemptDTO{},
+	}
+	if round.Manifest != nil {
+		dto.Manifest = make([]manifestItemDTO, 0, len(round.Manifest.Items))
+		for _, item := range round.Manifest.Items {
+			dto.Manifest = append(dto.Manifest, manifestItemDTO{
+				Kind:          item.Kind,
+				Label:         item.Label,
+				Ref:           item.Ref,
+				Version:       item.Version,
+				SHA256:        item.SHA256,
+				Length:        item.Length,
+				Included:      item.Included,
+				OmittedReason: item.OmittedReason,
+			})
+		}
 	}
 	if round.Decision != nil {
 		dto.Decision = &agentDecisionDTO{

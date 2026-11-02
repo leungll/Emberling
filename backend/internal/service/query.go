@@ -208,6 +208,9 @@ type AgentTraceTurn struct {
 	TurnClaimSource *domain.ClaimSource
 	// ActionSources is how the Action was claimed and ended, read from its Events.
 	ActionSources AgentActionSources
+	// Manifest is the Context Manifest written with the Turn's claim, nil while the Turn
+	// has not been claimed.
+	Manifest *domain.AgentTurnManifest
 }
 
 // AgentTrace reads one Agent NodeRun's Agent Run, Turns, Decisions, Actions, Tool
@@ -292,9 +295,20 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		if err != nil {
 			return err
 		}
+		manifests, err := tx.AgentTurnManifests().ListByAgentRunID(ctx, agentRun.ID)
+		if err != nil {
+			return err
+		}
+		manifestByTurn := make(map[string]domain.AgentTurnManifest, len(manifests))
+		for _, manifest := range manifests {
+			manifestByTurn[manifest.TurnID] = manifest
+		}
 		for i := range rounds {
 			if claim, ok := turnClaims[rounds[i].Turn.ID]; ok {
 				rounds[i].TurnClaimSource = &claim
+			}
+			if manifest, ok := manifestByTurn[rounds[i].Turn.ID]; ok {
+				rounds[i].Manifest = &manifest
 			}
 			if rounds[i].Action != nil {
 				rounds[i].ActionSources = actionSources[rounds[i].Action.ID]
