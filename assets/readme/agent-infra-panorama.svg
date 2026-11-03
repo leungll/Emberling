@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1784" height="1055" data-theme="dark" viewBox="0 0 1784 1055" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-animation="trace" data-preset="classic" data-quality-profile="showcase" data-node-ui="" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14"><style><![CDATA[
+<svg xmlns="http://www.w3.org/2000/svg" width="1784" height="1055" data-theme="light" viewBox="0 0 1784 1055" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-animation="trace" data-preset="classic" data-quality-profile="showcase" data-node-ui="" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14"><style><![CDATA[
 /*
 JetBrains Mono variable WOFF2 subsets from Google Fonts service revision v24.
 These fixed bytes are shared by the viewer and its SVG/raster exports.
@@ -149,7 +149,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
       --panel: rgba(15, 23, 42, 0.5);
       --panel-border: #1e293b;
-      --lane-fill: rgba(15, 23, 42, 0.22);
+      --lane-fill: #f8fafc;
       --lane-stroke: #334155;
 
       --arrow: #94a3b8;
@@ -159,19 +159,19 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
          so the arrows drawn underneath are properly hidden. */
       --mask: #0f172a;
 
-      --frontend-fill:    rgba(8, 51, 68, 0.4);
-      --frontend-stroke:  #22d3ee;
-      --backend-fill:     rgba(6, 78, 59, 0.4);
+      --frontend-fill:    #e8f4f7;
+      --frontend-stroke:  #0e7490;
+      --backend-fill:     #e8f5ef;
       --backend-stroke:   #34d399;
-      --database-fill:    rgba(76, 29, 149, 0.4);
-      --database-stroke:  #a78bfa;
-      --cloud-fill:       rgba(120, 53, 15, 0.3);
-      --cloud-stroke:     #fbbf24;
-      --security-fill:    rgba(136, 19, 55, 0.4);
-      --security-stroke:  #fb7185;
-      --messagebus-fill:  rgba(251, 146, 60, 0.3);
+      --database-fill:    #f1ebfc;
+      --database-stroke:  #7c3aed;
+      --cloud-fill:       #fff5e4;
+      --cloud-stroke:     #b7791f;
+      --security-fill:    #fceef1;
+      --security-stroke:  #be3455;
+      --messagebus-fill:  #fff2e8;
       --messagebus-stroke:#fb923c;
-      --external-fill:    rgba(30, 41, 59, 0.5);
+      --external-fill:    #f1f5f9;
       --external-stroke:  #94a3b8;
 
       --toolbar-bg:       rgba(15, 23, 42, 0.8);
@@ -182,7 +182,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
 
     [data-theme="light"] {
-      --bg: #f4f5f7;
+      --bg: #ffffff;
       --grid: #e9edf2;
       --canvas-dot: #e2e7ec;
       --text: #111827;
@@ -242,7 +242,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       --frontend-fill: rgba(6, 182, 212, 0.14);
       --frontend-stroke: #67e8f9;
       --backend-fill: rgba(16, 185, 129, 0.14);
-      --backend-stroke: #5eead4;
+      --backend-stroke: #0f766e;
       --database-fill: rgba(139, 92, 246, 0.16);
       --database-stroke: #c4b5fd;
       --cloud-fill: rgba(245, 158, 11, 0.13);
@@ -449,10 +449,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       --archify-page-top: 2rem;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans', Roboto, 'Helvetica Neue', Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
-      background: #1c2128;
+      background: #ffffff;
       min-height: 100vh;
-      padding: #adbac7 2rem 2rem;
-      color: #cdd9e5;
+      padding: #536479 2rem 2rem;
+      color: #1e293b;
       /* Theme surfaces change together; animating the page background leaves it
          visibly out of sync with the SVG and panel for the first 200ms. */
     }
@@ -478,7 +478,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     html[data-preset="editorial"] body {
       background-image:
-        linear-gradient(90deg, transparent 0, transparent 5.4rem, color-mix(in srgb, #fb7185 18%, transparent) 5.4rem, color-mix(in srgb, #fb7185 18%, transparent) calc(5.4rem + 1px), transparent calc(5.4rem + 1px)),
+        linear-gradient(90deg, transparent 0, transparent 5.4rem, color-mix(in srgb, #be3455 18%, transparent) 5.4rem, color-mix(in srgb, #be3455 18%, transparent) calc(5.4rem + 1px), transparent calc(5.4rem + 1px)),
         repeating-linear-gradient(0deg, transparent 0, transparent 31px, color-mix(in srgb, #1e293b 36%, transparent) 31px, color-mix(in srgb, #1e293b 36%, transparent) 32px);
       background-attachment: fixed;
     }
@@ -489,7 +489,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       min-height: 0;
       padding: 0;
       overflow: hidden;
-      background: #1c2128;
+      background: #ffffff;
       background-image: none;
     }
     html[data-embed="true"] .toolbar,
@@ -550,7 +550,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       justify-content: center;
       min-height: 0;
       padding: 0.75rem;
-      padding-bottom: calc(0.75rem + #adbac7);
+      padding-bottom: calc(0.75rem + #536479);
     }
     html[data-present="true"]:not([data-embed="true"]) .diagram-container > svg {
       flex: 1 1 auto;
@@ -561,8 +561,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     html[data-present="true"]:not([data-embed="true"]) .cards { display: none; }
     html[data-present="true"]:not([data-embed="true"]) #btn-present {
-      border-color: #22d3ee;
-      color: #22d3ee;
+      border-color: #0e7490;
+      color: #0e7490;
     }
 
     /* The reader owns only the outer scale. Compact automatic sequences fit at
@@ -572,11 +572,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
        Every strategy preserves the authored SVG/viewBox and semantic geometry. */
     .container {
       width: 100%;
-      max-width: #adbac7;
+      max-width: #536479;
       margin: 0 auto;
     }
     html[data-reader-area="true"] .diagram-container {
-      min-height: #adbac7;
+      min-height: #536479;
       display: flex;
       align-items: center;
     }
@@ -587,11 +587,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .diagram-container [data-reader-legend-corner] {
       transform-origin: 0 0;
       transform-box: view-box;
-      transform: #adbac7;
+      transform: #536479;
     }
     html[data-reader-narrow="true"]:not([data-present="true"]) .diagram-container > svg {
       min-width: 0;
-      max-width: #adbac7;
+      max-width: #536479;
       margin-inline: auto;
     }
     @media (min-width: 768px) and (max-height: 920px) {
@@ -619,9 +619,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       flex: none;
       width: 10px;
       height: 10px;
-      background: #22d3ee;
+      background: #0e7490;
       border-radius: 50%;
-      box-shadow: 0 0 0 4px color-mix(in srgb, #22d3ee 16%, transparent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, #0e7490 16%, transparent);
       animation: none;
     }
 
@@ -640,7 +640,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
 
     .subtitle {
-      color: #adbac7;
+      color: #536479;
       font-size: 0.875rem;
       line-height: 1.55;
       margin-left: 1.375rem;
@@ -650,8 +650,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       content: attr(data-preset-badge-signal-flow);
       flex: none;
       margin-left: 0.25rem;
-      color: #22d3ee;
-      border: 1px solid #22d3ee;
+      color: #0e7490;
+      border: 1px solid #0e7490;
       border-radius: 999px;
       padding: 0.28rem 0.6rem;
       font-size: 0.625rem;
@@ -664,10 +664,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     html[data-preset="blueprint"] .pulse-dot {
       width: 10px;
       height: 10px;
-      border: 1px solid #22d3ee;
+      border: 1px solid #0e7490;
       border-radius: 1px;
       background: transparent;
-      box-shadow: inset 0 0 0 2px #1c2128;
+      box-shadow: inset 0 0 0 2px #ffffff;
       transform: rotate(45deg);
       animation: none;
     }
@@ -676,9 +676,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       flex: none;
       margin-left: 0.25rem;
       padding: 0.28rem 0.55rem;
-      border-top: 1px solid #22d3ee;
-      border-bottom: 1px solid #22d3ee;
-      color: #22d3ee;
+      border-top: 1px solid #0e7490;
+      border-bottom: 1px solid #0e7490;
+      color: #0e7490;
       font-size: 0.5625rem;
       font-weight: 700;
       letter-spacing: 0.14em;
@@ -723,7 +723,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 1px solid #1e293b;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 40px -20px rgba(15, 23, 42, 0.18);
       padding: 1.5rem;
-      padding-bottom: calc(1.5rem + #adbac7);
+      padding-bottom: calc(1.5rem + #536479);
       overflow: hidden;
       position: relative;
     }
@@ -753,14 +753,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       inset: 0.7rem;
       pointer-events: none;
       background:
-        linear-gradient(#22d3ee, #22d3ee) left top / 1.35rem 1px no-repeat,
-        linear-gradient(#22d3ee, #22d3ee) left top / 1px 1.35rem no-repeat,
-        linear-gradient(#22d3ee, #22d3ee) right top / 1.35rem 1px no-repeat,
-        linear-gradient(#22d3ee, #22d3ee) right top / 1px 1.35rem no-repeat,
-        linear-gradient(#22d3ee, #22d3ee) left bottom / 1.35rem 1px no-repeat,
-        linear-gradient(#22d3ee, #22d3ee) left bottom / 1px 1.35rem no-repeat,
-        linear-gradient(#22d3ee, #22d3ee) right bottom / 1.35rem 1px no-repeat,
-        linear-gradient(#22d3ee, #22d3ee) right bottom / 1px 1.35rem no-repeat;
+        linear-gradient(#0e7490, #0e7490) left top / 1.35rem 1px no-repeat,
+        linear-gradient(#0e7490, #0e7490) left top / 1px 1.35rem no-repeat,
+        linear-gradient(#0e7490, #0e7490) right top / 1.35rem 1px no-repeat,
+        linear-gradient(#0e7490, #0e7490) right top / 1px 1.35rem no-repeat,
+        linear-gradient(#0e7490, #0e7490) left bottom / 1.35rem 1px no-repeat,
+        linear-gradient(#0e7490, #0e7490) left bottom / 1px 1.35rem no-repeat,
+        linear-gradient(#0e7490, #0e7490) right bottom / 1.35rem 1px no-repeat,
+        linear-gradient(#0e7490, #0e7490) right bottom / 1px 1.35rem no-repeat;
       opacity: 0.58;
     }
     html[data-preset="editorial"] .diagram-container {
@@ -768,10 +768,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border-color: #1e293b;
       border-radius: 0.38rem;
       background:
-        linear-gradient(90deg, color-mix(in srgb, rgba(136, 19, 55, 0.4) 58%, transparent), transparent 12%),
+        linear-gradient(90deg, color-mix(in srgb, #fceef1 58%, transparent), transparent 12%),
         rgba(15, 23, 42, 0.5);
       box-shadow:
-        0 1px 0 color-mix(in srgb, #cdd9e5 6%, transparent),
+        0 1px 0 color-mix(in srgb, #1e293b 6%, transparent),
         0 18px 48px color-mix(in srgb, #000 19%, transparent);
     }
     html[data-preset="editorial"] .diagram-container::after {
@@ -894,7 +894,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       right: 1rem;
       bottom: 1rem;
       z-index: 12;
-      translate: 0 calc(-1 * #adbac7);
+      translate: 0 calc(-1 * #536479);
       display: inline-flex;
       align-items: center;
       max-width: calc(100% - 2rem);
@@ -922,7 +922,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       height: 2rem;
       padding: 0 0.4rem;
       border-radius: 0.5rem;
-      color: #adbac7;
+      color: #536479;
       font-size: 0.75rem;
       font-weight: 500;
       letter-spacing: 0;
@@ -930,8 +930,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .diagram-nav button:hover,
     .diagram-nav button:focus-visible {
-      color: #cdd9e5;
-      background: color-mix(in srgb, #cdd9e5 6%, transparent);
+      color: #1e293b;
+      background: color-mix(in srgb, #1e293b 6%, transparent);
     }
     .diagram-nav button:hover,
     .diagram-nav button:focus-visible,
@@ -939,7 +939,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .focus-chip button:focus-visible { background: rgba(15, 23, 42, 0.95); }
     .diagram-nav button:focus-visible,
     .focus-chip button:focus-visible {
-      outline: 2px solid #22d3ee;
+      outline: 2px solid #0e7490;
       outline-offset: 1px;
     }
     .diagram-nav button:disabled { opacity: 0.38; cursor: default; }
@@ -953,7 +953,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .diagram-nav #btn-semantic-lens {
       min-width: auto;
       padding-inline: 0.6rem;
-      color: #adbac7;
+      color: #536479;
       font-weight: 500;
     }
     .diagram-nav #btn-node-finder,
@@ -1020,7 +1020,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       letter-spacing: 0.07em;
     }
     .diagram-nav-percent {
-      color: #adbac7;
+      color: #536479;
       font-size: 0.75rem;
       font-weight: 500;
       font-variant-numeric: tabular-nums;
@@ -1044,8 +1044,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       background: currentColor;
       content: "";
       opacity: 0.85;
-      -webkit-mask: #adbac7 center / contain no-repeat;
-      mask: #adbac7 center / contain no-repeat;
+      -webkit-mask: #536479 center / contain no-repeat;
+      mask: #536479 center / contain no-repeat;
     }
     .diagram-nav #btn-route-probe { --nav-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cg fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='4.8' cy='14.8' r='2.2'/%3E%3Ccircle cx='15.2' cy='5.2' r='2.2'/%3E%3Cpath d='M6.9 13.9c3.8-1.4 2.6-6.3 6.2-7.8'/%3E%3C/g%3E%3C/svg%3E"); }
     .diagram-nav #btn-overview-map { --nav-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cg fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round'%3E%3Cpath d='M2.8 5.4 7.4 3.5l5.2 2 4.6-1.9v11l-4.6 1.9-5.2-2-4.6 1.9z'/%3E%3Cpath d='M7.4 3.5v11M12.6 5.5v11'/%3E%3C/g%3E%3C/svg%3E"); }
@@ -1078,14 +1078,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .diagram-nav [data-view="reset"]:hover,
     .diagram-nav [data-view="in"]:hover { background: color-mix(in srgb, #1e293b 60%, transparent); }
     .diagram-nav [data-view="out"]:disabled,
-    .diagram-nav [data-view="in"]:disabled { opacity: 1; color: color-mix(in srgb, #adbac7 40%, transparent); }
+    .diagram-nav [data-view="in"]:disabled { opacity: 1; color: color-mix(in srgb, #536479 40%, transparent); }
     .diagram-nav [data-view="out"]:disabled:hover,
     .diagram-nav [data-view="in"]:disabled:hover { background: color-mix(in srgb, #1e293b 38%, transparent); }
     .diagram-nav [data-view="reset"] { min-width: 3.25rem; }
     .diagram-container[data-camera-indicator="true"] .diagram-nav-detail,
-    .diagram-container[data-camera-indicator="true"] .diagram-nav-percent { color: #22d3ee; }
+    .diagram-container[data-camera-indicator="true"] .diagram-nav-percent { color: #0e7490; }
     .diagram-nav #btn-diagram-guide[aria-expanded="true"] {
-      color: #fbbf24;
+      color: #b7791f;
       background: rgba(15, 23, 42, 0.95);
     }
 
@@ -1096,11 +1096,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .overview-map {
       position: absolute;
       right: 1rem;
-      bottom: calc(4.15rem + #adbac7);
+      bottom: calc(4.15rem + #536479);
       z-index: 12;
       width: 11.25rem;
       overflow: hidden;
-      border: 1px solid color-mix(in srgb, #22d3ee 52%, #334155);
+      border: 1px solid color-mix(in srgb, #0e7490 52%, #334155);
       border-radius: 0.78rem;
       background: #0f172a;
       color: #e2e8f0;
@@ -1111,13 +1111,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .overview-map[hidden] { display: none; }
     .overview-map[data-docked="true"] {
       position: fixed;
-      right: #adbac7;
-      top: #adbac7;
+      right: #536479;
+      top: #536479;
       bottom: auto;
     }
     .overview-map[data-docked="true"][data-dock-side="left"] {
       right: auto;
-      left: #adbac7;
+      left: #536479;
     }
     html[data-preset="blueprint"] .overview-map { border-radius: 0.28rem; }
     .overview-map-head {
@@ -1128,15 +1128,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       min-height: 2.25rem;
       padding: 0.42rem 0.48rem 0.38rem 0.55rem;
       border-bottom: 1px solid #334155;
-      background: linear-gradient(110deg, color-mix(in srgb, rgba(8, 51, 68, 0.4) 45%, transparent), transparent 68%);
+      background: linear-gradient(110deg, color-mix(in srgb, #e8f4f7 45%, transparent), transparent 68%);
       cursor: grab;
       touch-action: none;
       user-select: none;
     }
     .overview-map[data-panel-dragging="true"] .overview-map-head { cursor: grabbing; }
     .overview-map[data-placement-invalid="true"] {
-      border-color: #fb7185;
-      box-shadow: 0 0 0 2px color-mix(in srgb, #fb7185 34%, transparent), 0 16px 42px rgba(0, 0, 0, 0.3);
+      border-color: #be3455;
+      box-shadow: 0 0 0 2px color-mix(in srgb, #be3455 34%, transparent), 0 16px 42px rgba(0, 0, 0, 0.3);
     }
     .overview-map[data-compact="true"] {
       width: 7.4rem;
@@ -1164,15 +1164,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 0.42rem;
       height: 0.42rem;
       border-radius: 50%;
-      background: #539bf5;
-      box-shadow: 0 0 0 0 color-mix(in srgb, #539bf5 52%, transparent);
+      background: #2563eb;
+      box-shadow: 0 0 0 0 color-mix(in srgb, #2563eb 52%, transparent);
       animation: archify-radar-live 2.4s ease-out infinite;
     }
     .overview-map-copy { min-width: 0; line-height: 1.1; }
     .overview-map-copy strong {
       display: block;
       overflow: hidden;
-      color: #22d3ee;
+      color: #0e7490;
       font-size: 0.59rem;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -1200,7 +1200,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 0;
       border-radius: 0.3rem;
       background: transparent;
-      color: #22d3ee;
+      color: #0e7490;
       font: inherit;
       font-size: 0.49rem;
       font-weight: 700;
@@ -1229,7 +1229,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .overview-map-close:focus-visible,
     .overview-map-surface:focus-visible,
     .overview-map-node:focus-visible {
-      outline: 2px solid #22d3ee;
+      outline: 2px solid #0e7490;
       outline-offset: 1px;
     }
     .overview-map-surface {
@@ -1242,7 +1242,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       background:
         linear-gradient(color-mix(in srgb, #1e293b 26%, transparent) 1px, transparent 1px),
         linear-gradient(90deg, color-mix(in srgb, #1e293b 26%, transparent) 1px, transparent 1px),
-        color-mix(in srgb, #1c2128 86%, transparent);
+        color-mix(in srgb, #ffffff 86%, transparent);
       background-size: 12px 12px;
       cursor: crosshair;
       touch-action: none;
@@ -1258,24 +1258,24 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       overflow: visible;
     }
     .overview-map-node {
-      fill: #539bf5;
+      fill: #2563eb;
       fill-opacity: 0.52;
-      stroke: #539bf5;
+      stroke: #2563eb;
       stroke-opacity: 0.86;
       vector-effect: non-scaling-stroke;
       cursor: pointer;
       transition: fill-opacity 140ms ease, stroke-width 140ms ease, filter 140ms ease;
     }
     .overview-map-node[data-kind="frontend"],
-    .overview-map-node[data-kind="start"] { fill: #22d3ee; stroke: #22d3ee; }
+    .overview-map-node[data-kind="start"] { fill: #0e7490; stroke: #0e7490; }
     .overview-map-node[data-kind="database"],
-    .overview-map-node[data-kind="success"] { fill: #a78bfa; stroke: #a78bfa; }
+    .overview-map-node[data-kind="success"] { fill: #7c3aed; stroke: #7c3aed; }
     .overview-map-node[data-kind="cloud"],
-    .overview-map-node[data-kind="waiting"] { fill: #fbbf24; stroke: #fbbf24; }
+    .overview-map-node[data-kind="waiting"] { fill: #b7791f; stroke: #b7791f; }
     .overview-map-node[data-kind="messagebus"] { fill: #fb923c; stroke: #fb923c; }
     .overview-map-node[data-kind="security"],
     .overview-map-node[data-kind="decision"],
-    .overview-map-node[data-kind="failure"] { fill: #fb7185; stroke: #fb7185; }
+    .overview-map-node[data-kind="failure"] { fill: #be3455; stroke: #be3455; }
     .overview-map-node[data-kind="external"],
     .overview-map-node[data-kind="neutral"] { fill: #94a3b8; stroke: #94a3b8; }
     .overview-map-node[data-radar-active="true"],
@@ -1286,12 +1286,12 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       filter: drop-shadow(0 0 3px currentColor);
     }
     .overview-map-viewport {
-      fill: color-mix(in srgb, rgba(8, 51, 68, 0.4) 56%, transparent);
-      stroke: #22d3ee;
+      fill: color-mix(in srgb, #e8f4f7 56%, transparent);
+      stroke: #0e7490;
       stroke-width: 2;
       vector-effect: non-scaling-stroke;
       pointer-events: none;
-      filter: drop-shadow(0 0 3px color-mix(in srgb, #22d3ee 54%, transparent));
+      filter: drop-shadow(0 0 3px color-mix(in srgb, #0e7490 54%, transparent));
     }
     .overview-map-hint {
       display: flex;
@@ -1304,8 +1304,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       text-transform: uppercase;
     }
     .diagram-nav #btn-overview-map[aria-expanded="true"] {
-      color: #22d3ee;
-      background: color-mix(in srgb, #22d3ee 11%, transparent);
+      color: #0e7490;
+      background: color-mix(in srgb, #0e7490 11%, transparent);
     }
     .overview-map-feedback {
       position: absolute;
@@ -1314,7 +1314,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       z-index: 13;
       max-width: min(16rem, calc(100% - 2rem));
       padding: 0.38rem 0.55rem;
-      border: 1px solid color-mix(in srgb, #22d3ee 52%, #334155);
+      border: 1px solid color-mix(in srgb, #0e7490 52%, #334155);
       border-radius: 0.5rem;
       background: #0f172a;
       color: #e2e8f0;
@@ -1326,13 +1326,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .overview-map-feedback[hidden] { display: none; }
     .focus-chip[data-radar-yielded="true"] { display: none !important; }
     .diagram-nav #btn-route-probe[aria-pressed="true"] {
-      color: #539bf5;
-      background: color-mix(in srgb, #539bf5 11%, transparent);
+      color: #2563eb;
+      background: color-mix(in srgb, #2563eb 11%, transparent);
     }
     .diagram-nav #btn-semantic-lens[aria-expanded="true"],
     .diagram-nav #btn-semantic-lens[aria-pressed="true"] {
-      color: #a78bfa;
-      background: color-mix(in srgb, #a78bfa 11%, transparent);
+      color: #7c3aed;
+      background: color-mix(in srgb, #7c3aed 11%, transparent);
     }
 
     /* Semantic Lens turns the compiled node-kind palette into an analytical
@@ -1341,14 +1341,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .semantic-lens {
       position: absolute;
       right: 1rem;
-      bottom: calc(4.15rem + #adbac7);
+      bottom: calc(4.15rem + #536479);
       z-index: 24;
       width: min(20rem, calc(100% - 2rem));
       overflow: hidden;
-      border: 1px solid color-mix(in srgb, #a78bfa 58%, #334155);
+      border: 1px solid color-mix(in srgb, #7c3aed 58%, #334155);
       border-radius: 0.82rem;
       background:
-        linear-gradient(135deg, color-mix(in srgb, rgba(76, 29, 149, 0.4) 34%, transparent), transparent 48%),
+        linear-gradient(135deg, color-mix(in srgb, #f1ebfc 34%, transparent), transparent 48%),
         #0f172a;
       color: #e2e8f0;
       box-shadow: 0 18px 52px rgba(0, 0, 0, 0.36);
@@ -1369,7 +1369,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .semantic-lens-eyebrow {
       display: block;
-      color: #a78bfa;
+      color: #7c3aed;
       font-size: 0.5rem;
       font-weight: 800;
       letter-spacing: 0.16em;
@@ -1378,7 +1378,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .semantic-lens-title {
       display: block;
       margin-top: 0.16rem;
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.82rem;
       letter-spacing: -0.02em;
     }
@@ -1421,7 +1421,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       min-width: 0;
       min-height: 2.15rem;
       padding: 0.35rem 0.42rem;
-      border: 1px solid color-mix(in srgb, #adbac7 24%, #334155);
+      border: 1px solid color-mix(in srgb, #536479 24%, #334155);
       border-radius: 0.45rem;
       background: color-mix(in srgb, rgba(15, 23, 42, 0.5) 76%, transparent);
       color: #e2e8f0;
@@ -1432,27 +1432,27 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     html[data-preset="blueprint"] .semantic-lens-kind { border-radius: 0.12rem; }
     .semantic-lens-kind[data-kind="frontend"],
-    .semantic-lens-kind[data-kind="start"] { --lens-color: #22d3ee; }
+    .semantic-lens-kind[data-kind="start"] { --lens-color: #0e7490; }
     .semantic-lens-kind[data-kind="backend"],
-    .semantic-lens-kind[data-kind="active"] { --lens-color: #539bf5; }
+    .semantic-lens-kind[data-kind="active"] { --lens-color: #2563eb; }
     .semantic-lens-kind[data-kind="database"],
-    .semantic-lens-kind[data-kind="success"] { --lens-color: #a78bfa; }
+    .semantic-lens-kind[data-kind="success"] { --lens-color: #7c3aed; }
     .semantic-lens-kind[data-kind="cloud"],
-    .semantic-lens-kind[data-kind="waiting"] { --lens-color: #fbbf24; }
+    .semantic-lens-kind[data-kind="waiting"] { --lens-color: #b7791f; }
     .semantic-lens-kind[data-kind="messagebus"] { --lens-color: #fb923c; }
     .semantic-lens-kind[data-kind="security"],
     .semantic-lens-kind[data-kind="decision"],
-    .semantic-lens-kind[data-kind="failure"] { --lens-color: #fb7185; }
+    .semantic-lens-kind[data-kind="failure"] { --lens-color: #be3455; }
     .semantic-lens-kind:hover,
     .semantic-lens-kind:focus-visible,
     .semantic-lens-kind[aria-pressed="true"] {
-      border-color: color-mix(in srgb, #adbac7 78%, #334155);
-      background: color-mix(in srgb, #adbac7 11%, rgba(15, 23, 42, 0.5));
+      border-color: color-mix(in srgb, #536479 78%, #334155);
+      background: color-mix(in srgb, #536479 11%, rgba(15, 23, 42, 0.5));
     }
     .semantic-lens-kind:focus-visible,
     .semantic-lens-close:focus-visible,
     .semantic-lens-actions button:focus-visible {
-      outline: 2px solid #a78bfa;
+      outline: 2px solid #7c3aed;
       outline-offset: 1px;
     }
     .semantic-lens-kind:disabled { opacity: 0.34; cursor: default; }
@@ -1460,18 +1460,18 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 0.48rem;
       height: 0.48rem;
       border-radius: 50%;
-      background: #adbac7;
-      box-shadow: 0 0 8px color-mix(in srgb, #adbac7 58%, transparent);
+      background: #536479;
+      box-shadow: 0 0 8px color-mix(in srgb, #536479 58%, transparent);
     }
     .semantic-lens-kind strong {
       overflow: hidden;
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.61rem;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .semantic-lens-kind em {
-      color: #adbac7;
+      color: #536479;
       font-size: 0.54rem;
       font-style: normal;
       font-weight: 800;
@@ -1485,7 +1485,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       font-size: 0.55rem;
       line-height: 1.45;
     }
-    .semantic-lens-status strong { color: #a78bfa; font-weight: 800; }
+    .semantic-lens-status strong { color: #7c3aed; font-weight: 800; }
     .semantic-lens-actions {
       display: flex;
       justify-content: flex-end;
@@ -1504,7 +1504,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       cursor: pointer;
     }
     .semantic-lens-actions button:hover { background: rgba(15, 23, 42, 0.95); }
-    .semantic-lens-actions #semantic-lens-copy { color: #a78bfa; }
+    .semantic-lens-actions #semantic-lens-copy { color: #7c3aed; }
     @keyframes archify-lens-in {
       from { opacity: 0; transform: translateY(5px) scale(0.985); }
       to { opacity: 1; transform: translateY(0) scale(1); }
@@ -1516,15 +1516,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .route-probe {
       position: absolute;
       left: 1rem;
-      bottom: calc(1rem + #adbac7);
+      bottom: calc(1rem + #536479);
       z-index: 12;
       width: min(46rem, calc(100% - 25rem));
       min-width: 18rem;
       overflow: hidden;
-      border: 1px solid color-mix(in srgb, #539bf5 62%, #334155);
+      border: 1px solid color-mix(in srgb, #2563eb 62%, #334155);
       border-radius: 0.82rem;
       background:
-        linear-gradient(115deg, color-mix(in srgb, #2d333b 50%, transparent), transparent 62%),
+        linear-gradient(115deg, color-mix(in srgb, #ffffff 50%, transparent), transparent 62%),
         #0f172a;
       color: #e2e8f0;
       box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
@@ -1552,7 +1552,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .route-probe-copy { min-width: 0; }
     .route-probe-eyebrow {
       display: block;
-      color: #539bf5;
+      color: #2563eb;
       font-size: 0.6875rem;
       font-weight: 600;
       letter-spacing: 0.02em;
@@ -1582,11 +1582,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .route-probe button:hover,
     .route-probe button:focus-visible { background: rgba(15, 23, 42, 0.95); }
     .route-probe button:focus-visible {
-      outline: 2px solid #539bf5;
+      outline: 2px solid #2563eb;
       outline-offset: 1px;
     }
-    .route-probe-copy-link { color: #22d3ee !important; }
-    .route-probe-find { color: #539bf5 !important; }
+    .route-probe-copy-link { color: #0e7490 !important; }
+    .route-probe-find { color: #2563eb !important; }
     .route-probe-copy-link[hidden] { display: none; }
     .route-probe-find[hidden] { display: none; }
     .route-probe-path {
@@ -1605,30 +1605,30 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       overflow: hidden;
       min-height: 1.75rem !important;
       padding: 0.22rem 0.38rem;
-      border: 1px solid color-mix(in srgb, #539bf5 46%, #334155);
+      border: 1px solid color-mix(in srgb, #2563eb 46%, #334155);
       border-radius: 999px;
-      background: color-mix(in srgb, #2d333b 52%, transparent);
-      color: #cdd9e5;
+      background: color-mix(in srgb, #ffffff 52%, transparent);
+      color: #1e293b;
       font-size: 0.56rem;
       font-weight: 700;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .route-probe-node[data-endpoint="start"] {
-      border-color: #22d3ee;
-      color: #22d3ee;
+      border-color: #0e7490;
+      color: #0e7490;
     }
     .route-probe-node[data-endpoint="end"] {
-      border-color: #fb7185;
-      color: #fb7185;
+      border-color: #be3455;
+      color: #be3455;
     }
     .route-probe-node[data-route-journey-state="past"] { opacity: 0.66; }
     .route-probe-node[data-route-journey-state="future"] { opacity: 0.48; }
     .route-probe-node[aria-current="step"] {
-      border-color: #539bf5;
-      background: color-mix(in srgb, #2d333b 82%, #0f172a);
-      color: #cdd9e5;
-      box-shadow: 0 0 0 1px color-mix(in srgb, #539bf5 42%, transparent), 0 0 14px color-mix(in srgb, #539bf5 34%, transparent);
+      border-color: #2563eb;
+      background: color-mix(in srgb, #ffffff 82%, #0f172a);
+      color: #1e293b;
+      box-shadow: 0 0 0 1px color-mix(in srgb, #2563eb 42%, transparent), 0 0 14px color-mix(in srgb, #2563eb 34%, transparent);
       opacity: 1;
     }
     html[data-preset="blueprint"] .route-probe-node[aria-current="step"] {
@@ -1651,7 +1651,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       display: block;
       min-height: 1.45rem;
       padding: 0.5rem 0.75rem 0.625rem;
-      color: #adbac7);
+      color: #536479);
       font-size: 0.75rem;
       line-height: 1.45;
     }
@@ -1674,16 +1674,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       cursor: default;
       opacity: 0.34;
     }
-    .route-journey-play { color: #539bf5 !important; }
-    .route-journey-overview { color: #22d3ee !important; }
+    .route-journey-play { color: #2563eb !important; }
+    .route-journey-overview { color: #0e7490 !important; }
     .route-journey-controls[data-playing="true"] .route-journey-play {
-      border-color: color-mix(in srgb, #539bf5 64%, #334155);
-      background: color-mix(in srgb, #2d333b 62%, transparent);
+      border-color: color-mix(in srgb, #2563eb 64%, #334155);
+      background: color-mix(in srgb, #ffffff 62%, transparent);
     }
     .route-probe[data-state="error"] {
-      border-color: color-mix(in srgb, #fb7185 72%, #334155);
+      border-color: color-mix(in srgb, #be3455 72%, #334155);
     }
-    .route-probe[data-state="error"] .route-probe-status { color: #fb7185; }
+    .route-probe[data-state="error"] .route-probe-status { color: #be3455; }
 
     .focus-chip {
       position: absolute;
@@ -1694,7 +1694,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: min(22rem, calc(100% - 13rem));
       max-width: calc(100% - 13rem);
       overflow: hidden;
-      border: 1px solid #22d3ee;
+      border: 1px solid #0e7490;
       border-radius: 0.85rem;
       background: #0f172a;
       color: #e2e8f0;
@@ -1718,7 +1718,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       gap: 0.75rem;
       padding: 0.9rem 0.75rem 0.65rem;
       border-bottom: 1px solid #334155;
-      background: linear-gradient(120deg, color-mix(in srgb, rgba(8, 51, 68, 0.4) 34%, transparent), transparent 72%);
+      background: linear-gradient(120deg, color-mix(in srgb, #e8f4f7 34%, transparent), transparent 72%);
     }
     .relationship-lens-drag-handle {
       position: absolute;
@@ -1759,21 +1759,21 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       height: 1.75rem;
       padding: 0;
       place-items: center;
-      color: #adbac7;
+      color: #536479;
       font-size: 1rem;
       line-height: 1;
     }
     .relationship-lens-actions #btn-focus-clear:hover,
     .relationship-lens-actions #btn-focus-clear:focus-visible {
       background: rgba(15, 23, 42, 0.95);
-      color: #cdd9e5;
+      color: #1e293b;
     }
-    .relationship-lens-actions #btn-focus-copy { color: #22d3ee; }
+    .relationship-lens-actions #btn-focus-copy { color: #0e7490; }
     .relationship-lens-actions #btn-focus-relations { display: none; }
     .relationship-lens-eyebrow {
       display: block;
       margin-bottom: 0.18rem;
-      color: #22d3ee;
+      color: #0e7490;
       font-size: 0.5rem;
       font-weight: 800;
       letter-spacing: 0.14em;
@@ -1782,7 +1782,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .relationship-lens-title {
       display: block;
       overflow: hidden;
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.8rem;
       line-height: 1.35;
       text-overflow: ellipsis;
@@ -1792,7 +1792,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       display: block;
       margin-top: 0.12rem;
       overflow: hidden;
-      color: #adbac7;
+      color: #536479;
       font-size: 0.625rem;
       line-height: 1.4;
       text-overflow: ellipsis;
@@ -1821,12 +1821,12 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       white-space: nowrap;
     }
     .semantic-passport-meta [data-passport="kind"] {
-      border-color: color-mix(in srgb, #22d3ee 50%, #334155);
-      color: #22d3ee;
+      border-color: color-mix(in srgb, #0e7490 50%, #334155);
+      color: #0e7490;
       font-weight: 800;
       text-transform: uppercase;
     }
-    .semantic-passport-meta [data-passport="tag"] { color: #fbbf24; }
+    .semantic-passport-meta [data-passport="tag"] { color: #b7791f; }
     .semantic-passport-meta [data-passport="brand"] {
       border-color: color-mix(in srgb, #fb923c 52%, #334155);
       color: #fb923c;
@@ -1838,9 +1838,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .semantic-passport-evidence {
       margin-top: 0.52rem;
       padding: 0.5rem;
-      border: 1px solid color-mix(in srgb, #539bf5 32%, #334155);
+      border: 1px solid color-mix(in srgb, #2563eb 32%, #334155);
       border-radius: 0.55rem;
-      background: color-mix(in srgb, #2d333b 18%, rgba(15, 23, 42, 0.5));
+      background: color-mix(in srgb, #ffffff 18%, rgba(15, 23, 42, 0.5));
     }
     .semantic-passport-evidence[hidden] { display: none; }
     html[data-preset="blueprint"] .semantic-passport-evidence { border-radius: 0.18rem; }
@@ -1855,7 +1855,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       display: inline-flex;
       align-items: center;
       gap: 0.28rem;
-      color: #539bf5;
+      color: #2563eb;
       font-size: 0.5rem;
       font-weight: 800;
       letter-spacing: 0.08em;
@@ -1866,8 +1866,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 0.38rem;
       height: 0.38rem;
       border-radius: 50%;
-      background: #539bf5;
-      box-shadow: 0 0 0 3px color-mix(in srgb, #539bf5 14%, transparent);
+      background: #2563eb;
+      box-shadow: 0 0 0 3px color-mix(in srgb, #2563eb 14%, transparent);
     }
     .semantic-passport-repository {
       min-width: 0;
@@ -1879,7 +1879,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       white-space: nowrap;
     }
     .semantic-passport-repository:hover,
-    .semantic-passport-repository:focus-visible { color: #539bf5; }
+    .semantic-passport-repository:focus-visible { color: #2563eb; }
     .semantic-passport-evidence-links { display: grid; gap: 0.22rem; }
     .semantic-passport-source {
       display: grid;
@@ -1889,14 +1889,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       padding: 0.34rem 0.4rem;
       border: 1px solid transparent;
       border-radius: 0.38rem;
-      color: #adbac7;
+      color: #536479;
       text-decoration: none;
     }
     a.semantic-passport-source:hover,
     a.semantic-passport-source:focus-visible {
-      border-color: color-mix(in srgb, #539bf5 42%, transparent);
-      background: color-mix(in srgb, #2d333b 32%, transparent);
-      color: #cdd9e5;
+      border-color: color-mix(in srgb, #2563eb 42%, transparent);
+      background: color-mix(in srgb, #ffffff 32%, transparent);
+      color: #1e293b;
     }
     .semantic-passport-source strong {
       overflow: hidden;
@@ -1905,7 +1905,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       white-space: nowrap;
     }
     .semantic-passport-source code {
-      color: #539bf5;
+      color: #2563eb;
       font: inherit;
       font-size: 0.5rem;
     }
@@ -1953,16 +1953,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       padding: 0.32rem 0.42rem;
       border: 1px solid color-mix(in srgb, #334155 86%, transparent);
       background: color-mix(in srgb, rgba(15, 23, 42, 0.5) 70%, transparent);
-      color: #adbac7;
+      color: #536479;
       text-align: left;
     }
     .semantic-passport-reach-actions button:hover:not(:disabled),
     .semantic-passport-reach-actions button:focus-visible {
-      border-color: color-mix(in srgb, #22d3ee 62%, #334155);
-      color: #cdd9e5;
+      border-color: color-mix(in srgb, #0e7490 62%, #334155);
+      color: #1e293b;
     }
     .semantic-passport-reach-actions button:focus-visible {
-      outline: 2px solid #22d3ee;
+      outline: 2px solid #0e7490;
       outline-offset: 1px;
     }
     .semantic-passport-reach-actions button:disabled {
@@ -1970,20 +1970,20 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       opacity: 0.5;
     }
     .semantic-passport-reach-actions button[aria-pressed="true"] {
-      border-color: color-mix(in srgb, #adbac7) 72%, #334155);
-      background: color-mix(in srgb, #adbac7) 48%, transparent);
-      color: #cdd9e5;
+      border-color: color-mix(in srgb, #536479) 72%, #334155);
+      background: color-mix(in srgb, #536479) 48%, transparent);
+      color: #1e293b;
     }
     #btn-reach-upstream {
-      --reach-color: #a78bfa;
-      --reach-fill: rgba(76, 29, 149, 0.4);
+      --reach-color: #7c3aed;
+      --reach-fill: #f1ebfc;
     }
     #btn-reach-downstream {
-      --reach-color: #539bf5;
-      --reach-fill: #2d333b;
+      --reach-color: #2563eb;
+      --reach-fill: #ffffff;
     }
     .semantic-passport-reach-actions strong {
-      color: #adbac7);
+      color: #536479);
       font-size: 0.625rem;
     }
     .semantic-passport-reach-status {
@@ -1997,12 +1997,12 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       overflow: auto;
       padding: 0.4rem;
       scrollbar-width: thin;
-      scrollbar-color: #22d3ee transparent;
+      scrollbar-color: #0e7490 transparent;
     }
     .relationship-lens-list::-webkit-scrollbar { width: 4px; }
     .relationship-lens-list::-webkit-scrollbar-thumb {
       border-radius: 999px;
-      background: color-mix(in srgb, #22d3ee 68%, transparent);
+      background: color-mix(in srgb, #0e7490 68%, transparent);
     }
     .relationship-lens-group + .relationship-lens-group { margin-top: 0.35rem; }
     .relationship-lens-group-title {
@@ -2026,25 +2026,25 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .relationship-lens-row:focus-visible,
     .relationship-lens-row[data-preview-active="true"] {
       background: rgba(15, 23, 42, 0.95);
-      box-shadow: inset 2px 0 0 #22d3ee;
+      box-shadow: inset 2px 0 0 #0e7490;
     }
     .relationship-lens-row:focus-visible {
-      outline: 2px solid #22d3ee;
+      outline: 2px solid #0e7490;
       outline-offset: -2px;
     }
     .relationship-lens-direction {
       grid-row: 1 / 3;
       align-self: center;
-      color: #22d3ee;
+      color: #0e7490;
       font-size: 0.5rem;
       font-weight: 800;
       letter-spacing: 0.08em;
     }
-    .relationship-lens-row[data-direction="in"] .relationship-lens-direction { color: #a78bfa; }
-    .relationship-lens-row[data-direction="loop"] .relationship-lens-direction { color: #fb7185; }
+    .relationship-lens-row[data-direction="in"] .relationship-lens-direction { color: #7c3aed; }
+    .relationship-lens-row[data-direction="loop"] .relationship-lens-direction { color: #be3455; }
     .relationship-lens-row strong {
       overflow: hidden;
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.6875rem;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2076,10 +2076,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: min(32rem, calc(100% - 2rem));
       max-height: min(42rem, calc(100% - 2rem));
       overflow: auto;
-      border: 1px solid color-mix(in srgb, #fbbf24 58%, #334155);
+      border: 1px solid color-mix(in srgb, #b7791f 58%, #334155);
       border-radius: 0.82rem;
       background:
-        linear-gradient(135deg, color-mix(in srgb, rgba(120, 53, 15, 0.3) 32%, transparent), transparent 42%),
+        linear-gradient(135deg, color-mix(in srgb, #fff5e4 32%, transparent), transparent 42%),
         #0f172a;
       color: #e2e8f0;
       box-shadow: 0 22px 64px rgba(0, 0, 0, 0.4);
@@ -2098,7 +2098,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .diagram-guide-eyebrow {
       display: block;
-      color: #fbbf24;
+      color: #b7791f;
       font-size: 0.5rem;
       font-weight: 800;
       letter-spacing: 0.16em;
@@ -2107,7 +2107,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .diagram-guide-title {
       display: block;
       margin-top: 0.16rem;
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.86rem;
       letter-spacing: -0.02em;
     }
@@ -2141,8 +2141,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       height: 0.42rem;
       flex: none;
       border-radius: 50%;
-      background: #539bf5;
-      box-shadow: 0 0 10px color-mix(in srgb, #539bf5 72%, transparent);
+      background: #2563eb;
+      box-shadow: 0 0 10px color-mix(in srgb, #2563eb 72%, transparent);
     }
     .diagram-guide-actions {
       display: grid;
@@ -2151,14 +2151,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       padding: 0.62rem;
     }
     .diagram-guide-action {
-      --guide-accent: #22d3ee;
+      --guide-accent: #0e7490;
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
       gap: 0.55rem;
       min-height: 4.15rem;
       padding: 0.55rem 0.58rem;
-      border: 1px solid color-mix(in srgb, #adbac7 22%, #334155);
+      border: 1px solid color-mix(in srgb, #536479 22%, #334155);
       border-radius: 0.55rem;
       background: color-mix(in srgb, rgba(15, 23, 42, 0.5) 78%, transparent);
       color: #e2e8f0;
@@ -2167,22 +2167,22 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       cursor: pointer;
       transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
     }
-    .diagram-guide-action[data-guide-action="route"] { --guide-accent: #539bf5; }
-    .diagram-guide-action[data-guide-action="map"] { --guide-accent: #a78bfa; }
+    .diagram-guide-action[data-guide-action="route"] { --guide-accent: #2563eb; }
+    .diagram-guide-action[data-guide-action="map"] { --guide-accent: #7c3aed; }
     .diagram-guide-action[data-guide-action="lens"] { --guide-accent: #fb923c; }
 
     .diagram-guide-action[data-guide-action="present"] {
-      --guide-accent: #fbbf24;
+      --guide-accent: #b7791f;
     }
     .diagram-guide-action:hover,
     .diagram-guide-action:focus-visible {
-      border-color: color-mix(in srgb, #adbac7 76%, #334155);
-      background: color-mix(in srgb, #adbac7 9%, rgba(15, 23, 42, 0.5));
+      border-color: color-mix(in srgb, #536479 76%, #334155);
+      background: color-mix(in srgb, #536479 9%, rgba(15, 23, 42, 0.5));
       transform: translateY(-1px);
     }
     .diagram-guide-action:focus-visible,
     .diagram-guide-close:focus-visible {
-      outline: 2px solid #fbbf24;
+      outline: 2px solid #b7791f;
       outline-offset: 1px;
     }
     .diagram-guide-action:disabled {
@@ -2195,9 +2195,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       place-items: center;
       width: 1.65rem;
       height: 1.65rem;
-      border: 1px solid color-mix(in srgb, #adbac7 64%, #334155);
+      border: 1px solid color-mix(in srgb, #536479 64%, #334155);
       border-radius: 0.35rem;
-      color: #adbac7;
+      color: #536479;
       font-size: 0.5rem;
       font-weight: 800;
       letter-spacing: 0.06em;
@@ -2206,7 +2206,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .diagram-guide-action strong {
       display: block;
       overflow: hidden;
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.66rem;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2250,7 +2250,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .diagram-guide-feedback {
       min-height: 1rem;
       margin: -0.18rem 0.9rem 0.62rem;
-      color: #fb7185;
+      color: #be3455;
       font-size: 0.5rem;
     }
     .diagram-guide-feedback:empty { display: none; }
@@ -2287,8 +2287,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.6l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.4l-3.8 2 .7-4.3-3.1-3 4.3-.6z' stroke='black' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E");
     }
     .diagram-guide-credit:hover .diagram-guide-credit-link,
-    .diagram-guide-credit:focus-visible .diagram-guide-credit-link { opacity: 1; color: #fbbf24; }
-    .diagram-guide-credit:focus-visible { outline: 2px solid #fbbf24; outline-offset: -2px; }
+    .diagram-guide-credit:focus-visible .diagram-guide-credit-link { opacity: 1; color: #b7791f; }
+    .diagram-guide-credit:focus-visible { outline: 2px solid #b7791f; outline-offset: -2px; }
     @keyframes archify-guide-in {
       from { opacity: 0; transform: translateY(-5px) scale(0.985); }
       to { opacity: 1; transform: translateY(0) scale(1); }
@@ -2313,10 +2313,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .node-finder[hidden] { display: none; }
     .node-finder[data-context="route-source"] {
-      border-color: color-mix(in srgb, #22d3ee 68%, #334155);
+      border-color: color-mix(in srgb, #0e7490 68%, #334155);
     }
     .node-finder[data-context="route-target"] {
-      border-color: color-mix(in srgb, #fb7185 68%, #334155);
+      border-color: color-mix(in srgb, #be3455 68%, #334155);
     }
     html[data-preset="blueprint"] .node-finder { border-radius: 0.3rem; }
     .node-finder-head {
@@ -2327,13 +2327,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       padding: 0.7rem 0.8rem 0.45rem;
     }
     .node-finder-head strong {
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.6875rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
-    .node-finder[data-context="route-source"] .node-finder-head strong { color: #22d3ee; }
-    .node-finder[data-context="route-target"] .node-finder-head strong { color: #fb7185; }
+    .node-finder[data-context="route-source"] .node-finder-head strong { color: #0e7490; }
+    .node-finder[data-context="route-target"] .node-finder-head strong { color: #be3455; }
     .node-finder-close {
       width: 1.75rem;
       height: 1.75rem;
@@ -2349,7 +2349,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .node-finder-close:focus-visible { background: rgba(15, 23, 42, 0.95); }
     .node-finder-close:focus-visible,
     .node-finder-result:focus-visible {
-      outline: 2px solid #22d3ee;
+      outline: 2px solid #0e7490;
       outline-offset: -2px;
     }
     .node-finder-search {
@@ -2366,10 +2366,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       transition: border-color 160ms ease-out, box-shadow 160ms ease-out;
     }
     html[data-preset="blueprint"] .node-finder-search { border-radius: 0.18rem; }
-    .node-finder-search > span { color: #22d3ee; font-size: 0.875rem; }
+    .node-finder-search > span { color: #0e7490; font-size: 0.875rem; }
     .node-finder-search:focus-within {
-      border-color: #22d3ee;
-      box-shadow: 0 0 0 2px color-mix(in srgb, #22d3ee 14%, transparent);
+      border-color: #0e7490;
+      box-shadow: 0 0 0 2px color-mix(in srgb, #0e7490 14%, transparent);
     }
     .node-finder-input {
       appearance: none;
@@ -2378,7 +2378,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 0;
       outline: 0;
       background: transparent;
-      color: #cdd9e5;
+      color: #1e293b;
       font: inherit;
       font-size: 0.75rem;
     }
@@ -2419,7 +2419,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       background-clip: padding-box;
     }
     .node-finder-results::-webkit-scrollbar-thumb:hover {
-      background: color-mix(in srgb, #adbac7 65%, transparent);
+      background: color-mix(in srgb, #536479 65%, transparent);
       border: 3px solid transparent;
       background-clip: padding-box;
     }
@@ -2434,7 +2434,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 0;
       border-radius: 0;
       background: transparent;
-      color: #cdd9e5;
+      color: #1e293b;
       font: inherit;
       text-align: left;
       cursor: pointer;
@@ -2447,7 +2447,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .node-finder-result:focus-visible {
       position: relative;
       z-index: 1;
-      background: color-mix(in srgb, rgba(8, 51, 68, 0.4) 48%, rgba(15, 23, 42, 0.95));
+      background: color-mix(in srgb, #e8f4f7 48%, rgba(15, 23, 42, 0.95));
     }
     .node-finder-result strong {
       overflow: hidden;
@@ -2467,7 +2467,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .node-finder-result em {
       align-self: center;
-      color: #22d3ee;
+      color: #0e7490;
       font-size: 0.625rem;
       font-style: normal;
     }
@@ -2482,7 +2482,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       letter-spacing: 0.05em;
       text-transform: uppercase;
     }
-    .node-finder[data-context="route-target"] .node-finder-result em { color: #fb7185; }
+    .node-finder[data-context="route-target"] .node-finder-result em { color: #be3455; }
     .node-finder-empty {
       padding: 1.1rem 0.75rem 1.25rem;
       color: #7d8da1;
@@ -2533,7 +2533,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       .header { margin-bottom: 1rem; }
       .diagram-container {
         padding: 0.875rem;
-        padding-bottom: calc(0.875rem + #adbac7);
+        padding-bottom: calc(0.875rem + #536479);
       }
       .cards { margin-top: 1rem; }
       .card { padding: 1rem; }
@@ -2565,7 +2565,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       top: -1px;
       left: 1rem;
       width: 2.5rem;
-      border-top: 2px solid #22d3ee;
+      border-top: 2px solid #0e7490;
     }
 
     html[data-preset="editorial"] .card {
@@ -2589,9 +2589,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .reader-rail { display: contents; }
     html[data-reader-rail="true"] .container {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) #adbac7;
+      grid-template-columns: minmax(0, 1fr) #536479;
       grid-auto-flow: row dense;
-      column-gap: #adbac7;
+      column-gap: #536479;
       align-items: start;
     }
     html[data-reader-rail="true"] .container > .header { grid-column: 1 / -1; }
@@ -2605,7 +2605,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       grid-column: 2;
       align-self: stretch;
       min-height: 0;
-      max-height: #adbac7;
+      max-height: #536479;
     }
     html:is([data-reader-rail="true"], [data-reader-rail="overlay"]) .cards:empty { display: none; }
     html:is([data-reader-rail="true"], [data-reader-rail="overlay"]) .cards {
@@ -2661,7 +2661,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       bottom: 1rem;
       display: flex;
       flex-direction: column;
-      width: #adbac7;
+      width: #536479;
       padding: 0.75rem 1rem 0.5rem;
       border: 1px solid color-mix(in srgb, #1e293b 90%, transparent);
       border-radius: 1rem;
@@ -2749,15 +2749,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .rail-control[hidden] { display: none; }
     .rail-control:hover,
-    .rail-control:focus-visible { color: #cdd9e5; background: color-mix(in srgb, #cdd9e5 6%, transparent); }
-    .rail-control:focus-visible { outline: 1.5px solid color-mix(in srgb, #22d3ee 60%, transparent); outline-offset: -1.5px; }
+    .rail-control:focus-visible { color: #1e293b; background: color-mix(in srgb, #1e293b 6%, transparent); }
+    .rail-control:focus-visible { outline: 1.5px solid color-mix(in srgb, #0e7490 60%, transparent); outline-offset: -1.5px; }
     .rail-control-icon,
     .rail-reveal-icon {
       width: 1rem;
       height: 1rem;
       background: currentColor;
-      -webkit-mask: #adbac7 center / contain no-repeat;
-      mask: #adbac7 center / contain no-repeat;
+      -webkit-mask: #536479 center / contain no-repeat;
+      mask: #536479 center / contain no-repeat;
     }
     /* Panel glyphs: a frame with the panel drawn on the side it moves to. */
     .rail-control-icon.placement,
@@ -2780,7 +2780,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 1px solid color-mix(in srgb, #1e293b 85%, transparent);
       border-radius: 999px;
       background: color-mix(in srgb, rgba(15, 23, 42, 0.5) 86%, transparent);
-      color: #adbac7;
+      color: #536479;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 20px -12px rgba(15, 23, 42, 0.28);
       backdrop-filter: blur(12px);
       font: inherit;
@@ -2790,8 +2790,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       transition: color 0.14s ease, background 0.14s ease;
     }
     .rail-reveal:hover,
-    .rail-reveal:focus-visible { color: #cdd9e5; background: rgba(15, 23, 42, 0.5); }
-    .rail-reveal:focus-visible { outline: 1.5px solid color-mix(in srgb, #22d3ee 60%, transparent); outline-offset: 2px; }
+    .rail-reveal:focus-visible { color: #1e293b; background: rgba(15, 23, 42, 0.5); }
+    .rail-reveal:focus-visible { outline: 1.5px solid color-mix(in srgb, #0e7490 60%, transparent); outline-offset: 2px; }
     html[data-motion="still"] .reader-rail { animation: none !important; }
     .node-outline-head {
       display: flex;
@@ -2800,7 +2800,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       padding: 1.125rem 0.25rem 0.375rem;
     }
     .node-outline-head strong {
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.875rem;
       font-weight: 600;
       letter-spacing: -0.005em;
@@ -2809,8 +2809,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       min-width: 1.35rem;
       padding: 0.1rem 0.4rem;
       border-radius: 999px;
-      background: color-mix(in srgb, #cdd9e5 6%, transparent);
-      color: #adbac7;
+      background: color-mix(in srgb, #1e293b 6%, transparent);
+      color: #536479;
       font-size: 0.6875rem;
       font-weight: 600;
       line-height: 1.3;
@@ -2863,7 +2863,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     /* The rail frees the vertical budget, so compact viewports keep the normal
        title spacing instead of the stacked layout's tight stage rail. */
     html[data-reader-rail]:not([data-reader-rail="bottom"]) body { --archify-page-top: 1.5rem; padding-block: 1.5rem; }
-    html[data-reader-rail]:not([data-reader-rail="bottom"]) .toolbar { top: calc(#adbac7 - 0.1875rem); }
+    html[data-reader-rail]:not([data-reader-rail="bottom"]) .toolbar { top: calc(#536479 - 0.1875rem); }
     html[data-reader-rail]:not([data-reader-rail="bottom"]) .header { min-height: 0; margin-bottom: 1.125rem; }
     .node-outline-item {
       position: relative;
@@ -2877,7 +2877,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 0;
       border-radius: 0.5rem;
       background: transparent;
-      color: #cdd9e5;
+      color: #1e293b;
       font: inherit;
       text-align: left;
       cursor: pointer;
@@ -2889,7 +2889,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 0.75rem;
       height: 0.75rem;
       background: currentColor;
-      color: #adbac7;
+      color: #536479;
       content: "";
       opacity: 0;
       transform: translateX(-3px);
@@ -2899,27 +2899,27 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .node-outline-item:hover,
     .node-outline-item:focus-visible,
-    .node-outline-item[data-previewing] { background: color-mix(in srgb, #cdd9e5 4.5%, transparent); }
+    .node-outline-item[data-previewing] { background: color-mix(in srgb, #1e293b 4.5%, transparent); }
     .node-outline-item:hover::after,
     .node-outline-item:focus-visible::after { opacity: 0.7; transform: translateX(0); }
-    .node-outline-item:focus-visible { outline: 1.5px solid color-mix(in srgb, #adbac7 60%, transparent); outline-offset: -1.5px; }
-    .node-outline-item[aria-current="true"] { background: color-mix(in srgb, #adbac7 10%, transparent); }
+    .node-outline-item:focus-visible { outline: 1.5px solid color-mix(in srgb, #536479 60%, transparent); outline-offset: -1.5px; }
+    .node-outline-item[aria-current="true"] { background: color-mix(in srgb, #536479 10%, transparent); }
     .node-outline-item[aria-current="true"]::after { opacity: 0; }
     /* Swatches echo the diagram's node cards: tinted fill, hairline stroke. */
     .node-outline-dot {
       width: 0.625rem;
       height: 0.5rem;
-      border: 1.25px solid #adbac7;
+      border: 1.25px solid #536479;
       border-radius: 0.15rem;
-      background: color-mix(in srgb, #adbac7 16%, #1c2128);
+      background: color-mix(in srgb, #536479 16%, #ffffff);
       transition: background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
     }
     .node-outline-item:hover .node-outline-dot,
     .node-outline-item:focus-visible .node-outline-dot,
     .node-outline-item[data-previewing] .node-outline-dot,
     .node-outline-item[aria-current="true"] .node-outline-dot {
-      background: #adbac7;
-      box-shadow: 0 0 0 3px color-mix(in srgb, #adbac7 18%, transparent);
+      background: #536479;
+      box-shadow: 0 0 0 3px color-mix(in srgb, #536479 18%, transparent);
       transform: scale(1.08);
     }
     .node-outline-item strong {
@@ -2941,7 +2941,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .node-outline-item:hover small,
     .node-outline-item[data-previewing] small,
-    .node-outline-item[aria-current="true"] small { color: #adbac7; }
+    .node-outline-item[aria-current="true"] small { color: #536479; }
 
     /* The desktop bottom rail is an index: compact rows keep related nodes
        together while allowing full names and descriptions to wrap naturally. */
@@ -2988,19 +2988,19 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border-radius: 50%;
     }
 
-    .card-dot.cyan     { background: #22d3ee; }
-    .card-dot.emerald  { background: #539bf5; }
-    .card-dot.violet   { background: #a78bfa; }
-    .card-dot.amber    { background: #fbbf24; }
-    .card-dot.rose     { background: #fb7185; }
+    .card-dot.cyan     { background: #0e7490; }
+    .card-dot.emerald  { background: #2563eb; }
+    .card-dot.violet   { background: #7c3aed; }
+    .card-dot.amber    { background: #b7791f; }
+    .card-dot.rose     { background: #be3455; }
     .card-dot.orange   { background: #fb923c; }
     .card-dot.slate    { background: #94a3b8; }
 
-    .card h3 { font-size: 0.9375rem; font-weight: 600; line-height: 1.4; color: #cdd9e5; }
+    .card h3 { font-size: 0.9375rem; font-weight: 600; line-height: 1.4; color: #1e293b; }
 
     .card ul {
       list-style: none;
-      color: #adbac7;
+      color: #536479;
       font-size: 0.8125rem;
       line-height: 1.6;
     }
@@ -3019,17 +3019,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 4px;
       height: 4px;
       border-radius: 50%;
-      background: color-mix(in srgb, #adbac7) 70%, transparent);
+      background: color-mix(in srgb, #536479) 70%, transparent);
       content: "";
     }
-    .card:has(.card-dot.cyan)    { --card-tone: #22d3ee; }
-    .card:has(.card-dot.emerald) { --card-tone: #539bf5; }
-    .card:has(.card-dot.violet)  { --card-tone: #a78bfa; }
-    .card:has(.card-dot.amber)   { --card-tone: #fbbf24; }
-    .card:has(.card-dot.rose)    { --card-tone: #fb7185; }
+    .card:has(.card-dot.cyan)    { --card-tone: #0e7490; }
+    .card:has(.card-dot.emerald) { --card-tone: #2563eb; }
+    .card:has(.card-dot.violet)  { --card-tone: #7c3aed; }
+    .card:has(.card-dot.amber)   { --card-tone: #b7791f; }
+    .card:has(.card-dot.rose)    { --card-tone: #be3455; }
     .card:has(.card-dot.orange)  { --card-tone: #fb923c; }
     .card:has(.card-dot.slate)   { --card-tone: #94a3b8; }
-    .card-dot { box-shadow: 0 0 0 3px color-mix(in srgb, #adbac7 16%, transparent); }
+    .card-dot { box-shadow: 0 0 0 3px color-mix(in srgb, #536479 16%, transparent); }
 
     /* ==========================================================
        Print stylesheet — hide interactive controls, force light,
@@ -3125,8 +3125,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
        viewport edge. */
     .toolbar {
       position: absolute;
-      top: #adbac7;
-      right: max(1rem, calc((100vw - min(100vw - 4rem, #adbac7)) / 2));
+      top: #536479;
+      right: max(1rem, calc((100vw - min(100vw - 4rem, #536479)) / 2));
       display: flex;
       align-items: center;
       gap: 0.125rem;
@@ -3142,7 +3142,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       position: relative;
       isolation: isolate;
       background: transparent;
-      color: #adbac7;
+      color: #536479;
       border: 0;
       padding: 0.5rem 0.75rem;
       border-radius: 0.5625rem;
@@ -3167,31 +3167,31 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       content: "";
       transition: background 0.15s, box-shadow 0.15s;
     }
-    .toolbar button:hover { color: #cdd9e5; }
-    .toolbar button:hover::before { background: color-mix(in srgb, #cdd9e5 6%, transparent); }
+    .toolbar button:hover { color: #1e293b; }
+    .toolbar button:hover::before { background: color-mix(in srgb, #1e293b 6%, transparent); }
     .toolbar button[aria-expanded="true"],
-    .toolbar button[aria-pressed="true"]:not(#btn-theme) { color: #cdd9e5; }
+    .toolbar button[aria-pressed="true"]:not(#btn-theme) { color: #1e293b; }
     .toolbar button[aria-expanded="true"]::before,
     .toolbar button[aria-pressed="true"]:not(#btn-theme)::before {
-      background: color-mix(in srgb, #cdd9e5 8%, transparent);
+      background: color-mix(in srgb, #1e293b 8%, transparent);
     }
     .toolbar #btn-export {
       margin-left: 0.375rem;
       padding-right: 0.95rem;
       padding-left: 1rem;
-      color: #1c2128;
+      color: #ffffff;
       font-weight: 550;
     }
     .toolbar #btn-export::before {
-      background: #cdd9e5;
+      background: #1e293b;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12), 0 6px 16px -8px rgba(15, 23, 42, 0.4);
     }
     .toolbar #btn-export:hover,
-    .toolbar #btn-export[aria-expanded="true"] { color: #1c2128; }
+    .toolbar #btn-export[aria-expanded="true"] { color: #ffffff; }
     .toolbar #btn-export:hover::before,
-    .toolbar #btn-export[aria-expanded="true"]::before { background: color-mix(in srgb, #cdd9e5 86%, #1c2128); }
+    .toolbar #btn-export[aria-expanded="true"]::before { background: color-mix(in srgb, #1e293b 86%, #ffffff); }
     .toolbar button:focus-visible {
-      outline: 2px solid #22d3ee;
+      outline: 2px solid #0e7490;
       outline-offset: -4px;
     }
     .toolbar { gap: 0.5rem; }
@@ -3214,7 +3214,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 1px solid color-mix(in srgb, #1e293b 85%, transparent);
       border-radius: 0.6875rem;
       background: color-mix(in srgb, rgba(15, 23, 42, 0.5) 78%, transparent);
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px -14px rgba(15, 23, 42, 0.22);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px -14px #f8fafc;
       backdrop-filter: blur(12px);
       content: "";
     }
@@ -3238,10 +3238,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .toolbar #btn-theme::before {
       inset: 0.75rem 0.4375rem;
       border-radius: 999px;
-      background: color-mix(in srgb, #cdd9e5 9%, transparent);
+      background: color-mix(in srgb, #1e293b 9%, transparent);
       box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
     }
-    .toolbar #btn-theme:hover::before { background: color-mix(in srgb, #cdd9e5 13%, transparent); }
+    .toolbar #btn-theme:hover::before { background: color-mix(in srgb, #1e293b 13%, transparent); }
     .toolbar #btn-theme::after {
       position: absolute;
       z-index: 0;
@@ -3263,7 +3263,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       left: calc(0.5625rem + 0.1875rem);
       width: 0.75rem;
       height: 0.75rem;
-      color: #fbbf24;
+      color: #b7791f;
       transform: translateY(-50%);
       transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1);
     }
@@ -3327,19 +3327,19 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 0.58rem;
       height: 0.58rem;
       flex: 0 0 auto;
-      border: 1px solid #22d3ee;
+      border: 1px solid #0e7490;
       border-radius: 0.2rem;
-      background: color-mix(in srgb, #22d3ee 28%, transparent);
+      background: color-mix(in srgb, #0e7490 28%, transparent);
       transition: border-radius 0.15s, box-shadow 0.15s, transform 0.15s;
     }
     #btn-preset[data-preset-option="signal-flow"] .preset-control-mark {
       border-radius: 50%;
-      box-shadow: 0 0 10px color-mix(in srgb, #22d3ee 78%, transparent);
+      box-shadow: 0 0 10px color-mix(in srgb, #0e7490 78%, transparent);
     }
     #btn-preset[data-preset-option="blueprint"] .preset-control-mark {
       border-radius: 0.06rem;
       background: transparent;
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, #22d3ee 32%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, #0e7490 32%, transparent);
       transform: rotate(45deg) scale(0.84);
     }
     #btn-preset[data-preset-option="editorial"] .preset-control-mark {
@@ -3406,8 +3406,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 1px solid #1e293b;
       border-bottom-width: 2px;
       border-radius: 0.3rem;
-      background: color-mix(in srgb, #cdd9e5 3%, #0f172a);
-      color: #adbac7;
+      background: color-mix(in srgb, #1e293b 3%, #0f172a);
+      color: #536479;
       font-family: inherit;
       font-size: 0.625rem;
       font-weight: 600;
@@ -3426,17 +3426,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 0;
       border-radius: 0.625rem;
       background: transparent;
-      color: #cdd9e5;
+      color: #1e293b;
       box-shadow: none;
       backdrop-filter: none;
       text-align: left;
       transition: background 0.14s ease;
     }
     .toolbar .preset-option:hover,
-    .toolbar .preset-option:focus-visible { background: color-mix(in srgb, #cdd9e5 5%, transparent); }
-    .toolbar .preset-option[aria-checked="true"] { background: color-mix(in srgb, #22d3ee 8%, transparent); }
+    .toolbar .preset-option:focus-visible { background: color-mix(in srgb, #1e293b 5%, transparent); }
+    .toolbar .preset-option[aria-checked="true"] { background: color-mix(in srgb, #0e7490 8%, transparent); }
     .toolbar .preset-option:focus-visible {
-      outline: 1.5px solid color-mix(in srgb, #22d3ee 55%, transparent);
+      outline: 1.5px solid color-mix(in srgb, #0e7490 55%, transparent);
       outline-offset: -1.5px;
     }
     .preset-option-swatch {
@@ -3452,7 +3452,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .toolbar .preset-option:hover .preset-option-swatch { transform: translateY(-1px); }
     .toolbar .preset-option[aria-checked="true"] .preset-option-swatch {
-      box-shadow: 0 0 0 2px #0f172a, 0 0 0 3.5px #22d3ee;
+      box-shadow: 0 0 0 2px #0f172a, 0 0 0 3.5px #0e7490;
     }
     .preset-option-swatch::before,
     .preset-option-swatch::after { position: absolute; content: ""; }
@@ -3461,7 +3461,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       right: 0.35rem;
       bottom: 0.42rem;
       left: 0.35rem;
-      border: 1px solid #22d3ee;
+      border: 1px solid #0e7490;
       border-radius: 0.16rem;
       background: rgba(34, 211, 238, 0.14);
     }
@@ -3538,7 +3538,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .preset-option-copy strong,
     .preset-option-copy small { display: block; }
     .preset-option-copy strong {
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.8125rem;
       font-weight: 550;
       letter-spacing: -0.005em;
@@ -3557,7 +3557,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       display: inline-block;
       width: 0.9rem;
       height: 0.9rem;
-      color: #22d3ee;
+      color: #0e7490;
       background: currentColor;
       -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 8.5 3 3 7-7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
       -webkit-mask-position: center;
@@ -3585,10 +3585,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 0.46rem;
       height: 0.46rem;
       flex: 0 0 auto;
-      border: 1px solid #22d3ee;
+      border: 1px solid #0e7490;
       border-radius: 50%;
-      background: #22d3ee;
-      box-shadow: 0 0 9px color-mix(in srgb, #22d3ee 72%, transparent);
+      background: #0e7490;
+      box-shadow: 0 0 9px color-mix(in srgb, #0e7490 72%, transparent);
     }
     #btn-motion[aria-pressed="false"] .motion-control-dot {
       background: transparent;
@@ -3598,7 +3598,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
        with the wave it controls. Motion Governor mirrors the planned cycle from
        the diagram SVG onto the document. */
     html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden]) #btn-motion .motion-control-dot {
-      animation: archify-motion-dot-breathe #adbac7 ease-in-out infinite;
+      animation: archify-motion-dot-breathe #536479 ease-in-out infinite;
     }
     @keyframes archify-motion-dot-breathe {
       0%, 100% { opacity: 1; transform: scale(1); }
@@ -3632,7 +3632,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     .export-menu-header strong,
     .export-menu-header span { display: block; }
     .export-menu-header strong {
-      color: #cdd9e5;
+      color: #1e293b;
       font-size: 0.875rem;
       font-weight: 600;
       letter-spacing: -0.005em;
@@ -3648,8 +3648,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       border: 1px solid #1e293b;
       border-bottom-width: 2px;
       border-radius: 0.3rem;
-      background: color-mix(in srgb, #cdd9e5 3%, #0f172a);
-      color: #adbac7;
+      background: color-mix(in srgb, #1e293b 3%, #0f172a);
+      color: #536479;
       font-family: inherit;
       font-size: 0.625rem;
       font-weight: 600;
@@ -3689,14 +3689,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       text-align: left;
       padding: 0.4rem 0.6rem;
       border-radius: 0.5625rem;
-      color: #cdd9e5;
+      color: #1e293b;
       white-space: nowrap;
       transition: background 0.14s ease;
     }
     .toolbar .export-menu button:hover,
-    .toolbar .export-menu button:focus-visible { background: color-mix(in srgb, #cdd9e5 5%, transparent); color: #cdd9e5; }
+    .toolbar .export-menu button:focus-visible { background: color-mix(in srgb, #1e293b 5%, transparent); color: #1e293b; }
     .toolbar .export-menu button:focus-visible {
-      outline: 1.5px solid color-mix(in srgb, #22d3ee 55%, transparent);
+      outline: 1.5px solid color-mix(in srgb, #0e7490 55%, transparent);
       outline-offset: -1.5px;
     }
     /* Name and format hint share one line, so each row stays compact. */
@@ -3729,7 +3729,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 1rem;
       height: 1rem;
       background: currentColor;
-      color: #adbac7;
+      color: #536479;
       content: "";
       opacity: 0.8;
       -webkit-mask-position: center;
@@ -3761,15 +3761,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .toolbar .export-menu button[data-action="route-share-card"],
     .toolbar .export-menu button[data-action="reach-share-card"] {
-      color: #cdd9e5;
-      background: color-mix(in srgb, #22d3ee 7%, transparent);
+      color: #1e293b;
+      background: color-mix(in srgb, #0e7490 7%, transparent);
     }
     .toolbar .export-menu button[data-action="route-share-card"]::before,
-    .toolbar .export-menu button[data-action="reach-share-card"]::before { color: #22d3ee; opacity: 1; }
+    .toolbar .export-menu button[data-action="reach-share-card"]::before { color: #0e7490; opacity: 1; }
     .toolbar .export-menu button[hidden] { display: none; }
     .toolbar .export-menu button[data-action="route-share-card"]:hover,
     .toolbar .export-menu button[data-action="reach-share-card"]:hover {
-      background: color-mix(in srgb, #22d3ee 12%, transparent);
+      background: color-mix(in srgb, #0e7490 12%, transparent);
     }
     .toolbar .export-menu button:disabled {
       color: #7d8da1;
@@ -3789,7 +3789,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       left: 50%;
       transform: translateX(-50%) translateY(-8px);
       background: #0f172a;
-      color: #cdd9e5;
+      color: #1e293b;
       border: 1px solid #334155;
       padding: 0.5rem 1rem;
       border-radius: 0.5rem;
@@ -3883,7 +3883,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       html:not([data-embed="true"]) .diagram-container[data-wide-diagram="true"] .semantic-lens,
       html:not([data-embed="true"]) .diagram-container[data-wide-diagram="true"] .diagram-guide,
       html:not([data-embed="true"]) .diagram-container[data-wide-diagram="true"] .node-finder {
-        transform: translateX(#adbac7);
+        transform: translateX(#536479);
       }
       .diagram-nav { right: 0.5rem; bottom: 0.5rem; }
       .diagram-nav button {
@@ -3898,14 +3898,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         width: min(10.25rem, calc(100% - 1rem));
       }
       .overview-map[data-docked="true"] {
-        right: #adbac7;
-        top: #adbac7;
+        right: #536479;
+        top: #536479;
         bottom: auto;
         transform: none !important;
       }
       .overview-map[data-docked="true"][data-dock-side="left"] {
         right: auto;
-        left: #adbac7;
+        left: #536479;
       }
       .overview-map-surface { height: 4rem; }
       .overview-map-feedback { right: 0.5rem; bottom: 3.7rem; }
@@ -3926,7 +3926,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       .relationship-lens-head { padding-top: 0.7rem; }
       .relationship-lens-drag-handle { display: none; }
       .relationship-lens-list { max-height: min(12rem, 38vh); }
-      .relationship-lens-actions #btn-focus-relations { display: block; color: #a78bfa; }
+      .relationship-lens-actions #btn-focus-relations { display: block; color: #7c3aed; }
       .focus-chip:not([data-relations-expanded="true"]) .relationship-lens-head { border-bottom-color: transparent; }
       .focus-chip:not([data-relations-expanded="true"]) .relationship-lens-list { display: none; }
       /* While a mobile reader previews one relationship, turn the full Lens
@@ -4100,35 +4100,35 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
        SVG SEMANTIC CLASSES — use these instead of inline fill/stroke
        ========================================================== */
     .c-grid       { stroke: #1e293b; fill: none; }
-    .c-mask       { fill: #2d333b; stroke: none; }
+    .c-mask       { fill: #ffffff; stroke: none; }
     .c-lane-rule  { stroke: #334155; fill: none; opacity: 0.7; }
-    .c-lane-wash  { fill: rgba(15, 23, 42, 0.22); stroke: none; }
+    .c-lane-wash  { fill: #f8fafc; stroke: none; }
 
-    .c-frontend   { fill: rgba(8, 51, 68, 0.4);   stroke: #22d3ee; }
-    .c-backend    { fill: #2d333b;    stroke: #539bf5; }
-    .c-database   { fill: rgba(76, 29, 149, 0.4);   stroke: #a78bfa; }
-    .c-cloud      { fill: rgba(120, 53, 15, 0.3);      stroke: #fbbf24; }
-    .c-security   { fill: rgba(136, 19, 55, 0.4);   stroke: #fb7185; }
-    .c-messagebus { fill: rgba(251, 146, 60, 0.3); stroke: #fb923c; }
-    .c-external   { fill: rgba(30, 41, 59, 0.5);   stroke: #94a3b8; }
+    .c-frontend   { fill: #e8f4f7;   stroke: #0e7490; }
+    .c-backend    { fill: #ffffff;    stroke: #2563eb; }
+    .c-database   { fill: #f1ebfc;   stroke: #7c3aed; }
+    .c-cloud      { fill: #fff5e4;      stroke: #b7791f; }
+    .c-security   { fill: #fceef1;   stroke: #be3455; }
+    .c-messagebus { fill: #fff2e8; stroke: #fb923c; }
+    .c-external   { fill: #f1f5f9;   stroke: #94a3b8; }
 
     /* Text helpers */
-    .t-primary { fill: #cdd9e5; }
-    .t-muted   { fill: #adbac7; }
+    .t-primary { fill: #1e293b; }
+    .t-muted   { fill: #536479; }
     .t-dim     { fill: #475569; }
-    .t-frontend   { fill: #22d3ee; }
-    .t-backend    { fill: #539bf5; }
-    .t-database   { fill: #a78bfa; }
-    .t-cloud      { fill: #fbbf24; }
-    .t-security   { fill: #fb7185; }
+    .t-frontend   { fill: #0e7490; }
+    .t-backend    { fill: #2563eb; }
+    .t-database   { fill: #7c3aed; }
+    .t-cloud      { fill: #b7791f; }
+    .t-security   { fill: #be3455; }
     .t-messagebus { fill: #fb923c; }
     .t-external   { fill: #94a3b8; }
 
     /* Relationship labels share the exact color token used by their path. */
-    .t-edge-default  { fill: #768390; }
+    .t-edge-default  { fill: #718096; }
     .t-edge-emphasis { fill: #34d399; }
-    .t-edge-security { fill: #fb7185; }
-    .t-edge-dashed   { fill: #a78bfa; }
+    .t-edge-security { fill: #be3455; }
+    .t-edge-dashed   { fill: #7c3aed; }
 
     /* Classic canvas: a quiet dot field replaces drafting grid lines, and nodes
        read as lifted cards with hairline strokes. Paint only; authored geometry,
@@ -4141,17 +4141,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     html[data-preset="classic"] .diagram-container > svg .c-grid { stroke: transparent; }
     html[data-preset="classic"][data-theme="light"] .diagram-container > svg [data-node-id] > rect:not(.c-mask) {
       --ambient-node-base-filter: drop-shadow(0 1px 1px rgba(17, 24, 39, 0.05)) drop-shadow(0 6px 12px rgba(17, 24, 39, 0.06));
-      filter: #adbac7;
+      filter: #536479;
     }
     html[data-preset="classic"][data-theme="dark"] .diagram-container > svg [data-node-id] > rect:not(.c-mask) {
       --ambient-node-base-filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
-      filter: #adbac7;
+      filter: #536479;
     }
     html[data-preset="classic"] .diagram-container > svg [data-edge-from] {
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    html[data-preset="classic"] .diagram-container > svg .c-lane-wash { fill: color-mix(in srgb, #cdd9e5 2.6%, transparent); }
+    html[data-preset="classic"] .diagram-container > svg .c-lane-wash { fill: color-mix(in srgb, #1e293b 2.6%, transparent); }
     html[data-preset="classic"] .diagram-container > svg .c-lane-rule { stroke: #1e293b; opacity: 1; }
     html[data-preset="classic"][data-theme="dark"] .diagram-container > svg .c-lane-rule { stroke: rgba(148, 163, 184, 0.16); }
     html[data-preset="classic"] .diagram-container > svg [data-node-id] {
@@ -4175,11 +4175,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     svg .semantic-sigil > * { vector-effect: non-scaling-stroke; }
     svg .semantic-sigil .sigil-fill { fill: currentColor; stroke: none; }
-    svg .s-frontend   { color: #22d3ee; }
-    svg .s-backend    { color: #539bf5; }
-    svg .s-database   { color: #a78bfa; }
-    svg .s-cloud      { color: #fbbf24; }
-    svg .s-security   { color: #fb7185; }
+    svg .s-frontend   { color: #0e7490; }
+    svg .s-backend    { color: #2563eb; }
+    svg .s-database   { color: #7c3aed; }
+    svg .s-cloud      { color: #b7791f; }
+    svg .s-security   { color: #be3455; }
     svg .s-messagebus { color: #fb923c; }
     svg .s-external   { color: #94a3b8; }
 
@@ -4255,16 +4255,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg [data-node-id]:focus-visible [data-detail-anchor] { transform: none; }
 
     /* Arrows */
-    .a-default   { stroke: #768390; fill: none; }
+    .a-default   { stroke: #718096; fill: none; }
     .a-emphasis  { stroke: #34d399; fill: none; }
-    .a-security  { stroke: #fb7185; fill: none; stroke-dasharray: 5,5; }
-    .a-dashed    { stroke: #a78bfa; fill: none; stroke-dasharray: 4,4; }
+    .a-security  { stroke: #be3455; fill: none; stroke-dasharray: 5,5; }
+    .a-dashed    { stroke: #7c3aed; fill: none; stroke-dasharray: 4,4; }
 
     /* Arrowhead markers reference these */
-    .m-default   { fill: #768390; }
+    .m-default   { fill: #718096; }
     .m-emphasis  { fill: #34d399; }
-    .m-security  { fill: #fb7185; }
-    .m-dashed    { fill: #a78bfa; }
+    .m-security  { fill: #be3455; }
+    .m-dashed    { fill: #7c3aed; }
 
     /* Stable semantic exploration hooks emitted by every renderer. */
     svg [data-node-id] {
@@ -4275,7 +4275,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg [data-graph-role="automatic-crossover-underlay"] { transition: opacity 0.18s ease, filter 0.18s ease; }
     svg [data-node-id]:hover,
     svg [data-node-id]:focus-visible {
-      filter: drop-shadow(0 0 7px #22d3ee);
+      filter: drop-shadow(0 0 7px #0e7490);
       outline: none;
     }
     svg [data-legend-kind][role="button"] { cursor: pointer; }
@@ -4290,37 +4290,37 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     svg [data-legend-count-badge] { pointer-events: none; }
     svg [data-legend-count-badge] rect {
-      fill: #2d333b;
+      fill: #ffffff;
       stroke: #1e293b;
       stroke-width: 1;
       vector-effect: non-scaling-stroke;
     }
     svg [data-legend-count-badge] text {
-      fill: #adbac7;
+      fill: #536479;
       font-size: 8px;
       font-weight: 700;
       text-anchor: middle;
     }
     svg [data-legend-kind][role="button"]:hover [data-legend-hit] {
-      stroke: color-mix(in srgb, #a78bfa 58%, transparent);
+      stroke: color-mix(in srgb, #7c3aed 58%, transparent);
     }
     svg [data-legend-kind][role="button"]:focus-visible [data-legend-hit] {
-      stroke: #22d3ee;
+      stroke: #0e7490;
       stroke-width: 1.8;
-      filter: drop-shadow(0 0 3px #22d3ee);
+      filter: drop-shadow(0 0 3px #0e7490);
     }
     svg [data-legend-kind][data-legend-selected] [data-legend-hit] {
-      stroke: #a78bfa;
+      stroke: #7c3aed;
       stroke-width: 2.2;
       stroke-dasharray: 3 2;
     }
     svg [data-legend-kind][data-legend-selected] [data-legend-count-badge] rect {
-      stroke: #a78bfa;
+      stroke: #7c3aed;
       stroke-width: 1.8;
     }
     svg [data-legend-kind][data-legend-zero] { opacity: 0.44; }
     svg[data-preset="signal-flow"] [data-legend-kind][data-legend-selected] [data-legend-hit] {
-      filter: drop-shadow(0 0 4px #a78bfa);
+      filter: drop-shadow(0 0 4px #7c3aed);
     }
     svg[data-preset="blueprint"] [data-legend-hit],
     svg[data-preset="blueprint"] [data-legend-count-badge] rect { rx: 0; filter: none; }
@@ -4329,14 +4329,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg[data-legend-preview-active] [data-legend-preview-match] { opacity: 1; }
     svg[data-legend-preview-active] [data-legend-preview-peer] { opacity: 0.62; }
     svg[data-legend-preview-active] [data-legend-preview-selected] {
-      filter: drop-shadow(0 0 8px #a78bfa);
+      filter: drop-shadow(0 0 8px #7c3aed);
     }
     svg[data-lens-active] [data-node-id],
     svg[data-lens-active] [data-edge-from] { opacity: 0.11; }
     svg[data-lens-active] [data-lens-match] { opacity: 1; }
     svg[data-lens-active] [data-lens-peer] { opacity: 0.62; }
     svg[data-lens-active] [data-lens-selected] {
-      filter: drop-shadow(0 0 10px #a78bfa);
+      filter: drop-shadow(0 0 10px #7c3aed);
     }
     .semantic-lens-overlay { pointer-events: none; }
     .semantic-lens-flow {
@@ -4348,17 +4348,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       vector-effect: non-scaling-stroke;
       opacity: 0.9;
       animation: archify-semantic-lens-flow 1.35s linear 1 both;
-      animation-delay: #adbac7;
+      animation-delay: #536479;
     }
     .semantic-lens-flow[data-direction="out"],
     .semantic-lens-flow[data-direction="forward"] {
-      stroke: #22d3ee;
-      filter: drop-shadow(0 0 3px #22d3ee);
+      stroke: #0e7490;
+      filter: drop-shadow(0 0 3px #0e7490);
     }
     .semantic-lens-flow[data-direction="in"],
     .semantic-lens-flow[data-direction="reverse"] {
-      stroke: #a78bfa;
-      filter: drop-shadow(0 0 3px #a78bfa);
+      stroke: #7c3aed;
+      filter: drop-shadow(0 0 3px #7c3aed);
     }
     .semantic-lens-flow[data-direction="within"] {
       stroke: #fb923c;
@@ -4370,11 +4370,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     svg[data-preset="signal-flow"] .semantic-lens-flow[data-direction="out"],
     svg[data-preset="signal-flow"] .semantic-lens-flow[data-direction="forward"] {
-      filter: drop-shadow(0 0 6px #22d3ee);
+      filter: drop-shadow(0 0 6px #0e7490);
     }
     svg[data-preset="signal-flow"] .semantic-lens-flow[data-direction="in"],
     svg[data-preset="signal-flow"] .semantic-lens-flow[data-direction="reverse"] {
-      filter: drop-shadow(0 0 6px #a78bfa);
+      filter: drop-shadow(0 0 6px #7c3aed);
     }
     svg[data-preset="signal-flow"] .semantic-lens-flow[data-direction="within"] {
       filter: drop-shadow(0 0 6px #fb923c);
@@ -4403,7 +4403,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg[data-focus-active] [data-focus-match] { opacity: 1; }
     svg[data-focus-active] [data-graph-role="automatic-crossover"]:has(> [data-focus-match]) > [data-graph-role="automatic-crossover-underlay"] { opacity: 1; }
     svg[data-focus-active] [data-focus-selected] {
-      filter: drop-shadow(0 0 10px #22d3ee);
+      filter: drop-shadow(0 0 10px #0e7490);
     }
 
     /* Authored Reachability is a bounded graph query over the relationships
@@ -4416,16 +4416,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg[data-reach-active] [data-reach-match] { opacity: 1; }
     svg[data-reach-active] [data-graph-role="automatic-crossover"]:has(> [data-reach-match]) > [data-graph-role="automatic-crossover-underlay"] { opacity: 1; }
     svg[data-reach-active="upstream"] [data-reach-origin] {
-      filter: drop-shadow(0 0 11px #a78bfa);
+      filter: drop-shadow(0 0 11px #7c3aed);
     }
     svg[data-reach-active="downstream"] [data-reach-origin] {
-      filter: drop-shadow(0 0 11px #539bf5);
+      filter: drop-shadow(0 0 11px #2563eb);
     }
     svg[data-reach-active="upstream"] [data-edge-from][data-reach-match] {
-      filter: drop-shadow(0 0 4px color-mix(in srgb, #a78bfa 72%, transparent));
+      filter: drop-shadow(0 0 4px color-mix(in srgb, #7c3aed 72%, transparent));
     }
     svg[data-reach-active="downstream"] [data-edge-from][data-reach-match] {
-      filter: drop-shadow(0 0 4px color-mix(in srgb, #539bf5 72%, transparent));
+      filter: drop-shadow(0 0 4px color-mix(in srgb, #2563eb 72%, transparent));
     }
     svg[data-preset="blueprint"][data-reach-active] [data-reach-origin],
     svg[data-preset="blueprint"][data-reach-active] [data-edge-from][data-reach-match] {
@@ -4450,7 +4450,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     .relationship-focus-rail {
       fill: none;
-      stroke: color-mix(in srgb, #22d3ee 34%, transparent);
+      stroke: color-mix(in srgb, #0e7490 34%, transparent);
       stroke-width: 6;
       stroke-dasharray: 2 4;
       stroke-linecap: round;
@@ -4502,10 +4502,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       stroke-width: 2.75;
     }
     svg[data-relationship-preview-active] [data-relationship-preview-source] {
-      filter: drop-shadow(0 0 7px #22d3ee);
+      filter: drop-shadow(0 0 7px #0e7490);
     }
     svg[data-relationship-preview-active] [data-relationship-preview-target] {
-      filter: drop-shadow(0 0 7px #a78bfa);
+      filter: drop-shadow(0 0 7px #7c3aed);
     }
     .relationship-pulse-overlay { pointer-events: none; }
     .relationship-flow-pulse {
@@ -4521,9 +4521,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       animation: archify-relationship-pulse 1.2s linear 1 both;
     }
     svg[data-preset="signal-flow"] .relationship-flow-pulse {
-      stroke: #22d3ee;
+      stroke: #0e7490;
       stroke-width: 3.85;
-      filter: drop-shadow(0 0 7px #22d3ee);
+      filter: drop-shadow(0 0 7px #0e7490);
     }
     svg[data-preset="blueprint"] .relationship-flow-pulse {
       stroke-width: 2.5;
@@ -4536,7 +4536,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       filter: none;
     }
     .semantic-flow-token {
-      color: #22d3ee;
+      color: #0e7490;
       opacity: 0;
       pointer-events: none;
     }
@@ -4545,14 +4545,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
 
     .semantic-flow-token-halo {
-      fill: #2d333b;
+      fill: #ffffff;
       stroke: currentColor;
       stroke-width: 1.1;
       vector-effect: non-scaling-stroke;
       opacity: 0.96;
     }
     .relationship-flow-token-shape {
-      fill: #2d333b;
+      fill: #ffffff;
       stroke: currentColor;
       stroke-width: 1.35;
       stroke-linecap: round;
@@ -4567,10 +4567,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       vector-effect: non-scaling-stroke;
     }
     .relationship-flow-token-dot { fill: currentColor; stroke: none; }
-    .semantic-flow-token[data-token-kind="data"] { color: #a78bfa; }
+    .semantic-flow-token[data-token-kind="data"] { color: #7c3aed; }
     .semantic-flow-token[data-token-kind="event"] { color: #fb923c; }
-    .semantic-flow-token[data-token-kind="security"] { color: #fb7185; }
-    .semantic-flow-token[data-token-kind="state"] { color: #fbbf24; }
+    .semantic-flow-token[data-token-kind="security"] { color: #be3455; }
+    .semantic-flow-token[data-token-kind="state"] { color: #b7791f; }
     svg[data-preset="signal-flow"] .semantic-flow-token {
       filter: drop-shadow(0 0 5px currentColor);
     }
@@ -4593,7 +4593,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg[data-intent-trace-active] [data-intent-trace-match] { opacity: 1; }
     svg[data-intent-trace-active] [data-graph-role="automatic-crossover"]:has(> [data-intent-trace-match]) > [data-graph-role="automatic-crossover-underlay"] { opacity: 1; }
     svg[data-intent-trace-active] [data-intent-trace-selected] {
-      filter: drop-shadow(0 0 10px #22d3ee);
+      filter: drop-shadow(0 0 10px #0e7490);
     }
     .intent-trace-overlay { pointer-events: none; }
     .intent-trace-flow {
@@ -4610,17 +4610,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
        The cloned geometry already runs from the authored source to target, so
        incoming and outgoing signals must share the same playback direction. */
     .intent-trace-flow[data-direction="out"] {
-      stroke: #22d3ee;
-      filter: drop-shadow(0 0 4px #22d3ee);
+      stroke: #0e7490;
+      filter: drop-shadow(0 0 4px #0e7490);
     }
     .intent-trace-flow[data-direction="in"] {
-      stroke: #a78bfa;
-      filter: drop-shadow(0 0 4px #a78bfa);
+      stroke: #7c3aed;
+      filter: drop-shadow(0 0 4px #7c3aed);
       animation-direction: normal;
     }
     .intent-trace-flow[data-direction="loop"] {
-      stroke: #fb7185;
-      filter: drop-shadow(0 0 4px #fb7185);
+      stroke: #be3455;
+      filter: drop-shadow(0 0 4px #be3455);
     }
     svg[data-preset="blueprint"] [data-intent-trace-selected],
     svg[data-preset="blueprint"] .intent-trace-flow {
@@ -4650,7 +4650,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg[data-route-picking="target"] [data-route-start] { opacity: 1; }
     svg[data-route-picking] [data-node-id] { cursor: crosshair; }
     svg[data-route-picking] [data-route-start] {
-      filter: drop-shadow(0 0 10px #22d3ee);
+      filter: drop-shadow(0 0 10px #0e7490);
     }
     svg[data-route-active] [data-node-id],
     svg[data-route-active] [data-edge-from] { opacity: 0.11; }
@@ -4658,13 +4658,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg[data-route-active] [data-route-match] { opacity: 1; }
     svg[data-route-active] [data-graph-role="automatic-crossover"]:has(> [data-route-match]) > [data-graph-role="automatic-crossover-underlay"] { opacity: 1; }
     svg[data-route-active] [data-route-start] {
-      filter: drop-shadow(0 0 11px #22d3ee);
+      filter: drop-shadow(0 0 11px #0e7490);
     }
     svg[data-route-active] [data-route-end] {
-      filter: drop-shadow(0 0 11px #fb7185);
+      filter: drop-shadow(0 0 11px #be3455);
     }
     svg[data-route-active] [data-route-step]:not([data-route-start]):not([data-route-end]) {
-      filter: drop-shadow(0 0 7px #539bf5);
+      filter: drop-shadow(0 0 7px #2563eb);
     }
     svg[data-route-journey] [data-route-match][data-route-journey-state="past"] { opacity: 0.62; }
     svg[data-route-journey] [data-route-match][data-route-journey-state="future"] { opacity: 0.34; }
@@ -4673,37 +4673,37 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg[data-route-journey] [data-graph-role="automatic-crossover"]:has(> [data-route-match][data-route-journey-state="future"]) > [data-graph-role="automatic-crossover-underlay"] { opacity: 0.34; }
     svg[data-route-journey] [data-graph-role="automatic-crossover"]:has(> [data-route-match][data-route-journey-state="current"]) > [data-graph-role="automatic-crossover-underlay"] { opacity: 1; }
     svg[data-route-journey] [data-node-id][data-route-journey-current] {
-      filter: drop-shadow(0 0 10px #539bf5);
+      filter: drop-shadow(0 0 10px #2563eb);
     }
     svg[data-route-journey] [data-edge-from][data-route-journey-current] {
       opacity: 1;
-      filter: drop-shadow(0 0 6px #539bf5);
+      filter: drop-shadow(0 0 6px #2563eb);
     }
     .route-probe-overlay { pointer-events: none; }
     .route-journey-overlay { pointer-events: none; }
     .route-probe-flow {
       fill: none;
-      stroke: #539bf5;
+      stroke: #2563eb;
       stroke-width: 3.25;
       stroke-linecap: round;
       stroke-dasharray: 0.085 0.915;
       stroke-dashoffset: 0;
       vector-effect: non-scaling-stroke;
       opacity: 0.96;
-      filter: drop-shadow(0 0 5px #539bf5);
+      filter: drop-shadow(0 0 5px #2563eb);
       animation: archify-route-probe-flow 1.1s cubic-bezier(0.22, 1, 0.36, 1) 1 both;
-      animation-delay: calc(#adbac7 * 0.16s);
+      animation-delay: calc(#536479 * 0.16s);
     }
     .route-journey-flow {
       fill: none;
-      stroke: #539bf5;
+      stroke: #2563eb;
       stroke-width: 3.5;
       stroke-linecap: round;
       stroke-dasharray: 0.1 0.9;
       stroke-dashoffset: 0;
       vector-effect: non-scaling-stroke;
       opacity: 0;
-      filter: drop-shadow(0 0 6px #539bf5);
+      filter: drop-shadow(0 0 6px #2563eb);
       animation: archify-route-journey-flow 780ms cubic-bezier(0.22, 1, 0.36, 1) 1 both;
     }
     svg[data-preset="blueprint"] [data-route-start],
@@ -4728,13 +4728,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       opacity: 0.48;
     }
     svg[data-preset="editorial"] .c-region {
-      fill: color-mix(in srgb, rgba(120, 53, 15, 0.3) 48%, transparent);
+      fill: color-mix(in srgb, #fff5e4 48%, transparent);
       stroke-dasharray: 9 4;
     }
     svg[data-preset="editorial"] [data-node-id]:hover,
     svg[data-preset="editorial"] [data-node-id]:focus-visible,
     svg[data-preset="editorial"][data-focus-active] [data-focus-selected] {
-      filter: drop-shadow(0 2px 2px color-mix(in srgb, #cdd9e5 18%, transparent));
+      filter: drop-shadow(0 2px 2px color-mix(in srgb, #1e293b 18%, transparent));
     }
 
     svg[data-preset="blueprint"] .c-grid {
@@ -4742,17 +4742,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       opacity: 0.78;
     }
     svg[data-preset="blueprint"] .c-region {
-      fill: color-mix(in srgb, rgba(120, 53, 15, 0.3) 58%, transparent);
+      fill: color-mix(in srgb, #fff5e4 58%, transparent);
       stroke-dasharray: 12 4 2 4;
     }
     svg[data-preset="blueprint"] .c-security-group,
     svg[data-preset="blueprint"] .c-lane { stroke-dasharray: 7 3; }
     svg[data-preset="blueprint"] [data-node-id]:hover,
     svg[data-preset="blueprint"] [data-node-id]:focus-visible {
-      filter: drop-shadow(0 0 3px #22d3ee);
+      filter: drop-shadow(0 0 3px #0e7490);
     }
     svg[data-preset="blueprint"][data-focus-active] [data-focus-selected] {
-      filter: drop-shadow(0 0 3px #22d3ee);
+      filter: drop-shadow(0 0 3px #0e7490);
     }
     svg[data-preset="blueprint"][data-focus-active][data-reach-active] [data-focus-selected][data-reach-origin] {
       filter: none;
@@ -4760,13 +4760,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     svg[data-preset="blueprint"][data-relationship-preview-active] [data-relationship-preview],
     svg[data-preset="blueprint"][data-relationship-preview-active] [data-relationship-preview-source],
     svg[data-preset="blueprint"][data-relationship-preview-active] [data-relationship-preview-target] {
-      filter: drop-shadow(0 0 3px #22d3ee);
+      filter: drop-shadow(0 0 3px #0e7490);
     }
 
     /* Dashed boundary variants */
-    .c-security-group { fill: transparent; stroke: #fb7185; stroke-dasharray: 4,4; }
-    .c-region         { fill: rgba(251, 191, 36, 0.05); stroke: #fbbf24; stroke-dasharray: 8,4; }
-    .c-lane           { fill: rgba(15, 23, 42, 0.22); stroke: #334155; stroke-dasharray: 6,6; }
+    .c-security-group { fill: transparent; stroke: #be3455; stroke-dasharray: 4,4; }
+    .c-region         { fill: rgba(251, 191, 36, 0.05); stroke: #b7791f; stroke-dasharray: 8,4; }
+    .c-lane           { fill: #f8fafc; stroke: #334155; stroke-dasharray: 6,6; }
 
     /* Live plays one relay per cycle: a comet (halo, tail, head) leaves each
        source when the signal reaches it, travels at one shared speed, leaves a
@@ -4794,53 +4794,53 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       display: none;
     }
     .ambient-flow-wake {
-      --flow-peak: #adbac7;
+      --flow-peak: #536479;
       stroke-width: 3.2;
-      stroke-dasharray: #adbac7;
+      stroke-dasharray: #536479;
     }
     .ambient-flow-halo {
-      --flow-peak: #adbac7;
+      --flow-peak: #536479;
       stroke-width: 6;
-      stroke-dasharray: #adbac7 calc(#adbac7 - #adbac7);
+      stroke-dasharray: #536479 calc(#536479 - #536479);
     }
     /* A wide blurred streak centered on the head: this is the bloom that makes
        the comet read as a traveling orb of light rather than a bright dash. */
     .ambient-flow-glow {
-      --flow-peak: #adbac7;
+      --flow-peak: #536479;
       stroke-width: 9;
-      stroke-dasharray: #adbac7 calc(#adbac7 - #adbac7);
+      stroke-dasharray: #536479 calc(#536479 - #536479);
       filter: blur(2.5px);
     }
     .ambient-flow-tail {
-      --flow-peak: #adbac7;
+      --flow-peak: #536479;
       stroke-width: 2.4;
-      stroke-dasharray: #adbac7 calc(#adbac7 - #adbac7));
+      stroke-dasharray: #536479 calc(#536479 - #536479));
     }
     .ambient-flow-head {
-      --flow-peak: #adbac7;
+      --flow-peak: #536479;
       stroke: color-mix(in srgb, #34d399 40%, white);
       stroke-width: 2.6;
-      stroke-dasharray: #adbac7 calc(#adbac7 - #adbac7);
+      stroke-dasharray: #536479 calc(#536479 - #536479);
     }
     .ambient-flow-ripple {
-      --flow-peak: #adbac7;
+      --flow-peak: #536479;
       stroke: color-mix(in srgb, #34d399 55%, white);
       stroke-width: 2;
     }
     html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden]) .ambient-edge-flow {
       display: inline;
-      animation-name: #adbac7;
-      animation-duration: #adbac7;
+      animation-name: #536479;
+      animation-duration: #536479;
       animation-timing-function: linear;
       animation-iteration-count: infinite;
-      animation-delay: #adbac7;
+      animation-delay: #536479;
       /* Without backwards fill a delayed layer would sit at its natural opacity
          (fully lit) until its departure arrives. */
       animation-fill-mode: backwards;
     }
     /* Stream packets trail the comet head as smaller, dimmer beads. */
     .ambient-flow-head.packet {
-      --flow-peak: calc(#adbac7 * 0.62);
+      --flow-peak: calc(#536479 * 0.62);
       stroke-width: 3.4;
     }
     /* Timeline and waterfall playhead: a crisp rule over a soft bloom. */
@@ -4857,14 +4857,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     /* Waterfall spans fill in proportion to their measured time, then settle. */
     .ambient-flow-fill {
       --flow-peak: 0.5;
-      fill: color-mix(in srgb, #adbac7) 55%, white);
+      fill: color-mix(in srgb, #536479) 55%, white);
       stroke: none;
       transform-box: fill-box;
       transform-origin: left center;
     }
-    .ambient-flow-fill-failed { fill: #fb7185; --flow-peak: 0.5; }
+    .ambient-flow-fill-failed { fill: #be3455; --flow-peak: 0.5; }
     html[data-theme="light"] .ambient-flow-playhead { stroke: color-mix(in srgb, #34d399 70%, black); }
-    html[data-theme="light"] .ambient-flow-fill { --flow-peak: 0.42; fill: color-mix(in srgb, #adbac7) 70%, black); }
+    html[data-theme="light"] .ambient-flow-fill { --flow-peak: 0.42; fill: color-mix(in srgb, #536479) 70%, black); }
     svg[data-preset="editorial"] .ambient-flow-fill { --flow-peak: 0.2; }
     svg[data-preset="editorial"] .ambient-flow-playhead-glow { --flow-peak: 0.14; }
     /* Each decorative flow follows its owning edge through tree visibility. */
@@ -4890,47 +4890,47 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     html[data-ambient-entry="running"] svg[data-animation="trace"] [data-animate="node"] {
       transform-box: fill-box;
       transform-origin: center;
-      animation: archify-node-pulse 3.6s ease-in-out 1 calc(#adbac7 * 160ms),
-        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#adbac7 * 160ms);
+      animation: archify-node-pulse 3.6s ease-in-out 1 calc(#536479 * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#536479 * 160ms);
     }
     html[data-ambient-entry="running"] svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="node"] {
-      animation: archify-node-pulse 3.1s ease-in-out 1 calc(#adbac7 * 160ms),
-        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#adbac7 * 160ms);
+      animation: archify-node-pulse 3.1s ease-in-out 1 calc(#536479 * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#536479 * 160ms);
     }
     html[data-ambient-entry="running"] svg[data-preset="blueprint"][data-animation="trace"] [data-animate="node"] {
-      animation: archify-blueprint-node-pulse 3.8s ease-in-out 1 calc(#adbac7 * 160ms),
-        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#adbac7 * 160ms);
+      animation: archify-blueprint-node-pulse 3.8s ease-in-out 1 calc(#536479 * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#536479 * 160ms);
     }
     html[data-ambient-entry="running"] svg[data-preset="editorial"][data-animation="trace"] [data-animate="node"] {
-      animation: archify-editorial-node-pulse 3.5s ease-in-out 1 calc(#adbac7 * 160ms),
-        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#adbac7 * 160ms);
+      animation: archify-editorial-node-pulse 3.5s ease-in-out 1 calc(#536479 * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#536479 * 160ms);
     }
     /* Each node glows in its planned windows: when the relay reaches it, while a
        walk token rests on it, as a message lands, or as the playhead passes.
        During the bounded entrance all three animations run; the entrance pulse is
        listed after the repeating glow and wins on filter until it completes. */
     html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden]) svg[data-animation="trace"] [data-animate="node"] {
-      animation: #adbac7 #adbac7 linear infinite;
+      animation: #536479 #536479 linear infinite;
     }
     html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden])[data-ambient-entry="running"] svg[data-animation="trace"] [data-animate="node"] {
-      animation: #adbac7 #adbac7 linear infinite,
-        archify-node-pulse 3.6s ease-in-out 1 calc(#adbac7 * 160ms),
-        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#adbac7 * 160ms);
+      animation: #536479 #536479 linear infinite,
+        archify-node-pulse 3.6s ease-in-out 1 calc(#536479 * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#536479 * 160ms);
     }
     html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden])[data-ambient-entry="running"] svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="node"] {
-      animation: #adbac7 #adbac7 linear infinite,
-        archify-node-pulse 3.1s ease-in-out 1 calc(#adbac7 * 160ms),
-        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#adbac7 * 160ms);
+      animation: #536479 #536479 linear infinite,
+        archify-node-pulse 3.1s ease-in-out 1 calc(#536479 * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#536479 * 160ms);
     }
     html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden])[data-ambient-entry="running"] svg[data-preset="blueprint"][data-animation="trace"] [data-animate="node"] {
-      animation: #adbac7 #adbac7 linear infinite,
-        archify-blueprint-node-pulse 3.8s ease-in-out 1 calc(#adbac7 * 160ms),
-        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#adbac7 * 160ms);
+      animation: #536479 #536479 linear infinite,
+        archify-blueprint-node-pulse 3.8s ease-in-out 1 calc(#536479 * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#536479 * 160ms);
     }
     html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden])[data-ambient-entry="running"] svg[data-preset="editorial"][data-animation="trace"] [data-animate="node"] {
-      animation: #adbac7 #adbac7 linear infinite,
-        archify-editorial-node-pulse 3.5s ease-in-out 1 calc(#adbac7 * 160ms),
-        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#adbac7 * 160ms);
+      animation: #536479 #536479 linear infinite,
+        archify-editorial-node-pulse 3.5s ease-in-out 1 calc(#536479 * 160ms),
+        archify-node-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards calc(#536479 * 160ms);
     }
     @keyframes archify-node-enter {
       from { opacity: 0; }
@@ -4949,11 +4949,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     @keyframes archify-blueprint-node-pulse {
       0%, 72%, 100% { opacity: 1; filter: none; }
-      18%, 36% { opacity: 0.72; filter: drop-shadow(0 0 2px #22d3ee); }
+      18%, 36% { opacity: 0.72; filter: drop-shadow(0 0 2px #0e7490); }
     }
     @keyframes archify-editorial-node-pulse {
       0%, 72%, 100% { opacity: 1; filter: none; }
-      18%, 36% { opacity: 0.78; filter: drop-shadow(0 2px 2px color-mix(in srgb, #cdd9e5 18%, transparent)); }
+      18%, 36% { opacity: 0.78; filter: drop-shadow(0 2px 2px color-mix(in srgb, #1e293b 18%, transparent)); }
     }
     @keyframes archify-signal-scan {
       0%, 18% { opacity: 1; transform: translateX(-70%); }
@@ -4961,7 +4961,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       100% { opacity: 0; transform: translateX(70%); }
     }
     @keyframes archify-radar-live {
-      0% { box-shadow: 0 0 0 0 color-mix(in srgb, #539bf5 52%, transparent); }
+      0% { box-shadow: 0 0 0 0 color-mix(in srgb, #2563eb 52%, transparent); }
       55%, 100% { box-shadow: 0 0 0 0.32rem transparent; }
     }
 
@@ -5049,72 +5049,87 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       svg [data-node-id], svg [data-edge-from], svg [data-detail], svg [data-detail-anchor], svg [data-legend-hit], svg { transition: none !important; }
     }
 
-svg {background:#1c2128 !important;}
+svg {background:#ffffff !important;}
 svg .semantic-sigil {display:inline;}
 svg [data-node-id] > rect:not(.c-mask) {rx:5px !important;stroke-width:1.3px !important;}
 svg #node-goals text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-goals text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-goals text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-goals text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-patterns text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-patterns text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-patterns text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-patterns text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-entry text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-entry text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-entry text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-entry text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-model text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-model text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-model text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-model text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-harness text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-harness text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-harness text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-harness text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-context text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-context text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-context text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-context text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-tools text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-tools text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-tools text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-tools text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-state text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-state text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-state text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-state text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-runtime text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-runtime text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-runtime text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-runtime text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-sandbox text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-sandbox text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-sandbox text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-sandbox text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-gateway text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-93.0px,-14px);}
 svg #node-gateway text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-110.0px,-10px);}
-svg #node-gateway text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#adbac7 !important;}
+svg #node-gateway text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-110.0px,-8px);fill:#536479 !important;}
 svg #node-registry text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-103.0px,-14px);}
 svg #node-registry text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-120.0px,-10px);}
-svg #node-registry text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-120.0px,-8px);fill:#adbac7 !important;}
+svg #node-registry text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-120.0px,-8px);fill:#536479 !important;}
 svg #node-policy text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-103.0px,-14px);}
 svg #node-policy text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-120.0px,-10px);}
-svg #node-policy text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-120.0px,-8px);fill:#adbac7 !important;}
+svg #node-policy text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-120.0px,-8px);fill:#536479 !important;}
 svg #node-facts text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-103.0px,-14px);}
 svg #node-facts text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-120.0px,-10px);}
-svg #node-facts text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-120.0px,-8px);fill:#adbac7 !important;}
+svg #node-facts text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-120.0px,-8px);fill:#536479 !important;}
 svg #node-eval text[data-node-label] {font-size:12px !important;text-anchor:start;transform:translate(-103.0px,-14px);}
 svg #node-eval text[data-detail="context"] {font-size:10px !important;text-anchor:start;transform:translate(-120.0px,-10px);}
-svg #node-eval text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-120.0px,-8px);fill:#adbac7 !important;}
-svg rect[data-graph-role="structural-frame"][data-composition-frame-id="0"] {stroke:#22d3ee !important;fill:#22d3ee !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
-svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="0"] text {fill:#22d3ee !important;}
-svg rect[data-graph-role="structural-frame"][data-composition-frame-id="1"] {stroke:#539bf5 !important;fill:#539bf5 !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
-svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="1"] text {fill:#539bf5 !important;}
-svg rect[data-graph-role="structural-frame"][data-composition-frame-id="2"] {stroke:#fbbf24 !important;fill:#fbbf24 !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
-svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="2"] text {fill:#fbbf24 !important;}
-svg rect[data-graph-role="structural-frame"][data-composition-frame-id="3"] {stroke:#fb7185 !important;fill:#fb7185 !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
-svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="3"] text {fill:#fb7185 !important;}
-svg rect[data-graph-role="structural-frame"][data-composition-frame-id="4"] {stroke:#a78bfa !important;fill:#a78bfa !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
-svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="4"] text {fill:#a78bfa !important;}
-svg [data-graph-role="structural-frame-label-mask"] {fill:#22272e !important;stroke:none !important;}
+svg #node-eval text[data-detail="fine"] {font-size:9.5px !important;text-anchor:start;transform:translate(-120.0px,-8px);fill:#536479 !important;}
+svg rect[data-graph-role="structural-frame"][data-composition-frame-id="0"] {stroke:#0e7490 !important;fill:#0e7490 !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
+svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="0"] text {fill:#0e7490 !important;}
+svg rect[data-graph-role="structural-frame"][data-composition-frame-id="1"] {stroke:#2563eb !important;fill:#2563eb !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
+svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="1"] text {fill:#2563eb !important;}
+svg rect[data-graph-role="structural-frame"][data-composition-frame-id="2"] {stroke:#b7791f !important;fill:#b7791f !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
+svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="2"] text {fill:#b7791f !important;}
+svg rect[data-graph-role="structural-frame"][data-composition-frame-id="3"] {stroke:#be3455 !important;fill:#be3455 !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
+svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="3"] text {fill:#be3455 !important;}
+svg rect[data-graph-role="structural-frame"][data-composition-frame-id="4"] {stroke:#7c3aed !important;fill:#7c3aed !important;fill-opacity:.035 !important;stroke-dasharray:7 5 !important;stroke-width:1.3px !important;rx:7px !important;}
+svg g[data-graph-role="structural-frame-label"][data-composition-frame-id="4"] text {fill:#7c3aed !important;}
+svg [data-graph-role="structural-frame-label-mask"] {fill:#f8fafc !important;stroke:none !important;}
 svg .c-grid {opacity:.2;}
-svg path.a-feedback {stroke:#a78bfa !important;fill:none;stroke-width:1.5;}
+svg path.a-feedback {stroke:#7c3aed !important;fill:none;stroke-width:1.5;}
 svg path[data-edge-id="registry-harness"], svg path[data-edge-id="policy-runtime"], svg path[data-edge-id="eval-context"], svg path[data-edge-id="runtime-facts"] {stroke-dasharray:6 4 !important;}
 
 svg path.a-dashed {stroke-dasharray:6,4 !important;}
 
-svg {background:#1c2128;} text {font-family: "PingFang SC", sans-serif;}]]></style><rect width="100%" height="100%" fill="#1c2128"/>
+svg {background:#ffffff;} text {font-family: "PingFang SC", sans-serif;}
+/* README contrast hierarchy */
+svg text {font-weight:550 !important;}
+svg .a-default, svg .a-emphasis {stroke:#526176 !important;stroke-width:1.25px !important;opacity:1 !important;}
+svg .m-default, svg .m-emphasis {fill:#526176 !important;}
+svg path.a-feedback, svg path.a-dashed, svg path.a-security {stroke-width:1.25px !important;opacity:1 !important;}
+svg [data-node-id] > rect:not(.c-mask) {stroke-width:2px !important;}
+svg #node-runtime > rect:not(.c-mask) {stroke-width:3px !important;}
+svg rect[data-graph-role="structural-frame"] {stroke-width:1px !important;fill-opacity:.025 !important;}
+svg :is(#node-goals, #node-patterns, #node-entry, #node-model, #node-harness, #node-context, #node-tools, #node-state, #node-runtime, #node-sandbox, #node-gateway, #node-registry, #node-policy, #node-facts, #node-eval) text[data-node-label] {fill:#172536 !important;font-size:13px !important;font-weight:700 !important;}
+svg #node-runtime text[data-node-label] {fill:#713f12 !important;font-size:14px !important;font-weight:700 !important;}
+svg :is(#node-goals, #node-patterns, #node-entry, #node-model, #node-harness, #node-context, #node-tools, #node-state, #node-runtime, #node-sandbox, #node-gateway, #node-registry, #node-policy, #node-facts, #node-eval) text[data-detail="context"] {fill:#40536b !important;font-size:10.5px !important;font-weight:550 !important;}
+svg :is(#node-goals, #node-patterns, #node-entry, #node-model, #node-harness, #node-context, #node-tools, #node-state, #node-runtime, #node-sandbox, #node-gateway, #node-registry, #node-policy, #node-facts, #node-eval) text[data-detail="fine"] {fill:#40536b !important;font-size:10px !important;font-weight:550 !important;}
+svg .t-muted {fill:#40536b !important;}
+/* END README contrast hierarchy */
+]]></style><rect width="100%" height="100%" fill="#ffffff"/>
         <title id="archify-diagram-title">Agent Infra — Reference Architecture</title>
         <desc id="archify-diagram-description">An architecture diagram generated by Archify.</desc>
         <!-- Definitions -->
@@ -5134,11 +5149,11 @@ svg {background:#1c2128;} text {font-family: "PingFang SC", sans-serif;}]]></sty
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
             <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
           </pattern>
-        <marker id="arrowhead-feedback" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/></marker><marker id="arrowhead-start" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto-start-reverse"><polygon points="0 0, 10 3.5, 0 7" fill="#768390"/></marker></defs>
+        <marker id="arrowhead-feedback" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed"/></marker><marker id="arrowhead-start" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto-start-reverse"><polygon points="0 0, 10 3.5, 0 7" fill="#718096"/></marker></defs>
 
 
         <!-- Background Grid -->
-        <rect width="100%" height="100%" fill="url(#grid)" />
+        <rect width="100%" height="100%" fill="none" />
 
         <!-- Boundaries (behind everything) -->
         <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="1  Business &amp; Applications" x="406" y="33" width="898" height="127" rx="12" class="c-region" stroke-width="1"/>
@@ -5438,20 +5453,20 @@ svg {background:#1c2128;} text {font-family: "PingFang SC", sans-serif;}]]></sty
         <!-- Connection labels -->
 
 
-        <g data-detail="context" data-edge-from="patterns" data-edge-to="harness" data-edge-label="Task &amp; Acceptance Criteria" data-edge-key="2" data-edge-id="patterns-harness"><rect x="889.5" y="185" width="151.0" height="18" rx="3" fill="#1c2128"/><text x="965" y="196" font-size="11" fill="#adbac7" text-anchor="middle">Task &amp; Acceptance Criteria</text></g>
+        <g data-detail="context" data-edge-from="patterns" data-edge-to="harness" data-edge-label="Task &amp; Acceptance Criteria" data-edge-key="2" data-edge-id="patterns-harness"><rect x="889.5" y="185" width="151.0" height="18" rx="3" fill="#ffffff"/><text x="965" y="196" font-size="11" fill="#536479" text-anchor="middle">Task &amp; Acceptance Criteria</text></g>
         <g data-detail="context" data-edge-from="model" data-edge-to="harness" data-edge-label="Model interaction" data-edge-key="3" data-edge-id="model-harness"></g>
         <g data-detail="context" data-edge-from="harness" data-edge-to="context" data-edge-label="Context" data-edge-key="4" data-edge-id="harness-context"></g>
         <g data-detail="context" data-edge-from="harness" data-edge-to="tools" data-edge-label="Capabilities" data-edge-key="5" data-edge-id="harness-tools"></g>
-        <g data-detail="context" data-edge-from="harness" data-edge-to="runtime" data-edge-label="Task &amp; Capability Requests" data-edge-key="6" data-edge-id="harness-runtime"><rect x="677.25" y="489" width="101.5" height="32" rx="3" fill="#1c2128"/><text x="728" y="500" font-size="11" fill="#adbac7" text-anchor="middle">Task &amp; Capability</text><text x="728" y="514" font-size="11" fill="#adbac7" text-anchor="middle">Requests</text></g>
-        <g data-detail="context" data-edge-from="runtime" data-edge-to="harness" data-edge-label="Results &amp; Verification Feedback" data-edge-key="7" data-edge-id="runtime-harness"><rect x="925.75" y="496" width="178.5" height="18" rx="3" fill="#1c2128"/><text x="1015" y="507" font-size="11" fill="#adbac7" text-anchor="middle">Results &amp; Verification Feedback</text></g>
+        <g data-detail="context" data-edge-from="harness" data-edge-to="runtime" data-edge-label="Task &amp; Capability Requests" data-edge-key="6" data-edge-id="harness-runtime"><rect x="677.25" y="489" width="101.5" height="32" rx="3" fill="#ffffff"/><text x="728" y="500" font-size="11" fill="#536479" text-anchor="middle">Task &amp; Capability</text><text x="728" y="514" font-size="11" fill="#536479" text-anchor="middle">Requests</text></g>
+        <g data-detail="context" data-edge-from="runtime" data-edge-to="harness" data-edge-label="Results &amp; Verification Feedback" data-edge-key="7" data-edge-id="runtime-harness"><rect x="925.75" y="496" width="178.5" height="18" rx="3" fill="#ffffff"/><text x="1015" y="507" font-size="11" fill="#536479" text-anchor="middle">Results &amp; Verification Feedback</text></g>
 
         <g data-detail="context" data-edge-from="runtime" data-edge-to="sandbox" data-edge-label="Execute" data-edge-key="9" data-edge-id="runtime-sandbox"></g>
         <g data-detail="context" data-edge-from="runtime" data-edge-to="gateway" data-edge-label="Route calls" data-edge-key="10" data-edge-id="runtime-gateway"></g>
-        <g data-detail="context" data-edge-from="registry" data-edge-to="harness" data-edge-label="Version Gates · Policy · Approval" data-edge-key="11" data-edge-id="registry-harness"><rect x="328.5" y="282" width="73.0" height="46" rx="3" fill="#1c2128"/><text x="365" y="293" font-size="10" fill="#fb7185" text-anchor="middle">Version Gates</text><text x="365" y="307" font-size="10" fill="#fb7185" text-anchor="middle">Policy</text><text x="365" y="321" font-size="10" fill="#fb7185" text-anchor="middle">Approval</text></g>
-        <g data-detail="context" data-edge-from="policy" data-edge-to="runtime" data-edge-label="Quotas · Credentials · Isolation · Admission" data-edge-key="12" data-edge-id="policy-runtime"><rect x="238.25" y="584" width="123.5" height="32" rx="3" fill="#1c2128"/><text x="300" y="595" font-size="11" fill="#fb7185" text-anchor="middle">Quotas · Credentials</text><text x="300" y="609" font-size="11" fill="#fb7185" text-anchor="middle">Isolation · Admission</text></g>
-        <g data-detail="context" data-edge-from="runtime" data-edge-to="facts" data-edge-label="Trace · State · Outcome · Cost · Incidents" data-edge-key="13" data-edge-id="runtime-facts"><rect x="1372.75" y="574" width="134.5" height="32" rx="3" fill="#1c2128"/><text x="1440" y="585" font-size="11" fill="#a78bfa" text-anchor="middle">Trace · State · Outcome</text><text x="1440" y="599" font-size="11" fill="#a78bfa" text-anchor="middle">Cost · Incidents</text></g>
+        <g data-detail="context" data-edge-from="registry" data-edge-to="harness" data-edge-label="Version Gates · Policy · Approval" data-edge-key="11" data-edge-id="registry-harness"><rect x="328.5" y="282" width="73.0" height="46" rx="3" fill="#ffffff"/><text x="365" y="293" font-size="10" fill="#be3455" text-anchor="middle">Version Gates</text><text x="365" y="307" font-size="10" fill="#be3455" text-anchor="middle">Policy</text><text x="365" y="321" font-size="10" fill="#be3455" text-anchor="middle">Approval</text></g>
+        <g data-detail="context" data-edge-from="policy" data-edge-to="runtime" data-edge-label="Quotas · Credentials · Isolation · Admission" data-edge-key="12" data-edge-id="policy-runtime"><rect x="238.25" y="584" width="123.5" height="32" rx="3" fill="#ffffff"/><text x="300" y="595" font-size="11" fill="#be3455" text-anchor="middle">Quotas · Credentials</text><text x="300" y="609" font-size="11" fill="#be3455" text-anchor="middle">Isolation · Admission</text></g>
+        <g data-detail="context" data-edge-from="runtime" data-edge-to="facts" data-edge-label="Trace · State · Outcome · Cost · Incidents" data-edge-key="13" data-edge-id="runtime-facts"><rect x="1372.75" y="574" width="134.5" height="32" rx="3" fill="#ffffff"/><text x="1440" y="585" font-size="11" fill="#7c3aed" text-anchor="middle">Trace · State · Outcome</text><text x="1440" y="599" font-size="11" fill="#7c3aed" text-anchor="middle">Cost · Incidents</text></g>
         <g data-detail="context" data-edge-from="facts" data-edge-to="eval" data-edge-label="Evaluate" data-edge-key="14" data-edge-id="facts-eval"></g>
-        <g data-detail="context" data-edge-from="eval" data-edge-to="context" data-edge-label="Improvements &amp; Verification Evidence" data-edge-key="15" data-edge-id="eval-context"><rect x="1308.5" y="295" width="113.0" height="32" rx="3" fill="#1c2128"/><text x="1365" y="306" font-size="10" fill="#a78bfa" text-anchor="middle">Improvements</text><text x="1365" y="320" font-size="10" fill="#a78bfa" text-anchor="middle">Verification Evidence</text></g>
+        <g data-detail="context" data-edge-from="eval" data-edge-to="context" data-edge-label="Improvements &amp; Verification Evidence" data-edge-key="15" data-edge-id="eval-context"><rect x="1308.5" y="295" width="113.0" height="32" rx="3" fill="#ffffff"/><text x="1365" y="306" font-size="10" fill="#7c3aed" text-anchor="middle">Improvements</text><text x="1365" y="320" font-size="10" fill="#7c3aed" text-anchor="middle">Verification Evidence</text></g>
 
 
 
@@ -5460,51 +5475,51 @@ svg {background:#1c2128;} text {font-family: "PingFang SC", sans-serif;}]]></sty
 
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="1  Business &amp; Applications"><rect data-graph-role="structural-frame-label-mask" x="406.0" y="36.0" width="175.0" height="22" rx="4" fill="#22272e"/><text data-boundary-label="" x="414.0" y="51.0" font-size="11" font-weight="600" text-anchor="start">1 Business &amp; Applications</text></g>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="1  Business &amp; Applications"><rect data-graph-role="structural-frame-label-mask" x="406.0" y="36.0" width="175.0" height="22" rx="4" fill="#f8fafc"/><text data-boundary-label="" x="414.0" y="51.0" font-size="11" font-weight="600" text-anchor="start">1 Business &amp; Applications</text></g>
 
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="2  Agent Construction &amp; Orchestration"><rect data-graph-role="structural-frame-label-mask" x="406.0" y="227.0" width="243.20000000000002" height="22" rx="4" fill="#22272e"/><text data-boundary-label="" x="414.0" y="242.0" font-size="11" font-weight="600" text-anchor="start">2 Agent Construction &amp; Orchestration</text></g>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="2  Agent Construction &amp; Orchestration"><rect data-graph-role="structural-frame-label-mask" x="406.0" y="227.0" width="243.20000000000002" height="22" rx="4" fill="#f8fafc"/><text data-boundary-label="" x="414.0" y="242.0" font-size="11" font-weight="600" text-anchor="start">2 Agent Construction &amp; Orchestration</text></g>
 
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="3  Production Runtime"><rect data-graph-role="structural-frame-label-mask" x="406.0" y="538.0" width="144.0" height="22" rx="4" fill="#22272e"/><text data-boundary-label="" x="414.0" y="553.0" font-size="11" font-weight="600" text-anchor="start">3 Production Runtime</text></g>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="3  Production Runtime"><rect data-graph-role="structural-frame-label-mask" x="406.0" y="538.0" width="144.0" height="22" rx="4" fill="#f8fafc"/><text data-boundary-label="" x="414.0" y="553.0" font-size="11" font-weight="600" text-anchor="start">3 Production Runtime</text></g>
 
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="3" data-composition-frame-kind="security-group" data-composition-frame-label="4  Governance &amp; Control"><rect data-graph-role="structural-frame-label-mask" x="6.0" y="276.0" width="156.4" height="22" rx="4" fill="#22272e"/><text data-boundary-label="" x="14.0" y="291.0" font-size="11" font-weight="600" text-anchor="start">4 Governance &amp; Control</text></g>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="3" data-composition-frame-kind="security-group" data-composition-frame-label="4  Governance &amp; Control"><rect data-graph-role="structural-frame-label-mask" x="6.0" y="276.0" width="156.4" height="22" rx="4" fill="#f8fafc"/><text data-boundary-label="" x="14.0" y="291.0" font-size="11" font-weight="600" text-anchor="start">4 Governance &amp; Control</text></g>
 
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="4" data-composition-frame-kind="region" data-composition-frame-label="5  Observability &amp; Optimization"><rect data-graph-role="structural-frame-label-mask" x="1426.0" y="276.0" width="206.0" height="22" rx="4" fill="#22272e"/><text data-boundary-label="" x="1434.0" y="291.0" font-size="11" font-weight="600" text-anchor="start">5 Observability &amp; Optimization</text></g>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="4" data-composition-frame-kind="region" data-composition-frame-label="5  Observability &amp; Optimization"><rect data-graph-role="structural-frame-label-mask" x="1426.0" y="276.0" width="206.0" height="22" rx="4" fill="#f8fafc"/><text data-boundary-label="" x="1434.0" y="291.0" font-size="11" font-weight="600" text-anchor="start">5 Observability &amp; Optimization</text></g>
 
         <!-- Legend -->
 <g id="unified-legend">
-<text x="30" y="813" font-size="14" font-weight="600" fill="#cdd9e5">Capability Domains</text>
-<path d="M 30 827 H 1744" stroke="#444c56" stroke-width="1"/>
-<text x="30" y="854" font-size="13" font-weight="650" fill="#22d3ee">Business &amp; Applications</text>
-<text x="30" y="881" font-size="12" fill="#cdd9e5">Define goals, scope and deliverables</text>
-<text x="30" y="904" font-size="12" fill="#cdd9e5">Choose Agent and Workflow patterns</text>
-<text x="30" y="927" font-size="12" fill="#cdd9e5">Set acceptance criteria and triggers</text>
-<text x="380" y="854" font-size="13" font-weight="650" fill="#79b3fa">Construction &amp; Orchestration</text>
-<text x="380" y="881" font-size="12" fill="#cdd9e5">Organize model decisions and actions</text>
-<text x="380" y="904" font-size="12" fill="#cdd9e5">Supply context, knowledge and tools</text>
-<text x="380" y="927" font-size="12" fill="#cdd9e5">Verify results and involve people</text>
-<text x="730" y="854" font-size="13" font-weight="650" fill="#ffd36d">Production Runtime</text>
-<text x="730" y="881" font-size="12" fill="#cdd9e5">Schedule tasks and recover execution</text>
-<text x="730" y="904" font-size="12" fill="#cdd9e5">Persist state, workspace and artifacts</text>
-<text x="730" y="927" font-size="12" fill="#cdd9e5">Run tools in isolated environments</text>
-<text x="1080" y="854" font-size="13" font-weight="650" fill="#fb7185">Governance &amp; Control</text>
-<text x="1080" y="881" font-size="12" fill="#cdd9e5">Manage identities and permissions</text>
-<text x="1080" y="904" font-size="12" fill="#cdd9e5">Enforce approval and resource policies</text>
-<text x="1080" y="927" font-size="12" fill="#cdd9e5">Control Agent versions and releases</text>
-<text x="1430" y="854" font-size="13" font-weight="650" fill="#bba0f6">Observability &amp; Optimization</text>
-<text x="1430" y="881" font-size="12" fill="#cdd9e5">Record execution, results and costs</text>
-<text x="1430" y="904" font-size="12" fill="#cdd9e5">Evaluate quality and compare versions</text>
-<text x="1430" y="927" font-size="12" fill="#cdd9e5">Feed evidence back into improvements</text>
-<text x="30" y="957" font-size="11" fill="#adbac7">Task verification checks one outcome; evaluation compares performance across tasks and versions.</text>
-<path d="M 30 975 H 1744" stroke="#444c56" stroke-width="1"/>
-<text x="30" y="1000" font-size="12" font-weight="600" fill="#cdd9e5">Relationships</text>
-<path d="M 30 1025 H 72" fill="none" stroke="#768390" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-<text x="88" y="1029" font-size="11" fill="#adbac7">Interactions &amp; execution flow</text>
-<path d="M 600 1025 H 642" fill="none" stroke="#768390" stroke-width="1.5" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)"/>
-<text x="658" y="1029" font-size="11" fill="#adbac7">Two-way interaction</text>
-<path d="M 1210 1025 H 1252" fill="none" stroke="#768390" stroke-width="1.5" marker-end="url(#arrowhead)" stroke-dasharray="6,4"/>
-<text x="1268" y="1029" font-size="11" fill="#adbac7">Governance, observability &amp; feedback</text>
+<text x="30" y="813" font-size="14" font-weight="600" fill="#1e293b">Capability Domains</text>
+<path d="M 30 827 H 1744" stroke="#cbd5e1" stroke-width="1"/>
+<text x="30" y="854" font-size="13" font-weight="650" fill="#0e7490">Business &amp; Applications</text>
+<text x="30" y="881" font-size="12" fill="#1e293b">Define goals, scope and deliverables</text>
+<text x="30" y="904" font-size="12" fill="#1e293b">Choose Agent and Workflow patterns</text>
+<text x="30" y="927" font-size="12" fill="#1e293b">Set acceptance criteria and triggers</text>
+<text x="380" y="854" font-size="13" font-weight="650" fill="#2563eb">Construction &amp; Orchestration</text>
+<text x="380" y="881" font-size="12" fill="#1e293b">Organize model decisions and actions</text>
+<text x="380" y="904" font-size="12" fill="#1e293b">Supply context, knowledge and tools</text>
+<text x="380" y="927" font-size="12" fill="#1e293b">Verify results and involve people</text>
+<text x="730" y="854" font-size="13" font-weight="650" fill="#b7791f">Production Runtime</text>
+<text x="730" y="881" font-size="12" fill="#1e293b">Schedule tasks and recover execution</text>
+<text x="730" y="904" font-size="12" fill="#1e293b">Persist state, workspace and artifacts</text>
+<text x="730" y="927" font-size="12" fill="#1e293b">Run tools in isolated environments</text>
+<text x="1080" y="854" font-size="13" font-weight="650" fill="#be3455">Governance &amp; Control</text>
+<text x="1080" y="881" font-size="12" fill="#1e293b">Manage identities and permissions</text>
+<text x="1080" y="904" font-size="12" fill="#1e293b">Enforce approval and resource policies</text>
+<text x="1080" y="927" font-size="12" fill="#1e293b">Control Agent versions and releases</text>
+<text x="1430" y="854" font-size="13" font-weight="650" fill="#7c3aed">Observability &amp; Optimization</text>
+<text x="1430" y="881" font-size="12" fill="#1e293b">Record execution, results and costs</text>
+<text x="1430" y="904" font-size="12" fill="#1e293b">Evaluate quality and compare versions</text>
+<text x="1430" y="927" font-size="12" fill="#1e293b">Feed evidence back into improvements</text>
+<text x="30" y="957" font-size="11" fill="#536479">Task verification checks one outcome; evaluation compares performance across tasks and versions.</text>
+<path d="M 30 975 H 1744" stroke="#cbd5e1" stroke-width="1"/>
+<text x="30" y="1000" font-size="12" font-weight="600" fill="#1e293b">Relationships</text>
+<path d="M 30 1025 H 72" fill="none" stroke="#718096" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+<text x="88" y="1029" font-size="11" fill="#536479">Interactions &amp; execution flow</text>
+<path d="M 600 1025 H 642" fill="none" stroke="#718096" stroke-width="1.5" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)"/>
+<text x="658" y="1029" font-size="11" fill="#536479">Two-way interaction</text>
+<path d="M 1210 1025 H 1252" fill="none" stroke="#718096" stroke-width="1.5" marker-end="url(#arrowhead)" stroke-dasharray="6,4"/>
+<text x="1268" y="1029" font-size="11" fill="#536479">Governance, observability &amp; feedback</text>
 </g><g id="agent-infra-heading">
-      <text x="30" y="78" font-size="21" font-weight="650" fill="#cdd9e5">Agent Infra</text>
-      <text x="30" y="105" font-size="13" fill="#adbac7">Reference Architecture</text>
-      <text x="30" y="137" font-size="12" fill="#cdd9e5">Five capability domains for running Agents.</text>
+      <text x="30" y="78" font-size="21" font-weight="650" fill="#1e293b">Agent Infra</text>
+      <text x="30" y="105" font-size="13" fill="#536479">Reference Architecture</text>
+      <text x="30" y="137" font-size="12" fill="#1e293b">Five capability domains for running Agents.</text>
     </g></svg>
