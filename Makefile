@@ -284,6 +284,16 @@ check-fast:
 ##                         told the outcome is unknown and reports instead of redeploying.
 ##   delivery-runner-redelivery
 ##                         the restarted runner redelivers a finished test; no new Event.
+##   vuln-verify           the scripted repair Agent, bound to a workspace of the example
+##                         repository, upgrades the vulnerable dependency, fails one
+##                         verification, adapts the code and passes the second.
+##   vuln-scope-denied     a write outside the allowed paths is refused before any
+##                         Attempt; the Agent continues inside them.
+##   vuln-stale-evidence   a verification of a digest the workspace moved past is
+##                         refused; the latest digest is verified instead.
+##   vuln-restart-during-verify
+##                         SIGKILL while the verification callback is held; after the
+##                         restart no Decision is asked again, no verification runs twice.
 ##   serving-burst         twenty users submit the serving template at once.
 ##   serving-crash-held    SIGKILL while dispatches are held before acceptance.
 ##   serving-crash-waiting SIGKILL while every task waits for its callback; callbacks
@@ -300,7 +310,9 @@ check-fast:
 ##   serving-capacity      the Backend restarted with two slots on the image Provider;
 ##                         at most two image tasks in flight, the rest queue as READY.
 ## EMBERLING_DEMO_STUDIO=1 turns on the Studio demo mode described under demo-studio.
-## Needs Docker, curl and jq; deliberately not part of `check`.
+## EMBERLING_DEMO_MODEL=<model id> runs vuln-verify against a real decision model the
+## Backend registers through EMBERLING_MODELS; the key stays in the shell environment.
+## Needs Docker, git, curl and jq; deliberately not part of `check`.
 demo:
 	@bash scripts/demo/demo.sh run
 

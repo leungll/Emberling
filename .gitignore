@@ -17,3 +17,6 @@ studio/playwright-report/
 .env.*
 # Local diagram and review captures; never published.
 .archify/
+
+# Example repositories the demo generates for the Compose stack to mount.
+deploy/.demo/

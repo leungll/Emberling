@@ -36,6 +36,7 @@ BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 \echo '  one_external_task_per_attempt      no Attempt is bound to two external tasks, no external task id is bound twice'
 \echo '  at_most_one_succeeded_attempt      no NodeRun or Agent Action has two SUCCEEDED Attempts'
 \echo '  provider_slot_live_noderun         every Provider slot this Run holds belongs to a RUNNING or WAITING_CALLBACK NodeRun'
+\echo '  patch_verified_subject_recorded    every patch_verified fact is about a patch the same Agent workspace recorded (or the empty baseline patch)'
 SELECT CASE WHEN :'provider_capacity' = ''
     THEN 'checks not run: provider_slots_within_capacity (pass -v provider_capacity=<id>=<n>,... to check every Provider''s held slots against its limit)'
     ELSE '  provider_slots_within_capacity     no Provider holds more slots than its configured limit (' || :'provider_capacity' || ')' END;
@@ -271,6 +272,20 @@ v_slot_live AS (
     WHERE nr.status NOT IN ('RUNNING', 'WAITING_CALLBACK')
 ),
 
+-- A patch_verified fact binds its verdict to the patch digest the verification named. The
+-- verify Tool refuses a digest other than the workspace's current one before any Attempt
+-- exists, and a patch record commits in the same Tool result transaction as the write that
+-- produced it, so every subject is a patch the same Agent's workspace recorded. The one
+-- digest with no record is the empty patch: a workspace verified before any write.
+v_fact_patch_recorded AS (
+    SELECT 'patch_verified fact ' || f.id || ' is about ' || f.subject_ref || ', which the workspace never recorded' AS detail
+    FROM execution_facts f
+    WHERE f.run_id = :'run_id' AND f.fact_type = 'patch_verified'
+      AND f.subject_ref <> encode(sha256(''::bytea), 'hex')
+      AND NOT EXISTS (SELECT 1 FROM workspace_patches p
+                      WHERE p.agent_run_id = f.agent_run_id AND p.patch_digest = f.subject_ref)
+),
+
 -- Admission counts the held slots under the Provider's row lock before inserting its
 -- own, so the committed count never exceeds the configured limit. The limit is not a
 -- database fact: it is passed in, and the check runs only when it was. It is a snapshot
@@ -296,18 +311,19 @@ results AS (
     UNION ALL SELECT 6, 'one_external_task_per_attempt', detail FROM v_external_task
     UNION ALL SELECT 7, 'at_most_one_succeeded_attempt', detail FROM v_succeeded
     UNION ALL SELECT 8, 'provider_slot_live_noderun', detail FROM v_slot_live
-    UNION ALL SELECT 9, 'provider_slots_within_capacity', detail FROM v_within_capacity
+    UNION ALL SELECT 9, 'patch_verified_subject_recorded', detail FROM v_fact_patch_recorded
+    UNION ALL SELECT 10, 'provider_slots_within_capacity', detail FROM v_within_capacity
 ),
 checks(ord, check_name) AS (
     SELECT * FROM (
         VALUES (1, 'run_exists'), (2, 'event_seq_contiguous'), (3, 'transition_has_event'),
                (4, 'no_inflight_work_in_terminal_run'), (5, 'run_status_matches_noderuns'),
                (6, 'one_external_task_per_attempt'), (7, 'at_most_one_succeeded_attempt'),
-               (8, 'provider_slot_live_noderun')
+               (8, 'provider_slot_live_noderun'), (9, 'patch_verified_subject_recorded')
     ) AS always(ord, check_name)
     UNION ALL
     -- Listed, and so reported, only when the limits were passed in.
-    SELECT 9, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
+    SELECT 10, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
 )
 SELECT line FROM (
     SELECT c.ord, 0 AS sub,
