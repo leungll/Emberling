@@ -415,6 +415,7 @@ export const en = {
     patch_tested: 'Patch tested',
     image_generated: 'Image generated',
     asset_reviewed: 'Asset reviewed',
+    patch_reviewed: 'Patch reviewed',
   } as Record<string, string>,
 
   errors: {

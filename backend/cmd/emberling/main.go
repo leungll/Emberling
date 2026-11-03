@@ -269,6 +269,9 @@ func run(logger *slog.Logger) error {
 			if err := registerChangeRequestTool(toolRegistry, cfg.VerifyRunner, artifactStore); err != nil {
 				return err
 			}
+			if err := registerReviewPatchTool(toolRegistry, cfg.VerifyRunner, modelRegistry, artifactStore, cfg.WorkspaceRepositories); err != nil {
+				return err
+			}
 			if err := registerWorkspaceTools(toolRegistry, cfg.WorkspaceRepositories); err != nil {
 				return err
 			}

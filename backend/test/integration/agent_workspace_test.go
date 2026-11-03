@@ -109,6 +109,9 @@ type workspaceHarnessOptions struct {
 	writeExecutor registry.ToolExecutor
 	extraTools    []registry.ToolRegistration
 	wrapUoW       func(store.UnitOfWork) store.UnitOfWork
+	// modelProviders registers Model Providers beside the mock one, such as a scripted
+	// review model.
+	modelProviders []registry.ModelProvider
 }
 
 func newWorkspaceHarness(t *testing.T, opts workspaceHarnessOptions) *agentHarness {
@@ -124,7 +127,7 @@ func newWorkspaceHarness(t *testing.T, opts workspaceHarnessOptions) *agentHarne
 	}
 	tools = append(tools, opts.extraTools...)
 	return newAgentHarness(t, agentHarnessOptions{
-		Tools: tools, Pool: opts.pool, Clock: opts.clock, WrapUoW: opts.wrapUoW,
+		Tools: tools, Pool: opts.pool, Clock: opts.clock, WrapUoW: opts.wrapUoW, ModelProviders: opts.modelProviders,
 		WorkspaceRepositories: []string{wsRepositoryID},
 	})
 }

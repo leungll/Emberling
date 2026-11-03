@@ -92,8 +92,9 @@ const outputSchema = `{
 // an asset from another photo, or one this Run never generated, cannot be reviewed into a
 // passing verdict.
 //
-// The Tool declares UsesReviewModel, so each call carries the Agent Run's frozen review
-// Model ID, or none when the Agent node selected no review model.
+// The Tool declares UsesReviewModel with the vision input capability, so each call carries
+// the Agent Run's frozen review Model ID, which declares vision input, or none when the
+// Agent node selected no review model.
 func Registration(ports Ports) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
@@ -120,7 +121,8 @@ func Registration(ports Ports) registry.ToolRegistration {
 				SubjectArgument: "/assetRef",
 				MatchBindings:   []string{"photoAssetId"},
 			}},
-			UsesReviewModel: true,
+			UsesReviewModel:       true,
+			ReviewModelCapability: domain.ModelCapabilityVisionInput,
 		},
 		Executor: Executor{ports: ports},
 	}

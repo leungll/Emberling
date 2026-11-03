@@ -80,3 +80,55 @@ func TestSameBasis_ComparesEveryItem(t *testing.T) {
 		t.Error("a differing or missing item must compare unequal")
 	}
 }
+
+func TestReviewFactOfArguments_ReadsOnlyForToolsRecordingChangeRequests(t *testing.T) {
+	recording := domain.ToolMetadata{Name: "create_change_request", Records: []domain.ToolRecordKind{domain.ToolRecordChangeRequest}}
+	cited, err := reviewFactOfArguments(recording, json.RawMessage(`{"patchDigest":"d","reviewFactId":"fact_review_1"}`))
+	if err != nil || cited != "fact_review_1" {
+		t.Fatalf("cited = %q, %v, want fact_review_1", cited, err)
+	}
+	if cited, err := reviewFactOfArguments(recording, json.RawMessage(`{"patchDigest":"d"}`)); err != nil || cited != "" {
+		t.Errorf("arguments without a citation: %q, %v, want none", cited, err)
+	}
+	if cited, err := reviewFactOfArguments(recording, json.RawMessage(`{"reviewFactId":null}`)); err != nil || cited != "" {
+		t.Errorf("a null citation: %q, %v, want none", cited, err)
+	}
+	other := domain.ToolMetadata{Name: "write_file", Records: []domain.ToolRecordKind{domain.ToolRecordWorkspacePatch}}
+	if cited, err := reviewFactOfArguments(other, json.RawMessage(`{"reviewFactId":"fact_review_1"}`)); err != nil || cited != "" {
+		t.Errorf("a Tool that records no change request: %q, %v, want none", cited, err)
+	}
+	var invalid *errDecisionBasisInvalid
+	if _, err := reviewFactOfArguments(recording, json.RawMessage(`{"reviewFactId":7}`)); !errors.As(err, &invalid) {
+		t.Errorf("a non-string citation: err %v, want errDecisionBasisInvalid", err)
+	}
+	if _, err := reviewFactOfArguments(recording, json.RawMessage(`{"reviewFactId":""}`)); !errors.As(err, &invalid) {
+		t.Errorf("an empty citation: err %v, want errDecisionBasisInvalid", err)
+	}
+	if _, err := reviewFactOfArguments(recording, json.RawMessage(`[]`)); !errors.As(err, &invalid) {
+		t.Errorf("arguments that are not an object: err %v, want errDecisionBasisInvalid", err)
+	}
+}
+
+func TestReviewFactMatchesPatch_RequiresTypeRunAndSubject(t *testing.T) {
+	verdict := false
+	fact := domain.ExecutionFact{ID: "fact_review_1", RunID: "run_1", FactType: reviewFactType, SubjectRef: "digest-a", Verdict: &verdict}
+	if reason := reviewFactMismatch(fact, "run_1", "digest-a"); reason != "" {
+		t.Errorf("matching fact rejected: %s", reason)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*domain.ExecutionFact)
+		want   string
+	}{
+		"other run":     {func(f *domain.ExecutionFact) { f.RunID = "run_2" }, "this run"},
+		"other type":    {func(f *domain.ExecutionFact) { f.FactType = "patch_verified" }, reviewFactType},
+		"other subject": {func(f *domain.ExecutionFact) { f.SubjectRef = "digest-b" }, "patch"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := fact
+			tc.mutate(&candidate)
+			if reason := reviewFactMismatch(candidate, "run_1", "digest-a"); reason == "" || !strings.Contains(reason, tc.want) {
+				t.Errorf("reason = %q, want a mismatch mentioning %q", reason, tc.want)
+			}
+		})
+	}
+}

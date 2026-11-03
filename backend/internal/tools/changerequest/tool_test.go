@@ -247,3 +247,123 @@ func TestExecute_NoWorkspace_Fails(t *testing.T) {
 		t.Fatal("want an error for a call without a workspace view")
 	}
 }
+
+const testReviewFactID = "fact_review_1"
+
+func reviewFact(subject string, passed bool) domain.ExecutionFact {
+	return domain.ExecutionFact{
+		ID: testReviewFactID, RunID: "run_1", AgentRunID: "ar_1", ToolAttemptID: "tool_attempt_review", FactType: ReviewFactType,
+		SubjectRef: subject, Binding: json.RawMessage(`{"reviewModelId":"text-reviewer.1","opinionArtifactId":"art_opinion"}`), Verdict: &passed,
+	}
+}
+
+func argumentsWithReview(patchDigest string, unresolved []string) json.RawMessage {
+	var args map[string]any
+	_ = json.Unmarshal(argumentsFor(patchDigest, defaultBasis()), &args)
+	args["reviewFactId"] = testReviewFactID
+	if unresolved != nil {
+		args["unresolvedFindings"] = unresolved
+	}
+	encoded, _ := json.Marshal(args)
+	return encoded
+}
+
+func TestExecute_CitedReview_RendersReviewSectionAndNamesTheFact(t *testing.T) {
+	store := &memoryArtifacts{}
+	ws := workspace()
+	unresolved := []string{"The old require line is still present; it is removed in a follow-up.", "A changelog entry is missing."}
+	got, err := New(store).Execute(context.Background(), action(argumentsWithReview(ws.PatchDigest, unresolved), passingFact(ws.PatchDigest), reviewFact(ws.PatchDigest, false)))
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got.Result.ChangeRequest.ReviewFactID != testReviewFactID {
+		t.Errorf("record review fact = %q, want %s", got.Result.ChangeRequest.ReviewFactID, testReviewFactID)
+	}
+	var output map[string]any
+	_ = json.Unmarshal(got.Result.Output, &output)
+	if output["reviewFactId"] != testReviewFactID {
+		t.Errorf("output = %v, want it to name the review fact", output)
+	}
+	content := store.texts[0]
+	for _, want := range []string{
+		"## Review", "Fact: `" + testReviewFactID + "`", "Fact type: `" + ReviewFactType + "`", "Blocking findings: `yes`",
+		"opinionArtifactId: `art_opinion`", "reviewModelId: `text-reviewer.1`", "Unresolved findings:", "- " + unresolved[0], "- " + unresolved[1],
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("markdown lacks %q:\n%s", want, content)
+		}
+	}
+	if strings.Index(content, "## Review") > strings.Index(content, "## Decision basis") {
+		t.Errorf("the review section should precede the decision basis:\n%s", content)
+	}
+}
+
+func TestExecute_CleanReviewWithoutUnresolvedFindings_RendersNone(t *testing.T) {
+	store := &memoryArtifacts{}
+	ws := workspace()
+	if _, err := New(store).Execute(context.Background(), action(argumentsWithReview(ws.PatchDigest, nil), passingFact(ws.PatchDigest), reviewFact(ws.PatchDigest, true))); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	content := store.texts[0]
+	for _, want := range []string{"Blocking findings: `none`", "Unresolved findings:\n\n- none\n"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("markdown lacks %q:\n%s", want, content)
+		}
+	}
+}
+
+func TestExecute_NoReviewCited_RendersUnattachedReviewAndOmitsTheField(t *testing.T) {
+	store := &memoryArtifacts{}
+	ws := workspace()
+	got, err := New(store).Execute(context.Background(), action(argumentsFor(ws.PatchDigest, defaultBasis()), passingFact(ws.PatchDigest)))
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got.Result.ChangeRequest.ReviewFactID != "" || strings.Contains(string(got.Result.Output), "reviewFactId") {
+		t.Errorf("result = %+v / %s, want no review fact", got.Result.ChangeRequest, got.Result.Output)
+	}
+	if !strings.Contains(store.texts[0], "## Review\n\nNo independent review is attached") {
+		t.Errorf("markdown lacks the unattached review note:\n%s", store.texts[0])
+	}
+}
+
+func TestExecute_CitedReviewNotCarried_Refused(t *testing.T) {
+	ws := workspace()
+	cases := map[string][]domain.ExecutionFact{
+		"no review fact":          {passingFact(ws.PatchDigest)},
+		"review of another patch": {passingFact(ws.PatchDigest), reviewFact(strings.Repeat("0", 64), true)},
+		"review under another id": {passingFact(ws.PatchDigest), func() domain.ExecutionFact { f := reviewFact(ws.PatchDigest, true); f.ID = "fact_other"; return f }()},
+	}
+	for name, facts := range cases {
+		t.Run(name, func(t *testing.T) {
+			store := &memoryArtifacts{}
+			_, err := New(store).Execute(context.Background(), action(argumentsWithReview(ws.PatchDigest, nil), facts...))
+			if err == nil || !strings.Contains(err.Error(), ReviewFactType) {
+				t.Fatalf("err = %v, want the missing review refused", err)
+			}
+			if len(store.texts) != 0 {
+				t.Errorf("artifacts written = %d, want none", len(store.texts))
+			}
+		})
+	}
+}
+
+func TestExecute_UnresolvedFindingsOutOfBounds_Refused(t *testing.T) {
+	ws := workspace()
+	tooMany := make([]string, MaxUnresolvedFindings+1)
+	for i := range tooMany {
+		tooMany[i] = "finding"
+	}
+	for name, unresolved := range map[string][]string{
+		"too many": tooMany,
+		"too long": {strings.Repeat("x", MaxUnresolvedFindingRunes+1)},
+		"blank":    {"   "},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := New(&memoryArtifacts{}).Execute(context.Background(), action(argumentsWithReview(ws.PatchDigest, unresolved), passingFact(ws.PatchDigest), reviewFact(ws.PatchDigest, true)))
+			if err == nil || !strings.Contains(err.Error(), "unresolved finding") {
+				t.Fatalf("err = %v, want the findings refused", err)
+			}
+		})
+	}
+}
