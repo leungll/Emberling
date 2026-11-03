@@ -24,6 +24,13 @@ const releasedTaskTurn = 4
 // the WAITING_APPROVAL release Action.
 func (f *releaseFixture) startPatchedRelease(t *testing.T, workflowID string) domain.AgentAction {
 	t.Helper()
+	return f.startPatchedReleaseWith(t, workflowID, f.releaseCall(t))
+}
+
+// startPatchedReleaseWith is startPatchedRelease with the release Decision the given call
+// scripts.
+func (f *releaseFixture) startPatchedReleaseWith(t *testing.T, workflowID string, release crCall) domain.AgentAction {
+	t.Helper()
 	f.start(t, workflowID,
 		fixed(wsWrite(wsTokenPath, wsNewToken)),
 		func() mockmodel.Scenario {
@@ -36,7 +43,7 @@ func (f *releaseFixture) startPatchedRelease(t *testing.T, workflowID string) do
 			return wsCall(changerequest.ToolName, changeRequestArguments(wsLatestPatch(t, f.h, f.agentRunID(t)).PatchDigest,
 				basisItem("The verification of the patch passed every check.", 3, verifyAttempt.ID)))
 		},
-		f.releaseCall(t),
+		release,
 	)
 	latest := wsLatestPatch(t, f.h, f.agentRunID(t))
 	if latest == nil {
