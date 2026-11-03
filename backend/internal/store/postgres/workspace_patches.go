@@ -64,6 +64,27 @@ func (r *workspacePatchRepository) Latest(ctx context.Context, agentRunID string
 	return &patches[0], nil
 }
 
+func (r *workspacePatchRepository) GetByDigest(ctx context.Context, agentRunID, patchDigest string) (*domain.WorkspacePatch, error) {
+	const query = `SELECT ` + workspacePatchColumns + `
+		  FROM workspace_patches
+		 WHERE agent_run_id = $1 AND patch_digest = $2
+		 ORDER BY seq DESC
+		 LIMIT 1`
+
+	rows, err := r.conn.Query(ctx, query, agentRunID, patchDigest)
+	if err != nil {
+		return nil, mapError("workspace_patches.GetByDigest", err, agentRunID)
+	}
+	patches, err := scanWorkspacePatches(rows)
+	if err != nil {
+		return nil, mapError("workspace_patches.GetByDigest", err, agentRunID)
+	}
+	if len(patches) == 0 {
+		return nil, nil
+	}
+	return &patches[0], nil
+}
+
 func (r *workspacePatchRepository) ListSummariesByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.WorkspacePatch, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("store/postgres workspace_patches.ListSummariesByAgentRun: limit must be positive, got %d", limit)

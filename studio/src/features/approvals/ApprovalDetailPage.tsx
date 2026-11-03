@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 
 import { OperatorTokenField } from './OperatorTokenField';
 import {
@@ -8,10 +8,11 @@ import {
   type ApprovalLoadError,
 } from './approval-errors';
 import { ApiRequestError, decideApproval, getApproval } from '@/api/client';
-import type { Approval, ApprovalView } from '@/api/types';
+import type { Approval, ApprovalDetail } from '@/api/types';
 import { FactList } from '@/components/facts/FactList';
 import { IdChip } from '@/components/id/IdChip';
 import { JsonViewer } from '@/components/json/JsonViewer';
+import { Markdown } from '@/components/markdown/Markdown';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { Skeleton, StateBlock } from '@/components/state/StateBlock';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
@@ -26,7 +27,7 @@ import { useOperatorStore } from '@/stores/operator-store';
 
 type LoadState =
   | { kind: 'loading' }
-  | { kind: 'loaded'; view: ApprovalView }
+  | { kind: 'loaded'; view: ApprovalDetail }
   | { kind: 'error'; error: ApprovalLoadError };
 
 /** Mirrors the Backend's byte bound on a decision reason. */
@@ -41,9 +42,10 @@ type DecisionState =
   | { kind: 'failed'; message: string };
 
 /**
- * One approval: the Tool, the committed call arguments, where it sits, and the approve or
- * reject controls. The Backend settles the decision; this page only sends it and then shows
- * what was recorded, including a different decision that got there first.
+ * One approval: the Tool, the committed call arguments, where it sits, the change request
+ * and patch the call names, and the approve or reject controls. The Backend settles the
+ * decision; this page only sends it and then shows what was recorded, including a different
+ * decision that got there first.
  */
 export function ApprovalDetailPage() {
   const copy = useCopy();
@@ -227,6 +229,125 @@ export function ApprovalDetailPage() {
             <JsonViewer value={view.arguments} root="arguments" />
           )}
         </section>
+
+        <section
+          aria-labelledby="approval-change-request"
+          className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+        >
+          <h3 id="approval-change-request" className="m-0 text-md font-semibold">
+            {a.changeRequest}
+          </h3>
+          {view.changeRequest === null ? (
+            <p className="m-0 text-md text-fg-muted">{a.noChangeRequest}</p>
+          ) : (
+            <>
+              <FactList
+                compact
+                facts={[
+                  {
+                    label: a.changeRequestId,
+                    value: (
+                      <IdChip id={view.changeRequest.id} label={a.changeRequestId.toLowerCase()} />
+                    ),
+                  },
+                  {
+                    label: a.patchDigest,
+                    value: (
+                      <IdChip
+                        id={view.changeRequest.patchDigest}
+                        label={a.patchDigest.toLowerCase()}
+                      />
+                    ),
+                  },
+                  {
+                    label: a.verificationFact,
+                    value: (
+                      <IdChip
+                        id={view.changeRequest.verificationFactId}
+                        label={a.verificationFact.toLowerCase()}
+                      />
+                    ),
+                  },
+                  {
+                    label: a.contentDigest,
+                    value: (
+                      <IdChip
+                        id={view.changeRequest.contentDigest}
+                        label={a.contentDigest.toLowerCase()}
+                      />
+                    ),
+                  },
+                ]}
+              />
+              <Markdown
+                source={view.changeRequest.content}
+                className="rounded-md bg-surface-inset p-3"
+              />
+              <h4 className="m-0 text-md font-semibold">{a.decisionBasis}</h4>
+              <ol className="m-0 flex list-decimal flex-col gap-2 pl-6 text-md">
+                {view.changeRequest.decisionBasis.map((basis, i) => (
+                  <li key={i} className="flex flex-col gap-1">
+                    <span>{basis.statement}</span>
+                    <span className="flex flex-wrap items-center gap-2 text-sm text-fg-secondary">
+                      <Link
+                        to={`/runs/${view.runId}`}
+                        className="text-accent-fg underline-offset-3 hover:underline"
+                        title={a.openRunTurns}
+                      >
+                        {a.basisTurn(basis.turnNo)}
+                      </Link>
+                      {basis.item ? (
+                        <span>{a.basisItem(basis.item.kind, basis.item.label)}</span>
+                      ) : (
+                        <span className="text-fg-muted">{a.basisUnresolved}</span>
+                      )}
+                      <IdChip id={basis.manifestRef} size="sm" copy={false} />
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </section>
+
+        {view.changeRequest !== null ? (
+          <section
+            aria-labelledby="approval-patch"
+            className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+          >
+            <h3 id="approval-patch" className="m-0 text-md font-semibold">
+              {a.patch}
+            </h3>
+            {view.patch === null ? (
+              <p className="m-0 text-md text-fg-muted">{a.noPatch}</p>
+            ) : (
+              <>
+                <FactList
+                  compact
+                  facts={[
+                    { label: a.patch, value: a.patchSeq(view.patch.seq) },
+                    {
+                      label: a.patchDigest,
+                      value: (
+                        <IdChip id={view.patch.patchDigest} label={a.patchDigest.toLowerCase()} />
+                      ),
+                    },
+                    {
+                      label: a.touchedPaths,
+                      value:
+                        view.patch.touchedPaths.length > 0
+                          ? view.patch.touchedPaths.join(', ')
+                          : null,
+                    },
+                  ]}
+                />
+                <pre className="m-0 rounded-md bg-surface-inset p-3 font-mono text-xs whitespace-pre-wrap wrap-anywhere text-fg">
+                  {view.patch.patch}
+                </pre>
+              </>
+            )}
+          </section>
+        ) : null}
 
         {decision.kind === 'done' ? (
           <Callout tone="neutral">

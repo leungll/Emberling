@@ -468,11 +468,13 @@ type agentActionClaim struct {
 }
 
 // toolActionInputs are the per-call inputs the pre-execution checks resolved for the Tool
-// call: the frozen image and review Model IDs and the frozen workspace view.
+// call: the frozen image and review Model IDs, the frozen workspace view and the committed
+// facts that satisfied the Tool's requirements.
 type toolActionInputs struct {
 	imageModelID  string
 	reviewModelID string
 	workspace     *registry.WorkspaceView
+	requiredFacts []domain.ExecutionFact
 }
 
 // toolActionVerdict is the result of the pre-execution checks: the inputs of a call that
@@ -659,10 +661,11 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 
 // checkToolActionLocked runs every pre-execution check of a RUNNING TOOL_CALL Action, in
 // order: the frozen allowlist and the current registration, the committed Decision against
-// the registered InputSchema, the fact requirements the Tool declares, the frozen
-// generation limit, the frozen image and review models, and the frozen workspace with the
-// written path's scope. It decides, it does not write: the caller settles a failing verdict
-// so the approval path can resume the Agent's clock first. A passing verdict carries the
+// the registered InputSchema, the frozen workspace with the written path's scope and the
+// named patch, the fact requirements the Tool declares, the frozen generation limit, the
+// frozen image and review models, and the decision basis a change request cites. It
+// decides, it does not write: the caller settles a failing verdict so the approval path can
+// resume the Agent's clock first. A passing verdict carries the
 // inputs the Tool call needs. The registration it resolves is left on c for the caller.
 func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.Tx, c *agentActionClaim) (toolActionVerdict, error) {
 	reg, registered := s.deps.Tools.Get(c.toolName)
@@ -693,57 +696,7 @@ func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.T
 		return failVerdict(domain.TerminationInvalidAction, domain.ExecutionError{Code: "INVALID_ACTION", Message: validationErr.Error()}), nil
 	}
 
-	// A valid call of a Tool that requires committed facts is still not executable
-	// until those facts hold. An unmet requirement is decided before any Attempt
-	// exists, so no external call can follow. A Tool registered to return an unmet
-	// requirement hands the Agent a VERIFICATION_MISSING refusal naming the missing
-	// fact type, and the Agent decides the next step in a new Turn; every other Tool
-	// fails the Action exactly like an invalid Decision.
-	unmet, err := s.unmetFactRequirementLocked(ctx, tx, c.nodeRun.RunID, reg.Metadata.Requires, c.decision.Arguments)
-	if err != nil {
-		return toolActionVerdict{}, err
-	}
-	if unmet != nil && reg.Metadata.ReturnUnmetRequirement {
-		return returnVerdict(domain.ReturnVerificationMissing, verificationMissingMessage(*unmet)), nil
-	}
-	if unmet != nil {
-		return failVerdict(domain.TerminationInvalidAction, unmet.ExecutionError()), nil
-	}
-
-	// A counted Tool call past the Agent Run's frozen generation limit is rejected the
-	// same way, still before any Attempt exists; the Run lock serializes concurrent
-	// claims, so the limit can never be overrun.
-	overLimit, err := s.generationLimitReachedLocked(ctx, tx, c.agentRun, reg.Metadata)
-	if err != nil {
-		return toolActionVerdict{}, err
-	}
-	if overLimit != nil {
-		return failVerdict(domain.TerminationInvalidAction, *overLimit), nil
-	}
-
 	var inputs toolActionInputs
-	// A Tool that runs with the node's image model receives the Agent Run's frozen image
-	// Model ID, re-resolved here because configuration can change across a restart. An
-	// ID that no longer resolves fails the Tool call itself, before any Attempt exists,
-	// so nothing external is called and no other model is substituted.
-	if reg.Metadata.UsesImageModel {
-		inputs.imageModelID = frozenImageModel(c.agentRun)
-		if unusable := unusableModel(s.deps.Models, "image model", inputs.imageModelID, domain.ModelCapabilityReferenceImageGeneration); unusable != nil {
-			return failVerdict(domain.TerminationToolError, *unusable), nil
-		}
-	}
-
-	// A Tool that reviews with the node's review model receives the Agent Run's frozen
-	// review Model ID under the same rule. An Agent Run that froze none passes no ID,
-	// and the Tool applies its mock policy; a frozen ID that no longer resolves fails
-	// here and never falls back to that policy.
-	if reg.Metadata.UsesReviewModel && c.agentRun.ReviewModelID != nil {
-		inputs.reviewModelID = frozenReviewModel(c.agentRun)
-		if unusable := unusableModel(s.deps.Models, "review model", inputs.reviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
-			return failVerdict(domain.TerminationToolError, *unusable), nil
-		}
-	}
-
 	// A workspace Tool receives the Agent Run's frozen workspace: the binding, the newest
 	// recorded patch and its sequence, read under this lock so the view names exactly
 	// the version the call runs against. An Agent Run that froze none cannot run the
@@ -769,10 +722,84 @@ func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.T
 		// A Tool that acts on a named patch must name the newest one. The digest it names
 		// is compared with the view read under this lock, and a stale one is handed back as
 		// a STALE_PATCH refusal: no Attempt, no dispatch, so no result can ever bind to a
-		// superseded patch.
+		// superseded patch. The workspace is checked before the Tool's fact requirements,
+		// so a superseded patch is reported as stale even when facts about it exist: the
+		// Agent has to move to the current patch either way.
 		if named, stale := workspacePatchStale(reg.Metadata, c.decision.Arguments, view); stale {
 			return returnVerdict(domain.ReturnStalePatch, stalePatchMessage(named, view)), nil
 		}
+	}
+
+	// A valid call of a Tool that requires committed facts is still not executable
+	// until those facts hold. An unmet requirement is decided before any Attempt
+	// exists, so no external call can follow. A Tool registered to return an unmet
+	// requirement hands the Agent a VERIFICATION_MISSING refusal naming the missing
+	// fact type, and the Agent decides the next step in a new Turn; every other Tool
+	// fails the Action exactly like an invalid Decision.
+	requiredFacts, unmet, err := s.unmetFactRequirementLocked(ctx, tx, c.nodeRun.RunID, reg.Metadata.Requires, c.decision.Arguments)
+	if err != nil {
+		return toolActionVerdict{}, err
+	}
+	if unmet != nil && reg.Metadata.ReturnUnmetRequirement {
+		return returnVerdict(domain.ReturnVerificationMissing, verificationMissingMessage(*unmet)), nil
+	}
+	if unmet != nil {
+		return failVerdict(domain.TerminationInvalidAction, unmet.ExecutionError()), nil
+	}
+
+	// A counted Tool call past the Agent Run's frozen generation limit is rejected the
+	// same way, still before any Attempt exists; the Run lock serializes concurrent
+	// claims, so the limit can never be overrun.
+	overLimit, err := s.generationLimitReachedLocked(ctx, tx, c.agentRun, reg.Metadata)
+	if err != nil {
+		return toolActionVerdict{}, err
+	}
+	if overLimit != nil {
+		return failVerdict(domain.TerminationInvalidAction, *overLimit), nil
+	}
+
+	inputs.requiredFacts = requiredFacts
+
+	// A Tool that runs with the node's image model receives the Agent Run's frozen image
+	// Model ID, re-resolved here because configuration can change across a restart. An
+	// ID that no longer resolves fails the Tool call itself, before any Attempt exists,
+	// so nothing external is called and no other model is substituted.
+	if reg.Metadata.UsesImageModel {
+		inputs.imageModelID = frozenImageModel(c.agentRun)
+		if unusable := unusableModel(s.deps.Models, "image model", inputs.imageModelID, domain.ModelCapabilityReferenceImageGeneration); unusable != nil {
+			return failVerdict(domain.TerminationToolError, *unusable), nil
+		}
+	}
+
+	// A Tool that reviews with the node's review model receives the Agent Run's frozen
+	// review Model ID under the same rule. An Agent Run that froze none passes no ID,
+	// and the Tool applies its mock policy; a frozen ID that no longer resolves fails
+	// here and never falls back to that policy.
+	if reg.Metadata.UsesReviewModel && c.agentRun.ReviewModelID != nil {
+		inputs.reviewModelID = frozenReviewModel(c.agentRun)
+		if unusable := unusableModel(s.deps.Models, "review model", inputs.reviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
+			return failVerdict(domain.TerminationToolError, *unusable), nil
+		}
+	}
+
+	// A Tool that records a change request cites, in its decision basis, items of the
+	// Turns' Context Manifests. Every cited item must exist in the Manifest of the Turn it
+	// names, which this transaction reads under the lock; a reference that resolves to
+	// nothing is a defect of the committed Decision, so the Action fails before any
+	// Attempt exists and the model is not asked again.
+	basis, basisErr := decisionBasisOfArguments(reg.Metadata, c.decision.Arguments)
+	if basisErr == nil && len(basis) > 0 {
+		basisErr = checkDecisionBasisLocked(ctx, tx, c.agentRun.ID, basis)
+	}
+	if basisErr != nil {
+		var invalid *errDecisionBasisInvalid
+		if errors.As(basisErr, &invalid) {
+			return failVerdict(domain.TerminationInvalidAction, domain.ExecutionError{
+				Code:    codeDecisionBasisInvalid,
+				Message: fmt.Sprintf("tool %q cites a decision basis the runtime cannot resolve: %s", c.toolName, basisErr.Error()),
+			}), nil
+		}
+		return toolActionVerdict{}, basisErr
 	}
 	return toolActionVerdict{inputs: inputs}, nil
 }
@@ -898,6 +925,7 @@ func (s *ExecutionService) startToolAttemptLocked(ctx context.Context, tx store.
 			ImageModelID:  inputs.imageModelID,
 			ReviewModelID: inputs.reviewModelID,
 			Workspace:     inputs.workspace,
+			RequiredFacts: inputs.requiredFacts,
 			Callback:      callbackCtx,
 		},
 		async:    async,

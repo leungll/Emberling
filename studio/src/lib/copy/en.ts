@@ -510,6 +510,22 @@ export const en = {
     settled: 'This approval is no longer pending.',
     pauseNote: 'While it waits, the agent’s own time limit is paused.',
     notFound: 'This approval does not exist.',
+    changeRequest: 'Change request',
+    noChangeRequest: 'This call names no change request.',
+    changeRequestId: 'Change request',
+    contentDigest: 'Content digest',
+    verificationFact: 'Verification fact',
+    decisionBasis: 'Decision basis',
+    basisTurn: (n: number) => `Turn ${n}`,
+    basisItem: (kind: string, label: string) =>
+      `${kind.replace(/_/g, ' ').toLowerCase()}: ${label}`,
+    basisUnresolved: 'The cited manifest item can no longer be resolved.',
+    openRunTurns: 'Open the run’s turns',
+    patch: 'Patch',
+    noPatch: 'The workspace holds no patch with the digest this change request names.',
+    patchDigest: 'Patch digest',
+    patchSeq: (n: number) => `Workspace patch ${n}`,
+    touchedPaths: 'Touched paths',
   },
 
   glossary: {

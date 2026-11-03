@@ -356,6 +356,25 @@ function StepFacts({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
         ),
       });
     }
+    const requests = trace.changeRequests;
+    if (requests && requests.items.length > 0) {
+      const latestRequest = requests.items.at(-1);
+      facts.push({
+        label: f.changeRequests,
+        value: (
+          <>
+            <span className="tabular-nums">{requests.items.length}</span>
+            {latestRequest ? (
+              <Muted>
+                {' '}
+                <span className="font-mono">{f.latestChangeRequest(latestRequest.id)}</span>
+              </Muted>
+            ) : null}
+            {requests.truncated ? <Muted> ({f.moreChangeRequests})</Muted> : null}
+          </>
+        ),
+      });
+    }
   } else if (policy && (policy.maxAttempts ?? 1) > 1) {
     facts.push({
       label: f.attempts,

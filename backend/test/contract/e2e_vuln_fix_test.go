@@ -89,10 +89,10 @@ func (f *vulnFixture) startBackend(t *testing.T, opts testEnvOptions) *testEnv {
 	}
 	opts.AssetStorageRoot = f.assetRoot
 	opts.WorkspaceRepositories = []string{vulnRepositoryID}
-	opts.ExtraToolRegistrations = append(
+	opts.ExtraToolRegistrations = append(append(
 		workspace.Registrations(workspace.NewLocalGit(map[string]string{vulnRepositoryID: f.repoPath})),
 		verifypatch.Registration(f.runner.http.URL, nil, artifacts),
-	)
+	), opts.ExtraToolRegistrations...)
 	env := newTestEnvWithOptions(t, opts)
 	f.callbacks.setTarget(env.server.URL)
 	return env
@@ -100,6 +100,14 @@ func (f *vulnFixture) startBackend(t *testing.T, opts testEnvOptions) *testEnv {
 
 // saveVulnDefinition saves the vulnerability-fix fixture with its Agent bound to script.
 func saveVulnDefinition(t *testing.T, env *testEnv, script string) (string, int) {
+	t.Helper()
+	return saveVulnDefinitionWith(t, env, script, nil)
+}
+
+// saveVulnDefinitionWith saves the fixture with its Agent bound to script, after adjust,
+// when given, changed the Agent node's config: a story that needs more Tools or an
+// approval timeout edits the fixture's config instead of carrying a second fixture file.
+func saveVulnDefinitionWith(t *testing.T, env *testEnv, script string, adjust func(config map[string]any)) (string, int) {
 	t.Helper()
 	raw, err := os.ReadFile("../fixtures/definitions/vuln_fix.json")
 	if err != nil {
@@ -118,6 +126,9 @@ func saveVulnDefinition(t *testing.T, env *testEnv, script string) (string, int)
 			t.Fatalf("decode node_agent config: %v", err)
 		}
 		config["modelConfig"] = map[string]any{"script": script}
+		if adjust != nil {
+			adjust(config)
+		}
 		if fx.Nodes[i].Config, err = json.Marshal(config); err != nil {
 			t.Fatalf("encode node_agent config: %v", err)
 		}

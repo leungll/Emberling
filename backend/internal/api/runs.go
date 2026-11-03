@@ -268,6 +268,30 @@ type agentTraceResponse struct {
 	// Workspace is the frozen workspace and its recorded patches, null for an Agent Run
 	// that froze none.
 	Workspace *agentWorkspaceDTO `json:"workspace"`
+	// ChangeRequests are the change requests the Agent Run recorded, oldest first, named
+	// by their identifiers, digests and content Artifact; the rendered content is read
+	// through the Artifact content route, never carried here.
+	ChangeRequests agentTraceChangeRequestsDTO `json:"changeRequests"`
+}
+
+// agentTraceChangeRequestsDTO is the bounded change request list. Truncated reports that
+// the Agent Run recorded more requests than Items shows; the stored rows are never cut.
+type agentTraceChangeRequestsDTO struct {
+	Items     []changeRequestDTO `json:"items"`
+	Truncated bool               `json:"truncated"`
+}
+
+// changeRequestDTO projects one recorded change request: which patch it describes, which
+// verification fact it rests on and which text Artifact holds its content, with the digest
+// of that content. The decision basis and the Markdown belong to the approval view.
+type changeRequestDTO struct {
+	ID                 string    `json:"id"`
+	PatchDigest        string    `json:"patchDigest"`
+	VerificationFactID string    `json:"verificationFactId"`
+	ContentArtifactID  string    `json:"contentArtifactId"`
+	ContentDigest      string    `json:"contentDigest"`
+	ToolAttemptID      string    `json:"toolAttemptId"`
+	CreatedAt          time.Time `json:"createdAt"`
 }
 
 // agentWorkspaceDTO projects the frozen workspace binding and the summaries of its
@@ -504,7 +528,55 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			MaxGenerationCalls:  trace.Budget.MaxGenerationCalls,
 			GenerationCallsUsed: trace.Budget.Used,
 		},
-		Workspace: toAgentWorkspaceDTO(trace.Workspace),
+		Workspace:      toAgentWorkspaceDTO(trace.Workspace),
+		ChangeRequests: toAgentTraceChangeRequestsDTO(trace.ChangeRequests),
+	}
+}
+
+func toAgentTraceChangeRequestsDTO(requests service.AgentTraceChangeRequests) agentTraceChangeRequestsDTO {
+	items := make([]changeRequestDTO, len(requests.Requests))
+	for i, request := range requests.Requests {
+		items[i] = toChangeRequestDTO(request)
+	}
+	return agentTraceChangeRequestsDTO{Items: items, Truncated: requests.Truncated}
+}
+
+func toChangeRequestDTO(request domain.ChangeRequest) changeRequestDTO {
+	return changeRequestDTO{
+		ID:                 request.ID,
+		PatchDigest:        request.PatchDigest,
+		VerificationFactID: request.VerificationFactID,
+		ContentArtifactID:  request.ContentArtifactID,
+		ContentDigest:      request.ContentDigest,
+		ToolAttemptID:      request.ToolAttemptID,
+		CreatedAt:          utcTime(request.CreatedAt),
+	}
+}
+
+func toWorkspacePatchDTO(patch domain.WorkspacePatch) workspacePatchDTO {
+	touched := patch.TouchedPaths
+	if touched == nil {
+		touched = []string{}
+	}
+	return workspacePatchDTO{
+		Seq:           patch.Seq,
+		PatchDigest:   patch.PatchDigest,
+		TouchedPaths:  touched,
+		ToolAttemptID: patch.ToolAttemptID,
+		CreatedAt:     utcTime(patch.CreatedAt),
+	}
+}
+
+func toManifestItemDTO(item domain.ManifestItem) manifestItemDTO {
+	return manifestItemDTO{
+		Kind:          item.Kind,
+		Label:         item.Label,
+		Ref:           item.Ref,
+		Version:       item.Version,
+		SHA256:        item.SHA256,
+		Length:        item.Length,
+		Included:      item.Included,
+		OmittedReason: item.OmittedReason,
 	}
 }
 
@@ -527,17 +599,7 @@ func toAgentWorkspaceDTO(workspace *service.AgentTraceWorkspace) *agentWorkspace
 		dto.DeployTarget = &deployTargetDTO{Service: target.Service, Environment: target.Environment}
 	}
 	for i, patch := range workspace.Patches {
-		touched := patch.TouchedPaths
-		if touched == nil {
-			touched = []string{}
-		}
-		dto.Patches[i] = workspacePatchDTO{
-			Seq:           patch.Seq,
-			PatchDigest:   patch.PatchDigest,
-			TouchedPaths:  touched,
-			ToolAttemptID: patch.ToolAttemptID,
-			CreatedAt:     utcTime(patch.CreatedAt),
-		}
+		dto.Patches[i] = toWorkspacePatchDTO(patch)
 	}
 	return dto
 }
@@ -579,16 +641,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 	if round.Manifest != nil {
 		dto.Manifest = make([]manifestItemDTO, 0, len(round.Manifest.Items))
 		for _, item := range round.Manifest.Items {
-			dto.Manifest = append(dto.Manifest, manifestItemDTO{
-				Kind:          item.Kind,
-				Label:         item.Label,
-				Ref:           item.Ref,
-				Version:       item.Version,
-				SHA256:        item.SHA256,
-				Length:        item.Length,
-				Included:      item.Included,
-				OmittedReason: item.OmittedReason,
-			})
+			dto.Manifest = append(dto.Manifest, toManifestItemDTO(item))
 		}
 	}
 	if round.Decision != nil {
