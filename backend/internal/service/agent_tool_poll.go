@@ -251,6 +251,13 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 			skip(PollSkipNotClaimed)
 			return nil
 		}
+		if release != nil && attempt.PollCount+1 >= policy.MaxPolls {
+			// The claim took the release's last poll and cleared its schedule. Nothing
+			// else changes: the target stays occupied and the Attempt stays open for the
+			// confirm deadline and a person to resolve.
+			s.deps.Logger.WarnContext(ctx, "release attempt used its last poll; no further poll is scheduled",
+				"tool_attempt_id", attemptID, "operation_key", binding.ExternalTaskID)
+		}
 		// Past the void grace of an operation whose outcome is unknown, this scan asks
 		// production to void it instead of querying it. The first request time is a
 		// committed fact of the claim; a request that is lost is simply made again by the

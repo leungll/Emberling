@@ -237,6 +237,16 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return err
 		}
 
+		// A deployed release frees its target, closes an open human wait and resumes the
+		// Agent's clock before the round is judged: production did deploy, so neither the
+		// occupation nor the wait may stay open when a state patch or the fact below fails
+		// the Action and ends the Agent Run.
+		if call.release != nil {
+			if agentRun, err = s.settleReleaseSuccessLocked(ctx, tx, lock, nodeRun, agentRun, call.actionID, now); err != nil {
+				return err
+			}
+		}
+
 		// The state patch is decided before anything else is written: a patch that cannot
 		// be applied must leave no Context Version, no State Version and no moved pointer
 		// behind.
@@ -289,11 +299,6 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			}
 		}
 
-		if call.release != nil {
-			if agentRun, err = s.settleReleaseSuccessLocked(ctx, tx, lock, nodeRun, agentRun, call.actionID, now); err != nil {
-				return err
-			}
-		}
 		if err := tx.AgentActions().MarkSucceeded(ctx, call.actionID, src.fromAction, now); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded

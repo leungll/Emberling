@@ -92,13 +92,13 @@ type productionFixture struct {
 	release *mockproduction.Record
 }
 
-func newProductionFixture(t *testing.T) *productionFixture {
+func newProductionFixture(t *testing.T, opts ...mockproduction.Option) *productionFixture {
 	t.Helper()
 	record, err := mockproduction.OpenRecord(filepath.Join(t.TempDir(), "production.jsonl"))
 	if err != nil {
 		t.Fatalf("open production record: %v", err)
 	}
-	server := mockproduction.NewServer(mockproduction.WithTestControls(record), mockproduction.WithCompletionDelay(0))
+	server := mockproduction.NewServer(append([]mockproduction.Option{mockproduction.WithTestControls(record), mockproduction.WithCompletionDelay(0)}, opts...)...)
 	counts := &countingProduction{inner: server, calls: map[string]int{}}
 	srv := httptest.NewServer(counts)
 	t.Cleanup(func() { server.StopHolding(); srv.Close(); _ = record.Close() })
@@ -148,17 +148,20 @@ type releaseFixtureOptions struct {
 	approvalHooks service.ApprovalHooks
 	// client, when set, replaces the release Tool's HTTP client.
 	client *http.Client
+	// stateSchema, when set, is the Agent node's State Schema.
+	stateSchema string
 }
 
 type releaseFixture struct {
-	h          *agentHarness
-	repo       *workspaceRepo
-	stub       *verifyRunnerStub
-	artifacts  *asset.ArtifactStore
-	production *productionFixture
-	bounds     releaseBounds
-	run        domain.Run
-	outcome    service.AdvanceOutcome
+	h           *agentHarness
+	repo        *workspaceRepo
+	stub        *verifyRunnerStub
+	artifacts   *asset.ArtifactStore
+	production  *productionFixture
+	bounds      releaseBounds
+	stateSchema string
+	run         domain.Run
+	outcome     service.AdvanceOutcome
 }
 
 func newReleaseFixture(t *testing.T, opts releaseFixtureOptions) *releaseFixture {
@@ -194,7 +197,7 @@ func newReleaseFixture(t *testing.T, opts releaseFixtureOptions) *releaseFixture
 		PollHooks: opts.pollHooks, ApprovalHooks: opts.approvalHooks,
 		WorkspaceRepositories: []string{wsRepositoryID},
 	})
-	return &releaseFixture{h: h, repo: repo, stub: stub, artifacts: artifacts, production: opts.production, bounds: opts.bounds}
+	return &releaseFixture{h: h, repo: repo, stub: stub, artifacts: artifacts, production: opts.production, bounds: opts.bounds, stateSchema: opts.stateSchema}
 }
 
 // restart is a new Backend over the fixture's committed facts and clock, with a new runner
@@ -202,7 +205,7 @@ func newReleaseFixture(t *testing.T, opts releaseFixtureOptions) *releaseFixture
 func (f *releaseFixture) restart(t *testing.T, pollHooks service.PollHooks) *releaseFixture {
 	t.Helper()
 	restarted := newReleaseFixture(t, releaseFixtureOptions{
-		bounds: f.bounds, production: f.production, pool: f.h.pool, clock: f.h.clock, pollHooks: pollHooks,
+		bounds: f.bounds, production: f.production, pool: f.h.pool, clock: f.h.clock, pollHooks: pollHooks, stateSchema: f.stateSchema,
 	})
 	restarted.run, restarted.outcome = f.run, f.outcome
 	restarted.h.provider.Script = func(registry.ModelRequest) *mockmodel.Scenario {
@@ -230,6 +233,9 @@ func (f *releaseFixture) definition(workflowID string) domain.Definition {
 			"allowedPaths": []string{"go.mod", "internal/auth/"},
 			"deployTarget": map[string]string{"service": releaseService, "environment": releaseEnvironment},
 		},
+	}
+	if f.stateSchema != "" {
+		config["stateSchema"] = json.RawMessage(f.stateSchema)
 	}
 	for key, value := range map[string]int{
 		"releaseConfirmTimeoutMs": f.bounds.confirmTimeoutMs, "voidGraceMs": f.bounds.voidGraceMs,
@@ -291,11 +297,17 @@ func (f *releaseFixture) releaseCall(t *testing.T) crCall {
 // baseline, describe it, release it. It returns the WAITING_APPROVAL release Action.
 func (f *releaseFixture) startToRelease(t *testing.T, workflowID string, between ...crCall) domain.AgentAction {
 	t.Helper()
+	return f.startToReleaseWith(t, workflowID, f.releaseCall(t), between...)
+}
+
+// startToReleaseWith is startToRelease with the release Decision the given call scripts.
+func (f *releaseFixture) startToReleaseWith(t *testing.T, workflowID string, release crCall, between ...crCall) domain.AgentAction {
+	t.Helper()
 	calls := []crCall{verifyBaselineCall(), func() mockmodel.Scenario {
 		return wsCall(changerequest.ToolName, changeRequestArguments(baselineDigest(), f.instructionsBasis(t)))
 	}}
 	calls = append(calls, between...)
-	calls = append(calls, f.releaseCall(t))
+	calls = append(calls, release)
 	f.start(t, workflowID, calls...)
 	f.deliverVerification(t, true)
 	action := f.actionOfTurn(t, releaseTurn+len(between))
@@ -518,4 +530,88 @@ func (f *releaseFixture) finish(t *testing.T) {
 	if run := agentRunRow(f.h.ctx, t, f.h.uow, f.run.ID); run.Status != domain.RunCompleted {
 		t.Errorf("run = %s, want COMPLETED", run.Status)
 	}
+}
+
+// releaseCallDeadline is the deadline of one release request as the release Tool's HTTP
+// client saw it, with the operation it carried.
+type releaseCallDeadline struct {
+	operationKey string
+	deadline     time.Time
+	hasDeadline  bool
+	expired      bool
+}
+
+// deadlineRecorder is the release Tool's HTTP transport in a test that asserts what bounds
+// the release call: it records the context deadline of every release request before
+// handing it to the real transport.
+type deadlineRecorder struct {
+	inner http.RoundTripper
+	mu    sync.Mutex
+	calls []releaseCallDeadline
+}
+
+func (r *deadlineRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Method == http.MethodPost && req.URL.Path == "/v2/deployments" {
+		call := releaseCallDeadline{expired: req.Context().Err() != nil}
+		call.deadline, call.hasDeadline = req.Context().Deadline()
+		var body struct {
+			OperationID string `json:"operationId"`
+		}
+		if req.GetBody != nil {
+			if copied, err := req.GetBody(); err == nil {
+				_ = json.NewDecoder(copied).Decode(&body)
+				_ = copied.Close()
+			}
+		}
+		call.operationKey = body.OperationID
+		r.mu.Lock()
+		r.calls = append(r.calls, call)
+		r.mu.Unlock()
+	}
+	return r.inner.RoundTrip(req)
+}
+
+func (r *deadlineRecorder) releaseCalls() []releaseCallDeadline {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]releaseCallDeadline(nil), r.calls...)
+}
+
+// recordingClient returns an HTTP client for the production fixture whose release requests
+// pass through a deadlineRecorder.
+func (p *productionFixture) recordingClient() (*http.Client, *deadlineRecorder) {
+	base := p.srv.Client()
+	recorder := &deadlineRecorder{inner: base.Transport}
+	return &http.Client{Transport: recorder}, recorder
+}
+
+// releaseCallWithPatch is releaseCall with a state patch on the release Decision.
+func (f *releaseFixture) releaseCallWithPatch(t *testing.T, patch string) crCall {
+	call := f.releaseCall(t)
+	return func() mockmodel.Scenario {
+		scenario := call()
+		scenario.StatePatch = json.RawMessage(patch)
+		return scenario
+	}
+}
+
+// operationStatus is production's own status of one release operation, or "" when it does
+// not know the operation.
+func (p *productionFixture) operationStatus(t *testing.T, operationKey string) string {
+	t.Helper()
+	resp, err := http.Get(p.srv.URL + "/v2/deployments/" + operationKey)
+	if err != nil {
+		t.Fatalf("GET operation %s: %v", operationKey, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return ""
+	}
+	var out struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode operation %s: %v", operationKey, err)
+	}
+	return out.Status
 }

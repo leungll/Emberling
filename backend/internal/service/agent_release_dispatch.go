@@ -156,34 +156,12 @@ func (s *ExecutionService) settleReleaseDispatchLocked(ctx context.Context, tx s
 			return err
 		}
 	}
+	// An Action a confirm deadline already handed to a person does not wait on production
+	// again: it keeps its status and nothing about a wait is appended for it.
 	if t.action.Status == domain.AgentActionRunning {
-		if err := tx.AgentActions().MarkWaiting(ctx, t.action.ID, now); err != nil {
-			if errors.Is(err, domain.ErrStaleClaim) {
-				return errAgentTurnSuperseded
-			}
+		if err := s.markReleaseWaitingLocked(ctx, tx, t, now); err != nil {
 			return err
 		}
-		if t.nodeRun.Status == domain.NodeRunRunning {
-			if err := tx.NodeRuns().MarkWaiting(ctx, t.nodeRun.ID, now); err != nil {
-				if errors.Is(err, domain.ErrStaleClaim) {
-					return errAgentTurnSuperseded
-				}
-				return err
-			}
-		}
-	}
-	bindings, err := tx.CallbackBindings().ListByTargets(ctx, domain.CallbackTargetToolAttempt, []string{t.attempt.ID})
-	if err != nil {
-		return err
-	}
-	bindingID := ""
-	if len(bindings) == 1 {
-		bindingID = bindings[0].ID
-	}
-	if err := s.appendEvent(ctx, tx, t.lock, t.nodeRun.RunID, &t.nodeRun.ID, domain.EventAgentActionWaiting, now, agentActionWaitingPayload{
-		AgentRunID: t.agentRun.ID, TurnID: t.turnID, ActionID: t.action.ID, ToolAttemptID: t.attempt.ID, CallbackBindingID: bindingID,
-	}); err != nil {
-		return err
 	}
 	if first {
 		if err := s.appendEvent(ctx, tx, t.lock, t.nodeRun.RunID, &t.nodeRun.ID, domain.EventReleaseOutcomeUnknown, now, releaseOutcomeUnknownPayload{
@@ -195,6 +173,37 @@ func (s *ExecutionService) settleReleaseDispatchLocked(ctx context.Context, tx s
 	// Run status is derived from NodeRun state: with the Agent NodeRun waiting, the Run
 	// becomes PAUSED once nothing else is running.
 	return s.aggregateRunLocked(ctx, tx, t.lock, t.run, t.plan, now)
+}
+
+// markReleaseWaitingLocked moves a RUNNING release Action, and its Agent NodeRun when it
+// is still RUNNING, to waiting on production and appends AGENT_ACTION_WAITING naming the
+// Attempt's release Binding.
+func (s *ExecutionService) markReleaseWaitingLocked(ctx context.Context, tx store.Tx, t releaseSettle, now time.Time) error {
+	if err := tx.AgentActions().MarkWaiting(ctx, t.action.ID, now); err != nil {
+		if errors.Is(err, domain.ErrStaleClaim) {
+			return errAgentTurnSuperseded
+		}
+		return err
+	}
+	if t.nodeRun.Status == domain.NodeRunRunning {
+		if err := tx.NodeRuns().MarkWaiting(ctx, t.nodeRun.ID, now); err != nil {
+			if errors.Is(err, domain.ErrStaleClaim) {
+				return errAgentTurnSuperseded
+			}
+			return err
+		}
+	}
+	bindings, err := tx.CallbackBindings().ListByTargets(ctx, domain.CallbackTargetToolAttempt, []string{t.attempt.ID})
+	if err != nil {
+		return err
+	}
+	bindingID := ""
+	if len(bindings) == 1 {
+		bindingID = bindings[0].ID
+	}
+	return s.appendEvent(ctx, tx, t.lock, t.nodeRun.RunID, &t.nodeRun.ID, domain.EventAgentActionWaiting, now, agentActionWaitingPayload{
+		AgentRunID: t.agentRun.ID, TurnID: t.turnID, ActionID: t.action.ID, ToolAttemptID: t.attempt.ID, CallbackBindingID: bindingID,
+	})
 }
 
 // releasePollInterval is the poll interval the release Tool's registration declares.
@@ -311,8 +320,9 @@ func (s *ExecutionService) returnReleaseLocked(ctx context.Context, tx store.Tx,
 }
 
 // failReleaseDispatch fails the Action of a release whose Tool contradicted its
-// registration: the Attempt fails from STARTED, the target is freed as NOT_DEPLOYED and the
-// Agent Run ends as a Tool error, as the generic Tool failure does.
+// registration: the Attempt fails from STARTED, the target is freed as NOT_DEPLOYED, an open
+// human wait closes, and the Action fails from RUNNING or WAITING_HUMAN with the Agent Run
+// ending as a Tool error, as the generic Tool failure does.
 func (s *ExecutionService) failReleaseDispatch(ctx context.Context, call agentToolCall, execError domain.ExecutionError) error {
 	var commit agentCommit
 	err := s.deps.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
@@ -328,6 +338,15 @@ func (s *ExecutionService) failReleaseDispatch(ctx context.Context, call agentTo
 		if err != nil {
 			return err
 		}
+		action, err := tx.AgentActions().Get(ctx, call.actionID)
+		if err != nil {
+			return err
+		}
+		// A confirm deadline may have handed the Action to a person while the call was
+		// out; the Action fails from whichever of the two it is in.
+		if action.Status != domain.AgentActionRunning && action.Status != domain.AgentActionWaitingHuman {
+			return errAgentTurnSuperseded
+		}
 		now := s.deps.Clock.Now()
 		if err := tx.ToolAttempts().MarkFailed(ctx, call.attemptID, domain.ToolAttemptStarted, now, execError); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
@@ -338,9 +357,13 @@ func (s *ExecutionService) failReleaseDispatch(ctx context.Context, call agentTo
 		if err := releaseOccupationLocked(ctx, tx, call.actionID, domain.ReleaseReasonNotDeployed, now); err != nil {
 			return err
 		}
+		outcome := string(domain.ReleaseReasonNotDeployed)
+		if err := closeHumanWaitLocked(ctx, tx, call.actionID, domain.HumanWaitResolved, &outcome, now); err != nil {
+			return err
+		}
 		attemptID := call.attemptID
 		if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, call.actionID, &attemptID,
-			domain.AgentActionRunning, domain.FailureSyncExecution, domain.TerminationToolError, execError, now); err != nil {
+			action.Status, domain.FailureSyncExecution, domain.TerminationToolError, execError, now); err != nil {
 			return err
 		}
 		commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq(), terminal: true}

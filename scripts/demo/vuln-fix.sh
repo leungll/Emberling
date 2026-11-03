@@ -114,7 +114,7 @@ case "$story" in
 release-restart) RELEASE_VOID_GRACE_MS=10000 ;;
 *) RELEASE_VOID_GRACE_MS=60000 ;;
 esac
-RELEASE_INSTRUCTIONS='Once the latest patch has passed verification, describe it with create_change_request, citing the verification log artifact of the passing verification as its decision basis, then release it with deploy_change naming that change request; both calls return REJECTED tool messages for a definite refusal. A release needs a person to approve it; wait for the result and finish with {"status","advisory","patchDigest","changeRequestId","operationKey","version","healthy"}.'
+RELEASE_INSTRUCTIONS='Once the latest patch has passed verification, describe it with create_change_request, citing as its decision basis the workspace files it relied on, each by its path and the number of a turn whose request already carried its contents, then release it with deploy_change naming that change request; both calls return REJECTED tool messages for a definite refusal. A release needs a person to approve it; wait for the result and finish with {"status","advisory","patchDigest","changeRequestId","operationKey","version","healthy"}.'
 
 FIXTURE="$DEMO_ROOT/backend/test/fixtures/definitions/vuln_fix.json"
 HELD_DEADLINE_S=60

@@ -210,6 +210,74 @@ func TestRelease_ResponseDropped_Deployed_ConcludesFromQuery(t *testing.T) {
 	f.finish(t)
 }
 
+// Contract case: the process dies after its request reached production and before the
+// answer came back: production accepted and completed the deployment, the response was
+// dropped. The restarted process holds only the committed query state, polls, learns
+// DEPLOYED and concludes without a second request.
+func TestRelease_ResponseDroppedThenRestart_Deployed_ConcludesWithoutResend(t *testing.T) {
+	f := newReleaseFixture(t, releaseFixtureOptions{bounds: recoveryBounds})
+	action := f.startToRelease(t, "wf_release_drop_restart_deployed")
+	f.production.server.SetReleaseFaults(mockproduction.ReleaseFaults{DropResponse: true})
+	f.approve(t, action)
+	attempt := f.assertOutcomeUnknown(t, action)
+	f.production.server.SetReleaseFaults(mockproduction.ReleaseFaults{})
+
+	r := f.restart(t, service.PollHooks{})
+	r.poll(t, r.reconciler())
+	r.assertDeployedOnce(t, action, operationKey(attempt))
+	if n := r.production.counts.count("POST", deploymentsPath); n != 1 {
+		t.Errorf("release requests = %d, want only the one whose answer was dropped", n)
+	}
+	if attempts := r.attempts(t, action.ID); len(attempts) != 1 {
+		t.Errorf("attempts = %d, want 1", len(attempts))
+	}
+	r.finish(t)
+}
+
+// Contract case: the process dies after production accepted the operation and before the
+// answer came back, and the operation has not started yet. The restarted process sees it
+// in flight inside the void grace, voids it past the grace, production confirms VOIDED and
+// cancels it, and the re-release under the next key deploys; the first operation never
+// deploys.
+func TestRelease_ResponseDroppedThenRestart_AcceptedNotStarted_VoidedAndReleasedAgain(t *testing.T) {
+	production := newProductionFixture(t, mockproduction.WithCompletionDelay(time.Hour))
+	f := newReleaseFixture(t, releaseFixtureOptions{bounds: recoveryBounds, production: production})
+	action := f.startToRelease(t, "wf_release_drop_restart_voided")
+	f.production.server.SetReleaseFaults(mockproduction.ReleaseFaults{DropResponse: true})
+	f.approve(t, action)
+	first := f.assertOutcomeUnknown(t, action)
+	f.production.server.SetReleaseFaults(mockproduction.ReleaseFaults{})
+	if status := f.production.operationStatus(t, operationKey(first)); status != "ACCEPTED" {
+		t.Fatalf("first operation = %q, want ACCEPTED and not started", status)
+	}
+
+	r := f.restart(t, service.PollHooks{})
+	rec := r.reconciler()
+	r.poll(t, rec)
+	if attempts := r.attempts(t, action.ID); len(attempts) != 1 || attempts[0].Status != domain.ToolAttemptDispatched || attempts[0].VoidRequestedAt != nil {
+		t.Fatalf("attempts inside the grace = %+v, want the one DISPATCHED and not voided", attempts)
+	}
+
+	// The re-release completes in the request that accepts it.
+	r.production.server.SetCompletionDelay(0)
+	r.h.clock.Advance(time.Duration(recoveryBounds.voidGraceMs) * time.Millisecond)
+	r.poll(t, rec)
+	second := r.assertVoidedAndReleasedAgain(t, action)
+	if status := r.production.operationStatus(t, operationKey(first)); status != "VOIDED" {
+		t.Errorf("first operation = %q, want VOIDED", status)
+	}
+
+	r.poll(t, rec)
+	r.assertDeployedOnce(t, action, operationKey(second))
+	if status := r.production.operationStatus(t, operationKey(first)); status != "VOIDED" {
+		t.Errorf("first operation after the re-release = %q, want still VOIDED", status)
+	}
+	if n := r.production.counts.count("POST", deploymentsPath); n != 2 {
+		t.Errorf("release requests = %d, want the dropped one and the re-release", n)
+	}
+	r.finish(t)
+}
+
 // Contract case: the dispatch got no usable answer (production was unreachable) and the
 // operation never reached it. After the grace the Runtime voids the operation, production
 // confirms VOIDED with a tombstone, and the re-release deploys. (An operation production

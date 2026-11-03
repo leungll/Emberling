@@ -262,6 +262,15 @@ func (s *ExecutionService) startReleaseAttemptLocked(ctx context.Context, tx sto
 	}
 
 	c.commit = agentCommit{runID: c.nodeRun.RunID, lastSeq: c.lock.LastSeq()}
+	// The release wait does not count against the Agent's time limit, and while the Agent
+	// is paused its stored deadline is frozen and may already lie in the past; the call is
+	// bounded by this Attempt's own confirm deadline instead, an absolute instant written
+	// with it. Definition validation makes the confirm bound mandatory for a Tool that
+	// occupies a release target, so the Agent deadline remains only as a defensive bound.
+	callDeadline := c.agentRun.Deadline
+	if confirmDeadline != nil {
+		callDeadline = *confirmDeadline
+	}
 	return &agentToolCall{
 		runID:        c.nodeRun.RunID,
 		nodeRunID:    c.nodeRun.ID,
@@ -284,7 +293,7 @@ func (s *ExecutionService) startReleaseAttemptLocked(ctx context.Context, tx sto
 			Workspace:  inputs.workspace,
 		},
 		async:    true,
-		deadline: c.agentRun.Deadline,
+		deadline: callDeadline,
 		release:  &releaseCall{operationKey: operationKey, occupationID: occupationID, target: &target},
 	}, false, nil
 }

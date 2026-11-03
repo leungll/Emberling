@@ -185,7 +185,8 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 // the same STARTED Attempt, so an approved Action is executed once and never claimed twice.
 func (s *ExecutionService) executeClaimedAgentAction(ctx context.Context, call *agentToolCall) error {
 	// The Agent Run's deadline bounds the external call, so a Tool cannot hold this
-	// goroutine past the point at which the Agent Run may no longer continue.
+	// goroutine past the point at which the Agent Run may no longer continue. A release
+	// call carries its Attempt's confirm deadline here instead.
 	callCtx, cancel := context.WithDeadline(ctx, call.deadline)
 	defer cancel()
 

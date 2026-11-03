@@ -26,15 +26,18 @@ type agentActionWaitingHumanPayload struct {
 	Deadline      time.Time `json:"deadline"`
 }
 
-// codeHumanWaitTimeoutNotConfigured is reported, not written, when a release Attempt reaches
+// errHumanWaitTimeoutNotConfigured is reported, not written, when a release Attempt reaches
 // its confirm deadline but the Agent node bounds no human wait: the wait cannot be opened
 // without a deadline, so the release stays with the polling and void paths alone.
+// Definition validation requires the bound for every node that allows a release Tool, so
+// this is a defensive answer that a saved Definition does not reach.
 var errHumanWaitTimeoutNotConfigured = errors.New("execution: open release human wait: the Agent node sets a releaseConfirmTimeoutMs but no humanWaitTimeoutMs")
 
 // OpenReleaseHumanWait hands a release Attempt that passed its confirm deadline without a
 // definite production answer to a person, in one transaction under the Run aggregate lock:
-// the Action moves from RUNNING or WAITING_CALLBACK to WAITING_HUMAN, an OPEN human wait is
-// inserted with the node's human wait bound as its deadline, the paused Agent Run's pause
+// the Action moves from RUNNING or WAITING_CALLBACK to WAITING_HUMAN, a still RUNNING Agent
+// NodeRun moves to WAITING_CALLBACK, an OPEN human wait is inserted with the node's human
+// wait bound as its deadline, the paused Agent Run's pause
 // reason becomes HUMAN without touching when the pause began, and AGENT_ACTION_WAITING_HUMAN
 // is appended. Polling and voiding of the Attempt continue unchanged. An Attempt whose
 // deadline has not passed, that production already answered, or whose Action no longer
@@ -64,7 +67,7 @@ func (s *ExecutionService) OpenReleaseHumanWait(ctx context.Context, attemptID s
 		}
 		// The wait bound comes from the Run's immutable Definition version, compiled
 		// before the lock as every other plan read is.
-		_, plan, err := s.runPlan(ctx, tx, nodeRun.RunID)
+		run, plan, err := s.runPlan(ctx, tx, nodeRun.RunID)
 		if err != nil {
 			return err
 		}
@@ -88,6 +91,9 @@ func (s *ExecutionService) OpenReleaseHumanWait(ctx context.Context, attemptID s
 			return err
 		}
 		if agentRun, err = tx.AgentRuns().Get(ctx, agentRun.ID); err != nil {
+			return err
+		}
+		if nodeRun, err = tx.NodeRuns().Get(ctx, nodeRun.ID); err != nil {
 			return err
 		}
 		now := s.deps.Clock.Now()
@@ -131,12 +137,22 @@ func (s *ExecutionService) OpenReleaseHumanWait(ctx context.Context, attemptID s
 				return err
 			}
 		}
+		// A release whose dispatch has not settled yet leaves the Agent NodeRun RUNNING; the
+		// Action now waits on a person, so the NodeRun waits too and the Run shows PAUSED.
+		if nodeRun.Status == domain.NodeRunRunning {
+			if err := tx.NodeRuns().MarkWaiting(ctx, nodeRun.ID, now); err != nil {
+				if errors.Is(err, domain.ErrStaleClaim) {
+					return errAgentTurnSuperseded
+				}
+				return err
+			}
+		}
 		if err := s.appendEvent(ctx, tx, lock, nodeRun.RunID, &nodeRun.ID, domain.EventAgentActionWaitingHuman, now, agentActionWaitingHumanPayload{
 			AgentRunID: agentRun.ID, TurnID: turn.ID, ActionID: action.ID, ToolAttemptID: attempt.ID, HumanWaitID: wait.ID, Deadline: wait.Deadline,
 		}); err != nil {
 			return err
 		}
-		if err := tx.Runs().UpdateAggregate(ctx, lock, lock.Status(), now); err != nil {
+		if err := s.aggregateRunLocked(ctx, tx, lock, run, plan, now); err != nil {
 			return err
 		}
 		commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq()}

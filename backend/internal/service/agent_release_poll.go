@@ -349,8 +349,13 @@ func (s *ExecutionService) handleReleaseVoided(ctx context.Context, claim toolPo
 			if err := s.appendEvent(ctx, tx, lock, call.runID, &nodeRun.ID, domain.EventReleaseVoided, now, payload); err != nil {
 				return err
 			}
-			nextTurnID, err = s.returnReleaseLocked(ctx, tx, lock, call, run, plan, domain.ReleaseReasonNotDeployed, domain.ReturnReleaseNotDeployed,
-				fmt.Sprintf("The release was voided %d time(s) and no re-release is left; nothing was deployed.", len(attempts)), now)
+			message := fmt.Sprintf("The release was voided %d time(s) and no re-release is left; nothing was deployed.", len(attempts))
+			if action.Status == domain.AgentActionWaitingHuman {
+				// Once a person watches the release the Runtime starts no new production
+				// operation of its own, whatever re-releases the node would still allow.
+				message = "The release was voided after its confirm deadline passed; nothing was deployed. Ask for the release again if it is still needed; a new release needs a new approval."
+			}
+			nextTurnID, err = s.returnReleaseLocked(ctx, tx, lock, call, run, plan, domain.ReleaseReasonNotDeployed, domain.ReturnReleaseNotDeployed, message, now)
 			if err != nil {
 				return err
 			}

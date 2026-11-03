@@ -109,6 +109,15 @@ func WithCompletionDelay(delay time.Duration) Option {
 	return func(s *Server) { s.completionDelay = delay }
 }
 
+// SetCompletionDelay changes how long a release accepted from now on takes to complete; a
+// release already accepted keeps the delay it was accepted with. Zero completes it in the
+// accepting request itself.
+func (s *Server) SetCompletionDelay(delay time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.completionDelay = delay
+}
+
 // SetReleaseFaults replaces the fault switches. Without test controls it has no effect.
 func (s *Server) SetReleaseFaults(faults ReleaseFaults) {
 	if s.controls == nil {

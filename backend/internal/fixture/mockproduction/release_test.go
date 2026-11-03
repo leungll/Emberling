@@ -122,6 +122,23 @@ func TestRelease_VoidAcceptedBeforeStart_VoidsAndCancelsCompletion(t *testing.T)
 	}
 }
 
+func TestRelease_SetCompletionDelay_AppliesToLaterReleasesOnly(t *testing.T) {
+	p := newProduction(t)
+	p.server.SetCompletionDelay(time.Hour)
+	post(t, p.srv.URL+"/v2/deployments", releaseBody("op_d_1"))
+	p.server.SetCompletionDelay(0)
+	post(t, p.srv.URL+"/v2/deployments", releaseBody("op_d_2"))
+
+	_, body := get(t, p.srv.URL+"/v2/deployments/op_d_1")
+	if got := decode[releaseResponse](t, body); got.Status != releaseAccepted {
+		t.Errorf("release accepted under the hour delay = %+v, want still ACCEPTED", got)
+	}
+	_, body = get(t, p.srv.URL+"/v2/deployments/op_d_2")
+	if got := decode[releaseResponse](t, body); got.Status != releaseDeployed {
+		t.Errorf("release accepted after the delay was cleared = %+v, want DEPLOYED", got)
+	}
+}
+
 func TestRelease_VoidAfterStartOrCompletion_AnswersCurrentStatus(t *testing.T) {
 	p := newReleaseProduction(t)
 	p.server.PauseCompletion()

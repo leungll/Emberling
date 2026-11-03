@@ -61,7 +61,7 @@ type releaseReport struct {
 
 // TestE2E_VulnFix_Release_ApprovedDeploysOnceAndConfirmsTarget plays the demo's release
 // story through the public API with the scripted trajectory it uses: the Agent repairs and
-// verifies the patch, describes it in a change request citing the verification log, and
+// verifies the patch, describes it in a change request citing the files it relied on, and
 // asks to release it; the operator approves; the approval occupies the frozen target and
 // starts one operation under its key with a release Binding and no callback credential;
 // the mock production service deploys it once, the poll learns DEPLOYED, the target is

@@ -266,10 +266,15 @@ func (s *ExecutionService) HandleOrphanToolAttempt(ctx context.Context, attemptI
 		if agentRun.Termination != nil || (agentRun.PausedAt == nil && !now.Before(agentRun.Deadline)) {
 			return nil
 		}
-		if nodeRun.Status != domain.NodeRunRunning || turn.TurnNo != agentRun.CurrentTurnNo {
+		if turn.TurnNo != agentRun.CurrentTurnNo {
 			return nil
 		}
 		if registered && reg.Metadata.Reconcilable {
+			// A confirm deadline that passed before the dispatch settled has already moved
+			// the Agent NodeRun to waiting, together with the Action it handed to a person.
+			if nodeRun.Status != domain.NodeRunRunning && nodeRun.Status != domain.NodeRunWaitingCallback {
+				return nil
+			}
 			if action, err = tx.AgentActions().Get(ctx, action.ID); err != nil {
 				return err
 			}
@@ -279,6 +284,9 @@ func (s *ExecutionService) HandleOrphanToolAttempt(ctx context.Context, attemptI
 				return err
 			}
 			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq()}
+			return nil
+		}
+		if nodeRun.Status != domain.NodeRunRunning {
 			return nil
 		}
 		if registered && reg.Metadata.ExecutionKind != domain.ToolExecutionSync {

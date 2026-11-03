@@ -313,9 +313,7 @@ func TestRelease_TargetUnhealthy_FactVerdictFalseAndTargetFreed(t *testing.T) {
 // humanWaitBounds make the confirm deadline short enough to pass between two polls.
 var humanWaitBounds = releaseBounds{confirmTimeoutMs: 5_000, voidGraceMs: 3_600_000, maxReleaseRetries: 1, humanWaitTimeoutMs: 1_800_000}
 
-// Contract case: the confirm deadline passes without a definite answer. The Action moves
-// to WAITING_HUMAN with an OPEN human wait and the Agent's pause reason becomes HUMAN, while
-// polling continues; a later DEPLOYED resolves the wait and succeeds the Action.
+// Contract case: the confirm deadline passes without a definite answer.
 func TestRelease_ConfirmDeadlinePassed_OpensHumanWaitThenDeployedResolvesIt(t *testing.T) {
 	f := newReleaseFixture(t, releaseFixtureOptions{bounds: humanWaitBounds})
 	action := f.startToRelease(t, "wf_release_confirm_deadline")
