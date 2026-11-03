@@ -29,6 +29,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
 	"github.com/leungll/Emberling/backend/internal/reconciler"
 	"github.com/leungll/Emberling/backend/internal/registry"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/service"
 	"github.com/leungll/Emberling/backend/internal/store"
 	"github.com/leungll/Emberling/backend/internal/tools/changerequest"
@@ -516,8 +517,13 @@ func operationKey(attempt domain.ToolAttempt) string {
 }
 
 // finish drains the Turns the settlement created and ends the Run, then checks the Agent
-// answered FINAL and the Run completed.
-func (f *releaseFixture) finish(t *testing.T) {
+// answered FINAL and the Run ended the way its completion verdict says: COMPLETED for a
+// verdict that succeeds the Agent's step, FAILED with the verdict's code otherwise, and no
+// other failure in between. Most stories here release the verified baseline, the empty
+// patch, because they are about the release machinery: no workspace patch is recorded, so
+// their FIX_AND_DEPLOY task is judged INCOMPLETE however the release ended. It returns the
+// verdict so a story can assert on it.
+func (f *releaseFixture) finish(t *testing.T) *domain.AgentCompletion {
 	t.Helper()
 	if err := f.h.drainTurns(f.h.ctx); err != nil {
 		t.Fatalf("drain turns: %v", err)
@@ -527,9 +533,26 @@ func (f *releaseFixture) finish(t *testing.T) {
 	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationFinalResponse {
 		t.Errorf("agent termination = %s, want FINAL_RESPONSE", agentTermination(agentRun))
 	}
-	if run := agentRunRow(f.h.ctx, t, f.h.uow, f.run.ID); run.Status != domain.RunCompleted {
-		t.Errorf("run = %s, want COMPLETED", run.Status)
+	completion := completionOf(t, f.h, agentRun.ID)
+	if completion == nil {
+		t.Fatalf("agent run %s has no completion verdict", agentRun.ID)
 	}
+	run := agentRunRow(f.h.ctx, t, f.h.uow, f.run.ID)
+	switch {
+	case completion.Outcome.IsSuccess():
+		if run.Status != domain.RunCompleted {
+			t.Errorf("run = %s %+v, want COMPLETED for the %s verdict", run.Status, run.Error, completion.Outcome)
+		}
+	default:
+		want := runtime.CodeTaskIncomplete
+		if completion.Outcome == domain.CompletionReleaseUnknown {
+			want = runtime.CodeReleaseUnknown
+		}
+		if run.Status != domain.RunFailed || run.Error == nil || run.Error.Code != want {
+			t.Errorf("run = %s %+v, want FAILED with %s for the %s verdict", run.Status, run.Error, want, completion.Outcome)
+		}
+	}
+	return completion
 }
 
 // releaseCallDeadline is the deadline of one release request as the release Tool's HTTP

@@ -47,7 +47,7 @@
 #                   deploy target; a person approves through the approval API, the approval
 #                   occupies the target and starts one release operation, the mock
 #                   production service deploys it and the Runtime confirms the target.
-#                   Expects a COMPLETED Run, one deploy_change Attempt SUCCEEDED under its
+#                   Expects a COMPLETED Run judged DEPLOYED, one deploy_change Attempt SUCCEEDED under its
 #                   operation key with a release Binding and no callback credential, the
 #                   occupation RELEASED as DEPLOYED, one healthy release_confirmed fact about
 #                   the latest patch, the approval APPROVED, production deployed once and a
@@ -499,8 +499,10 @@ else
     check occupation_released_as_deployed "occupation=$(jq -c '.occupation' <<<"$release_action")" \
       jq -e '.occupation.status == "RELEASED" and .occupation.releaseReason == "DEPLOYED"' <<<"$release_action"
     check no_human_wait_opened "humanWait=$(jq -c '.humanWait' <<<"$release_action")" jq -e '.humanWait == null' <<<"$release_action"
-    check report_released "result=$result" \
-      jq -e --arg d "$latest_digest" '.status == "RELEASED" and .patchDigest == $d and .healthy == true and (.operationKey | startswith("op_"))' <<<"$result"
+    check deployed "completion=$completion" \
+      jq -e '.outcome == "DEPLOYED" and (.missing | length) == 0 and all(.checks[]; .passed)' <<<"$completion"
+    check report_released "report=$report" \
+      jq -e --arg d "$latest_digest" '.status == "RELEASED" and .patchDigest == $d and .healthy == true and (.operationKey | startswith("op_"))' <<<"$report"
     if [[ "$story" == release ]]; then
       check one_operation_deployed "attempts=$(jq -c '.attempts' <<<"$release_action") operations=$(jq -c '.operations' <<<"$release_action")" \
         jq -e --arg k "$first_key" '.actionStatus == "SUCCEEDED" and (.attempts | length == 1) and .attempts[0].status == "SUCCEEDED" and .attempts[0].provider == "release" and .attempts[0].operationKey == $k
@@ -509,7 +511,7 @@ else
         test "$(production_of "$first_key" arrived)" -eq 1 -a "$(production_of "$first_key" deployed)" -eq 1
       check no_outcome_unknown "unknown_events=$unknown_events voided=$voided_events" test "$unknown_events" -eq 0 -a "$(jq 'length' <<<"$voided_events")" -eq 0
       check eleven_decisions_committed "decisions=$decisions" test "$decisions" -eq 11
-      summary="approval=$approval_status operation=$first_key deployed=$(production_of "$first_key" deployed) release_facts=$(jq -c 'map(.verdict)' <<<"$release_facts") latest=$latest_digest decisions=$decisions status=$run_status"
+      summary="approval=$approval_status operation=$first_key deployed=$(production_of "$first_key" deployed) release_facts=$(jq -c 'map(.verdict)' <<<"$release_facts") latest=$latest_digest decisions=$decisions completion=$outcome status=$run_status"
     else
       check voided_then_released_again "attempts=$(jq -c '.attempts' <<<"$release_action") operations=$(jq -c '.operations' <<<"$release_action")" \
         jq -e --arg k1 "$first_key" --arg k2 "$second_key" '.actionStatus == "SUCCEEDED" and (.attempts | length == 2)
@@ -524,7 +526,7 @@ else
         test "$(production_of "$second_key" arrived)" -eq 1 -a "$(production_of "$second_key" deployed)" -eq 1
       check no_decision_asked_again "decisions before=$release_decisions_before after=$decisions" \
         test "$release_decisions_before" -eq 10 -a "$decisions" -eq 11
-      summary="approval=$approval_status operations=$first_key:voided,$second_key:deployed unknown_events=$unknown_events decisions=$release_decisions_before/$decisions latest=$latest_digest status=$run_status"
+      summary="approval=$approval_status operations=$first_key:voided,$second_key:deployed unknown_events=$unknown_events decisions=$release_decisions_before/$decisions latest=$latest_digest completion=$outcome status=$run_status"
     fi
     ;;
   restart)
