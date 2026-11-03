@@ -101,13 +101,21 @@ An image may still be generating externally when the service restarts. Starting 
 
 A [demo script](./scripts/demo/build-v1.sh) builds the refined settings into a serving template, with an independent run for each subsequent request. Idempotent submission, async task takeover and callback deduplication let work outlive a request or process.
 
+![Recovery after acceptance: the Backend is killed after the Mock Provider accepts the image task and the callback fails; after restart Emberling polls using the stored task link, the original task returns success and the same Attempt completes once, with nothing resubmitted.](./assets/readme/aigc-demo/05-recovery-after-accept.en.svg)
+
 ### 03 More requests, bounded capacity
 
 External generation services have a fixed number of available slots, while incoming requests may exceed that capacity. Emberling manages occupied slots and queued tasks, schedules the next task when capacity becomes available, and checks occupancy after failures to prevent leaks or over-admission.
 
+![In-flight slots and queueing: six requests reach an image Provider with two slots; two start at once, four queue and start as slots free, and no more than two are ever held.](./assets/readme/aigc-demo/06-capacity-queue.en.svg)
+
 ### 04 Templates change. In-flight work keeps its version.
 
 When a new effect goes live, existing generation tasks still need to finish on their original version. Emberling binds each run to an immutable execution version. Demo scripts route new requests to v1 or v2, adjust the split or switch back.
+
+![Two versions side by side: three version 1 requests waiting for callbacks still finish on version 1 at width 1024 after version 2 is saved; three later requests bind version 2 at width 768.](./assets/readme/aigc-demo/07-version-switch.en.svg)
+
+<sub>These three timelines come from local demo runs in which the Mock Provider stands in for the external generation service; times are taken from each Run's Events and the Mock Provider request record.</sub>
 
 **Agent-driven refinement → Workflow-based serving → Durable execution and recovery → Capacity management and version binding.**
 
