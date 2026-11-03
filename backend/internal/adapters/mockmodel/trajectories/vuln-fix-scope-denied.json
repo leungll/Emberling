@@ -53,12 +53,12 @@
           "decisionBasis": [
             {
               "statement": "RULES.md restricts the fix to go.mod and files under internal/auth/.",
-              "turnNo": 3,
+              "turnNo": 4,
               "manifestRef": "RULES.md"
             },
             {
               "statement": "The advisory names the vulnerable release and the release that fixes it.",
-              "turnNo": 4,
+              "turnNo": 5,
               "manifestRef": "advisories/{{task:/advisory}}.md"
             }
           ]

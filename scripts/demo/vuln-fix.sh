@@ -10,35 +10,45 @@
 # "definition" prints the Definition the story would save, as JSON, and touches nothing:
 # it needs jq only, and the contract tests read it to check what the environment changes.
 #
+# Every story runs a PREPARE_ONLY task, so the Runtime's completion check accepts the
+# Agent's answer only once the latest patch is verified and a change request names it:
+# the Run then COMPLETED with the verdict READY_FOR_APPROVAL, and the result node receives
+# that verdict with the Agent's own report inside it.
+#
 #   verify          the scripted Agent reads the rules and the advisory, upgrades go.mod
 #                   and the import path without adapting the code, verifies, adapts the
 #                   calling code after that verification fails (the upgrade does not
-#                   compile) and verifies again. Expects a COMPLETED Run, two verify_patch
-#                   Attempts bound to the runner, one failed then one passed patch_verified
-#                   fact whose subject is the latest workspace patch digest, a report
-#                   naming that digest, two verifications at the runner and nine committed
-#                   Decisions.
+#                   compile), verifies again and records the change request. Expects a
+#                   COMPLETED Run judged READY_FOR_APPROVAL, two verify_patch Attempts bound
+#                   to the runner, one failed then one passed patch_verified fact whose
+#                   subject is the latest workspace patch digest, exactly one change
+#                   request about that digest, a report naming it, two verifications at the
+#                   runner and ten committed Decisions.
 #   scope-denied    the Agent first writes under tests/, outside the allowed paths. Expects
 #                   the Action FAILED with SCOPE_DENIED from AUTHORIZATION before any
-#                   Attempt, nothing in the runner's record, the next Turn asked right after
-#                   the refusal, one patch touching go.mod and a SCOPE_RESPECTED report.
+#                   Attempt, the next Turn asked right after the refusal, nothing at the
+#                   runner but the one verification the Agent made afterwards, every patch
+#                   inside go.mod and internal/auth/, a SCOPE_RESPECTED report and the task
+#                   READY_FOR_APPROVAL.
 #   stale-evidence  the Agent verifies the first patch, writes a second one and then names
 #                   the first digest again. Expects that call FAILED with STALE_PATCH before
 #                   any Attempt, two verifications at the runner for the first and the
-#                   latest digest in that order, and a report of the latest digest.
+#                   latest digest in that order, a report of the latest digest and the task
+#                   READY_FOR_APPROVAL.
 #   restart         the verify story with the runner's callback held at its barrier while
 #                   the first verification is DISPATCHED and the Agent waits; the Backend is
 #                   killed with SIGKILL and started again, then the callback is released.
 #                   Expects the original Attempt to complete once, the runner to have
 #                   started that verification once and received exactly one more, the
 #                   committed Decisions to grow by exactly the Turns after the held one
-#                   (no Decision asked again) and the Run COMPLETED.
+#                   (no Decision asked again) and the Run COMPLETED, READY_FOR_APPROVAL.
 #
 # EMBERLING_DEMO_MODEL=<model id> binds the Agent to a real decision model the Backend
 # registers through EMBERLING_MODELS instead of the scripted mock model. Only the verify
 # story runs with a real model, and its checks are the ones a real model must still meet:
-# the Run completes, the report names the latest patch, and every patch_verified fact is
-# about a patch the workspace recorded. A real model needs more time than the scripted one,
+# the Run completes READY_FOR_APPROVAL, exactly one change request names the latest patch,
+# the report names that patch, and every patch_verified fact is about a patch the workspace
+# recorded. A real model needs more time than the scripted one,
 # so the Agent's timeoutMs becomes EMBERLING_DEMO_MODEL_TIMEOUT_MS (default 1800000, thirty
 # minutes) and the wait for the terminal Run grows to that budget plus a minute; the
 # scripted stories keep the fixture's budget. No key is read or written here; the Backend's
@@ -238,15 +248,21 @@ facts=$(jq -c '[.facts.items[] | select(.factType == "patch_verified") | {subjec
 refusals=$(jq -c '[.turns[] | select(.action.status == "FAILED")
     | {turnNo, code: (.action.error.code // null), failureSource: (.action.failureSource // null), attempts: (.toolAttempts | length)}]' <<<"$trace")
 termination=$(jq -r '.agentRun.termination // "none"' <<<"$trace")
+completion=$(jq -c '.agentRun.completion // {}' <<<"$trace")
+outcome=$(jq -r '.outcome // "none"' <<<"$completion")
+change_requests=$(jq -c '[.changeRequests.items[]? | {id, patchDigest}]' <<<"$trace")
+# The result node receives the completion verdict with the Agent's FINAL report inside it;
+# the fixture Agent answers in text form, so agentReport is a JSON string holding the report.
 result=$(jq -r '.nodeRuns[] | select(.nodeId == "node_result") | .output.text // "{}"' <<<"$snapshot" | jq -c '.' 2>/dev/null || echo '{}')
+report=$(jq -c '.agentReport // "{}" | if type == "string" then (fromjson? // {}) else . end' <<<"$result" 2>/dev/null || echo '{}')
 decisions=$(jq '[.[] | select(.type == "AGENT_DECISION_COMMITTED")] | length' <<<"$events")
 callback_completions=$(jq '[.[] | select(.type == "AGENT_ACTION_COMPLETED" and .payload.completionSource == "CALLBACK")] | length' <<<"$events")
 runner_arrivals=$(jq -c '[.[] | select(.event == "arrived" and .kind == "verification") | .patchDigest]' <<<"$runner")
 runner_arrival_count=$(jq 'length' <<<"$runner_arrivals")
 
 printf '\nvulnerability fix %s story, run %s\n' "$story" "$run_id"
-printf 'run status: %s, agent termination: %s, verify_patch attempts: %s, workspace patches: %s, patch_verified facts: %s, runner verifications: %s, decisions committed: %s\n\n' \
-  "$run_status" "$termination" "$(jq 'length' <<<"$verifications")" "$(jq 'length' <<<"$patches")" "$(jq 'length' <<<"$facts")" "$runner_arrival_count" "$decisions"
+printf 'run status: %s, agent termination: %s, completion: %s, verify_patch attempts: %s, workspace patches: %s, patch_verified facts: %s, change requests: %s, runner verifications: %s, decisions committed: %s\n\n' \
+  "$run_status" "$termination" "$outcome" "$(jq 'length' <<<"$verifications")" "$(jq 'length' <<<"$patches")" "$(jq 'length' <<<"$facts")" "$(jq 'length' <<<"$change_requests")" "$runner_arrival_count" "$decisions"
 
 facts_about_recorded_patches() {
   jq -e --argjson patches "$patches" 'all(.[]; .subject as $s | any($patches[]; .patchDigest == $s))' <<<"$facts" >/dev/null
@@ -255,7 +271,14 @@ last_fact_is_latest_passed() {
   [[ -n "$latest_digest" ]] && jq -e --arg d "$latest_digest" 'length >= 1 and (last | .subject == $d and .verdict == true)' <<<"$facts" >/dev/null
 }
 report_names_latest() {
-  [[ -n "$latest_digest" ]] && jq -e --arg d "$latest_digest" '.patchDigest == $d and .passed == true' <<<"$result" >/dev/null
+  [[ -n "$latest_digest" ]] && jq -e '.outcome == "READY_FOR_APPROVAL"' <<<"$result" >/dev/null \
+    && jq -e --arg d "$latest_digest" '.patchDigest == $d and .passed == true' <<<"$report" >/dev/null
+}
+ready_for_approval() {
+  jq -e '.outcome == "READY_FOR_APPROVAL" and (.missing | length) == 0 and all(.checks[]; .passed)' <<<"$completion" >/dev/null
+}
+one_change_request_for_latest() {
+  [[ -n "$latest_digest" ]] && jq -e --arg d "$latest_digest" 'length == 1 and .[0].patchDigest == $d' <<<"$change_requests" >/dev/null
 }
 all_verifications_succeeded() {
   jq -e 'all(.[]; .status == "SUCCEEDED" and .provider == "sandboxrunner")' <<<"$verifications" >/dev/null
@@ -266,8 +289,10 @@ if [[ -n "$real_model" ]]; then
   check verified_at_least_once "verifications=$verifications" test "$(jq 'length' <<<"$verifications")" -ge 1
   check facts_about_recorded_patches "facts=$facts patches=$(jq -c 'map(.patchDigest)' <<<"$patches")" facts_about_recorded_patches
   check last_fact_is_latest_passed "latest=$latest_digest facts=$facts" last_fact_is_latest_passed
+  check ready_for_approval "completion=$completion" ready_for_approval
+  check one_change_request_for_latest "change_requests=$change_requests latest=$latest_digest" one_change_request_for_latest
   check report_names_latest "result=$result" report_names_latest
-  summary="model=$real_model verifications=$(jq 'length' <<<"$verifications") patches=$(jq 'length' <<<"$patches") latest=$latest_digest runner_verifications=$runner_arrival_count status=$run_status"
+  summary="model=$real_model verifications=$(jq 'length' <<<"$verifications") patches=$(jq 'length' <<<"$patches") latest=$latest_digest change_requests=$(jq 'length' <<<"$change_requests") runner_verifications=$runner_arrival_count completion=$outcome status=$run_status"
 else
   case "$story" in
   verify)
@@ -278,10 +303,12 @@ else
       jq -e 'length == 2 and .[0].verdict == false and .[1].verdict == true' <<<"$facts"
     check last_fact_is_latest_passed "latest=$latest_digest facts=$facts" last_fact_is_latest_passed
     check facts_about_recorded_patches "patches=$(jq -c 'map(.patchDigest)' <<<"$patches")" facts_about_recorded_patches
+    check ready_for_approval "completion=$completion" ready_for_approval
+    check one_change_request_for_latest "change_requests=$change_requests latest=$latest_digest" one_change_request_for_latest
     check report_names_latest "result=$result" report_names_latest
     check runner_verified_twice "arrivals=$runner_arrivals" test "$runner_arrival_count" -eq 2
-    check nine_decisions_committed "decisions=$decisions" test "$decisions" -eq 9
-    summary="verifications=$(jq 'length' <<<"$verifications") facts=$(jq -c 'map(.verdict)' <<<"$facts") latest=$latest_digest runner_verifications=$runner_arrival_count decisions=$decisions status=$run_status"
+    check ten_decisions_committed "decisions=$decisions" test "$decisions" -eq 10
+    summary="verifications=$(jq 'length' <<<"$verifications") facts=$(jq -c 'map(.verdict)' <<<"$facts") latest=$latest_digest runner_verifications=$runner_arrival_count decisions=$decisions completion=$outcome status=$run_status"
     ;;
   scope-denied)
     refusal_seq=$(jq '[.[] | select(.type == "AGENT_ACTION_FAILED" and .payload.error.code == "SCOPE_DENIED") | .seq] | first // 0' <<<"$events")
@@ -291,13 +318,15 @@ else
       jq -e 'length == 1 and .[0].turnNo == 1 and .[0].code == "SCOPE_DENIED" and .[0].failureSource == "AUTHORIZATION" and .[0].attempts == 0' <<<"$refusals"
     check next_turn_received_refusal "refusal_seq=$refusal_seq then=$following" \
       jq -e '. == ["AGENT_TURN_READY", "AGENT_DECISION_COMMITTED"]' <<<"$following"
-    check no_external_call "runner_lines=$(jq 'length' <<<"$runner") verifications=$(jq 'length' <<<"$verifications")" \
-      test "$(jq 'length' <<<"$runner")" -eq 0 -a "$(jq 'length' <<<"$verifications")" -eq 0
-    check one_patch_inside_scope "patches=$patches" \
-      jq -e 'length == 1 and .[0].touchedPaths == ["go.mod"]' <<<"$patches"
-    check report_respects_scope "result=$result" \
-      jq -e --arg d "$latest_digest" '.status == "SCOPE_RESPECTED" and .patchDigest == $d' <<<"$result"
-    summary="refusal=SCOPE_DENIED attempts=0 runner_lines=$(jq 'length' <<<"$runner") patches=$(jq 'length' <<<"$patches") decisions=$decisions status=$run_status"
+    check refusal_cost_no_external_call "runner_arrivals=$runner_arrivals verifications=$(jq 'length' <<<"$verifications")" \
+      jq -e --arg d "$latest_digest" '. == [$d]' <<<"$runner_arrivals"
+    check patches_inside_scope "patches=$patches" \
+      jq -e 'length == 2 and .[0].touchedPaths == ["go.mod"] and all(.[].touchedPaths[]; . == "go.mod" or startswith("internal/auth/"))' <<<"$patches"
+    check ready_for_approval "completion=$completion" ready_for_approval
+    check one_change_request_for_latest "change_requests=$change_requests latest=$latest_digest" one_change_request_for_latest
+    check report_respects_scope "report=$report" \
+      jq -e --arg d "$latest_digest" '.status == "SCOPE_RESPECTED" and .patchDigest == $d and .passed == true' <<<"$report"
+    summary="refusal=SCOPE_DENIED attempts=0 runner_verifications=$runner_arrival_count patches=$(jq 'length' <<<"$patches") decisions=$decisions completion=$outcome status=$run_status"
     ;;
   stale-evidence)
     first_digest=$(jq -r 'first.patchDigest // ""' <<<"$patches")
@@ -309,8 +338,10 @@ else
     check runner_asked_first_then_latest "arrivals=$runner_arrivals first=$first_digest latest=$latest_digest" \
       jq -e --arg f "$first_digest" --arg l "$latest_digest" '. == [$f, $l]' <<<"$runner_arrivals"
     check last_fact_is_latest_passed "latest=$latest_digest facts=$facts" last_fact_is_latest_passed
+    check ready_for_approval "completion=$completion" ready_for_approval
+    check one_change_request_for_latest "change_requests=$change_requests latest=$latest_digest" one_change_request_for_latest
     check report_names_latest "result=$result" report_names_latest
-    summary="refusal=STALE_PATCH verifications=$(jq 'length' <<<"$verifications") runner_verifications=$runner_arrival_count first=$first_digest latest=$latest_digest status=$run_status"
+    summary="refusal=STALE_PATCH verifications=$(jq 'length' <<<"$verifications") runner_verifications=$runner_arrival_count first=$first_digest latest=$latest_digest completion=$outcome status=$run_status"
     ;;
   restart)
     held_after=$(jq -c --arg id "$held_attempt_before" '[.[] | select(.id == $id)] | first // {}' <<<"$verifications")
@@ -324,10 +355,12 @@ else
     check runner_asked_once_more "before=$arrivals_before after=$runner_arrival_count" \
       test "$arrivals_before" -eq 1 -a "$runner_arrival_count" -eq 2
     check no_decision_asked_again "decisions before=$decisions_before after=$decisions" \
-      test "$decisions_before" -eq 6 -a "$decisions" -eq 9
+      test "$decisions_before" -eq 6 -a "$decisions" -eq 10
     check callbacks_completed_twice "callback_completions=$callback_completions" test "$callback_completions" -eq 2
+    check ready_for_approval "completion=$completion" ready_for_approval
+    check one_change_request_for_latest "change_requests=$change_requests latest=$latest_digest" one_change_request_for_latest
     check report_names_latest "result=$result" report_names_latest
-    summary="attempt=$held_attempt_before verification=$held_verification decisions=$decisions_before/$decisions runner_verifications=$arrivals_before/$runner_arrival_count callback_completions=$callback_completions status=$run_status"
+    summary="attempt=$held_attempt_before verification=$held_verification decisions=$decisions_before/$decisions runner_verifications=$arrivals_before/$runner_arrival_count callback_completions=$callback_completions completion=$outcome status=$run_status"
     ;;
   esac
 fi

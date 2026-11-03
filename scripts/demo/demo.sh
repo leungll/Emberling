@@ -45,7 +45,9 @@
 #                   vuln-verify         vuln-fix.sh verify: an Agent bound to a workspace of
 #                                       the example repository upgrades the vulnerable
 #                                       dependency without adapting the code, fails that
-#                                       verification, adapts the code and passes the second;
+#                                       verification, adapts the code, passes the second,
+#                                       records the change request and is judged
+#                                       READY_FOR_APPROVAL;
 #                   vuln-scope-denied   vuln-fix.sh scope-denied: a write outside the
 #                                       allowed paths is refused before any Attempt and the
 #                                       Agent continues inside them;
