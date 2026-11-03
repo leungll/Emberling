@@ -303,7 +303,7 @@ $variants[0] as $variants | $production[0] as $production | $runner[0] as $runne
       else ["| Run | Variant | Target | Operation | Version |", "|---|---|---|---|---|"]
         + [$unchecked[] | [.run, .variant, .targetKey, .operationKey, .deployedUncheckedVersion] | row] end)
    + ["", "## Not covered", "",
-      "- An Agent Run that ends because its state patch or fact check failed after the release was DEPLOYED is judged INCOMPLETE; no dedicated test or variant covers this path."]
+      "- An Agent Run that ends because its state patch or fact check failed after the release was DEPLOYED: no demo variant shows it. It is judged INCOMPLETE, missing the release confirmation and the FINAL, while the target is freed as DEPLOYED; covered by TestAgentCompletion_DeployedThenStatePatchFails_IncompleteWithoutReleaseConfirmation (Backend integration test)."]
    | .[]),
   (if any($aspects[]; .conclusion == "FAIL") then "OVERALL FAIL" else "OVERALL PASS" end)
 JQ
