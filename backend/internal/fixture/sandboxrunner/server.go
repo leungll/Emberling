@@ -133,8 +133,10 @@ func WithHTTPClient(client *http.Client) Option {
 	return func(s *Server) { s.client = client }
 }
 
-// testState is the status of one accepted test.
+// testState is the status of one accepted job, a test or a verification. The two kinds
+// share one id space but separate status routes, so a status query names its kind.
 type testState struct {
+	kind   string
 	status string
 	result json.RawMessage
 }
@@ -142,9 +144,12 @@ type testState struct {
 // Server serves the runner routes and owns every test and callback goroutine it starts.
 type Server struct {
 	backend Backend
-	client  *http.Client
-	router  chi.Router
-	newID   func() (string, error)
+	// verifier runs verifications; nil unless WithVerification was passed, in which case
+	// the verification routes do not exist.
+	verifier VerificationBackend
+	client   *http.Client
+	router   chi.Router
+	newID    func() (string, error)
 
 	// controls is the barrier, request record and redelivery store. It is nil unless
 	// WithTestControls was passed, and every use of it is a no-op when nil.
@@ -184,6 +189,10 @@ func NewServer(backend Backend, opts ...Option) *Server {
 	})
 	r.Post(testsPath, s.handleCreate)
 	r.Get(testsPath+"/{testId}", s.handleStatus)
+	if s.verifier != nil {
+		r.Post(verificationsPath, s.handleCreateVerification)
+		r.Get(verificationsPath+"/{verificationId}", s.handleVerificationStatus)
+	}
 	if s.controls != nil {
 		s.mountControlRoutes(r)
 	}
@@ -275,8 +284,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	state, ok := s.tests[testID]
 	var response statusResponse
-	if ok {
+	if ok && state.kind == kindTest {
 		response = statusResponse{TestID: testID, Status: state.status, Result: state.result}
+	} else {
+		ok = false
 	}
 	s.mu.Unlock()
 	if !ok {
@@ -286,21 +297,26 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// setState records a test's status, forgetting the oldest test once maxKnownTests is
+// setState records a test's status, forgetting the oldest job once maxKnownTests is
 // reached.
 func (s *Server) setState(testID, status string, result json.RawMessage) {
+	s.setKindState(testID, kindTest, status, result)
+}
+
+// setKindState records the status of one job of the given kind.
+func (s *Server) setKindState(id, kind, status string, result json.RawMessage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if state, ok := s.tests[testID]; ok {
-		state.status, state.result = status, result
+	if state, ok := s.tests[id]; ok {
+		state.kind, state.status, state.result = kind, status, result
 		return
 	}
 	if len(s.testOrder) >= maxKnownTests {
 		delete(s.tests, s.testOrder[0])
 		s.testOrder = s.testOrder[1:]
 	}
-	s.testOrder = append(s.testOrder, testID)
-	s.tests[testID] = &testState{status: status, result: result}
+	s.testOrder = append(s.testOrder, id)
+	s.tests[id] = &testState{kind: kind, status: status, result: result}
 }
 
 // PatchDigest returns "sha256:" and the hex SHA-256 of patch with CRLF and lone CR line

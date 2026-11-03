@@ -23,7 +23,9 @@ const maxRedeliveryLineBytes = 1 << 20
 // line it holds the callback token, which is why the store is a separate file that only its
 // owner can read and that no route serves.
 type redeliveryEntry struct {
-	TestID        string          `json:"testId"`
+	TestID string `json:"testId"`
+	// Kind is the job kind the status route answers for; empty means a test.
+	Kind          string          `json:"kind,omitempty"`
 	CallbackURL   string          `json:"callbackUrl"`
 	CallbackToken string          `json:"callbackToken"`
 	Payload       json.RawMessage `json:"payload"`
@@ -135,7 +137,11 @@ func (s *Server) Redeliver(stored []StoredResult) {
 		return
 	}
 	for _, result := range stored {
-		s.setState(result.entry.TestID, payloadStatus(result.entry.Payload), result.entry.Payload)
+		kind := result.entry.Kind
+		if kind == "" {
+			kind = kindTest
+		}
+		s.setKindState(result.entry.TestID, kind, payloadStatus(result.entry.Payload), result.entry.Payload)
 	}
 	s.mu.Lock()
 	if s.stopped {

@@ -379,3 +379,76 @@ func TestArtifactStore_Open_MalformedKey_IsRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestArtifactStore_WriteText_StoresUTF8AsTextPlain(t *testing.T) {
+	store, _ := newArtifactStore(t, 1<<20)
+	content := []byte("verification log\n€ line two\n")
+	sum := sha256.Sum256(content)
+	digest := hex.EncodeToString(sum[:])
+
+	ref, err := store.WriteText(context.Background(), bytes.NewReader(content))
+	if err != nil {
+		t.Fatalf("WriteText: %v", err)
+	}
+	want := domain.ArtifactRef{ArtifactID: "artifact_" + digest[:32], MediaType: domain.ArtifactMediaTypeTextPlain, SizeBytes: int64(len(content)), SHA256: digest}
+	if ref != want {
+		t.Fatalf("ref = %+v, want %+v", ref, want)
+	}
+	key, _ := asset.ArtifactStorageKey(digest)
+	reader, err := store.Open(context.Background(), key)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer reader.Close()
+	stored, _ := io.ReadAll(reader)
+	if !bytes.Equal(stored, content) {
+		t.Fatalf("stored content = %q, want %q", stored, content)
+	}
+}
+
+// slowReader hands out one byte per Read, so multi-byte runes are always split across reads.
+type slowReader struct{ data []byte }
+
+func (s *slowReader) Read(p []byte) (int, error) {
+	if len(s.data) == 0 {
+		return 0, io.EOF
+	}
+	p[0] = s.data[0]
+	s.data = s.data[1:]
+	return 1, nil
+}
+
+func TestArtifactStore_WriteText_RunesSplitAcrossReads_AreAccepted(t *testing.T) {
+	store, _ := newArtifactStore(t, 1<<20)
+	content := []byte("€€€ 日本語 ok\n")
+	ref, err := store.WriteText(context.Background(), &slowReader{data: content})
+	if err != nil || ref.SizeBytes != int64(len(content)) {
+		t.Fatalf("WriteText over one-byte reads = %+v, %v", ref, err)
+	}
+}
+
+func TestArtifactStore_WriteText_InvalidUTF8_IsRejectedAndNothingIsStored(t *testing.T) {
+	store, root := newArtifactStore(t, 1<<20)
+	for name, content := range map[string][]byte{
+		"invalid byte":       []byte("log \xff line\n"),
+		"truncated rune":     []byte("log \xe2\x82"),
+		"png bytes":          pngContent("not text"),
+		"stray continuation": []byte("ab\x80"),
+	} {
+		_, err := store.WriteText(context.Background(), bytes.NewReader(content))
+		if !errors.Is(err, domain.ErrUnsupportedAssetMediaType) {
+			t.Fatalf("%s: WriteText error = %v, want %v", name, err, domain.ErrUnsupportedAssetMediaType)
+		}
+	}
+	if entries := stagingEntries(t, root); len(entries) != 0 {
+		t.Fatalf("staging holds %d entries after rejected writes, want none", len(entries))
+	}
+}
+
+func TestArtifactStore_WriteText_OverTheLimit_IsRejected(t *testing.T) {
+	store, _ := newArtifactStore(t, 16)
+	_, err := store.WriteText(context.Background(), strings.NewReader(strings.Repeat("a", 17)))
+	if !errors.Is(err, domain.ErrArtifactTooLarge) {
+		t.Fatalf("WriteText error = %v, want %v", err, domain.ErrArtifactTooLarge)
+	}
+}

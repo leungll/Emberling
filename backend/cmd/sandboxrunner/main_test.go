@@ -17,7 +17,7 @@ func TestLoadConfig_Unset_UsesMockBackendDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	want := config{addr: ":9103", backend: "mock", image: sandboxrunner.DefaultImage, testTimeout: 120 * time.Second}
+	want := config{addr: ":9103", backend: "mock", image: sandboxrunner.DefaultImage, testTimeout: 120 * time.Second, verifyTimeout: 5 * time.Minute}
 	if cfg != want {
 		t.Fatalf("config = %+v, want %+v", cfg, want)
 	}
@@ -36,7 +36,7 @@ func TestLoadConfig_DockerWithControls_ReadsEveryKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	want := config{addr: ":9999", backend: "docker", testControls: true, recordPath: "/out/record.jsonl", image: image, testTimeout: 45 * time.Second}
+	want := config{addr: ":9999", backend: "docker", testControls: true, recordPath: "/out/record.jsonl", image: image, testTimeout: 45 * time.Second, verifyTimeout: 5 * time.Minute}
 	if cfg != want {
 		t.Fatalf("config = %+v, want %+v", cfg, want)
 	}
@@ -44,20 +44,47 @@ func TestLoadConfig_DockerWithControls_ReadsEveryKey(t *testing.T) {
 
 func TestLoadConfig_InvalidValues_Rejected(t *testing.T) {
 	cases := map[string]map[string]string{
-		"unknown backend":            {"SANDBOXRUNNER_BACKEND": "podman"},
-		"image without digest":       {"SANDBOXRUNNER_IMAGE": "golang:1.27-alpine"},
-		"image read as a flag":       {"SANDBOXRUNNER_IMAGE": "--privileged@sha256:" + strings.Repeat("a", 64)},
-		"image with whitespace":      {"SANDBOXRUNNER_IMAGE": "go@sha256:" + strings.Repeat("a", 64) + " --privileged"},
-		"unparsable timeout":         {"SANDBOXRUNNER_TEST_TIMEOUT": "soon"},
-		"non-positive timeout":       {"SANDBOXRUNNER_TEST_TIMEOUT": "0s"},
-		"unparsable controls":        {"SANDBOXRUNNER_TEST_CONTROLS": "maybe"},
-		"controls without record":    {"SANDBOXRUNNER_TEST_CONTROLS": "true"},
-		"record without controls":    {"SANDBOXRUNNER_RECORD_PATH": "/out/record.jsonl"},
-		"record with controls false": {"SANDBOXRUNNER_TEST_CONTROLS": "false", "SANDBOXRUNNER_RECORD_PATH": "/out/r"},
+		"unknown backend":                   {"SANDBOXRUNNER_BACKEND": "podman"},
+		"image without digest":              {"SANDBOXRUNNER_IMAGE": "golang:1.27-alpine"},
+		"image read as a flag":              {"SANDBOXRUNNER_IMAGE": "--privileged@sha256:" + strings.Repeat("a", 64)},
+		"image with whitespace":             {"SANDBOXRUNNER_IMAGE": "go@sha256:" + strings.Repeat("a", 64) + " --privileged"},
+		"unparsable timeout":                {"SANDBOXRUNNER_TEST_TIMEOUT": "soon"},
+		"non-positive timeout":              {"SANDBOXRUNNER_TEST_TIMEOUT": "0s"},
+		"unparsable controls":               {"SANDBOXRUNNER_TEST_CONTROLS": "maybe"},
+		"controls without record":           {"SANDBOXRUNNER_TEST_CONTROLS": "true"},
+		"record without controls":           {"SANDBOXRUNNER_RECORD_PATH": "/out/record.jsonl"},
+		"record with controls false":        {"SANDBOXRUNNER_TEST_CONTROLS": "false", "SANDBOXRUNNER_RECORD_PATH": "/out/r"},
+		"verify image without docker":       {"SANDBOXRUNNER_VERIFY_IMAGE": "verify@sha256:" + strings.Repeat("a", 64), "SANDBOXRUNNER_REPOSITORIES": "vuln-demo=/srv/vuln-demo"},
+		"verify image without digest":       {"SANDBOXRUNNER_BACKEND": "docker", "SANDBOXRUNNER_VERIFY_IMAGE": "verify:latest", "SANDBOXRUNNER_REPOSITORIES": "vuln-demo=/srv/vuln-demo"},
+		"verify image without repositories": {"SANDBOXRUNNER_BACKEND": "docker", "SANDBOXRUNNER_VERIFY_IMAGE": "verify@sha256:" + strings.Repeat("a", 64)},
+		"repositories without verify image": {"SANDBOXRUNNER_BACKEND": "docker", "SANDBOXRUNNER_REPOSITORIES": "vuln-demo=/srv/vuln-demo"},
+		"relative repository path":          {"SANDBOXRUNNER_BACKEND": "docker", "SANDBOXRUNNER_VERIFY_IMAGE": "verify@sha256:" + strings.Repeat("a", 64), "SANDBOXRUNNER_REPOSITORIES": "vuln-demo=repos/vuln-demo"},
+		"bad repository id":                 {"SANDBOXRUNNER_BACKEND": "docker", "SANDBOXRUNNER_VERIFY_IMAGE": "verify@sha256:" + strings.Repeat("a", 64), "SANDBOXRUNNER_REPOSITORIES": "Vuln=/srv/vuln-demo"},
+		"non-positive verify timeout":       {"SANDBOXRUNNER_VERIFY_TIMEOUT": "0s"},
 	}
 	for name, values := range cases {
 		if _, err := loadConfig(env(values)); err == nil {
 			t.Fatalf("%s: load config succeeded, want an error", name)
 		}
+	}
+}
+
+func TestLoadConfig_DockerWithVerification_ReadsTheRepositories(t *testing.T) {
+	image := "registry.example/verify@sha256:" + strings.Repeat("b", 64)
+	cfg, err := loadConfig(env(map[string]string{
+		"SANDBOXRUNNER_BACKEND":        "docker",
+		"SANDBOXRUNNER_VERIFY_IMAGE":   image,
+		"SANDBOXRUNNER_REPOSITORIES":   "vuln-demo=/srv/repos/vuln-demo, other=/srv/repos/other/",
+		"SANDBOXRUNNER_VERIFY_TIMEOUT": "3m",
+	}))
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.verifyImage != image || cfg.verifyTimeout != 3*time.Minute {
+		t.Fatalf("config = %+v", cfg)
+	}
+	repositories, err := parseRepositories(cfg.repositories)
+	if err != nil || len(repositories) != 2 || repositories["vuln-demo"] != "/srv/repos/vuln-demo" || repositories["other"] != "/srv/repos/other" {
+		t.Fatalf("repositories = %v, err = %v", repositories, err)
 	}
 }

@@ -84,3 +84,21 @@ func TestArtifactRefValidate_IDMismatch_IsContentMismatch(t *testing.T) {
 		t.Fatalf("Validate error = %v, want ErrArtifactContentMismatch", err)
 	}
 }
+
+func TestArtifactRefValidate_TextArtifact_IsAcceptedWhileUploadsStayImages(t *testing.T) {
+	ref := domain.ArtifactRef{MediaType: domain.ArtifactMediaTypeTextPlain, SizeBytes: 12, SHA256: strings.Repeat("ab", 32)}
+	var err error
+	if ref.ArtifactID, err = domain.ArtifactIDForSHA256(ref.SHA256); err != nil {
+		t.Fatalf("ArtifactIDForSHA256: %v", err)
+	}
+	if err := ref.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want a text artifact accepted", err)
+	}
+	if domain.IsSupportedAssetMediaType(domain.ArtifactMediaTypeTextPlain) {
+		t.Fatal("text/plain must not become an uploadable Asset media type")
+	}
+	ref.MediaType = "text/plain"
+	if err := ref.Validate(); !errors.Is(err, domain.ErrUnsupportedAssetMediaType) {
+		t.Fatalf("Validate() without the charset parameter = %v, want %v", err, domain.ErrUnsupportedAssetMediaType)
+	}
+}

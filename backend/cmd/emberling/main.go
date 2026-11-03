@@ -261,6 +261,9 @@ func run(logger *slog.Logger) error {
 			if err := registerSandboxTool(toolRegistry, cfg.SandboxRunner, taskClient); err != nil {
 				return err
 			}
+			if err := registerVerifyTool(toolRegistry, cfg.VerifyRunner, taskClient, artifactStore); err != nil {
+				return err
+			}
 			if err := registerWorkspaceTools(toolRegistry, cfg.WorkspaceRepositories); err != nil {
 				return err
 			}

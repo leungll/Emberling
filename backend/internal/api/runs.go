@@ -424,13 +424,14 @@ type toolAttemptDTO struct {
 	// only for the Tool it describes and only once the facts it shows are committed;
 	// Withheld names a member left out because it exceeded the field bound or could carry
 	// a credential.
-	Photo      *toolPhotoDTO      `json:"photo,omitempty"`
-	Settings   *toolSettingsDTO   `json:"settings,omitempty"`
-	Review     *toolReviewDTO     `json:"review,omitempty"`
-	Test       *toolTestDTO       `json:"test,omitempty"`
-	Deployment *toolDeploymentDTO `json:"deployment,omitempty"`
-	Video      *toolVideoDTO      `json:"video,omitempty"`
-	Withheld   []withheldFieldDTO `json:"withheld,omitempty"`
+	Photo        *toolPhotoDTO        `json:"photo,omitempty"`
+	Settings     *toolSettingsDTO     `json:"settings,omitempty"`
+	Review       *toolReviewDTO       `json:"review,omitempty"`
+	Test         *toolTestDTO         `json:"test,omitempty"`
+	Verification *toolVerificationDTO `json:"verification,omitempty"`
+	Deployment   *toolDeploymentDTO   `json:"deployment,omitempty"`
+	Video        *toolVideoDTO        `json:"video,omitempty"`
+	Withheld     []withheldFieldDTO   `json:"withheld,omitempty"`
 }
 
 // agentCallbackBindingDTO is the Tool Attempt's Binding summary: the same three
@@ -466,8 +467,8 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			view := projector.project(attempt)
 			projected := &turns[i].ToolAttempts[j]
 			projected.Photo, projected.Settings, projected.Review = view.Photo, view.Settings, view.Review
-			projected.Test, projected.Deployment, projected.Video, projected.Withheld =
-				view.Test, view.Deployment, view.Video, view.Withheld
+			projected.Test, projected.Verification, projected.Deployment, projected.Video, projected.Withheld =
+				view.Test, view.Verification, view.Deployment, view.Video, view.Withheld
 		}
 	}
 	return agentTraceResponse{

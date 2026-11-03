@@ -335,6 +335,12 @@ export interface ToolMetadata {
    * when the Tool declares no single written path.
    */
   workspaceWritePath?: string;
+  /**
+   * JSON Pointer into the arguments naming the workspace patch digest a call acts on; the
+   * Backend refuses a call naming a digest other than the current patch's with
+   * `STALE_PATCH`. Absent when the Tool declares none.
+   */
+  workspacePatchDigestPath?: string;
   /** True when an uncertain asynchronous result of this Tool is reconciled by polling. */
   reconcilable: boolean;
   /**
@@ -741,6 +747,8 @@ export interface ToolAttemptTrace {
   review?: ToolReviewTrace;
   /** `sandbox_test` only, once the Attempt `SUCCEEDED`: the runner's verdict and counts. */
   test?: ToolTestTrace;
+  /** `verify_patch` only, once the Attempt `SUCCEEDED`: the three checks and the log artifact. */
+  verification?: ToolVerificationTrace;
   /** `deploy` only: the target from its arguments, the version once it `SUCCEEDED`. */
   deployment?: ToolDeploymentTrace;
   /** `generate_video` only, once the Attempt `SUCCEEDED` and the URL is credential-free. */
@@ -779,6 +787,21 @@ export interface ToolReviewTrace {
 export interface ToolTestTrace {
   passed: boolean;
   summary: { total: number; failed: number };
+}
+
+/**
+ * A `verify_patch` result. `passed` holds only when all three checks hold. `logArtifactId`
+ * names the text Execution Artifact holding the runner's log, served by the artifact
+ * content route; `logTruncated` marks a log the runner cut at its bound.
+ */
+export interface ToolVerificationTrace {
+  passed: boolean;
+  testsPassed: boolean;
+  scanClean: boolean;
+  dependenciesClean: boolean;
+  tests: { total: number; failed: number };
+  logArtifactId: string;
+  logTruncated: boolean;
 }
 
 export interface ToolDeploymentTrace {

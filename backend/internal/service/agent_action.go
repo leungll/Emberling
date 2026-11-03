@@ -661,6 +661,21 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
 				return nil
 			}
+			// A Tool that acts on a named patch must name the newest one. The digest it
+			// names is compared with the view read under this lock, and a stale one is handed
+			// back as a STALE_PATCH refusal: no Attempt, no dispatch, so no result can ever
+			// bind to a superseded patch.
+			if named, stale := workspacePatchStale(reg.Metadata, decision.Arguments, view); stale {
+				turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
+					lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
+				}, domain.AgentActionRunning, domain.ReturnStalePatch, stalePatchMessage(named, view), now)
+				if err != nil {
+					return err
+				}
+				nextTurnID = turnID
+				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
+				return nil
+			}
 		}
 
 		// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
