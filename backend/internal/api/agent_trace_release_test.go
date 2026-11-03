@@ -17,6 +17,7 @@ func releaseTraceRound() service.AgentTraceTurn {
 	released, reason := at(9), domain.ReleaseReasonDeployed
 	closed, outcome := at(9), "DEPLOYED"
 	key1, key2 := "op_action_1_1", "op_action_1_2"
+	unchecked := "1.4.2"
 	return service.AgentTraceTurn{
 		Turn:     domain.AgentTurn{ID: "turn_1", TurnNo: 3},
 		Action:   &domain.AgentAction{ID: "action_1", Type: domain.AgentActionToolCall, Status: domain.AgentActionSucceeded},
@@ -29,7 +30,7 @@ func releaseTraceRound() service.AgentTraceTurn {
 		},
 		Occupation: &domain.ReleaseOccupation{
 			ID: "occupation_1", TargetKey: "orders-api/staging", OperationKey: key2, Status: domain.ReleaseOccupationReleased,
-			AcquiredAt: at(0), ReleasedAt: &released, ReleaseReason: &reason, NextQueryAt: &released, DeployedUncheckedVersion: &outcome,
+			AcquiredAt: at(0), ReleasedAt: &released, ReleaseReason: &reason, QueryCount: 2, DeployedUncheckedVersion: &unchecked,
 		},
 		HumanWait: &domain.HumanWait{ID: "hw_1", ActionID: "action_1", RunID: "run_1", Status: domain.HumanWaitResolved,
 			OpenedAt: at(1), Deadline: at(31), ClosedAt: &closed, Outcome: &outcome},
@@ -47,15 +48,12 @@ func TestAgentTraceTurnDTO_ReleaseAction_RendersOperationsOccupationAndHumanWait
 		`{"operationKey":"op_action_1_2","toolAttemptId":"ta_2","attemptNo":2,"status":"SUCCEEDED","outcome":"DEPLOYED",` +
 		`"confirmDeadline":"2026-11-02T12:09:00Z","outcomeUnknownSince":null,"voidRequestedAt":null}],` +
 		`"occupation":{"id":"occupation_1","targetKey":"orders-api/staging","operationKey":"op_action_1_2","status":"RELEASED",` +
-		`"acquiredAt":"2026-11-02T12:00:00Z","releasedAt":"2026-11-02T12:09:00Z","releaseReason":"DEPLOYED"},` +
+		`"acquiredAt":"2026-11-02T12:00:00Z","releasedAt":"2026-11-02T12:09:00Z","releaseReason":"DEPLOYED",` +
+		`"nextQueryAt":null,"queryCount":2,"deployedUncheckedVersion":"1.4.2"},` +
 		`"humanWait":{"id":"hw_1","status":"RESOLVED","openedAt":"2026-11-02T12:01:00Z","deadline":"2026-11-02T12:31:00Z",` +
 		`"closedAt":"2026-11-02T12:09:00Z","closedBy":null,"outcome":"DEPLOYED"}}`
 	if !strings.Contains(string(body), want) {
 		t.Errorf("response %s\nlacks %s", body, want)
-	}
-	// The post-task reconciliation facts of the occupation are not part of this view.
-	if strings.Contains(string(body), "nextQueryAt") || strings.Contains(string(body), "deployedUncheckedVersion") {
-		t.Errorf("response carries reconciliation-internal occupation facts: %s", body)
 	}
 }
 
@@ -77,6 +75,7 @@ func TestAgentTraceTurnDTO_ActionWithoutReleaseFacts_RendersReleaseNull(t *testi
 
 func TestReleaseOutcomeOf_OpenAttempts_PendingUntilOutcomeUnknown(t *testing.T) {
 	now := time.Now()
+	uncertain := true
 	cases := map[string]struct {
 		attempt domain.ToolAttempt
 		want    releaseOperationOutcome
@@ -85,6 +84,7 @@ func TestReleaseOutcomeOf_OpenAttempts_PendingUntilOutcomeUnknown(t *testing.T) 
 		"dispatched":         {domain.ToolAttempt{Status: domain.ToolAttemptDispatched}, releaseOutcomePending},
 		"dispatched unknown": {domain.ToolAttempt{Status: domain.ToolAttemptDispatched, OutcomeUnknownSince: &now}, releaseOutcomeUnknown},
 		"refused":            {domain.ToolAttempt{Status: domain.ToolAttemptFailed, Error: &domain.ExecutionError{Code: "CHANGE_FREEZE"}}, releaseOutcomeRefused},
+		"failed uncertain":   {domain.ToolAttempt{Status: domain.ToolAttemptFailed, Uncertain: &uncertain, Error: &domain.ExecutionError{Code: "RELEASE_UNKNOWN"}}, releaseOutcomeUnknown},
 		"voided":             {domain.ToolAttempt{Status: domain.ToolAttemptFailed, Error: &domain.ExecutionError{Code: domain.ReleaseCodeVoided}}, releaseOutcomeVoided},
 		"deployed":           {domain.ToolAttempt{Status: domain.ToolAttemptSucceeded}, releaseOutcomeDeployed},
 	}

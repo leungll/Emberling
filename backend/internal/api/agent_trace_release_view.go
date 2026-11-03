@@ -51,6 +51,13 @@ type releaseOccupationDTO struct {
 	AcquiredAt    time.Time                      `json:"acquiredAt"`
 	ReleasedAt    *time.Time                     `json:"releasedAt"`
 	ReleaseReason *domain.ReleaseReason          `json:"releaseReason"`
+	// NextQueryAt and QueryCount are the post-task reconciliation schedule an occupation
+	// carries once its Run ended with the release outcome unknown.
+	// DeployedUncheckedVersion is the version production runs when that reconciliation
+	// learned the operation had deployed: live, but never health-checked by the task.
+	NextQueryAt              *time.Time `json:"nextQueryAt"`
+	QueryCount               int        `json:"queryCount"`
+	DeployedUncheckedVersion *string    `json:"deployedUncheckedVersion"`
 }
 
 // humanWaitDTO is one human wait. ClosedBy is the operator's identity name, never a
@@ -97,25 +104,24 @@ func toReleaseActionDTO(round service.AgentTraceTurn) *releaseActionDTO {
 			AcquiredAt:    utcTime(occupation.AcquiredAt),
 			ReleasedAt:    utcTimePtr(occupation.ReleasedAt),
 			ReleaseReason: occupation.ReleaseReason,
+
+			NextQueryAt:              utcTimePtr(occupation.NextQueryAt),
+			QueryCount:               occupation.QueryCount,
+			DeployedUncheckedVersion: occupation.DeployedUncheckedVersion,
 		}
 	}
 	if wait := round.HumanWait; wait != nil {
-		dto.HumanWait = &humanWaitDTO{
-			ID:       wait.ID,
-			Status:   wait.Status,
-			OpenedAt: utcTime(wait.OpenedAt),
-			Deadline: utcTime(wait.Deadline),
-			ClosedAt: utcTimePtr(wait.ClosedAt),
-			ClosedBy: wait.ClosedBy,
-			Outcome:  wait.Outcome,
-		}
+		waitDTO := toHumanWaitDTO(*wait)
+		dto.HumanWait = &waitDTO
 	}
 	return dto
 }
 
 // releaseOutcomeOf reads an operation's outcome from its Attempt: a SUCCEEDED Attempt
-// deployed; a FAILED one was voided when production said so and refused otherwise; an open
-// Attempt is unknown once the Runtime stopped knowing whether production took it.
+// deployed; a FAILED one was voided when production said so, is unknown when it failed with
+// an uncertain outcome (a person stopped waiting, or the wait expired), and was refused
+// otherwise; an open Attempt is unknown once the Runtime stopped knowing whether production
+// took it.
 func releaseOutcomeOf(attempt domain.ToolAttempt) releaseOperationOutcome {
 	switch attempt.Status {
 	case domain.ToolAttemptSucceeded:
@@ -123,6 +129,9 @@ func releaseOutcomeOf(attempt domain.ToolAttempt) releaseOperationOutcome {
 	case domain.ToolAttemptFailed:
 		if attempt.Error != nil && attempt.Error.Code == domain.ReleaseCodeVoided {
 			return releaseOutcomeVoided
+		}
+		if attempt.Uncertain != nil && *attempt.Uncertain {
+			return releaseOutcomeUnknown
 		}
 		return releaseOutcomeRefused
 	case domain.ToolAttemptStarted, domain.ToolAttemptDispatched:
