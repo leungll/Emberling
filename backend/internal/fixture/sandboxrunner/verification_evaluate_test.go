@@ -80,8 +80,11 @@ func TestEvaluateVerification_AllThreeChecksHold_Passes(t *testing.T) {
 
 func TestEvaluateVerification_ScanDidNotRun_ScanNotClean(t *testing.T) {
 	outcome := evaluateVerification(passingSteps(modulesClean, scanResult{Scanner: scannerGovulncheck}), mustSnapshot(t))
-	if !outcome.Verdict || outcome.ScanClean || outcome.Passed() {
+	if !outcome.Verdict || outcome.ScanClean || outcome.ScanRan || outcome.Passed() {
 		t.Fatalf("outcome = %+v, want a verdict whose scan is not clean", outcome)
+	}
+	if !strings.Contains(string(outcome.Log), "scan clean: false (govulncheck did not run to a result)") {
+		t.Fatalf("log does not state why the scan is not clean:\n%s", outcome.Log)
 	}
 }
 

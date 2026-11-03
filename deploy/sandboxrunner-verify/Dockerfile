@@ -21,7 +21,9 @@ RUN CGO_ENABLED=0 GOFLAGS=-mod=mod GOTOOLCHAIN=local GOBIN=/usr/local/bin \
     go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
 
 # The snapshot is the same directory the runner embeds, so the dependency comparison and
-# govulncheck judge against one database. Its digest is printed for the build record.
+# govulncheck judge against one database. The runner passes it to govulncheck with
+# -db file:///vulndb (the tool reads no database location from the environment). Its digest
+# is printed for the build record.
 COPY backend/internal/fixture/sandboxrunner/testdata/vulndb /vulndb
 RUN find /vulndb -type f | sort | xargs sha256sum
 
@@ -36,6 +38,6 @@ RUN cd /tmp/mirror \
     && find /modcache/cache/download -name '*.zip' | sort | xargs sha256sum
 
 ENV GOPROXY=off GOFLAGS=-mod=readonly GOSUMDB=off GOTOOLCHAIN=local GOTELEMETRY=off CGO_ENABLED=0 \
-    GOMODCACHE=/modcache GOVULNDB=file:///vulndb
+    GOMODCACHE=/modcache
 USER 65534:65534
 WORKDIR /work

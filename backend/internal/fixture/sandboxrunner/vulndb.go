@@ -15,8 +15,8 @@ import (
 
 // The vulnerability database snapshot is the fixed set of advisories every verification is
 // scanned against, so a verdict does not change when the public database is updated. The
-// same files are copied into the verification image for govulncheck, which reads them as
-// GOVULNDB=file:///vulndb, and are read here to compare the full dependency list of a
+// same files are copied into the verification image for govulncheck, which is run with
+// -db file:///vulndb, and are read here to compare the full dependency list of a
 // patched module against the affected version ranges. Its digest is reported with every
 // result so a verdict names the snapshot it was reached with.
 

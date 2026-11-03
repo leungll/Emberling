@@ -106,8 +106,14 @@ func evaluateVerification(steps verificationSteps, snapshot *vulnSnapshot) Verif
 	outcome.ScanFindings = slices.Clone(steps.Scan.Findings)
 	outcome.ScanClean = steps.Scan.Ran && len(steps.Scan.Findings) == 0
 
-	fmt.Fprintf(&log, "\ntests passed: %t (%d tests, %d failed)\nscan clean: %t (%s, %d findings)\ndependencies clean: %t (%d vulnerable, snapshot %s)\n",
-		outcome.TestsPassed, total, failedTests, outcome.ScanClean, steps.Scan.Scanner, len(steps.Scan.Findings), outcome.DependenciesClean, len(vulnerable), snapshot.digest)
+	scanSummary := fmt.Sprintf("%s, %d findings", steps.Scan.Scanner, len(steps.Scan.Findings))
+	if !steps.Scan.Ran {
+		// A scan that produced no result cannot clear the patch: the reason stays in the
+		// summary so a failed verification is not mistaken for a vulnerable one.
+		scanSummary = steps.Scan.Scanner + " did not run to a result"
+	}
+	fmt.Fprintf(&log, "\ntests passed: %t (%d tests, %d failed)\nscan clean: %t (%s)\ndependencies clean: %t (%d vulnerable, snapshot %s)\n",
+		outcome.TestsPassed, total, failedTests, outcome.ScanClean, scanSummary, outcome.DependenciesClean, len(vulnerable), snapshot.digest)
 	for _, dep := range outcome.VulnerableDependencies {
 		fmt.Fprintf(&log, "  vulnerable dependency: %s\n", dep)
 	}
