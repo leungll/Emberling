@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/asset"
@@ -162,9 +163,14 @@ func createVulnRun(t *testing.T, env *testEnv, script string) string {
 }
 
 // vulnTrace is the slice of the Agent Trace the stories assert on: the delivery slice plus
-// the workspace with its patch records.
+// the workspace with its patch records and the completion verdict.
 type vulnTrace struct {
 	deliveryTrace
+	// AgentRun shadows the delivery slice's view to add the completion verdict.
+	AgentRun struct {
+		Termination *string         `json:"termination"`
+		Completion  *vulnCompletion `json:"completion"`
+	} `json:"agentRun"`
 	Workspace *struct {
 		RepositoryID string `json:"repositoryId"`
 		BaseCommit   string `json:"baseCommit"`
@@ -195,23 +201,105 @@ func (tr vulnTrace) latestPatchDigest(t *testing.T) string {
 	return tr.Workspace.Patches[len(tr.Workspace.Patches)-1].PatchDigest
 }
 
-// vulnReport is the FINAL document the Agent hands to the result Node.
-type vulnReport struct {
-	Status       string `json:"status"`
-	Advisory     string `json:"advisory"`
-	PatchDigest  string `json:"patchDigest"`
-	ResultDigest string `json:"resultDigest"`
-	Passed       bool   `json:"passed"`
+// vulnCompletion is the completion verdict as the Trace projects it.
+type vulnCompletion struct {
+	Outcome string `json:"outcome"`
+	Checks  []struct {
+		Name   string   `json:"name"`
+		Passed bool     `json:"passed"`
+		Refs   []string `json:"refs"`
+	} `json:"checks"`
+	Missing []struct {
+		Code        string `json:"code"`
+		Description string `json:"description"`
+	} `json:"missing"`
+	EvaluatedAt string `json:"evaluatedAt"`
 }
 
-func vulnReportOf(t *testing.T, snapshot map[string]any) vulnReport {
-	t.Helper()
-	text, _ := nodeRunOutputOf(t, snapshot, "node_result")["text"].(string)
-	var report vulnReport
-	if err := json.Unmarshal([]byte(text), &report); err != nil {
-		t.Fatalf("repair report %q is not JSON: %v", text, err)
+func (c vulnCompletion) missingCodes() []string {
+	codes := make([]string, len(c.Missing))
+	for i, item := range c.Missing {
+		codes[i] = item.Code
 	}
-	return report
+	return codes
+}
+
+func (c vulnCompletion) check(name string) (passed bool, refs []string, found bool) {
+	for _, check := range c.Checks {
+		if check.Name == name {
+			return check.Passed, check.Refs, true
+		}
+	}
+	return false, nil, false
+}
+
+func vulnNodeRunOf(t *testing.T, snapshot map[string]any, nodeID string) map[string]any {
+	t.Helper()
+	nodeRuns, _ := snapshot["nodeRuns"].([]any)
+	for _, nr := range nodeRuns {
+		m, _ := nr.(map[string]any)
+		if id, _ := m["nodeId"].(string); id == nodeID {
+			return m
+		}
+	}
+	t.Fatalf("snapshot has no nodeRun for node %q: %v", nodeID, snapshot["nodeRuns"])
+	return nil
+}
+
+// assertVulnIncomplete proves the goal-based completion check ended a PREPARE_ONLY story
+// that declared completion without a change request: the Agent Run ended with
+// FINAL_RESPONSE (the model answered), the verdict is INCOMPLETE naming the change request
+// among wantMissing, the Agent NodeRun FAILED with TASK_INCOMPLETE, the Run FAILED and the
+// result node never ran. The fixture Definition offers no change-request Tool, so no story
+// here can be READY_FOR_APPROVAL; the stories assert the facts the Agent did establish
+// through the verdict's checks.
+func assertVulnIncomplete(t *testing.T, snapshot map[string]any, trace vulnTrace, wantMissing ...string) vulnCompletion {
+	t.Helper()
+	if got := runStatusOf(snapshot); got != "FAILED" {
+		t.Fatalf("Run status = %q, want FAILED from the completion check; snapshot=%v", got, snapshot)
+	}
+	agentNode := vulnNodeRunOf(t, snapshot, "node_agent")
+	nodeError, _ := agentNode["error"].(map[string]any)
+	if agentNode["status"] != "FAILED" || nodeError == nil || nodeError["code"] != "TASK_INCOMPLETE" {
+		t.Fatalf("node_agent = status %v error %v, want FAILED with TASK_INCOMPLETE", agentNode["status"], agentNode["error"])
+	}
+	nodeRuns, _ := snapshot["nodeRuns"].([]any)
+	for _, nr := range nodeRuns {
+		m, _ := nr.(map[string]any)
+		if id, _ := m["nodeId"].(string); id == "node_result" {
+			t.Errorf("node_result = %v, want no NodeRun after the Agent NodeRun failed", m)
+		}
+	}
+	if trace.AgentRun.Termination == nil || *trace.AgentRun.Termination != "FINAL_RESPONSE" {
+		t.Errorf("agentRun.termination = %v, want FINAL_RESPONSE: the model did answer", trace.AgentRun.Termination)
+	}
+	if trace.AgentRun.Completion == nil {
+		t.Fatalf("agent trace carries no completion verdict")
+	}
+	completion := *trace.AgentRun.Completion
+	if completion.Outcome != "INCOMPLETE" || completion.EvaluatedAt == "" {
+		t.Errorf("completion = %+v, want INCOMPLETE with an evaluation time", completion)
+	}
+	codes := completion.missingCodes()
+	for _, want := range append([]string{"CHANGE_REQUEST_MISSING"}, wantMissing...) {
+		found := false
+		for _, code := range codes {
+			found = found || code == want
+		}
+		if !found {
+			t.Errorf("completion.missing = %v, want %s named", codes, want)
+		}
+	}
+	for _, item := range completion.Missing {
+		if item.Description == "" {
+			t.Errorf("missing item %s carries no description", item.Code)
+		}
+	}
+	message, _ := nodeError["message"].(string)
+	if !strings.Contains(message, "CHANGE_REQUEST_MISSING") {
+		t.Errorf("node_agent error message %q does not name the missing change request", message)
+	}
+	return completion
 }
 
 // verifiedFacts returns the patch_verified facts in Trace order.
@@ -257,19 +345,17 @@ func toolMessagesOf(t *testing.T, request registry.ModelRequest) []map[string]an
 // TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch plays the main
 // story: the Agent upgrades go.mod and the import path, the verification of that
 // unadapted upgrade fails as its build really does, the Agent adapts the calling code and
-// the second verification passes. The Run completes with a report naming the latest
-// patch, the passing patch_verified fact is about exactly that digest, and the runner
-// verified twice.
+// the second verification passes. The passing patch_verified fact is about exactly the
+// latest digest and the runner verified twice; the completion check accepts that
+// verification but, with no change request recorded, ends the task INCOMPLETE.
 func TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch(t *testing.T) {
 	f := newVulnFixture(t)
 	env := f.startBackend(t, testEnvOptions{})
 
 	runID := createVulnRun(t, env, "vuln-fix-main-verify")
 	snapshot := env.waitForTerminal(t, runID, e2eWait)
-	if got := runStatusOf(snapshot); got != "COMPLETED" {
-		t.Fatalf("Run status = %q, want COMPLETED; snapshot=%v", got, snapshot)
-	}
 	trace := loadVulnTrace(t, env, runID, nodeRunIDOf(t, snapshot, "node_agent"))
+	completion := assertVulnIncomplete(t, snapshot, trace)
 
 	verifications := trace.callsOf(verifypatch.ToolName)
 	if len(verifications) != 2 {
@@ -295,9 +381,13 @@ func TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch(t *tes
 		t.Errorf("fact subjects = %+v, want the unadapted upgrade then the latest patch %s from the second verification", facts, latest)
 	}
 
-	report := vulnReportOf(t, snapshot)
-	if report.Status != "PATCH_VERIFIED" || report.Advisory != vulnAdvisory || report.PatchDigest != latest || !report.Passed {
-		t.Errorf("repair report = %+v, want PATCH_VERIFIED for %s on patch %s", report, vulnAdvisory, latest)
+	if passed, refs, found := completion.check("latest_patch_verified"); !found || !passed || len(refs) != 1 {
+		t.Errorf("completion check latest_patch_verified = passed %v refs %v found %v, want it passed citing the one passing fact", passed, refs, found)
+	}
+	for _, code := range completion.missingCodes() {
+		if code == "PATCH_VERIFICATION_MISSING" || code == "PATCH_VERIFICATION_FAILED" || code == "WORKSPACE_PATCH_MISSING" {
+			t.Errorf("completion.missing names %s although the latest patch was verified", code)
+		}
 	}
 
 	lines := serviceRecord(t, f.runner.http.URL)
@@ -320,17 +410,16 @@ func TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch(t *tes
 // TestE2E_VulnFix_ScopeDenied_ReturnedBeforeAnyAttempt plays a write outside the allowed
 // directories: the Action fails with SCOPE_DENIED before any Attempt exists, nothing
 // reaches the runner, the next model request carries the refusal as a tool message, and
-// the Agent completes with the write inside the allowed directory.
+// the Agent declares completion with the write inside the allowed directory, which the
+// completion check ends INCOMPLETE: the patch was never verified.
 func TestE2E_VulnFix_ScopeDenied_ReturnedBeforeAnyAttempt(t *testing.T) {
 	f := newVulnFixture(t)
 	env := f.startBackend(t, testEnvOptions{})
 
 	runID := createVulnRun(t, env, "vuln-fix-scope-denied")
 	snapshot := env.waitForTerminal(t, runID, e2eWait)
-	if got := runStatusOf(snapshot); got != "COMPLETED" {
-		t.Fatalf("Run status = %q, want COMPLETED; snapshot=%v", got, snapshot)
-	}
 	trace := loadVulnTrace(t, env, runID, nodeRunIDOf(t, snapshot, "node_agent"))
+	completion := assertVulnIncomplete(t, snapshot, trace, "PATCH_VERIFICATION_MISSING")
 	if len(trace.Turns) != 3 {
 		t.Fatalf("turns = %d, want 3: the refused write, the allowed write and the FINAL", len(trace.Turns))
 	}
@@ -345,8 +434,8 @@ func TestE2E_VulnFix_ScopeDenied_ReturnedBeforeAnyAttempt(t *testing.T) {
 	if trace.Workspace == nil || len(trace.Workspace.Patches) != 1 || trace.Workspace.Patches[0].TouchedPaths[0] != "go.mod" {
 		t.Errorf("workspace patches = %+v, want exactly the allowed go.mod write", trace.Workspace)
 	}
-	if report := vulnReportOf(t, snapshot); report.Status != "SCOPE_RESPECTED" || report.PatchDigest != trace.latestPatchDigest(t) {
-		t.Errorf("repair report = %+v, want SCOPE_RESPECTED naming the allowed write's patch", report)
+	if passed, refs, found := completion.check("workspace_patch_recorded"); !found || !passed || len(refs) != 1 {
+		t.Errorf("completion check workspace_patch_recorded = passed %v refs %v found %v, want it passed citing the allowed write's patch", passed, refs, found)
 	}
 
 	requests := env.provider.Requests()
@@ -377,10 +466,8 @@ func TestE2E_VulnFix_StaleEvidence_OldDigestRejectedAndRunnerAskedTwice(t *testi
 
 	runID := createVulnRun(t, env, "vuln-fix-stale-evidence")
 	snapshot := env.waitForTerminal(t, runID, e2eWait)
-	if got := runStatusOf(snapshot); got != "COMPLETED" {
-		t.Fatalf("Run status = %q, want COMPLETED; snapshot=%v", got, snapshot)
-	}
 	trace := loadVulnTrace(t, env, runID, nodeRunIDOf(t, snapshot, "node_agent"))
+	completion := assertVulnIncomplete(t, snapshot, trace)
 	if trace.Workspace == nil || len(trace.Workspace.Patches) != 2 {
 		t.Fatalf("workspace patches = %+v, want two", trace.Workspace)
 	}
@@ -406,8 +493,8 @@ func TestE2E_VulnFix_StaleEvidence_OldDigestRejectedAndRunnerAskedTwice(t *testi
 	if len(facts) != 2 || facts[0].Subject != first || facts[1].Subject != latest || facts[1].Verdict == nil || !*facts[1].Verdict {
 		t.Errorf("patch_verified facts = %+v, want %s then a passing %s", facts, first, latest)
 	}
-	if report := vulnReportOf(t, snapshot); report.PatchDigest != latest || !report.Passed {
-		t.Errorf("repair report = %+v, want the latest patch %s verified", report, latest)
+	if passed, _, found := completion.check("latest_patch_verified"); !found || !passed {
+		t.Errorf("completion check latest_patch_verified = passed %v found %v, want it passed for %s", passed, found, latest)
 	}
 
 	lines := serviceRecord(t, f.runner.http.URL)
@@ -421,7 +508,7 @@ func TestE2E_VulnFix_StaleEvidence_OldDigestRejectedAndRunnerAskedTwice(t *testi
 // callback while the Agent waits for it, stops the Backend and starts another over the same
 // database and Asset volume. The released callback resumes the original Attempt: the model
 // is not asked again for any committed Decision, the runner runs no verification twice,
-// and the story completes as it does without the restart.
+// and the story ends exactly as it does without the restart.
 func TestE2E_VulnFix_RestartDuringVerify_NoModelReaskNoRerun(t *testing.T) {
 	f := newVulnFixture(t)
 	control(t, f.runner.http.URL, "pause", `{"kinds":["callback"]}`)
@@ -452,16 +539,14 @@ func TestE2E_VulnFix_RestartDuringVerify_NoModelReaskNoRerun(t *testing.T) {
 	control(t, f.runner.http.URL, "release", "")
 
 	snapshot := second.waitForTerminal(t, runID, e2eWait)
-	if got := runStatusOf(snapshot); got != "COMPLETED" {
-		t.Fatalf("Run status = %q, want COMPLETED; snapshot=%v", got, snapshot)
-	}
 	trace := loadVulnTrace(t, second, runID, agentNodeRunID)
+	completion := assertVulnIncomplete(t, snapshot, trace)
 	verifications := trace.callsOf(verifypatch.ToolName)
 	if len(verifications) != 2 || verifications[0].attempt.ID != heldAttemptID || verifications[0].attempt.Status != "SUCCEEDED" {
 		t.Fatalf("verify_patch Attempts after the restart = %+v, want the held Attempt %s SUCCEEDED and one more", verifications, heldAttemptID)
 	}
-	if report := vulnReportOf(t, snapshot); report.PatchDigest != trace.latestPatchDigest(t) || !report.Passed {
-		t.Errorf("repair report = %+v, want the latest patch verified", report)
+	if passed, _, found := completion.check("latest_patch_verified"); !found || !passed {
+		t.Errorf("completion check latest_patch_verified = passed %v found %v, want it passed for %s", passed, found, trace.latestPatchDigest(t))
 	}
 
 	// The second Backend asked the model only for the Turns that follow the held
