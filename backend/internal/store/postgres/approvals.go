@@ -70,6 +70,27 @@ func (r *approvalRepository) ListByStatus(ctx context.Context, status domain.App
 	return approvals, nil
 }
 
+// ListByAgentRun returns the approvals one Agent Run requested, oldest request first.
+func (r *approvalRepository) ListByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.Approval, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres approvals.ListByAgentRun: limit must be positive, got %d", limit)
+	}
+	const query = `SELECT ` + approvalColumns + `
+		  FROM approvals
+		 WHERE agent_run_id = $1
+		 ORDER BY requested_at ASC, id ASC
+		 LIMIT $2`
+	rows, err := r.conn.Query(ctx, query, agentRunID, limit)
+	if err != nil {
+		return nil, mapError("approvals.ListByAgentRun", err, agentRunID)
+	}
+	approvals, err := scanApprovals(rows)
+	if err != nil {
+		return nil, mapError("approvals.ListByAgentRun", err, agentRunID)
+	}
+	return approvals, nil
+}
+
 // ListExpiredPending discovers the expiry work through the partial pending-deadline index.
 // It claims nothing; the expiry use case settles each row by its own conditional update.
 func (r *approvalRepository) ListExpiredPending(ctx context.Context, now time.Time, limit int) ([]domain.Approval, error) {

@@ -132,6 +132,7 @@ func (t *cbTx) AgentWorkspaces() store.AgentWorkspaceRepository           { retu
 func (t *cbTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
 func (t *cbTx) Approvals() store.ApprovalRepository                       { return nil }
 func (t *cbTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
+func (t *cbTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 type cbDefinitionRepo struct{ tx *cbTx }
 

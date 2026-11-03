@@ -199,6 +199,7 @@ func (t *execFakeTx) AgentWorkspaces() store.AgentWorkspaceRepository           
 func (t *execFakeTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
 func (t *execFakeTx) Approvals() store.ApprovalRepository                       { return nil }
 func (t *execFakeTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
+func (t *execFakeTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 type execFakeDefinitionRepo struct{ def domain.Definition }
 

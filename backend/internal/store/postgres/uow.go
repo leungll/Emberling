@@ -98,6 +98,7 @@ type tx struct {
 	workspacePatches     *workspacePatchRepository
 	approvals            *approvalRepository
 	changeRequests       *changeRequestRepository
+	agentCompletions     *agentCompletionRepository
 }
 
 func newTx(conn pgx.Tx) *tx {
@@ -127,6 +128,7 @@ func newTx(conn pgx.Tx) *tx {
 		workspacePatches:     &workspacePatchRepository{conn: conn},
 		approvals:            &approvalRepository{conn: conn},
 		changeRequests:       &changeRequestRepository{conn: conn},
+		agentCompletions:     &agentCompletionRepository{conn: conn},
 	}
 }
 
@@ -161,6 +163,7 @@ func (t *tx) AgentWorkspaces() store.AgentWorkspaceRepository       { return t.a
 func (t *tx) WorkspacePatches() store.WorkspacePatchRepository      { return t.workspacePatches }
 func (t *tx) Approvals() store.ApprovalRepository                   { return t.approvals }
 func (t *tx) ChangeRequests() store.ChangeRequestRepository         { return t.changeRequests }
+func (t *tx) AgentCompletions() store.AgentCompletionRepository     { return t.agentCompletions }
 
 var (
 	_ store.UnitOfWork = (*UnitOfWork)(nil)
