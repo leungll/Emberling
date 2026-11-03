@@ -186,6 +186,52 @@ describe('the Approval detail', () => {
     });
   });
 
+  it('bounds the reason by bytes and sends a 400-byte non-ASCII reason whole', async () => {
+    useOperatorStore.getState().setToken(TOKEN);
+    const reason = 'é'.repeat(200); // 400 bytes in UTF-8
+    decisionResponse = () =>
+      jsonResponse({
+        approval: { ...APPROVAL, status: 'REJECTED', decidedBy: 'test-operator', reason },
+        repeated: false,
+      });
+    renderAt('/approvals/apr_1');
+    await screen.findByRole('heading', { name: 'deploy' });
+
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'é'.repeat(201) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    expect(screen.getByText('The reason must be at most 400 bytes.')).toBeInTheDocument();
+    expect(calls.some((c) => c.url.endsWith('/decision'))).toBe(false);
+
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: reason } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+
+    await screen.findByText('Rejected. The agent is told why and its clock continues.');
+    const post = calls.find((c) => c.url === '/api/approvals/apr_1/decision');
+    expect(JSON.parse(post?.init?.body as string)).toEqual({ decision: 'REJECT', reason });
+  });
+
+  it('explains a pending approval whose run has ended instead of calling it decided', async () => {
+    useOperatorStore.getState().setToken(TOKEN);
+    decisionResponse = () =>
+      jsonResponse(
+        { error: { code: 'APPROVAL_NOT_ACTIONABLE', message: 'the run has ended' } },
+        409,
+      );
+    renderAt('/approvals/apr_1');
+    await screen.findByRole('heading', { name: 'deploy' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await screen.findByText(
+      'The run this approval belongs to has already ended. The approval stays undecided and expires at its deadline.',
+    );
+    expect(
+      screen.queryByText(
+        'This approval was already decided differently. Showing the recorded decision.',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows the decision the Backend already holds after a conflict', async () => {
     useOperatorStore.getState().setToken(TOKEN);
     let detailCalls = 0;

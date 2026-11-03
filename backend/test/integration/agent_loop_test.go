@@ -73,6 +73,9 @@ type agentHarnessOptions struct {
 	// Tools registers additional Tools beside `lookup`, for the case of a Tool that is
 	// registered but absent from an Agent Run's frozen allowlist.
 	Tools []registry.ToolRegistration
+	// Nodes registers additional Node Types beside the text input, text output and agent
+	// nodes, for a test that needs an input shape those do not publish.
+	Nodes []registry.NodeRegistration
 	// Notifier replaces the no-op EventNotifier. It is the only hook this service exposes
 	// between a committed transaction and the in-process advancement that follows it.
 	Notifier service.EventNotifier
@@ -108,8 +111,9 @@ var agentRunnerSeq atomic.Int64
 // calls, which keeps single-goroutine tests deterministic. Run-level Advance offers are
 // dropped, as the no-op enqueuer always did: tests drive NodeRuns explicitly.
 type agentInlineTurns struct {
-	mu      sync.Mutex
-	pending []string
+	mu             sync.Mutex
+	pending        []string
+	pendingActions []string
 }
 
 func (*agentInlineTurns) EnqueueAdvance(string) bool { return false }
@@ -119,6 +123,27 @@ func (q *agentInlineTurns) EnqueueAgentTurn(_, turnID string) bool {
 	defer q.mu.Unlock()
 	q.pending = append(q.pending, turnID)
 	return true
+}
+
+// EnqueueAgentAction records an approved Action the way it records a Turn; a test drains
+// it through the same use case a worker enters. Approved Actions are kept apart from Turns
+// because the use cases differ.
+func (q *agentInlineTurns) EnqueueAgentAction(_, actionID string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.pendingActions = append(q.pendingActions, actionID)
+	return true
+}
+
+func (q *agentInlineTurns) popAction() (string, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.pendingActions) == 0 {
+		return "", false
+	}
+	actionID := q.pendingActions[0]
+	q.pendingActions = q.pendingActions[1:]
+	return actionID, true
 }
 
 func (q *agentInlineTurns) pop() (string, bool) {
@@ -175,11 +200,11 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 			t.Fatalf("register model provider: %v", err)
 		}
 	}
-	for _, reg := range []registry.NodeRegistration{
+	for _, reg := range append([]registry.NodeRegistration{
 		textinput.Registration(),
 		textoutput.Registration(),
 		agent.Registration(),
-	} {
+	}, opts.Nodes...) {
 		if err := nodeRegistry.Register(reg); err != nil {
 			t.Fatalf("register node type %s: %v", reg.Metadata.Type, err)
 		}
@@ -311,6 +336,12 @@ func (h *agentHarness) drainTurns(ctx context.Context) error {
 		return nil
 	}
 	for {
+		if actionID, ok := h.turns.popAction(); ok {
+			if err := h.svc.ContinueAgentAction(ctx, actionID); err != nil {
+				return err
+			}
+			continue
+		}
 		turnID, ok := h.turns.pop()
 		if !ok {
 			return nil

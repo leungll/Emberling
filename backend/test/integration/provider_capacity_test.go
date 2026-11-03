@@ -192,7 +192,8 @@ func (q *capQueue) EnqueueAdvance(runID string) bool {
 	return true
 }
 
-func (q *capQueue) EnqueueAgentTurn(string, string) bool { return true }
+func (q *capQueue) EnqueueAgentTurn(string, string) bool   { return true }
+func (q *capQueue) EnqueueAgentAction(string, string) bool { return true }
 
 func (q *capQueue) advanced() []string {
 	q.mu.Lock()

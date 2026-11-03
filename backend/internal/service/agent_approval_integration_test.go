@@ -853,3 +853,374 @@ func TestDecideApproval_RequirementNoLongerMet_ReturnsVerificationMissingKeepsAp
 		t.Errorf("deadline = %v, want %v", agentRun.Deadline, want)
 	}
 }
+
+// failingNodeType is a test node whose every execution fails, so a Run can end while its
+// Agent sibling is still waiting.
+const failingNodeType = "test_failing_node"
+
+type failingNodeExecutor struct{}
+
+func (failingNodeExecutor) ValidateSemantics(context.Context, map[string]any) error { return nil }
+
+func (failingNodeExecutor) Execute(context.Context, registry.NodeInput, map[string]any) (registry.NodeResult, error) {
+	return registry.NodeResult{}, errors.New("the sibling node always fails")
+}
+
+func failingNodeRegistration() registry.NodeRegistration {
+	return registry.NodeRegistration{
+		Metadata: domain.NodeMetadata{
+			Type:          failingNodeType,
+			DisplayName:   "Test Failing Node",
+			Category:      domain.NodeCategoryPromptAndModel,
+			ExecutionKind: domain.NodeExecutionSync,
+			Inputs:        []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
+			Outputs:       []domain.PortMetadata{{Name: "image", DataType: domain.PortTypeImage, Required: true}},
+			ConfigSchema:  json.RawMessage(`{"type":"object","additionalProperties":false}`),
+			SideEffect:    domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
+		},
+		Binding: registry.ExecutorBinding{Executor: failingNodeExecutor{}},
+	}
+}
+
+// endRunThroughSibling claims and executes the failing sibling node, which the scheduler
+// releases once the Agent NodeRun waits; its failure fails the Run while the Agent still
+// waits for its approval.
+func (h *returnHarness) endRunThroughSibling() {
+	h.t.Helper()
+	sibling := h.advance()
+	if sibling.AgentRunID != "" {
+		h.t.Fatalf("advance claimed an Agent NodeRun, want the failing sibling")
+	}
+	if err := h.svc.Execute(h.ctx, sibling); err != nil {
+		h.t.Fatalf("execute failing sibling: %v", err)
+	}
+	if run := h.getRun(); run.Status != domain.RunFailed {
+		h.t.Fatalf("run = %s after the sibling failed, want FAILED", run.Status)
+	}
+}
+
+// reconcilableToolName is a test Tool registered as an asynchronous, polled, reconcilable
+// production Tool: the shape of a release Tool, dispatching an external task it never
+// completes in these tests.
+const reconcilableToolName = "test_reconcilable_tool"
+
+type reconcilableToolExecutor struct {
+	mu    sync.Mutex
+	calls []registry.ToolAction
+}
+
+func (e *reconcilableToolExecutor) Execute(_ context.Context, action registry.ToolAction) (registry.ToolExecutionResult, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.calls = append(e.calls, action)
+	return registry.ToolExecutionResult{
+		Kind:         registry.ToolResultDispatched,
+		ExternalTask: &registry.ExternalTask{ProviderID: "test-release-provider", ExternalTaskID: "release-task-1"},
+	}, nil
+}
+
+func (e *reconcilableToolExecutor) OnCallback(context.Context, registry.ToolAsyncState, []byte) (registry.ToolResult, error) {
+	return registry.ToolResult{}, errors.New("the test release tool takes no callback")
+}
+
+func (e *reconcilableToolExecutor) Poll(context.Context, registry.ToolAsyncState) (registry.PollResult, error) {
+	return registry.PollResult{Status: registry.PollRunning}, nil
+}
+
+func reconcilableToolRegistration(executor *reconcilableToolExecutor) registry.ToolRegistration {
+	reg := riskToolRegistration(reconcilableToolName, domain.ToolRiskProduction, executor)
+	reg.Metadata.ExecutionKind = domain.ToolExecutionAsync
+	reg.Metadata.Poll = &domain.PollPolicy{IntervalMs: 30_000, MaxPolls: 10}
+	reg.Metadata.Reconcilable = true
+	return reg
+}
+
+func TestDecideApproval_RunEndedBeforeDecision_NotActionable(t *testing.T) {
+	executor := &recordingToolExecutor{}
+	h := newReturnHarness(t, returnHarnessOptions{
+		goal: domain.AgentGoalFixAndDeploy, approvalTimeoutMs: approvalWaitMs, failingSibling: true,
+		tools: []registry.ToolRegistration{riskToolRegistration(productionToolName, domain.ToolRiskProduction, executor)},
+	})
+	action := h.seedDecision(productionToolName, productionArguments(), domain.AgentActionReady)
+	approval := h.suspendForApproval(action)
+	h.endRunThroughSibling()
+
+	_, err := h.decide(approval.ID, domain.ApprovalApproved, "")
+	var notActionable *ApprovalNotActionableError
+	if !errors.As(err, &notActionable) || notActionable.ApprovalID != approval.ID {
+		t.Fatalf("approve after the run ended = %v, want ApprovalNotActionableError for %s", err, approval.ID)
+	}
+	var conflict *ApprovalConflictError
+	if errors.As(err, &conflict) {
+		t.Errorf("the error must not read as an already decided approval")
+	}
+	if got := h.getApprovalOf(action.ID); got.Status != domain.ApprovalPending {
+		t.Errorf("approval = %s, want still PENDING: the decision wrote nothing", got.Status)
+	}
+	if h.attemptCount(action.ID) != 0 || len(executor.received()) != 0 {
+		t.Errorf("a decision on an ended run created an Attempt or ran the tool")
+	}
+	if h.eventCount(domain.EventApprovalDecided) != 0 {
+		t.Errorf("APPROVAL_DECIDED was written by a decision that cannot act")
+	}
+}
+
+func TestExpireApproval_RunEndedBeforeDeadline_ExpiresWithoutReturn(t *testing.T) {
+	executor := &recordingToolExecutor{}
+	h := newReturnHarness(t, returnHarnessOptions{
+		goal: domain.AgentGoalFixAndDeploy, approvalTimeoutMs: approvalWaitMs, failingSibling: true,
+		tools: []registry.ToolRegistration{riskToolRegistration(productionToolName, domain.ToolRiskProduction, executor)},
+	})
+	action := h.seedDecision(productionToolName, productionArguments(), domain.AgentActionReady)
+	approval := h.suspendForApproval(action)
+	h.endRunThroughSibling()
+	pausedAgentRun := h.getAgentRun()
+	h.clock.Advance(time.Duration(approvalWaitMs)*time.Millisecond + time.Second)
+
+	if expired := h.listExpiredApprovals(); len(expired) != 1 || expired[0].ID != approval.ID {
+		t.Fatalf("expired approvals before the scan = %v, want [%s]", expired, approval.ID)
+	}
+	if err := h.svc.ExpireApproval(h.ctx, approval.ID); err != nil {
+		t.Fatalf("expire: %v", err)
+	}
+
+	if got := h.getApprovalOf(action.ID); got.Status != domain.ApprovalExpired || got.DecidedAt == nil || got.DecidedBy != nil {
+		t.Errorf("approval = %+v, want EXPIRED with a decided time and no deciding person", got)
+	}
+	if remaining := h.listExpiredApprovals(); len(remaining) != 0 {
+		t.Errorf("the expired approval is still listed for the scan")
+	}
+	if decided := h.payloadsOf(domain.EventApprovalDecided); len(decided) != 1 || decided[0]["decision"] != string(domain.ApprovalExpired) {
+		t.Errorf("APPROVAL_DECIDED = %v, want one EXPIRED", decided)
+	}
+	// Nothing is returned to an Agent whose Run has ended: no refusal, no new Turn, and
+	// the clock stays as the termination left it.
+	if got := h.getAction(action.ID); got.Status != domain.AgentActionWaitingApproval {
+		t.Errorf("action = %s, want left WAITING_APPROVAL", got.Status)
+	}
+	if h.eventCount(domain.EventAgentActionFailed) != 0 || h.eventCount(domain.EventAgentResumed) != 0 || len(h.readyTurns()) != 0 {
+		t.Errorf("an ended run got a refusal, a resumed clock or a new Turn")
+	}
+	agentRun := h.getAgentRun()
+	if agentRun.PausedAt == nil || !agentRun.Deadline.Equal(pausedAgentRun.Deadline) {
+		t.Errorf("agent run = paused %v deadline %v, want unchanged (%v, %v)", agentRun.PausedAt, agentRun.Deadline, pausedAgentRun.PausedAt, pausedAgentRun.Deadline)
+	}
+	if run := h.getRun(); run.Status != domain.RunFailed {
+		t.Errorf("run = %s, want still FAILED", run.Status)
+	}
+
+	// A decision after the expiry is a conflict with the recorded EXPIRED decision.
+	_, err := h.decide(approval.ID, domain.ApprovalApproved, "")
+	var conflict *ApprovalConflictError
+	if !errors.As(err, &conflict) || conflict.Status != domain.ApprovalExpired {
+		t.Errorf("approve after expiry = %v, want a conflict with EXPIRED", err)
+	}
+}
+
+func TestDecideApproval_ProcessDiesBeforeWorkerCall_OrphanHandlingReturnsAction(t *testing.T) {
+	executor := &recordingToolExecutor{}
+	h := approvalHarness(t, domain.AgentGoalFixAndDeploy, executor)
+	// No worker takes the approved call: the process dies between COMMIT and the call.
+	h.queue.mu.Lock()
+	h.queue.svc = nil
+	h.queue.mu.Unlock()
+	action := h.seedDecision(productionToolName, productionArguments(), domain.AgentActionReady)
+	approval := h.suspendForApproval(action)
+	h.clock.Advance(time.Minute)
+
+	outcome, err := h.decide(approval.ID, domain.ApprovalApproved, "")
+	if err != nil || outcome.Approval.Status != domain.ApprovalApproved {
+		t.Fatalf("approve = %+v, %v, want APPROVED", outcome, err)
+	}
+	if offered := h.queue.offeredActions(); len(offered) != 1 || offered[0] != action.ID {
+		t.Fatalf("actions offered to the queue = %v, want [%s]", offered, action.ID)
+	}
+	if len(executor.received()) != 0 {
+		t.Fatalf("the tool ran on the request goroutine")
+	}
+	attempts := h.toolAttempts(action.ID)
+	if len(attempts) != 1 || attempts[0].Status != domain.ToolAttemptStarted {
+		t.Fatalf("attempts = %+v, want one STARTED attempt committed by the approval", attempts)
+	}
+	if got := h.getAction(action.ID); got.Status != domain.AgentActionRunning {
+		t.Fatalf("action = %s, want RUNNING with its STARTED attempt", got.Status)
+	}
+
+	// A new process over the same database: its runner identity differs, so the orphan
+	// scan finds the STARTED Attempt and the orphan use case returns it to the Agent.
+	h.restart(returnHarnessOptions{goal: domain.AgentGoalFixAndDeploy, approvalTimeoutMs: approvalWaitMs,
+		tools: []registry.ToolRegistration{riskToolRegistration(productionToolName, domain.ToolRiskProduction, executor)}})
+	orphans := h.listOrphanStarted()
+	if len(orphans) != 1 || orphans[0].ID != attempts[0].ID {
+		t.Fatalf("orphan scan = %v, want the approved attempt", orphans)
+	}
+	if err := h.svc.HandleOrphanToolAttempt(h.ctx, attempts[0].ID); err != nil {
+		t.Fatalf("handle orphan: %v", err)
+	}
+	after := h.toolAttempts(action.ID)
+	if len(after) != 1 || after[0].Status != domain.ToolAttemptFailed {
+		t.Errorf("attempt = %+v, want FAILED by orphan handling", after)
+	}
+	if got := h.getAction(action.ID); got.Status != domain.AgentActionFailed {
+		t.Errorf("action = %s, want FAILED and returned to the Agent", got.Status)
+	}
+	if len(executor.received()) != 0 {
+		t.Errorf("the tool ran in the restarted process without a prepared call")
+	}
+	if got := h.getApprovalOf(action.ID); got.Status != domain.ApprovalApproved {
+		t.Errorf("approval = %s, want still APPROVED", got.Status)
+	}
+}
+
+func TestDecideApproval_ReconcilableTool_ResumesClockThenPausesForRelease(t *testing.T) {
+	executor := &reconcilableToolExecutor{}
+	h := newReturnHarness(t, returnHarnessOptions{
+		goal: domain.AgentGoalFixAndDeploy, approvalTimeoutMs: approvalWaitMs,
+		tools: []registry.ToolRegistration{reconcilableToolRegistration(executor)},
+	})
+	// Hold the prepared call instead of making it, so its deadline can be inspected.
+	h.queue.mu.Lock()
+	h.queue.svc = nil
+	h.queue.mu.Unlock()
+	action := h.seedDecision(reconcilableToolName, productionArguments(), domain.AgentActionReady)
+	approval := h.suspendForApproval(action)
+	originalDeadline := h.getAgentRun().Deadline
+	const paused = 11 * time.Minute
+	h.clock.Advance(paused)
+	decidedAt := h.clock.Now()
+
+	if _, err := h.decide(approval.ID, domain.ApprovalApproved, ""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	movedDeadline := originalDeadline.Add(paused)
+	call, ok := h.svc.approved.take(action.ID)
+	if !ok {
+		t.Fatalf("no prepared call for %s", action.ID)
+	}
+	if !call.deadline.Equal(movedDeadline) {
+		t.Errorf("call deadline = %v, want the moved deadline %v", call.deadline, movedDeadline)
+	}
+	if call.action.Callback == nil || call.action.Callback.Token == "" {
+		t.Fatalf("an asynchronous call was prepared without its callback credential")
+	}
+	// The credential was issued from the moved deadline: a claim of it at the old expiry
+	// plus the pending TTL is already past it, the moved one is not.
+	parsed, err := verifyCallbackToken([]byte("return-test-signing-secret"), call.action.Callback.Token, decidedAt)
+	if err != nil || parsed.AttemptID != call.attemptID {
+		t.Fatalf("prepared credential = %+v, %v, want one for attempt %s", parsed, err, call.attemptID)
+	}
+	if want := movedDeadline.Add(time.Hour); !parsed.ExpiresAt.Equal(want) {
+		t.Errorf("credential expires %v, want the moved deadline plus the pending TTL (%v), not %v", parsed.ExpiresAt, want, originalDeadline.Add(time.Hour))
+	}
+	agentRun := h.getAgentRun()
+	if !agentRun.Deadline.Equal(movedDeadline) {
+		t.Errorf("deadline = %v, want %v", agentRun.Deadline, movedDeadline)
+	}
+	if agentRun.PausedAt == nil || agentRun.PauseReason == nil || *agentRun.PauseReason != domain.PauseRelease || !agentRun.PausedAt.Equal(decidedAt) {
+		t.Errorf("agent run = paused %v for %v, want paused for RELEASE since %v", agentRun.PausedAt, agentRun.PauseReason, decidedAt)
+	}
+	resumed := h.payloadsOf(domain.EventAgentResumed)
+	pausedEvents := h.payloadsOf(domain.EventAgentPaused)
+	if len(resumed) != 1 || resumed[0]["reason"] != string(domain.PauseApproval) || resumed[0]["pausedMs"] != float64(paused.Milliseconds()) {
+		t.Errorf("AGENT_RESUMED = %v, want the approval pause credited back", resumed)
+	}
+	if len(pausedEvents) != 2 || pausedEvents[1]["reason"] != string(domain.PauseRelease) {
+		t.Errorf("AGENT_PAUSED = %v, want APPROVAL then RELEASE", pausedEvents)
+	}
+	if h.attemptCount(action.ID) != 1 {
+		t.Errorf("attempts = %d, want 1", h.attemptCount(action.ID))
+	}
+}
+
+func TestDecideApproval_Reject400ByteReason_CarriedWholeToAgent(t *testing.T) {
+	executor := &recordingToolExecutor{}
+	h := approvalHarness(t, domain.AgentGoalFixAndDeploy, executor)
+	action := h.seedDecision(productionToolName, productionArguments(), domain.AgentActionReady)
+	approval := h.suspendForApproval(action)
+	// 200 two-byte characters: exactly the 400-byte bound, and not ASCII.
+	reason := strings.Repeat("é", 200)
+	if len(reason) != maxApprovalReasonBytes {
+		t.Fatalf("reason is %d bytes, want %d", len(reason), maxApprovalReasonBytes)
+	}
+
+	if _, err := h.decide(approval.ID, domain.ApprovalRejected, reason+"x"); err == nil {
+		t.Fatalf("a 401-byte reason was accepted")
+	}
+	if got := h.getApprovalOf(action.ID); got.Status != domain.ApprovalPending {
+		t.Fatalf("an oversized reason changed the approval to %s", got.Status)
+	}
+	outcome, err := h.decide(approval.ID, domain.ApprovalRejected, reason)
+	if err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	if outcome.Approval.Reason == nil || *outcome.Approval.Reason != reason {
+		t.Errorf("recorded reason = %v, want the whole reason", outcome.Approval.Reason)
+	}
+	assertReturnedToAgent(t, h, action, domain.ReturnApprovalRejected)
+	message := h.toolMessage(action.ID)
+	text, _ := message["message"].(string)
+	if !strings.Contains(text, reason) {
+		t.Errorf("tool message = %q, want the whole %d-byte reason in it", text, len(reason))
+	}
+}
+
+func TestDecideApproval_ToolUnregisteredAfterRestart_FailsActionKeepsApproved(t *testing.T) {
+	executor := &recordingToolExecutor{}
+	h := approvalHarness(t, domain.AgentGoalFixAndDeploy, executor)
+	action := h.seedDecision(productionToolName, productionArguments(), domain.AgentActionReady)
+	approval := h.suspendForApproval(action)
+	h.clock.Advance(time.Minute)
+	// The process restarts without the production Tool registered.
+	h.restart(returnHarnessOptions{goal: domain.AgentGoalFixAndDeploy, approvalTimeoutMs: approvalWaitMs})
+
+	outcome, err := h.decide(approval.ID, domain.ApprovalApproved, "")
+	if err != nil || outcome.Approval.Status != domain.ApprovalApproved {
+		t.Fatalf("approve = %+v, %v, want the APPROVED decision recorded", outcome, err)
+	}
+	if got := h.getApprovalOf(action.ID); got.Status != domain.ApprovalApproved {
+		t.Errorf("approval = %s, want APPROVED kept", got.Status)
+	}
+	got := h.getAction(action.ID)
+	if got.Status != domain.AgentActionFailed || got.Error == nil {
+		t.Fatalf("action = %s %+v, want FAILED with the registration error", got.Status, got.Error)
+	}
+	if h.attemptCount(action.ID) != 0 || len(executor.received()) != 0 || len(h.queue.offeredActions()) != 0 {
+		t.Errorf("an unregistered tool got an Attempt, a call or a queue offer")
+	}
+	agentRun := h.getAgentRun()
+	if agentRun.Termination == nil || *agentRun.Termination != domain.TerminationToolError {
+		t.Errorf("agent run termination = %v, want TOOL_ERROR", agentRun.Termination)
+	}
+	assertNotPaused(t, agentRun)
+	if run := h.getRun(); run.Status != domain.RunFailed {
+		t.Errorf("run = %s, want FAILED", run.Status)
+	}
+}
+
+func (h *returnHarness) toolAttempts(actionID string) []domain.ToolAttempt {
+	h.t.Helper()
+	var out []domain.ToolAttempt
+	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		out, err = tx.ToolAttempts().ListByActionID(ctx, actionID)
+		return err
+	}); err != nil {
+		h.t.Fatalf("list attempts: %v", err)
+	}
+	return out
+}
+
+// listOrphanStarted is the scan the Reconciler of the harness's current process runs.
+func (h *returnHarness) listOrphanStarted() []domain.ToolAttempt {
+	h.t.Helper()
+	var out []domain.ToolAttempt
+	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		out, err = tx.ToolAttempts().ListOrphanStarted(ctx, h.svc.deps.RunnerID, h.clock.Now(), 10)
+		return err
+	}); err != nil {
+		h.t.Fatalf("list orphan attempts: %v", err)
+	}
+	return out
+}

@@ -29,6 +29,9 @@ import (
 type WorkEnqueuer interface {
 	EnqueueAdvance(runID string) bool
 	EnqueueAgentTurn(runID, turnID string) bool
+	// EnqueueAgentAction offers an approved Agent Action whose STARTED Attempt has
+	// committed, so a worker makes the Tool call the approval transaction prepared.
+	EnqueueAgentAction(runID, actionID string) bool
 }
 
 // EventNotifier wakes in-process SSE cursors after Events have committed. PostgreSQL
@@ -44,6 +47,8 @@ type NoopEnqueuer struct{}
 func (NoopEnqueuer) EnqueueAdvance(string) bool { return false }
 
 func (NoopEnqueuer) EnqueueAgentTurn(string, string) bool { return false }
+
+func (NoopEnqueuer) EnqueueAgentAction(string, string) bool { return false }
 
 // NoopNotifier drops notifications. SSE still works through cursor polling.
 type NoopNotifier struct{}

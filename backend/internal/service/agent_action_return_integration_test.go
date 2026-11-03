@@ -22,6 +22,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/nodes/agent"
+	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textoutput"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -54,9 +55,14 @@ func (c *returnClock) Advance(d time.Duration) {
 // recordingQueue records the Turns offered to it after COMMIT. It accepts them unless
 // refuse is set, which models a full work queue leaving the Turn to the Reconciler.
 type recordingQueue struct {
-	mu     sync.Mutex
-	turns  []string
-	refuse atomic.Bool
+	mu      sync.Mutex
+	turns   []string
+	actions []string
+	refuse  atomic.Bool
+	// svc, when set, makes the queue drive each approved Action through the worker's use
+	// case on the test goroutine, as an in-process worker would right after COMMIT. Left
+	// nil, the offer is only recorded: the process "died" before any worker took it.
+	svc *ExecutionService
 }
 
 func (*recordingQueue) EnqueueAdvance(string) bool { return true }
@@ -66,6 +72,25 @@ func (q *recordingQueue) EnqueueAgentTurn(_, turnID string) bool {
 	defer q.mu.Unlock()
 	q.turns = append(q.turns, turnID)
 	return !q.refuse.Load()
+}
+
+func (q *recordingQueue) EnqueueAgentAction(_, actionID string) bool {
+	q.mu.Lock()
+	q.actions = append(q.actions, actionID)
+	svc := q.svc
+	q.mu.Unlock()
+	if svc != nil {
+		if err := svc.ContinueAgentAction(context.Background(), actionID); err != nil {
+			panic("continue approved agent action: " + err.Error())
+		}
+	}
+	return true
+}
+
+func (q *recordingQueue) offeredActions() []string {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return append([]string(nil), q.actions...)
 }
 
 func (q *recordingQueue) offered() []string {
@@ -153,6 +178,10 @@ type returnHarnessOptions struct {
 	approvalTimeoutMs int
 	approvalHooks     ApprovalHooks
 	runnerID          string
+	// failingSibling adds a second node fed by the input beside the Agent, whose executor
+	// always fails, so a test can end the Run while the Agent waits. The output becomes a
+	// media output fed by both, since every node must reach the one Output node.
+	failingSibling bool
 }
 
 type returnHarness struct {
@@ -187,6 +216,7 @@ func newReturnHarness(t *testing.T, opts returnHarnessOptions) *returnHarness {
 	clock := &returnClock{now: time.Now().UTC().Truncate(time.Second)}
 	queue := &recordingQueue{}
 	svc, compiler := newReturnService(t, uow, clock, queue, opts)
+	queue.svc = svc
 	h := &returnHarness{t: t, ctx: ctx, uow: uow, svc: svc, clock: clock, queue: queue}
 
 	maxTurns := opts.maxTurns
@@ -224,6 +254,23 @@ func newReturnHarness(t *testing.T, opts returnHarnessOptions) *returnHarness {
 			{ID: "e2", Source: "node_agent", SourceHandle: "text", Target: "node_output", TargetHandle: "text"},
 		},
 		CreatedAt: clock.Now(),
+	}
+	if opts.failingSibling {
+		// The sibling sorts after node_agent, so the Agent is claimed first and the sibling
+		// only once the Agent waits.
+		def.Nodes = []domain.Node{
+			inputNode,
+			{ID: "node_agent", Type: "agent", Name: "Agent", Config: json.RawMessage(agentConfig)},
+			{ID: "node_sibling", Type: failingNodeType, Name: "Sibling", Config: json.RawMessage(`{}`),
+				ExecutionPolicy: &domain.ExecutionPolicy{MaxAttempts: 1, Backoff: domain.BackoffFixed}},
+			{ID: "node_output", Type: "media_output", Name: "Output", Config: json.RawMessage(`{}`)},
+		}
+		def.Edges = []domain.Edge{
+			{ID: "e1", Source: "node_input", SourceHandle: "text", Target: "node_agent", TargetHandle: "input"},
+			{ID: "e2", Source: "node_agent", SourceHandle: "text", Target: "node_output", TargetHandle: "caption"},
+			{ID: "e3", Source: "node_input", SourceHandle: "text", Target: "node_sibling", TargetHandle: "text"},
+			{ID: "e4", Source: "node_sibling", SourceHandle: "image", Target: "node_output", TargetHandle: "image"},
+		}
 	}
 	plan, err := compiler.Compile(ctx, def)
 	if err != nil {
@@ -265,7 +312,7 @@ func newReturnService(t *testing.T, uow store.UnitOfWork, clock *returnClock, qu
 	if err := modelRegistry.Register(ctx, mockmodel.NewProvider()); err != nil {
 		t.Fatalf("register mock model provider: %v", err)
 	}
-	for _, reg := range []registry.NodeRegistration{textinput.Registration(), textoutput.Registration(), agent.Registration(), taskInputRegistration()} {
+	for _, reg := range []registry.NodeRegistration{textinput.Registration(), textoutput.Registration(), mediaoutput.Registration(), agent.Registration(), taskInputRegistration(), failingNodeRegistration()} {
 		if err := nodeRegistry.Register(reg); err != nil {
 			t.Fatalf("register node type %s: %v", reg.Metadata.Type, err)
 		}
@@ -297,6 +344,9 @@ func (h *returnHarness) restart(opts returnHarnessOptions) *ExecutionService {
 	h.t.Helper()
 	previous := h.svc
 	h.svc, _ = newReturnService(h.t, h.uow, h.clock, h.queue, opts)
+	h.queue.mu.Lock()
+	h.queue.svc = h.svc
+	h.queue.mu.Unlock()
 	return previous
 }
 

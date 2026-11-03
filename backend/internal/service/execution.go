@@ -23,13 +23,16 @@ import (
 type ExecutionService struct {
 	deps  Deps
 	plans *planCache
+	// approved holds the Tool calls an approval transaction prepared for this process's
+	// work queue; see approvedCalls.
+	approved *approvedCalls
 }
 
 // NewExecutionService builds an ExecutionService over deps. Deps.Queue and Deps.Notifier
 // default to no-ops (Deps.withDefaults), so a Reconciler-only deployment or a test with
 // no worker pool remains valid.
 func NewExecutionService(deps Deps) *ExecutionService {
-	return &ExecutionService{deps: deps.withDefaults(), plans: newPlanCache(planCacheCapacity)}
+	return &ExecutionService{deps: deps.withDefaults(), plans: newPlanCache(planCacheCapacity), approved: newApprovedCalls()}
 }
 
 // compile resolves the compiled plan for one immutable Definition version, through the

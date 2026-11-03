@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-	"unicode/utf8"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/runtime"
@@ -23,8 +22,10 @@ import (
 // conditional update from PENDING, so approve, reject and expiry racing for the same
 // approval have one winner and the losers write nothing.
 
-// maxApprovalReasonChars bounds the reason a person gives with a decision.
-const maxApprovalReasonChars = 500
+// maxApprovalReasonBytes bounds the reason a person gives with a decision, in bytes, so
+// the tool message that returns a rejection to the Agent carries the whole reason within
+// its own byte bound.
+const maxApprovalReasonBytes = 400
 
 // codeApprovalTimeoutNotConfigured fails a call of a Tool a person must approve on an
 // Agent node that bounds no approval wait: the Runtime never substitutes a wait bound.
@@ -88,6 +89,18 @@ type ApprovalConflictError struct {
 
 func (e *ApprovalConflictError) Error() string {
 	return fmt.Sprintf("execution: approval %s is already %s", e.ApprovalID, e.Status)
+}
+
+// ApprovalNotActionableError reports a decision on an approval that is still PENDING but
+// whose Run or Agent Run has already ended: there is nothing left for the decision to act
+// on. The approval is not decided; the expiry settles it as EXPIRED at its deadline.
+// Nothing was written.
+type ApprovalNotActionableError struct {
+	ApprovalID string
+}
+
+func (e *ApprovalNotActionableError) Error() string {
+	return fmt.Sprintf("execution: approval %s belongs to a run that has ended and can no longer be acted on", e.ApprovalID)
 }
 
 // ApprovalRequestError reports a decision request that is malformed before anything is
@@ -252,15 +265,17 @@ func (s *ExecutionService) lockApprovalTarget(ctx context.Context, tx store.Tx, 
 // DecideApproval records one authenticated decision on a PENDING approval, in a single
 // transaction under the Run aggregate lock. A decision already recorded is answered without
 // a write: the same decision again returns it as Repeated, a different one or an expiry is
-// an ApprovalConflictError.
+// an ApprovalConflictError. A PENDING approval whose Run or Agent Run has ended is an
+// ApprovalNotActionableError, and only the expiry settles it.
 //
 // A rejection resumes the Agent's clock and returns the Action to the Agent with the
 // person's reason, so the next Turn can decide what to do. An approval hands the Action
 // its execution right back, re-runs every pre-execution check against the facts as they
 // are now, creates the STARTED Attempt and resumes the clock; a check that no longer passes
 // returns or fails the Action exactly as the claim would, with the approval kept APPROVED.
-// After COMMIT the approved Tool is called through the same execution path a claim uses,
-// holding no lock, and a returned refusal's next Turn is offered to the work queue.
+// After COMMIT the prepared Tool call is offered to the work queue, where a worker makes it
+// on the same path a claim continues on; the response reflects only the committed approval.
+// A returned refusal's next Turn is offered to the work queue the same way.
 func (s *ExecutionService) DecideApproval(ctx context.Context, req DecideApproval) (DecideApprovalOutcome, error) {
 	if err := req.validate(); err != nil {
 		return DecideApprovalOutcome{}, err
@@ -285,10 +300,10 @@ func (s *ExecutionService) DecideApproval(ctx context.Context, req DecideApprova
 			}
 			return &ApprovalConflictError{ApprovalID: t.approval.ID, Status: t.approval.Status}
 		}
-		if t.lock.Status().IsTerminal() || t.action.Status != domain.AgentActionWaitingApproval || t.agentRun.Termination != nil {
+		if !t.actionable() {
 			// The Run or the Agent Run ended while the approval was open; the decision has
 			// nothing left to act on and the approval stays PENDING for the expiry.
-			return &ApprovalConflictError{ApprovalID: t.approval.ID, Status: t.approval.Status}
+			return &ApprovalNotActionableError{ApprovalID: t.approval.ID}
 		}
 
 		decidedBy := req.DecidedBy
@@ -340,14 +355,17 @@ func (s *ExecutionService) DecideApproval(ctx context.Context, req DecideApprova
 		s.enqueueAgentTurn(commit.runID, nextTurnID)
 	}
 	if call != nil {
-		// The approved Tool runs after COMMIT, holding no lock, on the same path a claim
-		// continues on. The request that carried the decision may end at any moment, so
-		// the call does not inherit its cancellation; the Agent deadline still bounds it.
-		if err := s.executeClaimedAgentAction(context.WithoutCancel(ctx), call); err != nil {
-			return outcome, err
-		}
+		// The approved Tool is called by a worker, holding no lock, on the same path a
+		// claim continues on; the request that carried the decision owns none of it.
+		s.enqueueApprovedCall(call)
 	}
 	return outcome, nil
+}
+
+// actionable reports whether a decision still has something to act on: the Run is not
+// terminal, the Action still waits for the approval and the Agent Run has not ended.
+func (t approvalDecisionTarget) actionable() bool {
+	return !t.lock.Status().IsTerminal() && t.action.Status == domain.AgentActionWaitingApproval && t.agentRun.Termination == nil
 }
 
 func (req DecideApproval) validate() error {
@@ -357,8 +375,8 @@ func (req DecideApproval) validate() error {
 	if req.DecidedBy == "" {
 		return &ApprovalRequestError{Reason: "the deciding identity is required"}
 	}
-	if utf8.RuneCountInString(req.Reason) > maxApprovalReasonChars {
-		return &ApprovalRequestError{Reason: fmt.Sprintf("reason must be at most %d characters", maxApprovalReasonChars)}
+	if len(req.Reason) > maxApprovalReasonBytes {
+		return &ApprovalRequestError{Reason: fmt.Sprintf("reason must be at most %d bytes", maxApprovalReasonBytes)}
 	}
 	if req.Decision == domain.ApprovalRejected && req.Reason == "" {
 		return &ApprovalRequestError{Reason: "a rejection requires a reason"}
@@ -387,9 +405,11 @@ func (s *ExecutionService) returnWaitingApprovalLocked(ctx context.Context, tx s
 // again against the facts as they are now, because the approval only covered the call's
 // arguments, not the world around them. A check that fails resumes the clock and settles
 // the Action as the claim would, with the approval kept APPROVED. When every check passes
-// the STARTED Attempt is created once; the clock resumes unless the Tool's registration
-// marks it reconcilable, in which case the Agent stays paused for the release the Runtime
-// will reconcile and only the pause reason changes. It returns the call to make after
+// the STARTED Attempt is created once and the clock resumes, so the call's deadline and any
+// callback credential it issues are bound to the moved deadline. A Tool whose registration
+// marks it reconcilable then pauses the Agent again at once, for the release the Runtime
+// will reconcile: the approval wait is credited back, and the release wait starts its own
+// pause, so neither counts against the Agent's time. It returns the call to make after
 // COMMIT (nil when the Action was settled instead) and what the transaction owes.
 func (s *ExecutionService) resumeApprovedActionLocked(ctx context.Context, tx store.Tx, t approvalDecisionTarget, now time.Time) (*agentToolCall, agentCommit, string, error) {
 	if err := tx.AgentActions().ResumeApproved(ctx, t.action.ID, now); err != nil {
@@ -437,12 +457,13 @@ func (s *ExecutionService) resumeApprovedActionLocked(ctx context.Context, tx st
 		return nil, c.commit, c.nextTurnID, nil
 	}
 
-	if !c.reg.Metadata.Reconcilable {
-		if c.agentRun, err = s.resumeAgentLocked(ctx, tx, t.lock, t.nodeRun, t.agentRun, now); err != nil {
+	if c.agentRun, err = s.resumeAgentLocked(ctx, tx, t.lock, t.nodeRun, t.agentRun, now); err != nil {
+		return nil, agentCommit{}, "", err
+	}
+	if c.reg.Metadata.Reconcilable {
+		if c.agentRun, err = s.pauseAgentLocked(ctx, tx, t.lock, t.nodeRun, c.agentRun, domain.PauseRelease, now); err != nil {
 			return nil, agentCommit{}, "", err
 		}
-	} else if err := tx.AgentRuns().SetPauseReason(ctx, t.agentRun.ID, domain.PauseRelease); err != nil {
-		return nil, agentCommit{}, "", err
 	}
 	call, err := s.startToolAttemptLocked(ctx, tx, c, verdict.inputs, now)
 	if err != nil {
@@ -455,7 +476,10 @@ func (s *ExecutionService) resumeApprovedActionLocked(ctx context.Context, tx st
 // clock: the approval becomes EXPIRED, APPROVAL_DECIDED records it, the Agent's clock
 // resumes and the Action is returned to the Agent as APPROVAL_EXPIRED, all in one
 // transaction under the Run lock. An approval a person decided first, or whose deadline has
-// not passed, is left untouched. After COMMIT the next Turn is offered to the work queue.
+// not passed, is left untouched. When the Run or the Agent Run ended while the approval was
+// open there is nothing to return to: the approval still becomes EXPIRED with its Event, so
+// it leaves the expiry scan, and the Agent's clock and Action are left as the termination
+// left them. After COMMIT the next Turn, if any, is offered to the work queue.
 func (s *ExecutionService) ExpireApproval(ctx context.Context, approvalID string) error {
 	var commit agentCommit
 	var nextTurnID string
@@ -466,9 +490,6 @@ func (s *ExecutionService) ExpireApproval(ctx context.Context, approvalID string
 		}
 		now := s.deps.Clock.Now()
 		if t.approval.Status.IsDecided() || now.Before(t.approval.Deadline) {
-			return nil
-		}
-		if t.lock.Status().IsTerminal() || t.action.Status != domain.AgentActionWaitingApproval || t.agentRun.Termination != nil {
 			return nil
 		}
 		won, err := tx.Approvals().Decide(ctx, t.approval.ID, domain.ApprovalExpired, now, nil, nil)
@@ -483,6 +504,15 @@ func (s *ExecutionService) ExpireApproval(ctx context.Context, approvalID string
 			Decision: domain.ApprovalExpired,
 		}); err != nil {
 			return err
+		}
+		if !t.actionable() {
+			// Expiring changes no Run-level status; UpdateAggregate persists the seq
+			// watermark APPROVAL_DECIDED allocated under the lock.
+			if err := tx.Runs().UpdateAggregate(ctx, t.lock, t.lock.Status(), now); err != nil {
+				return err
+			}
+			commit = agentCommit{runID: t.nodeRun.RunID, lastSeq: t.lock.LastSeq()}
+			return nil
 		}
 		nextTurnID, err = s.returnWaitingApprovalLocked(ctx, tx, t, domain.ReturnApprovalExpired,
 			fmt.Sprintf("Nobody approved the %s call before its approval deadline.", boundedToolName(t.toolName)), now)

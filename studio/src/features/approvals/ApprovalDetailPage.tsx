@@ -29,11 +29,15 @@ type LoadState =
   | { kind: 'loaded'; view: ApprovalView }
   | { kind: 'error'; error: ApprovalLoadError };
 
+/** Mirrors the Backend's byte bound on a decision reason. */
+const MAX_REASON_BYTES = 400;
+
 type DecisionState =
   | { kind: 'idle' }
   | { kind: 'saving' }
   | { kind: 'done'; status: Approval['status']; repeated: boolean }
   | { kind: 'conflict' }
+  | { kind: 'notActionable' }
   | { kind: 'failed'; message: string };
 
 /**
@@ -82,6 +86,11 @@ export function ApprovalDetailPage() {
       setReasonError(a.reasonRequired);
       return;
     }
+    // The Backend bounds the reason by bytes, not characters, so measure it the same way.
+    if (new TextEncoder().encode(text).length > MAX_REASON_BYTES) {
+      setReasonError(a.reasonTooLong);
+      return;
+    }
     setReasonError(null);
     setDecision({ kind: 'saving' });
     decideApproval(approvalId, text ? { decision: kind, reason: text } : { decision: kind }, token)
@@ -95,6 +104,11 @@ export function ApprovalDetailPage() {
       })
       .catch((error: unknown) => {
         if (error instanceof ApiRequestError && error.status === 409) {
+          if (error.code === 'APPROVAL_NOT_ACTIONABLE') {
+            // The run ended first: the approval is still pending but can no longer be decided.
+            setDecision({ kind: 'notActionable' });
+            return;
+          }
           // Someone else's decision was recorded first: show what the Backend holds.
           setDecision({ kind: 'conflict' });
           reload();
@@ -221,6 +235,9 @@ export function ApprovalDetailPage() {
           </Callout>
         ) : null}
         {decision.kind === 'conflict' ? <Callout tone="caution">{a.conflict}</Callout> : null}
+        {decision.kind === 'notActionable' ? (
+          <Callout tone="caution">{a.notActionable}</Callout>
+        ) : null}
         {decision.kind === 'failed' ? <Callout tone="danger">{decision.message}</Callout> : null}
 
         {pending && decision.kind !== 'done' ? (

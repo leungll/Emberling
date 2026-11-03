@@ -82,6 +82,8 @@ func (e *agentRefusingEnqueuer) EnqueueAgentTurn(_, turnID string) bool {
 	return false
 }
 
+func (*agentRefusingEnqueuer) EnqueueAgentAction(string, string) bool { return false }
+
 func (e *agentRefusingEnqueuer) refusedTurns() []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()

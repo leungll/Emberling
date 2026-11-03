@@ -32,6 +32,7 @@ const (
 	codeInvalidOperatorCredential = "INVALID_OPERATOR_CREDENTIAL"
 	codeApprovalNotFound          = "APPROVAL_NOT_FOUND"
 	codeApprovalConflict          = "APPROVAL_CONFLICT"
+	codeApprovalNotActionable     = "APPROVAL_NOT_ACTIONABLE"
 )
 
 // status422Codes names the runtime.ValidationError codes the interface contract groups
@@ -155,6 +156,13 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error, notFoundC
 		writeErrorEnvelope(w, http.StatusConflict, codeApprovalConflict,
 			"the approval was already decided differently or can no longer be acted on",
 			map[string]any{"status": approvalConflict.Status})
+		return
+	}
+
+	var approvalNotActionable *service.ApprovalNotActionableError
+	if errors.As(err, &approvalNotActionable) {
+		writeErrorEnvelope(w, http.StatusConflict, codeApprovalNotActionable,
+			"the run this approval belongs to has ended; the approval is still undecided and expires at its deadline", nil)
 		return
 	}
 
