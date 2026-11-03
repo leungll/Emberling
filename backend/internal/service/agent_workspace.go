@@ -86,6 +86,10 @@ func workspaceViewLocked(ctx context.Context, tx store.Tx, agentRunID string) (*
 		PatchDigest:  domain.WorkspacePatchDigest(""),
 		AllowedPaths: slices.Clone(workspace.AllowedPaths),
 	}
+	if target := workspace.DeployTarget; target != nil {
+		copied := *target
+		view.DeployTarget = &copied
+	}
 	if latest != nil {
 		view.Patch, view.PatchDigest, view.PatchSeq = latest.Patch, latest.PatchDigest, latest.Seq
 	}

@@ -544,13 +544,68 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			return nil
 		}
 
+		// A workspace Tool receives the Agent Run's frozen workspace: the binding, the newest
+		// recorded patch and its sequence, read under this lock so the view names exactly
+		// the version the call runs against. An Agent Run that froze none cannot run the
+		// Tool at all; that is a Definition defect, so the Action fails before any Attempt
+		// exists. A Tool that declares the path it writes has that path checked against
+		// the frozen allowed paths here, and a path outside them is handed back to the
+		// Agent as a SCOPE_DENIED refusal: no Attempt, no executor call, no patch.
+		var workspace *registry.WorkspaceView
+		if reg.Metadata.UsesWorkspace {
+			view, err := workspaceViewLocked(ctx, tx, agentRun.ID)
+			switch {
+			case errors.Is(err, domain.ErrNotFound):
+				if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
+					domain.FailureSyncExecution, domain.TerminationToolError, domain.ExecutionError{
+						Code:    codeWorkspaceNotConfigured,
+						Message: fmt.Sprintf("tool %q needs a workspace, but the Agent node froze none", toolName),
+					}, now); err != nil {
+					return err
+				}
+				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
+				return nil
+			case err != nil:
+				return err
+			}
+			workspace = view
+			if refusal := workspaceWriteScopeRefusal(reg.Metadata, decision.Arguments, view.AllowedPaths); refusal != nil {
+				turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
+					lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
+				}, domain.AgentActionRunning, domain.ReturnScopeDenied, scopeDeniedMessage(refusal, view.AllowedPaths), now)
+				if err != nil {
+					return err
+				}
+				nextTurnID = turnID
+				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
+				return nil
+			}
+			// A Tool that acts on a named patch must name the newest one. The digest it
+			// names is compared with the view read under this lock, and a stale one is handed
+			// back as a STALE_PATCH refusal: no Attempt, no dispatch, so no result can ever
+			// bind to a superseded patch. The workspace is checked before the Tool's fact
+			// requirements, so a superseded patch is reported as stale even when facts about
+			// it exist: the Agent has to move to the current patch either way.
+			if named, stale := workspacePatchStale(reg.Metadata, decision.Arguments, view); stale {
+				turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
+					lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
+				}, domain.AgentActionRunning, domain.ReturnStalePatch, stalePatchMessage(named, view), now)
+				if err != nil {
+					return err
+				}
+				nextTurnID = turnID
+				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
+				return nil
+			}
+		}
+
 		// A valid call of a Tool that requires committed facts is still not executable
 		// until those facts hold. An unmet requirement is decided before any Attempt
 		// exists, so no external call can follow. A Tool registered to return an unmet
 		// requirement hands the Agent a VERIFICATION_MISSING refusal naming the missing
 		// fact type, and the Agent decides the next step in a new Turn; every other Tool
 		// fails the Action exactly like an invalid Decision.
-		unmet, err := s.unmetFactRequirementLocked(ctx, tx, nodeRun.RunID, reg.Metadata.Requires, decision.Arguments)
+		requiredFacts, unmet, err := s.unmetFactRequirementLocked(ctx, tx, nodeRun.RunID, reg.Metadata.Requires, decision.Arguments)
 		if err != nil {
 			return err
 		}
@@ -625,57 +680,29 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			}
 		}
 
-		// A workspace Tool receives the Agent Run's frozen workspace: the binding, the newest
-		// recorded patch and its sequence, read under this lock so the view names exactly
-		// the version the call runs against. An Agent Run that froze none cannot run the
-		// Tool at all; that is a Definition defect, so the Action fails before any Attempt
-		// exists. A Tool that declares the path it writes has that path checked against
-		// the frozen allowed paths here, and a path outside them is handed back to the
-		// Agent as a SCOPE_DENIED refusal: no Attempt, no executor call, no patch.
-		var workspace *registry.WorkspaceView
-		if reg.Metadata.UsesWorkspace {
-			view, err := workspaceViewLocked(ctx, tx, agentRun.ID)
-			switch {
-			case errors.Is(err, domain.ErrNotFound):
+		// A Tool that records a change request cites, in its decision basis, items of the
+		// Turns' Context Manifests. Every cited item must exist in the Manifest of the Turn it
+		// names, which this transaction reads under the lock; a reference that resolves to
+		// nothing is a defect of the committed Decision, so the Action fails before any
+		// Attempt exists and the model is not asked again.
+		basis, basisErr := decisionBasisOfArguments(reg.Metadata, decision.Arguments)
+		if basisErr == nil && len(basis) > 0 {
+			basisErr = checkDecisionBasisLocked(ctx, tx, agentRun.ID, basis)
+		}
+		if basisErr != nil {
+			var invalid *errDecisionBasisInvalid
+			if errors.As(basisErr, &invalid) {
 				if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-					domain.FailureSyncExecution, domain.TerminationToolError, domain.ExecutionError{
-						Code:    codeWorkspaceNotConfigured,
-						Message: fmt.Sprintf("tool %q needs a workspace, but the Agent node froze none", toolName),
+					domain.FailureSyncExecution, domain.TerminationInvalidAction, domain.ExecutionError{
+						Code:    codeDecisionBasisInvalid,
+						Message: fmt.Sprintf("tool %q cites a decision basis the runtime cannot resolve: %s", toolName, basisErr.Error()),
 					}, now); err != nil {
 					return err
 				}
 				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
 				return nil
-			case err != nil:
-				return err
 			}
-			workspace = view
-			if refusal := workspaceWriteScopeRefusal(reg.Metadata, decision.Arguments, view.AllowedPaths); refusal != nil {
-				turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
-					lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
-				}, domain.AgentActionRunning, domain.ReturnScopeDenied, scopeDeniedMessage(refusal, view.AllowedPaths), now)
-				if err != nil {
-					return err
-				}
-				nextTurnID = turnID
-				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
-				return nil
-			}
-			// A Tool that acts on a named patch must name the newest one. The digest it
-			// names is compared with the view read under this lock, and a stale one is handed
-			// back as a STALE_PATCH refusal: no Attempt, no dispatch, so no result can ever
-			// bind to a superseded patch.
-			if named, stale := workspacePatchStale(reg.Metadata, decision.Arguments, view); stale {
-				turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
-					lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
-				}, domain.AgentActionRunning, domain.ReturnStalePatch, stalePatchMessage(named, view), now)
-				if err != nil {
-					return err
-				}
-				nextTurnID = turnID
-				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
-				return nil
-			}
+			return basisErr
 		}
 
 		// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
@@ -761,6 +788,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 				ImageModelID:  imageModelID,
 				ReviewModelID: reviewModelID,
 				Workspace:     workspace,
+				RequiredFacts: requiredFacts,
 				Callback:      callbackCtx,
 			},
 			async:    async,
