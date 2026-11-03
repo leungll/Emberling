@@ -232,6 +232,9 @@ function failureLine(step: Step): CardLine {
 }
 
 function waitingLine(step: Step): CardLine {
+  const approvalTurn = step.trace?.turns.find((t) => t.action?.status === 'WAITING_APPROVAL');
+  const approvalTool = approvalTurn?.decision?.tool;
+  if (approvalTool) return line(c().waitingForApproval(approvalTool), [approvalTool]);
   const turn = step.trace?.turns.find((t) => t.action?.status === 'WAITING_CALLBACK');
   const tool = turn?.decision?.tool;
   if (turn && tool) {

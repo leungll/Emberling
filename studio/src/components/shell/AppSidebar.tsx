@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Keyboard,
   PanelLeft,
+  ShieldCheck,
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
@@ -160,6 +161,8 @@ export function AppSidebar({
           ? nav.workflows
           : nav.countTip(nav.workflows, nav.workflowTotal(counts.workflows), ''),
     },
+    // Approvals need the operator credential, so the sidebar shows no count for them.
+    { list: 'approvals', label: nav.approvals, icon: ShieldCheck, total: null, tip: nav.approvals },
   ];
 
   const conn = copy.backend[connection];

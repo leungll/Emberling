@@ -1,6 +1,7 @@
 import type {
   AgentActionStatus,
   AgentTurnStatus,
+  ApprovalStatus,
   NodeAttemptStatus,
   NodeRunStatus,
   RunStatus,
@@ -25,6 +26,7 @@ export type StatusSubject =
   | { kind: 'turn'; value: AgentTurnStatus }
   | { kind: 'action'; value: AgentActionStatus }
   | { kind: 'attempt'; value: NodeAttemptStatus | ToolAttemptStatus }
+  | { kind: 'approval'; value: ApprovalStatus }
   | { kind: 'connection'; value: ConnectionStatus };
 
 export interface StatusInfo {
@@ -60,10 +62,19 @@ const GENERIC_TONE: Record<string, Tone> = {
   RUNNING: 'running',
   STARTED: 'running',
   WAITING_CALLBACK: 'waiting',
+  WAITING_APPROVAL: 'waiting',
+  WAITING_HUMAN: 'waiting',
   DISPATCHED: 'waiting',
   COMPLETED: 'succeeded',
   SUCCEEDED: 'succeeded',
   FAILED: 'failed',
+};
+
+const APPROVAL_TONE: Record<ApprovalStatus, Tone> = {
+  PENDING: 'waiting',
+  APPROVED: 'succeeded',
+  REJECTED: 'failed',
+  EXPIRED: 'inactive',
 };
 
 const CONNECTION_TONE: Record<ConnectionStatus, Tone> = {
@@ -108,6 +119,11 @@ export function statusInfo(subject: StatusSubject): StatusInfo {
         (typeof s.connection)[ConnectionStatus] | undefined;
       if (!entry) return { label: subject.value, tone: 'inactive' };
       return { label: entry.label, tone: CONNECTION_TONE[subject.value], help: entry.help };
+    }
+    case 'approval': {
+      const table: Record<string, string> = s.approval;
+      const tone = (APPROVAL_TONE as Record<string, Tone | undefined>)[subject.value] ?? 'inactive';
+      return { label: table[subject.value] ?? subject.value, tone, raw: subject.value };
     }
     case 'turn':
     case 'action':

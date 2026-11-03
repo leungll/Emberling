@@ -14,6 +14,7 @@ import { useShortcutsStore } from '@/stores/shortcuts-store';
 function sectionOf(pathname: string): ListName | null {
   if (pathname === '/runs' || pathname.startsWith('/runs/')) return 'runs';
   if (pathname === '/workflows' || pathname.startsWith('/workflows/')) return 'workflows';
+  if (pathname === '/approvals' || pathname.startsWith('/approvals/')) return 'approvals';
   return null;
 }
 
@@ -65,6 +66,8 @@ export function ListShell({ children }: { children?: ReactNode }) {
     runs: onListPage && section === 'runs' ? LIST_PATH.runs : listHref('runs', true),
     workflows:
       onListPage && section === 'workflows' ? LIST_PATH.workflows : listHref('workflows', true),
+    approvals:
+      onListPage && section === 'approvals' ? LIST_PATH.approvals : listHref('approvals', true),
   };
   const counts: NavCounts = {
     runs: runCounts
