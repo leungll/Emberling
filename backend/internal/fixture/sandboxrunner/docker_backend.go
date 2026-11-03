@@ -151,9 +151,15 @@ func (d *DockerBackend) Run(ctx context.Context, job Job) Outcome {
 // A failed or interrupted create removes the name defensively; with --rm the daemon also
 // removes the container on its own once a started container exits.
 func (d *DockerBackend) createContainer(ctx context.Context, name string) bool {
+	return d.createContainerWith(ctx, name, d.createArgs(name))
+}
+
+// createContainerWith is createContainer for a caller-built, fixed `docker create` argument
+// list; the verifier shares the container lifecycle this way.
+func (d *DockerBackend) createContainerWith(ctx context.Context, name string, args []string) bool {
 	createCtx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
-	exitCode, err := d.runner.Docker(createCtx, d.createArgs(name), nil, &boundedBuffer{})
+	exitCode, err := d.runner.Docker(createCtx, args, nil, &boundedBuffer{})
 	if err != nil || exitCode != 0 {
 		d.removeContainer(ctx, name)
 		return false

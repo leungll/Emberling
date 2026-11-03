@@ -143,6 +143,12 @@ services:
       SANDBOXRUNNER_BACKEND: docker
       SANDBOXRUNNER_TEST_CONTROLS: "true"
       SANDBOXRUNNER_RECORD_PATH: /var/lib/emberling/sandboxrunner/test-record.jsonl
+      # Patch verification is off until both are set: the verification image built and
+      # pushed by deploy/sandboxrunner-verify/build.sh, pinned by digest, and the
+      # repositories as "<id>=<absolute path inside this container>". The repository
+      # must be mounted into this container at that path, read-only.
+      SANDBOXRUNNER_VERIFY_IMAGE: ${SANDBOXRUNNER_VERIFY_IMAGE:-}
+      SANDBOXRUNNER_REPOSITORIES: ${SANDBOXRUNNER_REPOSITORIES:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - emberling-sandboxrunner-record:/var/lib/emberling/sandboxrunner
@@ -254,6 +260,10 @@ services:
       # The sandbox_test Tool is registered only when this is set. Set it to an empty value
       # to run without a sandbox runner.
       EMBERLING_SANDBOX_RUNNER_BASE_URL: ${EMBERLING_SANDBOX_RUNNER_BASE_URL-http://sandboxrunner:9103}
+      # The verify_patch Tool is registered only when this is set. The mock runner answers
+      # verifications from its mock verification backend; the docker runner needs the
+      # verification image and the registered repositories below.
+      EMBERLING_VERIFY_RUNNER_BASE_URL: ${EMBERLING_VERIFY_RUNNER_BASE_URL-http://sandboxrunner:9103}
       # Optional in-flight task limit per asynchronous Provider, as
       # "<provider id>=<n>,...", for example "mock-task-provider-v1=2". Empty by default:
       # no Provider is limited. Read once at startup; the serving-capacity demo variant
