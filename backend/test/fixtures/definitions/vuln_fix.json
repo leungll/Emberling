@@ -1,0 +1,57 @@
+{
+  "workflowId": "wf_vuln_fix",
+  "name": "Vulnerability Fix",
+  "description": "An Agent repairs a dependency vulnerability inside a bound workspace and verifies the patch through the sandbox runner before reporting it",
+  "nodes": [
+    {
+      "id": "node_task",
+      "type": "task_input",
+      "name": "Repair Task",
+      "position": {"x": 0, "y": 0},
+      "config": {
+        "inputKey": "task",
+        "label": "Repair Task",
+        "required": true,
+        "schema": {
+          "properties": {
+            "advisory": {"type": "string", "minLength": 1},
+            "goal": {"type": "string", "enum": ["PREPARE_ONLY", "FIX_AND_DEPLOY"]},
+            "service": {"type": "string"}
+          },
+          "required": ["advisory", "goal"]
+        }
+      }
+    },
+    {
+      "id": "node_agent",
+      "type": "agent",
+      "name": "Repair Agent",
+      "position": {"x": 200, "y": 0},
+      "config": {
+        "instructions": "The task is a JSON object {\"advisory\",\"goal\",\"service\"}. You work inside a bound repository: read RULES.md and advisories/<advisory>.md first, then read the files you need. Fix the vulnerable dependency by editing only go.mod and files under internal/auth/ with write_file; every write returns the digest of the cumulative patch. Verify the latest patch with verify_patch, passing exactly the patchDigest the last write returned; adapt the code and verify again when the verification fails. A REJECTED tool message is a definite refusal: read its code and continue without repeating the refused call. Finish with {\"status\",\"advisory\",\"patchDigest\",\"resultDigest\",\"passed\"} describing the last verification.",
+        "modelId": "text-model-v1",
+        "modelConfig": {"script": "vuln-fix-main-verify"},
+        "allowedTools": ["read_file", "list_files", "write_file", "verify_patch"],
+        "maxTurns": 12,
+        "timeoutMs": 300000,
+        "workspace": {
+          "repositoryId": "vuln-demo",
+          "baseCommit": "2706ca6fb4ddbe969e9acfa5464a347ff90c7774",
+          "allowedPaths": ["go.mod", "internal/auth/"]
+        },
+        "goalPointer": "/goal"
+      }
+    },
+    {
+      "id": "node_result",
+      "type": "text_output",
+      "name": "Repair Report",
+      "position": {"x": 400, "y": 0},
+      "config": {}
+    }
+  ],
+  "edges": [
+    {"id": "edge_task_agent", "source": "node_task", "sourceHandle": "task", "target": "node_agent", "targetHandle": "input"},
+    {"id": "edge_agent_result", "source": "node_agent", "sourceHandle": "text", "target": "node_result", "targetHandle": "text"}
+  ]
+}
