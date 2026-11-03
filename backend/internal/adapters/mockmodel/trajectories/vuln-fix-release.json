@@ -1,0 +1,117 @@
+{
+  "turns": [
+    {
+      "toolCall": {
+        "toolName": "read_file",
+        "arguments": {
+          "path": "RULES.md"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "read_file",
+        "arguments": {
+          "path": "advisories/{{task:/advisory}}.md"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "read_file",
+        "arguments": {
+          "path": "go.mod"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "write_file",
+        "arguments": {
+          "path": "go.mod",
+          "content": "module example.com/tokenservice\n\ngo 1.24\n\nrequire github.com/golang-jwt/jwt/v5 v5.3.1\n"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "write_file",
+        "arguments": {
+          "path": "internal/auth/token.go",
+          "content": "// Package auth issues and verifies the signed access tokens of the token service. The\n// HTTP layer depends only on this package's exported API: Issuer, Identity and the three\n// sentinel errors.\npackage auth\n\nimport (\n\t\"errors\"\n\t\"fmt\"\n\t\"time\"\n\n\t\"github.com/golang-jwt/jwt/v5\"\n)\n\n// Verification errors. A caller compares with errors.Is; the message never carries the\n// token.\nvar (\n\t// ErrExpired reports a well-formed token whose expiry has passed.\n\tErrExpired = errors.New(\"auth: token has expired\")\n\t// ErrAudience reports a valid token issued for another audience.\n\tErrAudience = errors.New(\"auth: token is not for this audience\")\n\t// ErrInvalid reports a token that is malformed, tampered with or signed another way.\n\tErrInvalid = errors.New(\"auth: token is invalid\")\n)\n\n// minSecretBytes is the shortest HMAC secret an Issuer accepts.\nconst minSecretBytes = 16\n\n// Issuer signs tokens for one audience with one shared secret and verifies them again.\ntype Issuer struct {\n\tsecret   []byte\n\taudience string\n\tttl      time.Duration\n}\n\n// Identity is what a verified token says about its holder.\ntype Identity struct {\n\tSubject   string\n\tExpiresAt time.Time\n}\n\n// NewIssuer returns an Issuer for audience whose tokens live for ttl.\nfunc NewIssuer(secret []byte, audience string, ttl time.Duration) (*Issuer, error) {\n\tswitch {\n\tcase len(secret) < minSecretBytes:\n\t\treturn nil, fmt.Errorf(\"auth: secret must be at least %d bytes\", minSecretBytes)\n\tcase audience == \"\":\n\t\treturn nil, errors.New(\"auth: audience is required\")\n\tcase ttl <= 0:\n\t\treturn nil, errors.New(\"auth: ttl must be positive\")\n\t}\n\treturn &Issuer{secret: secret, audience: audience, ttl: ttl}, nil\n}\n\n// Issue signs a token for subject that expires ttl after now.\nfunc (i *Issuer) Issue(subject string, now time.Time) (string, error) {\n\tif subject == \"\" {\n\t\treturn \"\", errors.New(\"auth: subject is required\")\n\t}\n\tclaims := jwt.StandardClaims{\n\t\tSubject:   subject,\n\t\tAudience:  i.audience,\n\t\tIssuedAt:  now.Unix(),\n\t\tExpiresAt: now.Add(i.ttl).Unix(),\n\t}\n\tsigned, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(i.secret)\n\tif err != nil {\n\t\treturn \"\", fmt.Errorf(\"auth: sign token: %w\", err)\n\t}\n\treturn signed, nil\n}\n\n// Verify checks the signature, the expiry and the audience of token and returns the\n// identity it carries.\nfunc (i *Issuer) Verify(token string) (Identity, error) {\n\tclaims := &jwt.StandardClaims{}\n\t_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {\n\t\tif _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {\n\t\t\treturn nil, fmt.Errorf(\"unexpected signing method %v\", t.Header[\"alg\"])\n\t\t}\n\t\treturn i.secret, nil\n\t})\n\tif err != nil {\n\t\tvar validation *jwt.ValidationError\n\t\tif errors.As(err, &validation) && validation.Errors&jwt.ValidationErrorExpired != 0 {\n\t\t\treturn Identity{}, ErrExpired\n\t\t}\n\t\treturn Identity{}, ErrInvalid\n\t}\n\tif !claims.VerifyAudience(i.audience, true) {\n\t\treturn Identity{}, ErrAudience\n\t}\n\treturn Identity{Subject: claims.Subject, ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC()}, nil\n}\n"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "verify_patch",
+        "arguments": {
+          "patchDigest": "{{tool:4:/patchDigest}}"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "verify_patch",
+        "arguments": {
+          "patchDigest": "{{latest:/patchDigest}}"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "create_change_request",
+        "arguments": {
+          "patchDigest": "{{tool:6:/patchDigest}}",
+          "summary": "Upgrade github.com/golang-jwt/jwt from v3 to v5.3.1 and adapt internal/auth/token.go to the v5 claims and validation API, closing advisory {{task:/advisory}}.",
+          "impact": "Only go.mod and internal/auth/token.go change. Token issuance and verification keep their exported API and error values; audience and expiry checks now come from the v5 validator.",
+          "rollbackPlan": "Redeploy the previous version of {{task:/service}}; the change touches no stored data.",
+          "decisionBasis": [
+            {
+              "statement": "The second verification passed: tests, scan and dependency check are clean for the latest patch.",
+              "turnNo": 9,
+              "manifestRef": "{{tool:6:/logArtifactId}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "deploy_change",
+        "arguments": {
+          "changeRequestId": "{{tool:7:/changeRequestId}}"
+        }
+      }
+    },
+    {
+      "final": {
+        "outputText": {
+          "status": "RELEASED",
+          "advisory": "{{task:/advisory}}",
+          "patchDigest": "{{tool:6:/patchDigest}}",
+          "changeRequestId": "{{tool:7:/changeRequestId}}",
+          "operationKey": "{{tool:8:/operationKey}}",
+          "version": "{{tool:8:/version}}",
+          "healthy": "{{tool:8:/healthy}}"
+        }
+      }
+    }
+  ],
+  "onToolResult": [
+    {
+      "when": {
+        "tool": 5,
+        "pointer": "/passed",
+        "equals": false
+      },
+      "toolCall": {
+        "toolName": "write_file",
+        "arguments": {
+          "path": "internal/auth/token.go",
+          "content": "// Package auth issues and verifies the signed access tokens of the token service. The\n// HTTP layer depends only on this package's exported API: Issuer, Identity and the three\n// sentinel errors.\npackage auth\n\nimport (\n\t\"errors\"\n\t\"fmt\"\n\t\"time\"\n\n\t\"github.com/golang-jwt/jwt/v5\"\n)\n\n// Verification errors. A caller compares with errors.Is; the message never carries the\n// token.\nvar (\n\t// ErrExpired reports a well-formed token whose expiry has passed.\n\tErrExpired = errors.New(\"auth: token has expired\")\n\t// ErrAudience reports a valid token issued for another audience.\n\tErrAudience = errors.New(\"auth: token is not for this audience\")\n\t// ErrInvalid reports a token that is malformed, tampered with or signed another way.\n\tErrInvalid = errors.New(\"auth: token is invalid\")\n)\n\n// minSecretBytes is the shortest HMAC secret an Issuer accepts.\nconst minSecretBytes = 16\n\n// Issuer signs tokens for one audience with one shared secret and verifies them again.\ntype Issuer struct {\n\tsecret   []byte\n\taudience string\n\tttl      time.Duration\n}\n\n// Identity is what a verified token says about its holder.\ntype Identity struct {\n\tSubject   string\n\tExpiresAt time.Time\n}\n\n// NewIssuer returns an Issuer for audience whose tokens live for ttl.\nfunc NewIssuer(secret []byte, audience string, ttl time.Duration) (*Issuer, error) {\n\tswitch {\n\tcase len(secret) < minSecretBytes:\n\t\treturn nil, fmt.Errorf(\"auth: secret must be at least %d bytes\", minSecretBytes)\n\tcase audience == \"\":\n\t\treturn nil, errors.New(\"auth: audience is required\")\n\tcase ttl <= 0:\n\t\treturn nil, errors.New(\"auth: ttl must be positive\")\n\t}\n\treturn &Issuer{secret: secret, audience: audience, ttl: ttl}, nil\n}\n\n// Issue signs a token for subject that expires ttl after now.\nfunc (i *Issuer) Issue(subject string, now time.Time) (string, error) {\n\tif subject == \"\" {\n\t\treturn \"\", errors.New(\"auth: subject is required\")\n\t}\n\tclaims := jwt.RegisteredClaims{\n\t\tSubject:   subject,\n\t\tAudience:  jwt.ClaimStrings{i.audience},\n\t\tIssuedAt:  jwt.NewNumericDate(now),\n\t\tExpiresAt: jwt.NewNumericDate(now.Add(i.ttl)),\n\t}\n\tsigned, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(i.secret)\n\tif err != nil {\n\t\treturn \"\", fmt.Errorf(\"auth: sign token: %w\", err)\n\t}\n\treturn signed, nil\n}\n\n// Verify checks the signature, the expiry and the audience of token and returns the\n// identity it carries.\nfunc (i *Issuer) Verify(token string) (Identity, error) {\n\tclaims := &jwt.RegisteredClaims{}\n\t_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {\n\t\treturn i.secret, nil\n\t}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithAudience(i.audience))\n\tswitch {\n\tcase errors.Is(err, jwt.ErrTokenExpired):\n\t\treturn Identity{}, ErrExpired\n\tcase errors.Is(err, jwt.ErrTokenInvalidAudience):\n\t\treturn Identity{}, ErrAudience\n\tcase err != nil:\n\t\treturn Identity{}, ErrInvalid\n\t}\n\tif claims.ExpiresAt == nil {\n\t\treturn Identity{}, ErrInvalid\n\t}\n\treturn Identity{Subject: claims.Subject, ExpiresAt: claims.ExpiresAt.Time.UTC()}, nil\n}\n"
+        }
+      }
+    }
+  ]
+}

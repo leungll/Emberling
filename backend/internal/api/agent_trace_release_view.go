@@ -125,9 +125,10 @@ func releaseOutcomeOf(attempt domain.ToolAttempt) releaseOperationOutcome {
 			return releaseOutcomeVoided
 		}
 		return releaseOutcomeRefused
-	}
-	if attempt.OutcomeUnknownSince != nil {
-		return releaseOutcomeUnknown
+	case domain.ToolAttemptStarted, domain.ToolAttemptDispatched:
+		if attempt.OutcomeUnknownSince != nil {
+			return releaseOutcomeUnknown
+		}
 	}
 	return releaseOutcomePending
 }

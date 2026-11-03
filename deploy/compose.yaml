@@ -265,6 +265,11 @@ services:
       EMBERLING_PRODUCTION_BASE_URL: ${EMBERLING_PRODUCTION_BASE_URL:-http://mockproduction:9102}
       # Registers the deploy_change Tool against the same service's release surface.
       EMBERLING_RELEASE_BASE_URL: ${EMBERLING_RELEASE_BASE_URL:-http://mockproduction:9102}
+      # The approval routes exist only with an operator credential (at least 32 bytes),
+      # resolved from the developer's own environment and never committed; the release
+      # demo stories need it. EMBERLING_OPERATOR_NAME is the identity a decision records.
+      EMBERLING_OPERATOR_TOKEN: ${EMBERLING_OPERATOR_TOKEN:-}
+      EMBERLING_OPERATOR_NAME: ${EMBERLING_OPERATOR_NAME:-demo-operator}
       # The sandbox_test Tool is registered only when this is set. Set it to an empty value
       # to run without a sandbox runner.
       EMBERLING_SANDBOX_RUNNER_BASE_URL: ${EMBERLING_SANDBOX_RUNNER_BASE_URL-http://sandboxrunner:9103}

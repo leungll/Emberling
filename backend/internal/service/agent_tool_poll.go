@@ -181,7 +181,7 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 		// wait never stops the Runtime from learning production's answer.
 		reg, ok := s.deps.Tools.Get(attempt.ToolName)
 		releaseTool := ok && reg.Metadata.Reconcilable
-		if action.Status != domain.AgentActionWaitingCallback && !(releaseTool && action.Status == domain.AgentActionWaitingHuman) {
+		if action.Status != domain.AgentActionWaitingCallback && (!releaseTool || action.Status != domain.AgentActionWaitingHuman) {
 			skip(PollSkipActionNotWaiting)
 			return nil
 		}
