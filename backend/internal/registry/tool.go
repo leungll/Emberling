@@ -64,6 +64,10 @@ type WorkspaceView struct {
 	PatchSeq int
 	// AllowedPaths are normalised relative path prefixes inside the repository.
 	AllowedPaths []string
+	// DeployTarget is the frozen service and environment a release Tool deploys to, nil
+	// when the Agent node configured none. A release Tool reads it verbatim and never
+	// lets the model choose a target.
+	DeployTarget *domain.WorkspaceDeployTarget
 }
 
 // ToolResult is the complete logical result of one Tool call. The Runtime validates it
@@ -149,6 +153,30 @@ type PollableAsyncToolExecutor interface {
 	Poll(ctx context.Context, state ToolAsyncState) (PollResult, error)
 }
 
+// ReconcilableToolExecutor is for the release Tool, whose external operation the Runtime
+// reconciles after the fact instead of resending it. Void asks production to void the
+// operation named by state and reports the operation's status afterwards in the same
+// vocabulary as Poll: FAILED with the VOIDED code when production confirmed the void,
+// SUCCEEDED or RUNNING when the operation had already started or finished, UNKNOWN when
+// production gave no interpretable answer. CheckTarget reads what the deploy target runs
+// now. Each method sends exactly one request and never retries; the Runtime decides what a
+// lost answer means.
+type ReconcilableToolExecutor interface {
+	PollableAsyncToolExecutor
+	Void(ctx context.Context, state ToolAsyncState) (PollResult, error)
+	CheckTarget(ctx context.Context, state ToolAsyncState) (TargetState, error)
+}
+
+// TargetState is what a deploy target runs, as production reports it. Known is false when
+// production has no deployment for the target at all.
+type TargetState struct {
+	Known           bool
+	Version         string
+	PatchDigest     string
+	Healthy         bool
+	LastOperationID string
+}
+
 // ToolAsyncState is what the Runtime restores from committed facts before asking an async
 // Tool to interpret a callback or poll an external task. It carries no plaintext callback
 // token.
@@ -158,4 +186,7 @@ type ToolAsyncState struct {
 	ToolName     string
 	AttemptNo    int
 	ExternalTask ExternalTask
+	// ReleaseTarget is the frozen deploy target of a release Attempt, restored from the
+	// Agent Run's workspace for CheckTarget; nil for every other Tool.
+	ReleaseTarget *domain.WorkspaceDeployTarget
 }

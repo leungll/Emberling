@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
 // ReleaseOccupationStatus is the state of one release target occupation. ACTIVE is the
 // only non-terminal state; a RELEASED occupation records why the target was given back.
@@ -34,6 +37,18 @@ func (r ReleaseReason) IsValid() bool {
 	default:
 		return false
 	}
+}
+
+// ReleaseCodeVoided is the error code a release Attempt fails with when production confirms
+// that its operation was voided: nothing was deployed under that operation key.
+const ReleaseCodeVoided = "VOIDED"
+
+// ReleaseOperationKey is the production-side identity of one release Attempt of an Action:
+// "op_<actionID>_<attemptNo>". The Runtime persists it on the Attempt and in the Callback
+// Binding that routes polls, and the release Tool sends exactly this key, so one Attempt
+// can never be attributed to two production operations.
+func ReleaseOperationKey(actionID string, attemptNo int) string {
+	return "op_" + actionID + "_" + strconv.Itoa(attemptNo)
 }
 
 // ReleaseTargetKey is the persisted identity of a deploy target: "<service>/<environment>".

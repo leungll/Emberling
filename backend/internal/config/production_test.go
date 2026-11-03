@@ -56,3 +56,30 @@ func TestConfig_ProductionBaseURLInvalid_ReturnsInvalidConfigErrorWithoutValue(t
 		})
 	}
 }
+
+func TestConfig_ReleaseBaseURL_IndependentOfProductionBaseURL(t *testing.T) {
+	env := completeEnv()
+	env[config.KeyReleaseBaseURL] = "http://mockproduction:9102/"
+
+	cfg, err := config.Load(lookup(env))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Production.Enabled() || !cfg.Production.ReleaseEnabled() || cfg.Production.ReleaseBaseURL != "http://mockproduction:9102" {
+		t.Errorf("Production = %+v, want only the release surface enabled, trimmed", cfg.Production)
+	}
+}
+
+func TestConfig_ReleaseBaseURLInvalid_ReturnsInvalidConfigErrorWithoutValue(t *testing.T) {
+	env := completeEnv()
+	env[config.KeyReleaseBaseURL] = "mockproduction:9102/secret-path"
+
+	_, err := config.Load(lookup(env))
+	var invalid *config.InvalidConfigError
+	if !errors.As(err, &invalid) || !strings.Contains(err.Error(), config.KeyReleaseBaseURL) {
+		t.Fatalf("Load() error = %v, want an InvalidConfigError naming %s", err, config.KeyReleaseBaseURL)
+	}
+	if strings.Contains(err.Error(), "secret-path") {
+		t.Errorf("error %q quotes the configured value", err)
+	}
+}

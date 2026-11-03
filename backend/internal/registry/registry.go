@@ -416,6 +416,15 @@ func (r *ToolRegistry) Register(reg ToolRegistration) error {
 		case reg.Metadata.Poll == nil && pollable:
 			errs = append(errs, fmt.Errorf("tool %q: executor implements PollableAsyncToolExecutor but metadata declares no poll policy", reg.Metadata.Name))
 		}
+		// A reconcilable declaration and the void/target-check implementation must be
+		// declared together, for the same reason.
+		_, reconcilable := reg.Executor.(ReconcilableToolExecutor)
+		switch {
+		case reg.Metadata.Reconcilable && !reconcilable:
+			errs = append(errs, fmt.Errorf("tool %q: reconcilable declared but executor does not implement ReconcilableToolExecutor", reg.Metadata.Name))
+		case !reg.Metadata.Reconcilable && reconcilable:
+			errs = append(errs, fmt.Errorf("tool %q: executor implements ReconcilableToolExecutor but metadata does not declare reconcilable", reg.Metadata.Name))
+		}
 	}
 
 	if len(errs) > 0 {

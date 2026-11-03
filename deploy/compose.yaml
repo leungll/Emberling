@@ -263,6 +263,8 @@ services:
       # Registers the deploy Tool against the mockproduction service (container DNS, like
       # the Model Provider above). Without this key the Backend does not register the Tool.
       EMBERLING_PRODUCTION_BASE_URL: ${EMBERLING_PRODUCTION_BASE_URL:-http://mockproduction:9102}
+      # Registers the deploy_change Tool against the same service's release surface.
+      EMBERLING_RELEASE_BASE_URL: ${EMBERLING_RELEASE_BASE_URL:-http://mockproduction:9102}
       # The sandbox_test Tool is registered only when this is set. Set it to an empty value
       # to run without a sandbox runner.
       EMBERLING_SANDBOX_RUNNER_BASE_URL: ${EMBERLING_SANDBOX_RUNNER_BASE_URL-http://sandboxrunner:9103}
