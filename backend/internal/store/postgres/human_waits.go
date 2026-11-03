@@ -66,6 +66,42 @@ func (r *humanWaitRepository) Close(ctx context.Context, id string, status domai
 	return affected == 1, nil
 }
 
+// ListOpen returns the OPEN waits a person may still act on, earliest deadline first.
+func (r *humanWaitRepository) ListOpen(ctx context.Context, limit int) ([]domain.HumanWait, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres human_waits.ListOpen: limit must be positive, got %d", limit)
+	}
+	const query = `SELECT ` + humanWaitColumns + `
+		  FROM human_waits WHERE status = 'OPEN' ORDER BY deadline ASC, id ASC LIMIT $1`
+	rows, err := r.conn.Query(ctx, query, limit)
+	if err != nil {
+		return nil, mapError("human_waits.ListOpen", err)
+	}
+	waits, err := scanHumanWaits(rows)
+	if err != nil {
+		return nil, mapError("human_waits.ListOpen", err)
+	}
+	return waits, nil
+}
+
+// ListExpiredOpen discovers OPEN waits whose deadline has passed.
+func (r *humanWaitRepository) ListExpiredOpen(ctx context.Context, now time.Time, limit int) ([]domain.HumanWait, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres human_waits.ListExpiredOpen: limit must be positive, got %d", limit)
+	}
+	const query = `SELECT ` + humanWaitColumns + `
+		  FROM human_waits WHERE status = 'OPEN' AND deadline <= $1 ORDER BY deadline ASC, id ASC LIMIT $2`
+	rows, err := r.conn.Query(ctx, query, now, limit)
+	if err != nil {
+		return nil, mapError("human_waits.ListExpiredOpen", err)
+	}
+	waits, err := scanHumanWaits(rows)
+	if err != nil {
+		return nil, mapError("human_waits.ListExpiredOpen", err)
+	}
+	return waits, nil
+}
+
 func (r *humanWaitRepository) queryOne(ctx context.Context, op, query string, arg any) (domain.HumanWait, error) {
 	rows, err := r.conn.Query(ctx, query, arg)
 	if err != nil {

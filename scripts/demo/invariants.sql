@@ -39,6 +39,7 @@ BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 \echo '  patch_verified_subject_recorded    every patch_verified fact is about a patch the same Agent workspace recorded (or the empty baseline patch)'
 \echo '  release_target_single_active       no deploy target this Run released to has more than one ACTIVE occupation, across every Run'
 \echo '  active_occupation_action_open      every ACTIVE occupation of this Run belongs to an Action that is still open, unless the Run has ended'
+\echo '  ended_run_occupation_queried       every ACTIVE occupation of an ended Run carries a post-task query schedule, across every Run'
 SELECT CASE WHEN :'provider_capacity' = ''
     THEN 'checks not run: provider_slots_within_capacity (pass -v provider_capacity=<id>=<n>,... to check every Provider''s held slots against its limit)'
     ELSE '  provider_slots_within_capacity     no Provider holds more slots than its configured limit (' || :'provider_capacity' || ')' END;
@@ -313,6 +314,20 @@ v_active_occupation_action_open AS (
       AND t.status NOT IN ('COMPLETED', 'FAILED')
 ),
 
+-- A Run that ends while its release outcome is unknown hands the query schedule to the
+-- occupation in the same transaction, so the post-task reconciliation is persisted work
+-- and never depends on process memory: no ACTIVE occupation of an ended Run may lack its
+-- next_query_at. The report inspects every Run, because the occupation that blocks this
+-- Run's target may belong to another.
+v_ended_run_occupation_queried AS (
+    SELECT 'occupation ' || o.id || ' of target ' || o.target_key || ' is ACTIVE without a query schedule while its run ' || o.run_id || ' is ' || r.status AS detail
+    FROM release_occupations o
+    JOIN runs r ON r.id = o.run_id
+    WHERE o.status = 'ACTIVE'
+      AND r.status IN ('COMPLETED', 'FAILED')
+      AND o.next_query_at IS NULL
+),
+
 -- Admission counts the held slots under the Provider's row lock before inserting its
 -- own, so the committed count never exceeds the configured limit. The limit is not a
 -- database fact: it is passed in, and the check runs only when it was. It is a snapshot
@@ -341,7 +356,8 @@ results AS (
     UNION ALL SELECT 9, 'patch_verified_subject_recorded', detail FROM v_fact_patch_recorded
     UNION ALL SELECT 10, 'release_target_single_active', detail FROM v_release_target_single_active
     UNION ALL SELECT 11, 'active_occupation_action_open', detail FROM v_active_occupation_action_open
-    UNION ALL SELECT 12, 'provider_slots_within_capacity', detail FROM v_within_capacity
+    UNION ALL SELECT 12, 'ended_run_occupation_queried', detail FROM v_ended_run_occupation_queried
+    UNION ALL SELECT 13, 'provider_slots_within_capacity', detail FROM v_within_capacity
 ),
 checks(ord, check_name) AS (
     SELECT * FROM (
@@ -349,11 +365,12 @@ checks(ord, check_name) AS (
                (4, 'no_inflight_work_in_terminal_run'), (5, 'run_status_matches_noderuns'),
                (6, 'one_external_task_per_attempt'), (7, 'at_most_one_succeeded_attempt'),
                (8, 'provider_slot_live_noderun'), (9, 'patch_verified_subject_recorded'),
-               (10, 'release_target_single_active'), (11, 'active_occupation_action_open')
+               (10, 'release_target_single_active'), (11, 'active_occupation_action_open'),
+               (12, 'ended_run_occupation_queried')
     ) AS always(ord, check_name)
     UNION ALL
     -- Listed, and so reported, only when the limits were passed in.
-    SELECT 12, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
+    SELECT 13, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
 )
 SELECT line FROM (
     SELECT c.ord, 0 AS sub,

@@ -69,6 +69,8 @@ type agentActionFailedPayload struct {
 	FailureSource   domain.FailureSource  `json:"failureSource"`
 	Error           domain.ExecutionError `json:"error"`
 	ReturnedToAgent bool                  `json:"returnedToAgent,omitempty"`
+	// HumanWaitID names the human wait whose stop or expiry ended the Action.
+	HumanWaitID *string `json:"humanWaitId,omitempty"`
 }
 
 // agentStateUpdatedPayload is AGENT_STATE_UPDATED (Event fields: turnId,
