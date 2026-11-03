@@ -285,8 +285,8 @@ check-fast:
 ##   delivery-runner-redelivery
 ##                         the restarted runner redelivers a finished test; no new Event.
 ##   vuln-verify           the scripted repair Agent, bound to a workspace of the example
-##                         repository, upgrades the vulnerable dependency, fails one
-##                         verification, adapts the code and passes the second.
+##                         repository, upgrades the vulnerable dependency without adapting
+##                         the code, fails that verification, adapts it, passes the second.
 ##   vuln-scope-denied     a write outside the allowed paths is refused before any
 ##                         Attempt; the Agent continues inside them.
 ##   vuln-stale-evidence   a verification of a digest the workspace moved past is

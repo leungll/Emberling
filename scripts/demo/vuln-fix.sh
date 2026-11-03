@@ -6,12 +6,13 @@
 #
 # Usage: scripts/demo/vuln-fix.sh verify|scope-denied|stale-evidence|restart
 #
-#   verify          the scripted Agent reads the rules and the advisory, upgrades go.mod,
-#                   verifies, adapts the calling code after the first verification fails
-#                   and verifies again. Expects a COMPLETED Run, two verify_patch Attempts
-#                   bound to the runner, one failed then one passed patch_verified fact
-#                   whose subject is the latest workspace patch digest, a report naming
-#                   that digest, two verifications at the runner and eight committed
+#   verify          the scripted Agent reads the rules and the advisory, upgrades go.mod
+#                   and the import path without adapting the code, verifies, adapts the
+#                   calling code after that verification fails (the upgrade does not
+#                   compile) and verifies again. Expects a COMPLETED Run, two verify_patch
+#                   Attempts bound to the runner, one failed then one passed patch_verified
+#                   fact whose subject is the latest workspace patch digest, a report
+#                   naming that digest, two verifications at the runner and nine committed
 #                   Decisions.
 #   scope-denied    the Agent first writes under tests/, outside the allowed paths. Expects
 #                   the Action FAILED with SCOPE_DENIED from AUTHORIZATION before any
@@ -34,9 +35,10 @@
 # story runs with a real model, and its checks are the ones a real model must still meet:
 # the Run completes, the report names the latest patch, and every patch_verified fact is
 # about a patch the workspace recorded. No key is read or written here; the Backend's own
-# environment supplies it. The scripted verify story asks the mock runner for one failed
-# verification by its mock mode, which the docker runner refuses, so the scripted stories
-# run against the mock runner only.
+# environment supplies it. The scripted stories pass no mock mode: the failed verification
+# is the real verdict on an upgrade that does not compile, which the mock runner judges
+# from the patch the same way the docker runner's build does, so every story holds against
+# either runner.
 #
 # Writes RUN_ID, WORKFLOW_ID, RECORD_AFTER, RUN_STATUS and SUMMARY to $DEMO_STATE when it
 # is set, for ledger-vs-record.sh and the demo summary.
@@ -240,7 +242,7 @@ else
     check facts_about_recorded_patches "patches=$(jq -c 'map(.patchDigest)' <<<"$patches")" facts_about_recorded_patches
     check report_names_latest "result=$result" report_names_latest
     check runner_verified_twice "arrivals=$runner_arrivals" test "$runner_arrival_count" -eq 2
-    check eight_decisions_committed "decisions=$decisions" test "$decisions" -eq 8
+    check nine_decisions_committed "decisions=$decisions" test "$decisions" -eq 9
     summary="verifications=$(jq 'length' <<<"$verifications") facts=$(jq -c 'map(.verdict)' <<<"$facts") latest=$latest_digest runner_verifications=$runner_arrival_count decisions=$decisions status=$run_status"
     ;;
   scope-denied)
@@ -284,7 +286,7 @@ else
     check runner_asked_once_more "before=$arrivals_before after=$runner_arrival_count" \
       test "$arrivals_before" -eq 1 -a "$runner_arrival_count" -eq 2
     check no_decision_asked_again "decisions before=$decisions_before after=$decisions" \
-      test "$decisions_before" -eq 5 -a "$decisions" -eq 8
+      test "$decisions_before" -eq 6 -a "$decisions" -eq 9
     check callbacks_completed_twice "callback_completions=$callback_completions" test "$callback_completions" -eq 2
     check report_names_latest "result=$result" report_names_latest
     summary="attempt=$held_attempt_before verification=$held_verification decisions=$decisions_before/$decisions runner_verifications=$arrivals_before/$runner_arrival_count callback_completions=$callback_completions status=$run_status"

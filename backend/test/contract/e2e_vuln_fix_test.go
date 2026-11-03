@@ -244,10 +244,11 @@ func toolMessagesOf(t *testing.T, request registry.ModelRequest) []map[string]an
 }
 
 // TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch plays the main
-// story: the Agent upgrades go.mod, the first verification fails, the Agent adapts the
-// calling code and the second verification passes. The Run completes with a report naming
-// the latest patch, the passing patch_verified fact is about exactly that digest, and the
-// runner verified twice.
+// story: the Agent upgrades go.mod and the import path, the verification of that
+// unadapted upgrade fails as its build really does, the Agent adapts the calling code and
+// the second verification passes. The Run completes with a report naming the latest
+// patch, the passing patch_verified fact is about exactly that digest, and the runner
+// verified twice.
 func TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch(t *testing.T) {
 	f := newVulnFixture(t)
 	env := f.startBackend(t, testEnvOptions{})
@@ -271,16 +272,16 @@ func TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch(t *tes
 	}
 
 	latest := trace.latestPatchDigest(t)
-	if trace.Workspace == nil || len(trace.Workspace.Patches) != 2 || trace.Workspace.Patches[0].PatchDigest == latest {
-		t.Fatalf("workspace patches = %+v, want two distinct patch records", trace.Workspace)
+	if trace.Workspace == nil || len(trace.Workspace.Patches) != 3 || trace.Workspace.Patches[1].PatchDigest == latest {
+		t.Fatalf("workspace patches = %+v, want three patch records: go.mod, the unadapted import, the adaptation", trace.Workspace)
 	}
 	facts := verifiedFacts(trace)
 	if len(facts) != 2 || facts[0].Verdict == nil || *facts[0].Verdict || facts[1].Verdict == nil || !*facts[1].Verdict {
 		t.Fatalf("patch_verified facts = %+v, want one failed then one passed", facts)
 	}
-	if facts[0].Subject != trace.Workspace.Patches[0].PatchDigest || facts[1].Subject != latest ||
+	if facts[0].Subject != trace.Workspace.Patches[1].PatchDigest || facts[1].Subject != latest ||
 		facts[1].Attempt != verifications[1].attempt.ID {
-		t.Errorf("fact subjects = %+v, want the first patch then the latest patch %s from the second verification", facts, latest)
+		t.Errorf("fact subjects = %+v, want the unadapted upgrade then the latest patch %s from the second verification", facts, latest)
 	}
 
 	report := vulnReportOf(t, snapshot)
@@ -297,8 +298,8 @@ func TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch(t *tes
 	}
 	events := env.listEvents(t, runID)
 	assertContiguousSeq(t, events)
-	if n := len(eventsOfType(events, "AGENT_DECISION_COMMITTED")); n != 8 {
-		t.Errorf("AGENT_DECISION_COMMITTED events = %d, want 8: seven scripted Turns and the inserted adaptation", n)
+	if n := len(eventsOfType(events, "AGENT_DECISION_COMMITTED")); n != 9 {
+		t.Errorf("AGENT_DECISION_COMMITTED events = %d, want 9: eight scripted Turns and the inserted adaptation", n)
 	}
 	if n := agentAsyncCallbackCompletions(events); n != 2 {
 		t.Errorf("AGENT_ACTION_COMPLETED with completionSource CALLBACK = %d, want 2", n)
@@ -428,8 +429,8 @@ func TestE2E_VulnFix_RestartDuringVerify_NoModelReaskNoRerun(t *testing.T) {
 	heldAttemptID := held[0].attempt.ID
 	verificationID := held[0].attempt.CallbackBinding.ExternalTaskID
 	modelCallsBefore := len(first.provider.Requests())
-	if modelCallsBefore != 5 {
-		t.Fatalf("model calls before the restart = %d, want 5: three reads, one write and the verification", modelCallsBefore)
+	if modelCallsBefore != 6 {
+		t.Fatalf("model calls before the restart = %d, want 6: three reads, two writes and the verification", modelCallsBefore)
 	}
 	arrivalsBefore := len(recordLines(serviceRecord(t, f.runner.http.URL), "arrived", "verification"))
 
@@ -453,13 +454,13 @@ func TestE2E_VulnFix_RestartDuringVerify_NoModelReaskNoRerun(t *testing.T) {
 	}
 
 	// The second Backend asked the model only for the Turns that follow the held
-	// verification; the first request it made already carried the five results.
+	// verification; the first request it made already carried the six results.
 	requests := second.provider.Requests()
 	if len(requests) != 3 {
 		t.Fatalf("model calls after the restart = %d, want 3: the adaptation, the second verification and the FINAL", len(requests))
 	}
-	if messages := toolMessagesOf(t, requests[0]); len(messages) != 5 || messages[4]["passed"] != false {
-		t.Errorf("first request after the restart carries %v, want the five results ending in the failed verification", messages)
+	if messages := toolMessagesOf(t, requests[0]); len(messages) != 6 || messages[5]["passed"] != false {
+		t.Errorf("first request after the restart carries %v, want the six results ending in the failed verification", messages)
 	}
 	events := second.listEvents(t, runID)
 	assertContiguousSeq(t, events)

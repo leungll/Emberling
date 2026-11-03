@@ -44,8 +44,8 @@
 #                                       no Event;
 #                   vuln-verify         vuln-fix.sh verify: an Agent bound to a workspace of
 #                                       the example repository upgrades the vulnerable
-#                                       dependency, fails one verification, adapts the code
-#                                       and passes the second;
+#                                       dependency without adapting the code, fails that
+#                                       verification, adapts the code and passes the second;
 #                   vuln-scope-denied   vuln-fix.sh scope-denied: a write outside the
 #                                       allowed paths is refused before any Attempt and the
 #                                       Agent continues inside them;

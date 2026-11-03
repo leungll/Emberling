@@ -15,6 +15,7 @@ const (
 	vulnTask           = `{"advisory":"GO-2025-3553","goal":"PREPARE_ONLY","service":"token-service"}`
 	readResult         = `{"path":"RULES.md","patchSeq":0,"kind":"file","content":"rules","sizeBytes":5,"truncated":false}`
 	writeGoModResult   = `{"path":"go.mod","bytesWritten":80,"patchDigest":"d1d1","touchedPaths":["go.mod"]}`
+	writeImportResult  = `{"path":"internal/auth/token.go","bytesWritten":2900,"patchDigest":"d1b1","touchedPaths":["go.mod","internal/auth/token.go"]}`
 	writeTokenResult   = `{"path":"internal/auth/token.go","bytesWritten":3041,"patchDigest":"d2d2","touchedPaths":["go.mod","internal/auth/token.go"]}`
 	scopeDeniedMessage = `{"status":"REJECTED","code":"SCOPE_DENIED","message":"tests/auth_test.go is outside the allowed directories."}`
 	stalePatchMessage  = `{"status":"REJECTED","code":"STALE_PATCH","message":"patchDigest is not the workspace's current patch."}`
@@ -58,14 +59,15 @@ func finalText(t *testing.T, response registry.ModelResponse) string {
 	return text
 }
 
-// mainVerifyResults are the first five results of the main verify script: three reads,
-// the go.mod write and a verification that failed.
+// mainVerifyResults are the first six results of the main verify script: three reads,
+// the go.mod write, the import-only write and the verification of that unadapted upgrade,
+// which failed.
 func mainVerifyResults() []string {
-	return []string{readResult, readResult, readResult, writeGoModResult, verifyResult("d1d1", false)}
+	return []string{readResult, readResult, readResult, writeGoModResult, writeImportResult, verifyResult("d1b1", false)}
 }
 
 // TestProvider_Generate_ResultCondition_FailedVerificationInsertsAdaptationOnce plays the
-// main verify script: the fifth result reports passed=false, the condition inserts the
+// main verify script: the sixth result reports passed=false, the condition inserts the
 // adaptation write, the next scripted Turn verifies the digest of that inserted write, and
 // the FINAL names the passing verification.
 func TestProvider_Generate_ResultCondition_FailedVerificationInsertsAdaptationOnce(t *testing.T) {
@@ -82,13 +84,13 @@ func TestProvider_Generate_ResultCondition_FailedVerificationInsertsAdaptationOn
 	}
 
 	// The inserted write's result is not a scripted result: the next Turn is the script's
-	// own sixth Turn, which verifies the latest patch digest.
+	// own seventh Turn, which verifies the latest patch digest.
 	results = append(results, writeTokenResult)
 	verify, err := generateVulnTurn(t, script, results...)
 	if err != nil {
 		t.Fatalf("Generate() after the inserted write error = %v", err)
 	}
-	assertToolCall(t, verify, "verify_patch", `{"mock":"pass","patchDigest":"d2d2"}`)
+	assertToolCall(t, verify, "verify_patch", `{"patchDigest":"d2d2"}`)
 
 	results = append(results, verifyResult("d2d2", true))
 	final, err := generateVulnTurn(t, script, results...)
@@ -120,13 +122,13 @@ func TestProvider_Generate_ResultCondition_SecondFailureDoesNotInsertAgain(t *te
 // script linear when the condition does not match: a verification that passed is followed
 // by the script's own next Turn, which verifies the same digest again.
 func TestProvider_Generate_ResultCondition_PassingVerificationSkipsTheInsertedStep(t *testing.T) {
-	results := []string{readResult, readResult, readResult, writeGoModResult, verifyResult("d1d1", true)}
+	results := []string{readResult, readResult, readResult, writeGoModResult, writeImportResult, verifyResult("d1b1", true)}
 
 	next, err := generateVulnTurn(t, "vuln-fix-main-verify", results...)
 	if err != nil {
 		t.Fatalf("Generate() after a passing verification error = %v", err)
 	}
-	assertToolCall(t, next, "verify_patch", `{"mock":"pass","patchDigest":"d1d1"}`)
+	assertToolCall(t, next, "verify_patch", `{"patchDigest":"d1b1"}`)
 }
 
 // TestProvider_Generate_RejectedCondition_MatchesByCode plays the scope-denied script: a
