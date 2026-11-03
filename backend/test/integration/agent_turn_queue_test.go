@@ -54,6 +54,10 @@ func (e *agentRecordingEnqueuer) EnqueueAgentTurn(runID, turnID string) bool {
 	return e.queue.EnqueueAgentTurn(runID, turnID)
 }
 
+func (e *agentRecordingEnqueuer) EnqueueAgentAction(runID, actionID string) bool {
+	return e.queue.EnqueueAgentAction(runID, actionID)
+}
+
 func (e *agentRecordingEnqueuer) enqueuedTurns() []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()

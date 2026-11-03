@@ -360,6 +360,7 @@ func (s *DefinitionService) resolveAgentRegistrations(def domain.Definition) []r
 		}
 
 		errs = append(errs, agentModelSelectionErrors(s.deps.Models, s.deps.Tools, node.ID, cfg)...)
+		errs = append(errs, agentAuthorizationConfigErrors(s.deps.Tools, node.ID, cfg)...)
 	}
 	return errs
 }

@@ -332,8 +332,14 @@ type agentRunDTO struct {
 	CurrentContextVersion int                      `json:"currentContextVersion"`
 	CurrentStateVersion   int                      `json:"currentStateVersion"`
 	Deadline              time.Time                `json:"deadline"`
-	TerminatedAt          *time.Time               `json:"terminatedAt"`
-	Error                 *domain.ExecutionError   `json:"error"`
+	// PausedAt and PauseReason are set while the Agent's clock is stopped; the deadline is
+	// then not running and moves later on resume. Goal is the frozen task goal, nil when
+	// the node configures none.
+	PausedAt     *time.Time               `json:"pausedAt"`
+	PauseReason  *domain.AgentPauseReason `json:"pauseReason"`
+	Goal         *domain.AgentGoal        `json:"goal"`
+	TerminatedAt *time.Time               `json:"terminatedAt"`
+	Error        *domain.ExecutionError   `json:"error"`
 }
 
 // agentTraceTurnDTO is one round. Decision, Action and ToolAttempts are typed so that a
@@ -401,6 +407,12 @@ type agentActionDTO struct {
 	ClaimSource      *domain.ClaimSource      `json:"claimSource"`
 	CompletionSource *domain.CompletionSource `json:"completionSource"`
 	FailureSource    *domain.FailureSource    `json:"failureSource"`
+	// Authorization is the claim's decision for this Action, nil until it decided;
+	// AuthorizationReason explains a DENY. Approval is the human decision requested for an
+	// ASK, nil otherwise.
+	Authorization       *domain.AuthorizationDecision `json:"authorization"`
+	AuthorizationReason *string                       `json:"authorizationReason"`
+	Approval            *approvalDTO                  `json:"approval"`
 }
 
 // toolAttemptDTO projects one real Tool call. CallbackBinding is typed as `any` for the
@@ -480,6 +492,9 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			CurrentContextVersion: trace.AgentRun.CurrentContextVersion,
 			CurrentStateVersion:   trace.AgentRun.CurrentStateVersion,
 			Deadline:              utcTime(trace.AgentRun.Deadline),
+			PausedAt:              utcTimePtr(trace.AgentRun.PausedAt),
+			PauseReason:           trace.AgentRun.PauseReason,
+			Goal:                  trace.AgentRun.Goal,
 			TerminatedAt:          utcTimePtr(trace.AgentRun.TerminatedAt),
 			Error:                 trace.AgentRun.Error,
 		},
@@ -595,6 +610,10 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 			ClaimSource:      round.ActionSources.Claim,
 			CompletionSource: round.ActionSources.Completion,
 			FailureSource:    round.ActionSources.Failure,
+
+			Authorization:       round.Action.Authorization,
+			AuthorizationReason: round.Action.AuthorizationReason,
+			Approval:            toApprovalDTOPtr(round.Approval),
 		}
 	}
 	for _, attempt := range round.ToolAttempts {

@@ -654,12 +654,80 @@ export interface NodeRunDetail {
  * Agent Run is still going; Studio never infers a termination from the Turns it can see.
  */
 export type AgentTermination =
-  'FINAL_RESPONSE' | 'MAX_TURNS' | 'TIMEOUT' | 'MODEL_ERROR' | 'TOOL_ERROR' | 'INVALID_ACTION';
+  | 'FINAL_RESPONSE'
+  | 'MAX_TURNS'
+  | 'TIMEOUT'
+  | 'MODEL_ERROR'
+  | 'TOOL_ERROR'
+  | 'INVALID_ACTION'
+  | 'HUMAN_STOPPED';
 
 export type AgentTurnStatus = 'READY' | 'RUNNING' | 'COMPLETED' | 'FAILED';
 
-/** Agent Action success is `SUCCEEDED`, matching NodeRun rather than Turn vocabulary. */
-export type AgentActionStatus = 'READY' | 'RUNNING' | 'WAITING_CALLBACK' | 'SUCCEEDED' | 'FAILED';
+/**
+ * Agent Action success is `SUCCEEDED`, matching NodeRun rather than Turn vocabulary.
+ * `WAITING_APPROVAL` is a call a person must approve before it runs; `WAITING_HUMAN` is a
+ * call whose outcome a person must confirm after it ran.
+ */
+export type AgentActionStatus =
+  | 'READY'
+  | 'RUNNING'
+  | 'WAITING_CALLBACK'
+  | 'WAITING_APPROVAL'
+  | 'WAITING_HUMAN'
+  | 'SUCCEEDED'
+  | 'FAILED';
+
+/** Why the Agent's clock is stopped: a person deciding, a release being reconciled, or a human wait. */
+export type AgentPauseReason = 'APPROVAL' | 'RELEASE' | 'HUMAN';
+
+/** What the Backend decided about a Tool call from the Tool's declared risk and the goal. */
+export type AuthorizationDecision = 'ALLOW' | 'ASK' | 'DENY';
+
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+
+/**
+ * One person's decision on one Agent Action. `decidedBy` is the operator's identity name,
+ * never a credential; `reason` is the bounded text given with the decision.
+ */
+export interface Approval {
+  id: string;
+  actionId: string;
+  runId: string;
+  agentRunId: string;
+  status: ApprovalStatus;
+  requestedAt: string;
+  /** When an undecided approval expires; the Backend settles it, never this page. */
+  deadline: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  reason: string | null;
+}
+
+/** An approval with what a person needs to decide it. */
+export interface ApprovalView extends Approval {
+  toolName: string;
+  /** The committed call arguments the approval covers. */
+  arguments: JsonValue | null;
+  workflowId: string;
+  nodeRunId: string;
+}
+
+export interface ApprovalListResponse {
+  items: ApprovalView[];
+}
+
+export interface ApprovalDecisionRequest {
+  decision: 'APPROVE' | 'REJECT';
+  /** Required for a rejection, optional for an approval. */
+  reason?: string;
+}
+
+/** The approval after the call; `repeated` means the same decision was already recorded. */
+export interface ApprovalDecisionResponse {
+  approval: Approval;
+  repeated: boolean;
+}
 
 export type ToolAttemptStatus = 'STARTED' | 'DISPATCHED' | 'SUCCEEDED' | 'FAILED';
 
@@ -673,8 +741,16 @@ export interface AgentRunTrace {
   currentTurnNo: number;
   currentContextVersion: number;
   currentStateVersion: number;
-  /** Absolute Agent deadline; entering WAITING_CALLBACK does not restart it. */
+  /**
+   * Absolute Agent deadline while the clock runs. Entering WAITING_CALLBACK does not restart
+   * it; a pause (`pausedAt` set) stops it, and resuming moves it later by the paused time,
+   * so while paused it is not a countdown.
+   */
   deadline: string | null;
+  /** Set while the Agent's clock is stopped, with why. */
+  pausedAt: string | null;
+  pauseReason: AgentPauseReason | null;
+  goal: AgentGoal | null;
   terminatedAt: string | null;
   error: ExecutionError | null;
 }
@@ -723,6 +799,12 @@ export interface AgentActionTrace {
   completionSource: CompletionSource | null;
   /** `null` unless the Action failed. */
   failureSource: FailureSource | null;
+  /** The Backend's authorization decision for a Tool call; `null` before it was made and for FINAL. */
+  authorization: AuthorizationDecision | null;
+  /** Why a call was denied; `null` otherwise. */
+  authorizationReason: string | null;
+  /** The person's decision on a call whose authorization was ASK; `null` for every other Action. */
+  approval: Approval | null;
 }
 
 /** One Tool Attempt. A retry preserves the earlier Attempt and adds a new `attemptNo`. */
@@ -971,11 +1053,19 @@ export type AgentEventType =
   | 'AGENT_ACTION_FAILED'
   | 'AGENT_STATE_UPDATED'
   | 'AGENT_COMPLETED'
-  | 'AGENT_FAILED';
+  | 'AGENT_FAILED'
+  | 'AGENT_ACTION_WAITING_APPROVAL'
+  | 'APPROVAL_DECIDED'
+  | 'AGENT_PAUSED'
+  | 'AGENT_RESUMED'
+  | 'RELEASE_OUTCOME_UNKNOWN'
+  | 'RELEASE_VOIDED'
+  | 'AGENT_ACTION_WAITING_HUMAN'
+  | 'AGENT_COMPLETION_EVALUATED';
 
 /**
- * The 24 MVP Event types. RUN_CANCELLED, NODE_SKIPPED, NODE_CANCELLED and the
- * MODEL_STREAM_* types are Phase 2 and are absent on purpose.
+ * The 32 Event types the Backend may write. RUN_CANCELLED, NODE_SKIPPED, NODE_CANCELLED and
+ * the MODEL_STREAM_* types are Phase 2 and are absent on purpose.
  */
 export type EventType = RunEventType | NodeEventType | AgentEventType;
 

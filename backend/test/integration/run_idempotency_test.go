@@ -31,7 +31,8 @@ func (q *idemRecordingQueue) EnqueueAdvance(runID string) bool {
 	return false
 }
 
-func (q *idemRecordingQueue) EnqueueAgentTurn(string, string) bool { return false }
+func (q *idemRecordingQueue) EnqueueAgentTurn(string, string) bool   { return false }
+func (q *idemRecordingQueue) EnqueueAgentAction(string, string) bool { return false }
 
 func (q *idemRecordingQueue) snapshot() []string {
 	q.mu.Lock()

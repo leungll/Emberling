@@ -249,7 +249,9 @@ func (s *ExecutionService) HandleOrphanToolAttempt(ctx context.Context, attemptI
 		if !s.orphanedByAnotherRunner(attempt) {
 			return nil
 		}
-		if agentRun.Termination != nil || !now.Before(agentRun.Deadline) {
+		// An expired deadline belongs to the Agent timeout, unless the Agent Run is paused:
+		// then its deadline is not running and the orphaned call is still this path's.
+		if agentRun.Termination != nil || (agentRun.PausedAt == nil && !now.Before(agentRun.Deadline)) {
 			return nil
 		}
 		if nodeRun.Status != domain.NodeRunRunning || turn.TurnNo != agentRun.CurrentTurnNo {

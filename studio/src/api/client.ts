@@ -1,6 +1,11 @@
 import type {
   AgentTrace,
   ApiError,
+  ApprovalDecisionRequest,
+  ApprovalDecisionResponse,
+  ApprovalListResponse,
+  ApprovalStatus,
+  ApprovalView,
   AssetRef,
   CreateDefinitionRequest,
   CreateRunOptions,
@@ -303,4 +308,56 @@ export function listEvents(
     `/runs/${encodeURIComponent(runId)}/events?${query.toString()}`,
     { ...(signal ? { signal } : {}) },
   ).then((r) => r.items);
+}
+
+// --- Approvals --------------------------------------------------------------
+
+/**
+ * The header the approval routes authenticate with. The credential comes from the viewer
+ * for the current page only; it is never stored by the client and never logged.
+ */
+export const OPERATOR_TOKEN_HEADER = 'X-Emberling-Operator-Token';
+
+function operatorHeaders(token: string): Record<string, string> {
+  return { [OPERATOR_TOKEN_HEADER]: token };
+}
+
+/** Approvals with the given status, oldest request first. */
+export function listApprovals(
+  status: ApprovalStatus,
+  token: string,
+  signal?: AbortSignal,
+): Promise<ApprovalView[]> {
+  const query = new URLSearchParams({ status });
+  return request<ApprovalListResponse>(`/approvals?${query.toString()}`, {
+    headers: operatorHeaders(token),
+    ...(signal ? { signal } : {}),
+  }).then((r) => r.items);
+}
+
+/** One approval with the Tool name and the committed call arguments a person decides on. */
+export function getApproval(
+  approvalId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<ApprovalView> {
+  return request<ApprovalView>(`/approvals/${encodeURIComponent(approvalId)}`, {
+    headers: operatorHeaders(token),
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/**
+ * Records a person's decision. The Backend settles the approval once; the same decision
+ * again is answered as `repeated`, a different one as a 409 conflict.
+ */
+export function decideApproval(
+  approvalId: string,
+  body: ApprovalDecisionRequest,
+  token: string,
+): Promise<ApprovalDecisionResponse> {
+  return request<ApprovalDecisionResponse>(
+    `/approvals/${encodeURIComponent(approvalId)}/decision`,
+    { method: 'POST', body, headers: operatorHeaders(token) },
+  );
 }

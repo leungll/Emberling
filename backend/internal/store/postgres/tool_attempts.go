@@ -362,7 +362,9 @@ func (r *toolAttemptRepository) ListDuePolls(ctx context.Context, now time.Time,
 // A NULL runner_id is never an orphan: which process wrote it is unknown. A callback
 // credential hash marks an asynchronous Tool's Attempt, whose claim always stores one, and
 // those are left to the deadline. Only Agent Runs that have not terminated and whose
-// deadline has not passed are scanned; an expired one belongs to the Agent timeout.
+// deadline has not passed are scanned; an expired one belongs to the Agent timeout. A
+// paused Agent Run's deadline is not running, so its STARTED Attempts are listed whatever
+// the clock says: a release that resumes the Agent must find them.
 func (r *toolAttemptRepository) ListOrphanStarted(ctx context.Context, currentRunnerID string, now time.Time, limit int) ([]domain.ToolAttempt, error) {
 	const query = `
 		SELECT ` + qualifiedToolAttemptColumns + `
@@ -375,7 +377,7 @@ func (r *toolAttemptRepository) ListOrphanStarted(ctx context.Context, currentRu
 		   AND ta.runner_id <> $1
 		   AND ta.callback_token_hash IS NULL
 		   AND ar.termination IS NULL
-		   AND ar.deadline > $2
+		   AND (ar.deadline > $2 OR ar.paused_at IS NOT NULL)
 		 ORDER BY ta.started_at, ta.id
 		 LIMIT $3`
 

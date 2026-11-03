@@ -150,10 +150,12 @@ func (s *ExecutionService) wake(c agentCommit) {
 //  1. Lock the Run, conditionally claim the Action READY->RUNNING, validate the committed
 //     Decision against the frozen allowlist and the registered Tool InputSchema, check
 //     the fact requirements the Tool declares against the Run's committed facts and the
-//     Agent Run's frozen generation limit, create
-//     the STARTED Tool Attempt and write AGENT_ACTION_STARTED. Losing the claim writes
-//     nothing; a Decision that may not be executed fails the Action in this same
-//     transaction and never reaches the Tool.
+//     Agent Run's frozen generation limit, decide the Action's authorization from the
+//     Tool's declared risk and the frozen goal, create the STARTED Tool Attempt and write
+//     AGENT_ACTION_STARTED. Losing the claim writes nothing; a Decision that may not be
+//     executed fails the Action in this same transaction and never reaches the Tool; a
+//     Decision a person must approve suspends the Action and pauses the Agent instead,
+//     and this call ends after that COMMIT.
 //  2. (after COMMIT, holding no lock) call the Tool.
 //  3. Lock the Run again and commit the outcome: either the Tool result with the appended
 //     Context Version, the optional new State Version and the next READY Turn, or the
@@ -166,7 +168,15 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 	if err != nil || call == nil {
 		return err
 	}
+	return s.executeClaimedAgentAction(ctx, call)
+}
 
+// executeClaimedAgentAction is steps 2 and 3 for an Action whose claim transaction has
+// committed with a STARTED Attempt: the Tool call, holding no lock, and the transaction
+// that commits its outcome. The claim path enters here right after its COMMIT; the
+// approval decision enters here after the transaction that approved the Action committed
+// the same STARTED Attempt, so an approved Action is executed once and never claimed twice.
+func (s *ExecutionService) executeClaimedAgentAction(ctx context.Context, call *agentToolCall) error {
 	// The Agent Run's deadline bounds the external call, so a Tool cannot hold this
 	// goroutine past the point at which the Agent Run may no longer continue.
 	callCtx, cancel := context.WithDeadline(ctx, call.deadline)
@@ -430,10 +440,76 @@ func (s *ExecutionService) recordAgentToolDispatch(ctx context.Context, call age
 	return nil
 }
 
+// agentActionClaim is what the claim transaction has read about one TOOL_CALL Action and
+// holds under the Run aggregate lock: the Action, its Decision, the Agent Run and NodeRun
+// as the lock protects them, and the registration the call resolves to. The approval
+// decision rebuilds the same view for an Action it hands the execution right back to, so
+// the pre-execution checks and the Attempt creation are written once and run from both.
+//
+// run and plan are resolved before the lock when the transaction may have to re-aggregate
+// the Run -- a Tool whose declared risk can suspend the Action, or an Action resuming from
+// an approval -- because compiling a Definition is work no Run row lock may be held across.
+// commit and nextTurnID are what the transaction owes after COMMIT.
+type agentActionClaim struct {
+	lock        *store.RunLock
+	nodeRun     domain.NodeRun
+	agentRun    domain.AgentRun
+	turn        domain.AgentTurn
+	action      domain.AgentAction
+	decision    domain.AgentDecision
+	toolName    string
+	reg         registry.ToolRegistration
+	claimSource domain.ClaimSource
+	run         domain.Run
+	plan        *runtime.CompiledDefinition
+
+	commit     agentCommit
+	nextTurnID string
+}
+
+// toolActionInputs are the per-call inputs the pre-execution checks resolved for the Tool
+// call: the frozen image and review Model IDs and the frozen workspace view.
+type toolActionInputs struct {
+	imageModelID  string
+	reviewModelID string
+	workspace     *registry.WorkspaceView
+}
+
+// toolActionVerdict is the result of the pre-execution checks: the inputs of a call that
+// may run, or exactly one of a terminal failure and a refusal returned to the Agent.
+type toolActionVerdict struct {
+	inputs toolActionInputs
+	fail   *toolActionFailure
+	ret    *toolActionReturn
+}
+
+// toolActionFailure ends the Agent Run: the Action fails and the termination is recorded.
+type toolActionFailure struct {
+	termination domain.AgentTermination
+	execError   domain.ExecutionError
+}
+
+// toolActionReturn hands a definite refusal back to the Agent in a new Turn.
+type toolActionReturn struct {
+	code    domain.AgentReturnCode
+	message string
+}
+
+func (v toolActionVerdict) ok() bool { return v.fail == nil && v.ret == nil }
+
+func failVerdict(termination domain.AgentTermination, execError domain.ExecutionError) toolActionVerdict {
+	return toolActionVerdict{fail: &toolActionFailure{termination: termination, execError: execError}}
+}
+
+func returnVerdict(code domain.AgentReturnCode, message string) toolActionVerdict {
+	return toolActionVerdict{ret: &toolActionReturn{code: code, message: message}}
+}
+
 // claimAgentAction is transaction 1. It returns nil without error when this caller may not
 // execute the Action: another advancement path already won the claim, the Action is no
-// longer READY, the Run has already reached a terminal status, or the Action is a FINAL
-// one, which belongs to the Final completion use case.
+// longer READY, the Run has already reached a terminal status, the Action is a FINAL one,
+// which belongs to the Final completion use case, or the Action was suspended for a human
+// decision, which the approval use case continues.
 func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string, claimSource domain.ClaimSource) (*agentToolCall, error) {
 	if !claimSource.IsValid() {
 		return nil, fmt.Errorf("execution: execute agent action %s: unknown claim source %q", actionID, claimSource)
@@ -462,6 +538,25 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		if err != nil {
 			return err
 		}
+		// The Decision is immutable once committed, so it is read before the lock; the
+		// Tool it names decides whether this transaction may have to suspend the Action
+		// and re-derive the Run status, which needs the Run and its compiled plan resolved
+		// before the lock is taken.
+		decision, err := tx.AgentDecisions().Get(ctx, action.DecisionID)
+		if err != nil {
+			return err
+		}
+		toolName := ""
+		if decision.ToolName != nil {
+			toolName = *decision.ToolName
+		}
+		var run domain.Run
+		var plan *runtime.CompiledDefinition
+		if reg, ok := s.deps.Tools.Get(toolName); ok && reg.Metadata.EffectiveRisk() == domain.ToolRiskProduction {
+			if run, plan, err = s.runPlan(ctx, tx, nodeRun.RunID); err != nil {
+				return err
+			}
+		}
 
 		lock, err := tx.Runs().LockForUpdate(ctx, nodeRun.RunID)
 		if err != nil {
@@ -485,11 +580,6 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 			return nil
 		}
 
-		decision, err := tx.AgentDecisions().Get(ctx, action.DecisionID)
-		if err != nil {
-			return err
-		}
-
 		now := s.deps.Clock.Now()
 		won, err := tx.AgentActions().ClaimReady(ctx, actionID, now)
 		if err != nil {
@@ -498,274 +588,59 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		if !won {
 			return nil
 		}
+		action.Status = domain.AgentActionRunning
 
-		toolName := ""
-		if decision.ToolName != nil {
-			toolName = *decision.ToolName
+		c := &agentActionClaim{
+			lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, decision: decision,
+			toolName: toolName, claimSource: claimSource, run: run, plan: plan,
 		}
-		reg, registered := s.deps.Tools.Get(toolName)
-		if !registered {
-			// The frozen allowlist is a Run-level authority decision, so it answers first:
-			// a Tool the Agent Run never allowed is an invalid Action whatever the current
-			// Registry holds.
-			termination := domain.TerminationInvalidAction
-			execError := domain.ExecutionError{
-				Code:    "INVALID_ACTION",
-				Message: fmt.Sprintf("tool %q is not in the Agent Run's frozen allowlist", toolName),
-			}
-			if slices.Contains(agentRun.AllowedTools, toolName) {
-				// Registry drift: the allowlist resolved when the Agent Run was created
-				// and no longer does. There is nothing to call and nothing to substitute
-				// (CLAUDE.md "Extensions and external calls"), so the Tool call itself is
-				// what failed.
-				termination = domain.TerminationToolError
-				execError = domain.ExecutionError{
-					Code:    "TOOL_NOT_REGISTERED",
-					Message: fmt.Sprintf("tool %q of the Agent Run's frozen allowlist is no longer registered", toolName),
-				}
-			}
-			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-				domain.FailureSyncExecution, termination, execError, now); err != nil {
-				return err
-			}
-			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
-			return nil
-		}
-
-		if validationErr := runtime.ValidateToolCall(decision, agentRun.AllowedTools, reg.Metadata); validationErr != nil {
-			// A deterministic, committed fact is invalid: no Tool Attempt is created, the
-			// Tool is not called and the model is not asked again.
-			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-				domain.FailureSyncExecution, domain.TerminationInvalidAction,
-				domain.ExecutionError{Code: "INVALID_ACTION", Message: validationErr.Error()}, now); err != nil {
-				return err
-			}
-			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
-			return nil
-		}
-
-		// A valid call of a Tool that requires committed facts is still not executable
-		// until those facts hold. An unmet requirement is decided before any Attempt
-		// exists, so no external call can follow. A Tool registered to return an unmet
-		// requirement hands the Agent a VERIFICATION_MISSING refusal naming the missing
-		// fact type, and the Agent decides the next step in a new Turn; every other Tool
-		// fails the Action exactly like an invalid Decision.
-		unmet, err := s.unmetFactRequirementLocked(ctx, tx, nodeRun.RunID, reg.Metadata.Requires, decision.Arguments)
+		verdict, err := s.checkToolActionLocked(ctx, tx, c)
 		if err != nil {
 			return err
 		}
-		if unmet != nil && reg.Metadata.ReturnUnmetRequirement {
-			turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
-				lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
-			}, domain.AgentActionRunning, domain.ReturnVerificationMissing, verificationMissingMessage(*unmet), now)
-			if err != nil {
+		if !verdict.ok() {
+			if err := s.settleToolActionLocked(ctx, tx, c, verdict, now); err != nil {
 				return err
 			}
-			nextTurnID = turnID
-			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
-			return nil
-		}
-		if unmet != nil {
-			execError := unmet.ExecutionError()
-			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-				domain.FailureSyncExecution, domain.TerminationInvalidAction, execError, now); err != nil {
-				return err
-			}
-			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
+			commit, nextTurnID = c.commit, c.nextTurnID
 			return nil
 		}
 
-		// A counted Tool call past the Agent Run's frozen generation limit is rejected the
-		// same way, still before any Attempt exists; the Run lock serializes concurrent
-		// claims, so the limit can never be overrun.
-		overLimit, err := s.generationLimitReachedLocked(ctx, tx, agentRun, reg.Metadata)
+		// The authorization decision is made once, here, from the Tool's declared risk and
+		// the goal the Agent Run froze; every check that could make the call invalid has
+		// already passed, so a person is only ever asked about a call that would run. An
+		// approved Action re-enters execution through the approval use case and never
+		// reaches this point again.
+		authorization, reason := runtime.DecideAuthorization(c.reg.Metadata.Authorization, agentRun.Goal)
+		switch authorization {
+		case domain.AuthorizationDeny:
+			if err := tx.AgentActions().SetAuthorization(ctx, action.ID, authorization, &reason); err != nil {
+				return err
+			}
+			if err := s.settleToolActionLocked(ctx, tx, c, returnVerdict(domain.ReturnGoalDenied, reason), now); err != nil {
+				return err
+			}
+			commit, nextTurnID = c.commit, c.nextTurnID
+			return nil
+		case domain.AuthorizationAsk:
+			if err := s.enterApprovalWaitLocked(ctx, tx, c, now); err != nil {
+				return err
+			}
+			commit, nextTurnID = c.commit, c.nextTurnID
+			return nil
+		case domain.AuthorizationAllow:
+			if err := tx.AgentActions().SetAuthorization(ctx, action.ID, authorization, nil); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("execution: execute agent action %s: unknown authorization decision %q", action.ID, authorization)
+		}
+
+		call, err = s.startToolAttemptLocked(ctx, tx, c, verdict.inputs, now)
 		if err != nil {
 			return err
 		}
-		if overLimit != nil {
-			if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-				domain.FailureSyncExecution, domain.TerminationInvalidAction, *overLimit, now); err != nil {
-				return err
-			}
-			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
-			return nil
-		}
-
-		// A Tool that runs with the node's image model receives the Agent Run's frozen image
-		// Model ID, re-resolved here because configuration can change across a restart. An
-		// ID that no longer resolves fails the Tool call itself, before any Attempt exists,
-		// so nothing external is called and no other model is substituted.
-		imageModelID := ""
-		if reg.Metadata.UsesImageModel {
-			imageModelID = frozenImageModel(agentRun)
-			if unusable := unusableModel(s.deps.Models, "image model", imageModelID, domain.ModelCapabilityReferenceImageGeneration); unusable != nil {
-				if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-					domain.FailureSyncExecution, domain.TerminationToolError, *unusable, now); err != nil {
-					return err
-				}
-				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
-				return nil
-			}
-		}
-
-		// A Tool that reviews with the node's review model receives the Agent Run's frozen
-		// review Model ID under the same rule. An Agent Run that froze none passes no ID,
-		// and the Tool applies its mock policy; a frozen ID that no longer resolves fails
-		// here and never falls back to that policy.
-		reviewModelID := ""
-		if reg.Metadata.UsesReviewModel && agentRun.ReviewModelID != nil {
-			reviewModelID = frozenReviewModel(agentRun)
-			if unusable := unusableModel(s.deps.Models, "review model", reviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
-				if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-					domain.FailureSyncExecution, domain.TerminationToolError, *unusable, now); err != nil {
-					return err
-				}
-				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
-				return nil
-			}
-		}
-
-		// A workspace Tool receives the Agent Run's frozen workspace: the binding, the newest
-		// recorded patch and its sequence, read under this lock so the view names exactly
-		// the version the call runs against. An Agent Run that froze none cannot run the
-		// Tool at all; that is a Definition defect, so the Action fails before any Attempt
-		// exists. A Tool that declares the path it writes has that path checked against
-		// the frozen allowed paths here, and a path outside them is handed back to the
-		// Agent as a SCOPE_DENIED refusal: no Attempt, no executor call, no patch.
-		var workspace *registry.WorkspaceView
-		if reg.Metadata.UsesWorkspace {
-			view, err := workspaceViewLocked(ctx, tx, agentRun.ID)
-			switch {
-			case errors.Is(err, domain.ErrNotFound):
-				if err := s.failAgentActionLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID, action.ID, nil, domain.AgentActionRunning,
-					domain.FailureSyncExecution, domain.TerminationToolError, domain.ExecutionError{
-						Code:    codeWorkspaceNotConfigured,
-						Message: fmt.Sprintf("tool %q needs a workspace, but the Agent node froze none", toolName),
-					}, now); err != nil {
-					return err
-				}
-				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: true}
-				return nil
-			case err != nil:
-				return err
-			}
-			workspace = view
-			if refusal := workspaceWriteScopeRefusal(reg.Metadata, decision.Arguments, view.AllowedPaths); refusal != nil {
-				turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
-					lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
-				}, domain.AgentActionRunning, domain.ReturnScopeDenied, scopeDeniedMessage(refusal, view.AllowedPaths), now)
-				if err != nil {
-					return err
-				}
-				nextTurnID = turnID
-				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
-				return nil
-			}
-			// A Tool that acts on a named patch must name the newest one. The digest it
-			// names is compared with the view read under this lock, and a stale one is handed
-			// back as a STALE_PATCH refusal: no Attempt, no dispatch, so no result can ever
-			// bind to a superseded patch.
-			if named, stale := workspacePatchStale(reg.Metadata, decision.Arguments, view); stale {
-				turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
-					lock: lock, nodeRun: nodeRun, agentRun: agentRun, turn: turn, action: action, toolName: toolName,
-				}, domain.AgentActionRunning, domain.ReturnStalePatch, stalePatchMessage(named, view), now)
-				if err != nil {
-					return err
-				}
-				nextTurnID = turnID
-				commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq(), terminal: turnID == ""}
-				return nil
-			}
-		}
-
-		// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
-		// exists so a Tool call carries the same audit and callback target model as a Node
-		// Attempt. A synchronous call saves no callback token.
-		attemptID := s.deps.IDs.NewID(domain.IDPrefixToolAttempt)
-
-		// An ASYNC Tool gets an Attempt-scoped callback credential issued here, before the
-		// call, so its hash is committed before any Provider can deliver a callback
-		// (the credential is persisted in the claim transaction). Only the hash
-		// is stored; the plaintext token reaches the Executor through CallbackContext and
-		// nowhere else. As on the Node path, the credential outlives the Agent deadline by
-		// the Pending Callback TTL, so a callback racing the timeout transaction competes
-		// through the conditional update instead of being refused on its credential.
-		async := reg.Metadata.ExecutionKind == domain.ToolExecutionAsync
-		var tokenHash *string
-		var callbackCtx *registry.CallbackContext
-		if async {
-			var expiresAt time.Time
-			if !agentRun.Deadline.IsZero() {
-				expiresAt = agentRun.Deadline.Add(s.deps.Callback.PendingTTL)
-			}
-			token, err := issueCallbackToken(s.deps.Callback.SigningSecret, attemptID, expiresAt)
-			if err != nil {
-				return fmt.Errorf("execution: issue callback credential for tool %q of action %s: %w", toolName, action.ID, err)
-			}
-			hash := hashCallbackToken(token)
-			tokenHash = &hash
-			callbackCtx = &registry.CallbackContext{URL: s.deps.Callback.BaseURL + CallbackPath, Token: token}
-		}
-
-		// The claiming process's identity is written with the STARTED row itself, so a
-		// committed Attempt always names the process that will make the call.
-		runnerID := s.deps.RunnerID
-		if err := tx.ToolAttempts().Create(ctx, domain.ToolAttempt{
-			ID:                attemptID,
-			ActionID:          action.ID,
-			AttemptNo:         1,
-			ToolName:          toolName,
-			Status:            domain.ToolAttemptStarted,
-			Input:             decision.Arguments,
-			CallbackTokenHash: tokenHash,
-			RunnerID:          &runnerID,
-			StartedAt:         now,
-		}); err != nil {
-			return err
-		}
-		if err := s.appendEvent(ctx, tx, lock, nodeRun.RunID, &nodeRun.ID, domain.EventAgentActionStarted, now, agentActionStartedPayload{
-			AgentRunID:    agentRun.ID,
-			TurnID:        turn.ID,
-			ActionID:      action.ID,
-			ToolAttemptID: &attemptID,
-			ClaimSource:   claimSource,
-		}); err != nil {
-			return err
-		}
-		// The claim changes no Run-level status; UpdateAggregate persists the seq watermark
-		// AGENT_ACTION_STARTED allocated under the lock.
-		if err := tx.Runs().UpdateAggregate(ctx, lock, lock.Status(), now); err != nil {
-			return err
-		}
-
-		commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq()}
-		call = &agentToolCall{
-			runID:        nodeRun.RunID,
-			nodeRunID:    nodeRun.ID,
-			agentRunID:   agentRun.ID,
-			turnID:       turn.ID,
-			actionID:     action.ID,
-			attemptID:    attemptID,
-			toolName:     toolName,
-			executor:     reg.Executor,
-			outputSchema: reg.Metadata.OutputSchema,
-			records:      reg.Metadata.Records,
-			action: registry.ToolAction{
-				RunID:         nodeRun.RunID,
-				AgentRunID:    agentRun.ID,
-				TurnID:        turn.ID,
-				ActionID:      action.ID,
-				ToolName:      toolName,
-				AttemptNo:     1,
-				Arguments:     decision.Arguments,
-				ImageModelID:  imageModelID,
-				ReviewModelID: reviewModelID,
-				Workspace:     workspace,
-				Callback:      callbackCtx,
-			},
-			async:    async,
-			deadline: agentRun.Deadline,
-		}
+		commit = c.commit
 		return nil
 	})
 	if errors.Is(err, errAgentTurnSuperseded) {
@@ -780,4 +655,252 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		s.enqueueAgentTurn(commit.runID, nextTurnID)
 	}
 	return call, nil
+}
+
+// checkToolActionLocked runs every pre-execution check of a RUNNING TOOL_CALL Action, in
+// order: the frozen allowlist and the current registration, the committed Decision against
+// the registered InputSchema, the fact requirements the Tool declares, the frozen
+// generation limit, the frozen image and review models, and the frozen workspace with the
+// written path's scope. It decides, it does not write: the caller settles a failing verdict
+// so the approval path can resume the Agent's clock first. A passing verdict carries the
+// inputs the Tool call needs. The registration it resolves is left on c for the caller.
+func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.Tx, c *agentActionClaim) (toolActionVerdict, error) {
+	reg, registered := s.deps.Tools.Get(c.toolName)
+	if !registered {
+		// The frozen allowlist is a Run-level authority decision, so it answers first:
+		// a Tool the Agent Run never allowed is an invalid Action whatever the current
+		// Registry holds.
+		if slices.Contains(c.agentRun.AllowedTools, c.toolName) {
+			// Registry drift: the allowlist resolved when the Agent Run was created
+			// and no longer does. There is nothing to call and nothing to substitute
+			// (CLAUDE.md "Extensions and external calls"), so the Tool call itself is
+			// what failed.
+			return failVerdict(domain.TerminationToolError, domain.ExecutionError{
+				Code:    "TOOL_NOT_REGISTERED",
+				Message: fmt.Sprintf("tool %q of the Agent Run's frozen allowlist is no longer registered", c.toolName),
+			}), nil
+		}
+		return failVerdict(domain.TerminationInvalidAction, domain.ExecutionError{
+			Code:    "INVALID_ACTION",
+			Message: fmt.Sprintf("tool %q is not in the Agent Run's frozen allowlist", c.toolName),
+		}), nil
+	}
+	c.reg = reg
+
+	if validationErr := runtime.ValidateToolCall(c.decision, c.agentRun.AllowedTools, reg.Metadata); validationErr != nil {
+		// A deterministic, committed fact is invalid: no Tool Attempt is created, the
+		// Tool is not called and the model is not asked again.
+		return failVerdict(domain.TerminationInvalidAction, domain.ExecutionError{Code: "INVALID_ACTION", Message: validationErr.Error()}), nil
+	}
+
+	// A valid call of a Tool that requires committed facts is still not executable
+	// until those facts hold. An unmet requirement is decided before any Attempt
+	// exists, so no external call can follow. A Tool registered to return an unmet
+	// requirement hands the Agent a VERIFICATION_MISSING refusal naming the missing
+	// fact type, and the Agent decides the next step in a new Turn; every other Tool
+	// fails the Action exactly like an invalid Decision.
+	unmet, err := s.unmetFactRequirementLocked(ctx, tx, c.nodeRun.RunID, reg.Metadata.Requires, c.decision.Arguments)
+	if err != nil {
+		return toolActionVerdict{}, err
+	}
+	if unmet != nil && reg.Metadata.ReturnUnmetRequirement {
+		return returnVerdict(domain.ReturnVerificationMissing, verificationMissingMessage(*unmet)), nil
+	}
+	if unmet != nil {
+		return failVerdict(domain.TerminationInvalidAction, unmet.ExecutionError()), nil
+	}
+
+	// A counted Tool call past the Agent Run's frozen generation limit is rejected the
+	// same way, still before any Attempt exists; the Run lock serializes concurrent
+	// claims, so the limit can never be overrun.
+	overLimit, err := s.generationLimitReachedLocked(ctx, tx, c.agentRun, reg.Metadata)
+	if err != nil {
+		return toolActionVerdict{}, err
+	}
+	if overLimit != nil {
+		return failVerdict(domain.TerminationInvalidAction, *overLimit), nil
+	}
+
+	var inputs toolActionInputs
+	// A Tool that runs with the node's image model receives the Agent Run's frozen image
+	// Model ID, re-resolved here because configuration can change across a restart. An
+	// ID that no longer resolves fails the Tool call itself, before any Attempt exists,
+	// so nothing external is called and no other model is substituted.
+	if reg.Metadata.UsesImageModel {
+		inputs.imageModelID = frozenImageModel(c.agentRun)
+		if unusable := unusableModel(s.deps.Models, "image model", inputs.imageModelID, domain.ModelCapabilityReferenceImageGeneration); unusable != nil {
+			return failVerdict(domain.TerminationToolError, *unusable), nil
+		}
+	}
+
+	// A Tool that reviews with the node's review model receives the Agent Run's frozen
+	// review Model ID under the same rule. An Agent Run that froze none passes no ID,
+	// and the Tool applies its mock policy; a frozen ID that no longer resolves fails
+	// here and never falls back to that policy.
+	if reg.Metadata.UsesReviewModel && c.agentRun.ReviewModelID != nil {
+		inputs.reviewModelID = frozenReviewModel(c.agentRun)
+		if unusable := unusableModel(s.deps.Models, "review model", inputs.reviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
+			return failVerdict(domain.TerminationToolError, *unusable), nil
+		}
+	}
+
+	// A workspace Tool receives the Agent Run's frozen workspace: the binding, the newest
+	// recorded patch and its sequence, read under this lock so the view names exactly
+	// the version the call runs against. An Agent Run that froze none cannot run the
+	// Tool at all; that is a Definition defect, so the Action fails before any Attempt
+	// exists. A Tool that declares the path it writes has that path checked against
+	// the frozen allowed paths here, and a path outside them is handed back to the
+	// Agent as a SCOPE_DENIED refusal: no Attempt, no executor call, no patch.
+	if reg.Metadata.UsesWorkspace {
+		view, err := workspaceViewLocked(ctx, tx, c.agentRun.ID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return failVerdict(domain.TerminationToolError, domain.ExecutionError{
+				Code:    codeWorkspaceNotConfigured,
+				Message: fmt.Sprintf("tool %q needs a workspace, but the Agent node froze none", c.toolName),
+			}), nil
+		case err != nil:
+			return toolActionVerdict{}, err
+		}
+		inputs.workspace = view
+		if refusal := workspaceWriteScopeRefusal(reg.Metadata, c.decision.Arguments, view.AllowedPaths); refusal != nil {
+			return returnVerdict(domain.ReturnScopeDenied, scopeDeniedMessage(refusal, view.AllowedPaths)), nil
+		}
+		// A Tool that acts on a named patch must name the newest one. The digest it names
+		// is compared with the view read under this lock, and a stale one is handed back as
+		// a STALE_PATCH refusal: no Attempt, no dispatch, so no result can ever bind to a
+		// superseded patch.
+		if named, stale := workspacePatchStale(reg.Metadata, c.decision.Arguments, view); stale {
+			return returnVerdict(domain.ReturnStalePatch, stalePatchMessage(named, view)), nil
+		}
+	}
+	return toolActionVerdict{inputs: inputs}, nil
+}
+
+// settleToolActionLocked writes a failing verdict for the RUNNING Action c holds: a
+// terminal failure ends the Agent Run, a refusal is returned to the Agent in a new Turn. It
+// records on c what the transaction owes after COMMIT.
+func (s *ExecutionService) settleToolActionLocked(ctx context.Context, tx store.Tx, c *agentActionClaim, verdict toolActionVerdict, now time.Time) error {
+	switch {
+	case verdict.fail != nil:
+		if err := s.failAgentActionLocked(ctx, tx, c.lock, c.nodeRun, c.agentRun, c.turn.ID, c.action.ID, nil, domain.AgentActionRunning,
+			domain.FailureSyncExecution, verdict.fail.termination, verdict.fail.execError, now); err != nil {
+			return err
+		}
+		c.commit = agentCommit{runID: c.nodeRun.RunID, lastSeq: c.lock.LastSeq(), terminal: true}
+		return nil
+	case verdict.ret != nil:
+		turnID, err := s.returnActionToAgentLocked(ctx, tx, agentActionReturn{
+			lock: c.lock, nodeRun: c.nodeRun, agentRun: c.agentRun, turn: c.turn, action: c.action, toolName: c.toolName,
+		}, domain.AgentActionRunning, verdict.ret.code, verdict.ret.message, now)
+		if err != nil {
+			return err
+		}
+		c.nextTurnID = turnID
+		c.commit = agentCommit{runID: c.nodeRun.RunID, lastSeq: c.lock.LastSeq(), terminal: turnID == ""}
+		return nil
+	default:
+		return fmt.Errorf("execution: settle agent action %s: the verdict allows the call", c.action.ID)
+	}
+}
+
+// startToolAttemptLocked creates the STARTED Tool Attempt of the RUNNING Action c holds,
+// appends AGENT_ACTION_STARTED and builds the call the caller makes after COMMIT. It is the
+// one place an Attempt is created for a TOOL_CALL Action: the claim path reaches it when the
+// authorization allows the call, the approval path when a person approved it.
+func (s *ExecutionService) startToolAttemptLocked(ctx context.Context, tx store.Tx, c *agentActionClaim, inputs toolActionInputs, now time.Time) (*agentToolCall, error) {
+	// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
+	// exists so a Tool call carries the same audit and callback target model as a Node
+	// Attempt. A synchronous call saves no callback token.
+	attemptID := s.deps.IDs.NewID(domain.IDPrefixToolAttempt)
+
+	// An ASYNC Tool gets an Attempt-scoped callback credential issued here, before the
+	// call, so its hash is committed before any Provider can deliver a callback
+	// (the credential is persisted in the claim transaction). Only the hash
+	// is stored; the plaintext token reaches the Executor through CallbackContext and
+	// nowhere else. As on the Node path, the credential outlives the Agent deadline by
+	// the Pending Callback TTL, so a callback racing the timeout transaction competes
+	// through the conditional update instead of being refused on its credential.
+	//
+	// The expiry is fixed from the deadline as it is now and is not moved when a pause
+	// later shifts the deadline. That is safe because Actions run one at a time and the
+	// Agent pauses only while an Action waits on a person or on a release, so no callback-
+	// bearing Tool is ever in flight while the deadline moves; a release Tool is polled
+	// and issues no credential.
+	async := c.reg.Metadata.ExecutionKind == domain.ToolExecutionAsync
+	var tokenHash *string
+	var callbackCtx *registry.CallbackContext
+	if async {
+		var expiresAt time.Time
+		if !c.agentRun.Deadline.IsZero() {
+			expiresAt = c.agentRun.Deadline.Add(s.deps.Callback.PendingTTL)
+		}
+		token, err := issueCallbackToken(s.deps.Callback.SigningSecret, attemptID, expiresAt)
+		if err != nil {
+			return nil, fmt.Errorf("execution: issue callback credential for tool %q of action %s: %w", c.toolName, c.action.ID, err)
+		}
+		hash := hashCallbackToken(token)
+		tokenHash = &hash
+		callbackCtx = &registry.CallbackContext{URL: s.deps.Callback.BaseURL + CallbackPath, Token: token}
+	}
+
+	// The claiming process's identity is written with the STARTED row itself, so a
+	// committed Attempt always names the process that will make the call.
+	runnerID := s.deps.RunnerID
+	if err := tx.ToolAttempts().Create(ctx, domain.ToolAttempt{
+		ID:                attemptID,
+		ActionID:          c.action.ID,
+		AttemptNo:         1,
+		ToolName:          c.toolName,
+		Status:            domain.ToolAttemptStarted,
+		Input:             c.decision.Arguments,
+		CallbackTokenHash: tokenHash,
+		RunnerID:          &runnerID,
+		StartedAt:         now,
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.appendEvent(ctx, tx, c.lock, c.nodeRun.RunID, &c.nodeRun.ID, domain.EventAgentActionStarted, now, agentActionStartedPayload{
+		AgentRunID:    c.agentRun.ID,
+		TurnID:        c.turn.ID,
+		ActionID:      c.action.ID,
+		ToolAttemptID: &attemptID,
+		ClaimSource:   c.claimSource,
+	}); err != nil {
+		return nil, err
+	}
+	// Starting the Attempt changes no Run-level status; UpdateAggregate persists the seq
+	// watermark AGENT_ACTION_STARTED allocated under the lock.
+	if err := tx.Runs().UpdateAggregate(ctx, c.lock, c.lock.Status(), now); err != nil {
+		return nil, err
+	}
+
+	c.commit = agentCommit{runID: c.nodeRun.RunID, lastSeq: c.lock.LastSeq()}
+	return &agentToolCall{
+		runID:        c.nodeRun.RunID,
+		nodeRunID:    c.nodeRun.ID,
+		agentRunID:   c.agentRun.ID,
+		turnID:       c.turn.ID,
+		actionID:     c.action.ID,
+		attemptID:    attemptID,
+		toolName:     c.toolName,
+		executor:     c.reg.Executor,
+		outputSchema: c.reg.Metadata.OutputSchema,
+		records:      c.reg.Metadata.Records,
+		action: registry.ToolAction{
+			RunID:         c.nodeRun.RunID,
+			AgentRunID:    c.agentRun.ID,
+			TurnID:        c.turn.ID,
+			ActionID:      c.action.ID,
+			ToolName:      c.toolName,
+			AttemptNo:     1,
+			Arguments:     c.decision.Arguments,
+			ImageModelID:  inputs.imageModelID,
+			ReviewModelID: inputs.reviewModelID,
+			Workspace:     inputs.workspace,
+			Callback:      callbackCtx,
+		},
+		async:    async,
+		deadline: c.agentRun.Deadline,
+	}, nil
 }

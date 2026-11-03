@@ -179,7 +179,7 @@ describe('AppSidebar counts', () => {
   const base = {
     section: 'runs' as const,
     onListPage: true,
-    hrefs: { runs: '/runs', workflows: '/workflows' },
+    hrefs: { runs: '/runs', workflows: '/workflows', approvals: '/approvals' },
     recent: [] as RecentItem[],
     connection: 'ready' as const,
     collapsed: false,

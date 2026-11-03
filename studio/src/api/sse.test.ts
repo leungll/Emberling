@@ -100,7 +100,7 @@ describe('subscribeRunEvents', () => {
     EVENT_TYPES.forEach((type, index) => stream.emit(event(index + 1, type)));
 
     expect(received.map((e) => e.type)).toEqual([...EVENT_TYPES]);
-    expect(EVENT_TYPES).toHaveLength(24);
+    expect(EVENT_TYPES).toHaveLength(32);
     subscription.close();
   });
 

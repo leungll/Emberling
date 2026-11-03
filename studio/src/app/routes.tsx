@@ -5,6 +5,8 @@ import { RouteErrorPage } from './RouteErrorPage';
 import { RunRedirect } from './RunRedirect';
 import { ListShell } from '@/components/shell/ListShell';
 import { NotFoundView } from '@/components/shell/NotFoundView';
+import { ApprovalDetailPage } from '@/features/approvals/ApprovalDetailPage';
+import { ApprovalsPage } from '@/features/approvals/ApprovalsPage';
 import { EditPage } from '@/features/editor/EditPage';
 import { RunsTabPage } from '@/features/observe/RunsTabPage';
 import { RunsPage } from '@/features/runs/RunsPage';
@@ -30,6 +32,10 @@ export const routes: RouteObject[] = [
           // A run's own address resolves to its workflow's Runs tab.
           { path: '/runs/:runId', element: <RunRedirect /> },
           { path: '/workflows', element: <WorkflowsPage /> },
+          // A person decides on an Agent's production call here; both pages ask for the
+          // operator credential and keep it in memory only.
+          { path: '/approvals', element: <ApprovalsPage /> },
+          { path: '/approvals/:approvalId', element: <ApprovalDetailPage /> },
           { path: '*', element: <NotFoundView kind="page" /> },
         ],
       },

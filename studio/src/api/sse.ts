@@ -32,6 +32,14 @@ const EVENT_TYPE_SET: Record<EventType, true> = {
   AGENT_STATE_UPDATED: true,
   AGENT_COMPLETED: true,
   AGENT_FAILED: true,
+  AGENT_ACTION_WAITING_APPROVAL: true,
+  APPROVAL_DECIDED: true,
+  AGENT_PAUSED: true,
+  AGENT_RESUMED: true,
+  RELEASE_OUTCOME_UNKNOWN: true,
+  RELEASE_VOIDED: true,
+  AGENT_ACTION_WAITING_HUMAN: true,
+  AGENT_COMPLETION_EVALUATED: true,
 };
 
 export const EVENT_TYPES: readonly EventType[] = Object.keys(EVENT_TYPE_SET) as EventType[];

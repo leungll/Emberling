@@ -329,6 +329,9 @@ func run(logger *slog.Logger) error {
 		CallbackMaxPayloadBytes: cfg.PendingCallback.MaxPayloadBytes,
 		AssetMaxUploadBytes:     int64(cfg.AssetStorage.MaxUploadBytes),
 		TraceMaxFieldBytes:      cfg.Projection.MaxFieldBytes,
+		// The credential is revealed only here, where it is handed to the comparison
+		// that needs it; it reaches no log, Event or response.
+		Operator: api.OperatorConfig{Token: cfg.Operator.Token.Reveal(), Name: cfg.Operator.Name},
 	})
 
 	httpServer := &http.Server{Addr: cfg.HTTP.Addr, Handler: router, ReadHeaderTimeout: readHeaderTimeout}
