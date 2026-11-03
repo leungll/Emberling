@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/readme/hero.svg" width="100%" alt="Emberling — Give agents the whole job. Agent Infra for Cloud Agent Workloads, with a shared Execution Runtime for AIGC and vulnerability repair and release.">
+<img src="./assets/readme/hero.svg" width="100%" alt="Emberling Agent Runtime — Give agents the whole job. Agent Infra for Cloud Agent Workloads, with a shared Execution Runtime for AIGC and vulnerability repair and release.">
 
 <h3>A runtime foundation for agents to take on the whole job</h3>
 

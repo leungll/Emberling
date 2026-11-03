@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/readme/hero.svg" width="100%" alt="Emberling — Give agents the whole job. 面向 Cloud Agent Workloads 的 Agent Infra，以共同 Execution Runtime 承载 AIGC 与开发中的漏洞修复发布。">
+<img src="./assets/readme/hero.svg" width="100%" alt="Emberling Agent Runtime — Give agents the whole job. 面向 Cloud Agent Workloads 的 Agent Infra，以共同 Execution Runtime 承载 AIGC 与开发中的漏洞修复发布。">
 
 <h3>为 Agent 承担完整工作提供运行基础</h3>
 
