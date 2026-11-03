@@ -57,6 +57,7 @@ type Advancer interface {
 	CompleteAgentFinal(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
 	TimeoutAgentRun(ctx context.Context, agentRunID string) error
 	HandleOrphanToolAttempt(ctx context.Context, attemptID string) error
+	ExpireApproval(ctx context.Context, approvalID string) error
 }
 
 // defaultBatchLimit bounds one RunOnce scan of ListReadyOrRetryable/ListExpired. MVP
@@ -154,6 +155,10 @@ type Report struct {
 	ToolPollsReturned  int
 	ToolPollsSkipped   int
 	ToolPollsDuplicate int
+	// ExpiredApprovalsFound is how many PENDING approvals had passed their deadline;
+	// ApprovalsExpired counts the ExpireApproval calls that returned without error.
+	ExpiredApprovalsFound int
+	ApprovalsExpired      int
 	// ConsumablePendingFound is how many stored early callbacks
 	// ListConsumableForWaiting found routed to a still-waiting Attempt.
 	ConsumablePendingFound int
@@ -259,6 +264,8 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 // scanAgentWork performs the Agent rows of the Reconciler scan table, each bounded by the
 // same BatchLimit as every other scan:
 //
+//   - PENDING approvals past their deadline -> the approval expiry use case, which hands
+//     the call back to the Agent and resumes its clock.
 //   - Agent Runs past their deadline -> the Agent timeout use case.
 //   - STARTED synchronous Tool Attempts another process created -> the orphaned Tool
 //     Attempt use case, which hands the call back to the Agent without calling it again.
@@ -285,6 +292,10 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 // Each use case takes its own conditional claim, so a lost race with immediate advancement
 // is a normal outcome, not an error; only a real failure is collected into the report.
 func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *Report) error {
+	if err := r.scanExpiredApprovals(ctx, now, report); err != nil {
+		return err
+	}
+
 	var expired []domain.AgentRun
 	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		var err error
@@ -371,6 +382,31 @@ func (r *Reconciler) scanOrphanToolAttempts(ctx context.Context, now time.Time, 
 			continue
 		}
 		report.OrphanToolAttemptsHandled++
+	}
+	return nil
+}
+
+// scanExpiredApprovals hands every PENDING approval whose deadline has passed to the
+// approval expiry use case. It runs before the Agent deadline scan: an Agent waiting on an
+// approval is paused and therefore never listed as expired, and once the expiry resumes it
+// the deadline has moved. The use case owns the conditional decision; a person who decided
+// first wins and the expiry writes nothing.
+func (r *Reconciler) scanExpiredApprovals(ctx context.Context, now time.Time, report *Report) error {
+	var expired []domain.Approval
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		expired, err = tx.Approvals().ListExpiredPending(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list expired approvals: %w", err)
+	}
+	report.ExpiredApprovalsFound = len(expired)
+	for _, approval := range expired {
+		if err := r.cfg.Executor.ExpireApproval(ctx, approval.ID); err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: expire approval %s: %w", approval.ID, err))
+			continue
+		}
+		report.ApprovalsExpired++
 	}
 	return nil
 }

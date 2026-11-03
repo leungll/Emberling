@@ -223,3 +223,63 @@ func containsKey(keys []string, want string) bool {
 	}
 	return false
 }
+
+// TestConfig_OperatorToken_Optional proves a deployment without the operator credential
+// loads with the approval routes disabled and the default deciding identity.
+func TestConfig_OperatorToken_Optional(t *testing.T) {
+	cfg, err := config.Load(lookup(completeEnv()))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Operator.Enabled() {
+		t.Errorf("Operator.Enabled() = true without %s", config.KeyOperatorToken)
+	}
+	if cfg.Operator.Name != config.DefaultOperatorName {
+		t.Errorf("Operator.Name = %q, want the default %q", cfg.Operator.Name, config.DefaultOperatorName)
+	}
+}
+
+// TestConfig_OperatorToken_ShortTokenRejectedWithoutEchoingIt proves a credential shorter
+// than the minimum fails validation by key, and that the error never repeats the value.
+func TestConfig_OperatorToken_ShortTokenRejectedWithoutEchoingIt(t *testing.T) {
+	env := completeEnv()
+	const short = "short-operator-token"
+	env[config.KeyOperatorToken] = short
+
+	_, err := config.Load(lookup(env))
+
+	var invalid *config.InvalidConfigError
+	if !errors.As(err, &invalid) || invalid.Key != config.KeyOperatorToken {
+		t.Fatalf("Load with a %d-byte operator token: want *config.InvalidConfigError for %s, got %v", len(short), config.KeyOperatorToken, err)
+	}
+	if strings.Contains(err.Error(), short) {
+		t.Errorf("error message repeats the rejected credential: %q", err.Error())
+	}
+}
+
+// TestConfig_OperatorToken_LoadedAndRedacted proves a long enough credential enables the
+// routes, the configured name is kept, and the serialised Config never shows the token.
+func TestConfig_OperatorToken_LoadedAndRedacted(t *testing.T) {
+	env := completeEnv()
+	const token = "operator-token-with-at-least-thirty-two-bytes"
+	env[config.KeyOperatorToken] = token
+	env[config.KeyOperatorName] = "release-manager"
+
+	cfg, err := config.Load(lookup(env))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Operator.Enabled() || cfg.Operator.Token.Reveal() != token || cfg.Operator.Name != "release-manager" {
+		t.Errorf("Operator = enabled %v name %q, want enabled with the configured name", cfg.Operator.Enabled(), cfg.Operator.Name)
+	}
+	encoded, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if strings.Contains(string(encoded), token) {
+		t.Errorf("serialised Config leaks the operator credential: %s", encoded)
+	}
+	if got := cfg.Operator.Token.String(); strings.Contains(got, token) {
+		t.Errorf("Secret.String() leaks the operator credential: %q", got)
+	}
+}

@@ -6,7 +6,7 @@ import { readJson, writeJson } from '@/lib/storage';
  * per browser tab in sessionStorage `emb.nav.<list>`. It is a convenience, never a fact:
  * missing or blocked storage simply opens the list as it opens by default.
  */
-export type ListName = 'runs' | 'workflows';
+export type ListName = 'runs' | 'workflows' | 'approvals';
 
 export interface ListState {
   /** The list's query string, with its leading "?", or "" for none. */
@@ -21,7 +21,11 @@ const KEY = 'emb.nav.';
 export const RETURN_PARAM = 'ret';
 export const FROM_PARAM = 'from';
 
-export const LIST_PATH: Record<ListName, string> = { runs: '/runs', workflows: '/workflows' };
+export const LIST_PATH: Record<ListName, string> = {
+  runs: '/runs',
+  workflows: '/workflows',
+  approvals: '/approvals',
+};
 
 function isListState(v: unknown): v is ListState {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;

@@ -62,7 +62,19 @@ const (
 	KeyTraceMaxResponseBytes = EnvPrefix + "TRACE_MAX_RESPONSE_BYTES"
 
 	KeyHTTPAddr = EnvPrefix + "HTTP_ADDR"
+
+	// KeyOperatorToken is the optional shared credential of the approval routes; without
+	// it those routes are not served. KeyOperatorName is the identity recorded as the
+	// deciding person.
+	KeyOperatorToken = EnvPrefix + "OPERATOR_TOKEN"
+	KeyOperatorName  = EnvPrefix + "OPERATOR_NAME"
 )
+
+// DefaultOperatorName is the deciding identity when none is configured.
+const DefaultOperatorName = "demo-operator"
+
+// MinOperatorTokenBytes is the shortest operator credential accepted.
+const MinOperatorTokenBytes = 32
 
 // DefaultHTTPAddr is the only defaulted value: the listen address is not one of
 // the required categories, while every other key must be set explicitly so that no
@@ -88,6 +100,7 @@ type Config struct {
 	PendingCallback PendingCallback
 	Projection      Projection
 	HTTP            HTTP
+	Operator        Operator
 	// ProviderCapacity is the in-flight task limit per asynchronous Provider id; a
 	// Provider absent from it is not limited.
 	ProviderCapacity map[string]int
@@ -177,6 +190,17 @@ type Callback struct {
 	BaseURL       string
 	SigningSecret Secret
 }
+
+// Operator authenticates the approval routes. Token is a Secret and optional: when it is
+// not configured the Backend serves no approval route. Name is the fixed identity recorded
+// as the deciding person.
+type Operator struct {
+	Token Secret
+	Name  string
+}
+
+// Enabled reports whether the approval routes are configured.
+func (o Operator) Enabled() bool { return !o.Token.IsZero() }
 
 // Reconciliation bounds the recovery scan.
 type Reconciliation struct {
@@ -274,6 +298,10 @@ func Load(env func(string) string) (Config, error) {
 		},
 		HTTP: HTTP{
 			Addr: l.optional(KeyHTTPAddr, DefaultHTTPAddr),
+		},
+		Operator: Operator{
+			Token: Secret{value: l.optional(KeyOperatorToken, "")},
+			Name:  l.optional(KeyOperatorName, DefaultOperatorName),
 		},
 		ProviderCapacity:      l.providerCapacity(),
 		WorkspaceRepositories: l.workspaceRepositories(),
@@ -376,6 +404,12 @@ func (c Config) Validate() error {
 	}
 	if err := c.ImageModel.validate(c.OpenAIModel); err != nil {
 		return err
+	}
+	if c.Operator.Enabled() && len(c.Operator.Token.Reveal()) < MinOperatorTokenBytes {
+		return &InvalidConfigError{Key: KeyOperatorToken, Reason: fmt.Sprintf("must be at least %d bytes", MinOperatorTokenBytes)}
+	}
+	if c.Operator.Name == "" {
+		return &InvalidConfigError{Key: KeyOperatorName, Reason: "must not be empty"}
 	}
 	if err := validateProviderCapacity(c.ProviderCapacity); err != nil {
 		return err

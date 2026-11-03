@@ -311,7 +311,24 @@ function StepFacts({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
       });
     }
     facts.push({ label: f.timeLimit, value: limitText(numberOf(config, 'timeoutMs')) });
-    const term = trace.agentRun.termination;
+    const agentRun = trace.agentRun;
+    if (agentRun.goal) facts.push({ label: f.agentGoal, value: agentRun.goal });
+    // A stopped clock is a stored fact (pausedAt and its reason); the deadline is only a
+    // countdown while the clock runs, so a paused Agent shows the pause instead.
+    if (agentRun.pausedAt && agentRun.pauseReason) {
+      facts.push({
+        label: f.agentClock,
+        value: (
+          <span className="flex flex-col">
+            <span>{copy.status.pause[agentRun.pauseReason]}</span>
+            <Muted>
+              {copy.runs.details.pausedSince} <Timestamp iso={agentRun.pausedAt} />
+            </Muted>
+          </span>
+        ),
+      });
+    }
+    const term = agentRun.termination;
     if (term) facts.push({ label: f.ended, value: copy.status.termination[term] });
     const ws = trace.workspace;
     if (ws) {
@@ -720,7 +737,11 @@ function TurnOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
           ? turn.toolAttempts.length
             ? d.turnLead.FAILED
             : d.turnLead.BLOCKED
-          : status === 'SUCCEEDED' || status === 'WAITING_CALLBACK' || status === 'RUNNING'
+          : status === 'SUCCEEDED' ||
+              status === 'WAITING_CALLBACK' ||
+              status === 'WAITING_APPROVAL' ||
+              status === 'WAITING_HUMAN' ||
+              status === 'RUNNING'
             ? d.turnLead[status]
             : d.turnLead.other;
       lead = `${d.turnLead.call(tool)}${tail}`;
@@ -819,7 +840,10 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   if (!turn || !action || !decision || !step) return null;
   const focus = ctx.failure?.focus === el.id;
   const wait =
-    action.status === 'WAITING_CALLBACK' && ctx.model.waitingStep === step ? ctx.wait : null;
+    (action.status === 'WAITING_CALLBACK' || action.status === 'WAITING_APPROVAL') &&
+    ctx.model.waitingStep === step
+      ? ctx.wait
+      : null;
   const ids: (Fact | null)[] = [
     { label: f.actionId, value: <IdChip id={action.id} label={f.actionId.toLowerCase()} /> },
   ];
@@ -855,6 +879,11 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   const source = action.completionSource;
   const claim = action.claimSource;
   const claimWords = claim ? copy.status.claimSource[claim] : null;
+  const approval = action.approval;
+  const approvalWords = approval ? copy.status.approval[approval.status] : null;
+  const authorizationWords = action.authorization
+    ? copy.status.authorization[action.authorization]
+    : null;
   const attemptEls = attempts
     .map((x) => ctx.model.byId.get(x.id))
     .filter((x): x is TraceElement => Boolean(x));
@@ -870,7 +899,13 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
       {wait ? (
         <WaitCard wait={wait} model={ctx.model} tools={ctx.tools} onSelect={ctx.onSelect} />
       ) : null}
-      {!attempts.length && action.status === 'FAILED' && !focus ? <Lead>{d.blocked}</Lead> : null}
+      {!attempts.length && action.status === 'FAILED' && !focus ? (
+        <Lead>
+          {action.authorization === 'DENY' && action.authorizationReason
+            ? d.denied(action.authorizationReason)
+            : d.blocked}
+        </Lead>
+      ) : null}
       <Section>
         <FactList
           compact
@@ -899,6 +934,34 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
               ? { label: f.result, value: d.receivedVia[source] ?? d.received }
               : null,
             claimWords ? { label: f.pickedUp, value: claimWords } : null,
+            authorizationWords ? { label: f.authorization, value: authorizationWords } : null,
+            approval && approvalWords
+              ? {
+                  label: f.approval,
+                  value: (
+                    <span className="flex flex-col">
+                      <span>
+                        <Link
+                          to={`/approvals/${encodeURIComponent(approval.id)}`}
+                          className="text-accent-fg underline-offset-3 hover:underline"
+                        >
+                          {approvalWords}
+                        </Link>
+                      </span>
+                      {approval.decidedBy ? (
+                        <span className="text-fg-muted">
+                          {f.decidedBy}: {approval.decidedBy}
+                        </span>
+                      ) : null}
+                      {approval.reason ? (
+                        <span className="text-fg-muted">
+                          {f.reason}: {approval.reason}
+                        </span>
+                      ) : null}
+                    </span>
+                  ),
+                }
+              : null,
             attempts.length > 1 ? { label: f.attempts, value: String(attempts.length) } : null,
           ]}
         />

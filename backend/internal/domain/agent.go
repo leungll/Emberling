@@ -39,6 +39,11 @@ type AgentRun struct {
 	// apply the deterministic mock review policy. Claims resolve this frozen value, never
 	// the Definition's current one.
 	ReviewModelID *string `json:"reviewModelId"`
+	// Goal is the task goal the Agent Run was frozen to when it started, read once from the
+	// node input at the configured goal pointer; nil when the node configures none. The
+	// authorization decision of a production-risk Tool reads it and never re-reads the
+	// input.
+	Goal *AgentGoal `json:"goal"`
 
 	// CurrentTurnNo is the highest Turn number created so far; the initialisation
 	// transaction sets it to 1. CurrentContextVersion and CurrentStateVersion point at
@@ -48,8 +53,16 @@ type AgentRun struct {
 	CurrentStateVersion   int `json:"currentStateVersion"`
 
 	StartedAt time.Time `json:"startedAt"`
-	// Deadline is one hard bound covering every Turn, Tool call and callback wait.
+	// Deadline is the execution deadline while the Agent Run is not paused: one hard bound
+	// covering every Turn, Tool call and callback wait. It only ever moves later: resuming
+	// from a pause shifts it by the paused duration, so time spent waiting on a person is
+	// not execution time. Nothing derives the start time from it; StartedAt holds that.
 	Deadline time.Time `json:"deadline"`
+	// PausedAt and PauseReason are set together while the Agent Run waits on something
+	// outside its own execution and cleared together when it resumes. A paused Agent Run
+	// is never timed out and its Deadline is not compared against the clock.
+	PausedAt    *time.Time        `json:"pausedAt"`
+	PauseReason *AgentPauseReason `json:"pauseReason"`
 
 	TerminatedAt *time.Time        `json:"terminatedAt"`
 	Termination  *AgentTermination `json:"termination"`
@@ -148,6 +161,10 @@ type AgentAction struct {
 	WaitingAt   *time.Time      `json:"waitingAt"`
 	CompletedAt *time.Time      `json:"completedAt"`
 	Error       *ExecutionError `json:"error"`
+	// Authorization is the decision the claim made for this Action before any Attempt
+	// existed, nil until the claim decided. AuthorizationReason explains a DENY.
+	Authorization       *AuthorizationDecision `json:"authorization"`
+	AuthorizationReason *string                `json:"authorizationReason"`
 }
 
 // ToolAttempt records one real Tool call made by a TOOL_CALL Action. Synchronous and

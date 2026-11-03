@@ -44,6 +44,14 @@ const GROUPS_OF: Record<EventType, readonly EventGroup[]> = {
   AGENT_ACTION_COMPLETED: ['tools'],
   AGENT_ACTION_WAITING: ['tools', 'waits'],
   AGENT_ACTION_FAILED: ['tools', 'errors'],
+  AGENT_ACTION_WAITING_APPROVAL: ['tools', 'waits'],
+  APPROVAL_DECIDED: ['decisions', 'waits'],
+  AGENT_PAUSED: ['state', 'waits'],
+  AGENT_RESUMED: ['state', 'waits'],
+  RELEASE_OUTCOME_UNKNOWN: ['tools', 'errors'],
+  RELEASE_VOIDED: ['tools', 'errors'],
+  AGENT_ACTION_WAITING_HUMAN: ['tools', 'waits'],
+  AGENT_COMPLETION_EVALUATED: ['decisions'],
 };
 
 function payloadOf(e: RunEvent): Record<string, unknown> {
@@ -185,6 +193,21 @@ export function eventSummary(model: RunModel, e: RunEvent): string {
       const term = str(p.termination);
       const words = term
         ? (copy.status.termination as Record<string, string | undefined>)[term]
+        : undefined;
+      return words ?? '';
+    }
+    case 'APPROVAL_DECIDED': {
+      const status = str(p.status);
+      const words = status
+        ? (copy.status.approval as Record<string, string | undefined>)[status]
+        : undefined;
+      return words ?? '';
+    }
+    case 'AGENT_PAUSED':
+    case 'AGENT_RESUMED': {
+      const reason = str(p.reason);
+      const words = reason
+        ? (copy.status.pause as Record<string, string | undefined>)[reason]
         : undefined;
       return words ?? '';
     }

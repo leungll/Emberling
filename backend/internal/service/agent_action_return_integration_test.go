@@ -22,6 +22,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/nodes/agent"
+	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textoutput"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -54,9 +55,14 @@ func (c *returnClock) Advance(d time.Duration) {
 // recordingQueue records the Turns offered to it after COMMIT. It accepts them unless
 // refuse is set, which models a full work queue leaving the Turn to the Reconciler.
 type recordingQueue struct {
-	mu     sync.Mutex
-	turns  []string
-	refuse atomic.Bool
+	mu      sync.Mutex
+	turns   []string
+	actions []string
+	refuse  atomic.Bool
+	// svc, when set, makes the queue drive each approved Action through the worker's use
+	// case on the test goroutine, as an in-process worker would right after COMMIT. Left
+	// nil, the offer is only recorded: the process "died" before any worker took it.
+	svc *ExecutionService
 }
 
 func (*recordingQueue) EnqueueAdvance(string) bool { return true }
@@ -66,6 +72,25 @@ func (q *recordingQueue) EnqueueAgentTurn(_, turnID string) bool {
 	defer q.mu.Unlock()
 	q.turns = append(q.turns, turnID)
 	return !q.refuse.Load()
+}
+
+func (q *recordingQueue) EnqueueAgentAction(_, actionID string) bool {
+	q.mu.Lock()
+	q.actions = append(q.actions, actionID)
+	svc := q.svc
+	q.mu.Unlock()
+	if svc != nil {
+		if err := svc.ContinueAgentAction(context.Background(), actionID); err != nil {
+			panic("continue approved agent action: " + err.Error())
+		}
+	}
+	return true
+}
+
+func (q *recordingQueue) offeredActions() []string {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return append([]string(nil), q.actions...)
 }
 
 func (q *recordingQueue) offered() []string {
@@ -146,6 +171,17 @@ type returnHarnessOptions struct {
 	maxTurns       int
 	tools          []registry.ToolRegistration
 	lookupExecutor registry.ToolExecutor
+	// goal, when set, replaces the text_input with the test task input node, which hands
+	// the Agent an object carrying this goal at /goal, and configures goalPointer on the
+	// Agent node. approvalTimeoutMs bounds the approval wait when > 0.
+	goal              domain.AgentGoal
+	approvalTimeoutMs int
+	approvalHooks     ApprovalHooks
+	runnerID          string
+	// failingSibling adds a second node fed by the input beside the Agent, whose executor
+	// always fails, so a test can end the Run while the Agent waits. The output becomes a
+	// media output fed by both, since every node must reach the one Output node.
+	failingSibling bool
 }
 
 type returnHarness struct {
@@ -177,36 +213,10 @@ func newReturnHarness(t *testing.T, opts returnHarnessOptions) *returnHarness {
 	ctx := context.Background()
 	pool := testdb.Open(t)
 	uow := postgres.NewUnitOfWork(pool)
-
-	nodeRegistry := registry.NewNodeRegistry()
-	modelRegistry := registry.NewModelRegistry()
-	toolRegistry := registry.NewToolRegistry()
-	if err := modelRegistry.Register(ctx, mockmodel.NewProvider()); err != nil {
-		t.Fatalf("register mock model provider: %v", err)
-	}
-	for _, reg := range []registry.NodeRegistration{textinput.Registration(), textoutput.Registration(), agent.Registration()} {
-		if err := nodeRegistry.Register(reg); err != nil {
-			t.Fatalf("register node type %s: %v", reg.Metadata.Type, err)
-		}
-	}
-	lookupReg := lookup.Registration()
-	if opts.lookupExecutor != nil {
-		lookupReg.Executor = opts.lookupExecutor
-	}
-	for _, reg := range append([]registry.ToolRegistration{lookupReg}, opts.tools...) {
-		if err := toolRegistry.Register(reg); err != nil {
-			t.Fatalf("register tool %s: %v", reg.Metadata.Name, err)
-		}
-	}
-
 	clock := &returnClock{now: time.Now().UTC().Truncate(time.Second)}
 	queue := &recordingQueue{}
-	compiler := runtime.NewCompiler(nodeRegistry, clock)
-	svc := NewExecutionService(Deps{
-		UoW: uow, Nodes: nodeRegistry, Models: modelRegistry, Tools: toolRegistry, Compiler: compiler,
-		Clock: clock, IDs: store.NewUUIDGenerator(), Queue: queue,
-		Callback: CallbackConfig{BaseURL: "https://emberling.test", SigningSecret: []byte("return-test-signing-secret"), PendingTTL: time.Hour},
-	})
+	svc, compiler := newReturnService(t, uow, clock, queue, opts)
+	queue.svc = svc
 	h := &returnHarness{t: t, ctx: ctx, uow: uow, svc: svc, clock: clock, queue: queue}
 
 	maxTurns := opts.maxTurns
@@ -219,12 +229,24 @@ func newReturnHarness(t *testing.T, opts returnHarnessOptions) *returnHarness {
 	}
 	allowedJSON, _ := json.Marshal(allowed)
 	workflowID := "wf_return_" + strconv.FormatInt(returnHarnessSeq.Add(1), 10)
+	inputNode := domain.Node{ID: "node_input", Type: "text_input", Name: "Question", Config: json.RawMessage(`{"inputKey":"question","required":true}`)}
+	runInput := json.RawMessage(`{"question":"what is the record?"}`)
+	agentConfig := `{"instructions":"Answer.","modelId":"` + mockmodel.ModelID +
+		`","allowedTools":` + string(allowedJSON) + `,"maxTurns":` + strconv.Itoa(maxTurns) + `,"timeoutMs":600000`
+	if opts.goal != "" {
+		inputNode = domain.Node{ID: "node_input", Type: taskInputNodeType, Name: "Task", Config: json.RawMessage(`{"task":{"goal":"` + string(opts.goal) + `","question":"what is the record?"}}`)}
+		runInput = json.RawMessage(`{}`)
+		agentConfig += `,"goalPointer":"/goal"`
+	}
+	if opts.approvalTimeoutMs > 0 {
+		agentConfig += `,"approvalTimeoutMs":` + strconv.Itoa(opts.approvalTimeoutMs)
+	}
+	agentConfig += `}`
 	def := domain.Definition{
-		WorkflowID: workflowID, Version: 1, Name: "Return to Agent", Description: "text_input -> agent -> text_output",
+		WorkflowID: workflowID, Version: 1, Name: "Return to Agent", Description: "input -> agent -> text_output",
 		Nodes: []domain.Node{
-			{ID: "node_input", Type: "text_input", Name: "Question", Config: json.RawMessage(`{"inputKey":"question","required":true}`)},
-			{ID: "node_agent", Type: "agent", Name: "Agent", Config: json.RawMessage(`{"instructions":"Answer.","modelId":"` + mockmodel.ModelID +
-				`","allowedTools":` + string(allowedJSON) + `,"maxTurns":` + strconv.Itoa(maxTurns) + `,"timeoutMs":600000}`)},
+			inputNode,
+			{ID: "node_agent", Type: "agent", Name: "Agent", Config: json.RawMessage(agentConfig)},
 			{ID: "node_output", Type: "text_output", Name: "Output", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []domain.Edge{
@@ -232,6 +254,23 @@ func newReturnHarness(t *testing.T, opts returnHarnessOptions) *returnHarness {
 			{ID: "e2", Source: "node_agent", SourceHandle: "text", Target: "node_output", TargetHandle: "text"},
 		},
 		CreatedAt: clock.Now(),
+	}
+	if opts.failingSibling {
+		// The sibling sorts after node_agent, so the Agent is claimed first and the sibling
+		// only once the Agent waits.
+		def.Nodes = []domain.Node{
+			inputNode,
+			{ID: "node_agent", Type: "agent", Name: "Agent", Config: json.RawMessage(agentConfig)},
+			{ID: "node_sibling", Type: failingNodeType, Name: "Sibling", Config: json.RawMessage(`{}`),
+				ExecutionPolicy: &domain.ExecutionPolicy{MaxAttempts: 1, Backoff: domain.BackoffFixed}},
+			{ID: "node_output", Type: "media_output", Name: "Output", Config: json.RawMessage(`{}`)},
+		}
+		def.Edges = []domain.Edge{
+			{ID: "e1", Source: "node_input", SourceHandle: "text", Target: "node_agent", TargetHandle: "input"},
+			{ID: "e2", Source: "node_agent", SourceHandle: "text", Target: "node_output", TargetHandle: "caption"},
+			{ID: "e3", Source: "node_input", SourceHandle: "text", Target: "node_sibling", TargetHandle: "text"},
+			{ID: "e4", Source: "node_sibling", SourceHandle: "image", Target: "node_output", TargetHandle: "image"},
+		}
 	}
 	plan, err := compiler.Compile(ctx, def)
 	if err != nil {
@@ -243,7 +282,7 @@ func newReturnHarness(t *testing.T, opts returnHarnessOptions) *returnHarness {
 		t.Fatalf("save definition: %v", err)
 	}
 
-	run, err := svc.CreateRun(ctx, CreateRun{WorkflowID: workflowID, DefinitionVersion: 1, Input: json.RawMessage(`{"question":"what is the record?"}`)})
+	run, err := svc.CreateRun(ctx, CreateRun{WorkflowID: workflowID, DefinitionVersion: 1, Input: runInput})
 	if err != nil {
 		t.Fatalf("create run: %v", err)
 	}
@@ -258,6 +297,57 @@ func newReturnHarness(t *testing.T, opts returnHarnessOptions) *returnHarness {
 	}
 	h.nodeRunID, h.agentRunID, h.turnID = agentOutcome.NodeRunID, agentOutcome.AgentRunID, agentOutcome.AgentTurnID
 	return h
+}
+
+// newReturnService wires one ExecutionService over uow with the registries the harness
+// uses: the mock model, the text_input, text_output, agent and test task input nodes, the
+// lookup Tool and opts.tools. A restart test calls it a second time over the same uow and
+// clock to get a process image that shares nothing in memory with the first one.
+func newReturnService(t *testing.T, uow store.UnitOfWork, clock *returnClock, queue *recordingQueue, opts returnHarnessOptions) (*ExecutionService, *runtime.Compiler) {
+	t.Helper()
+	ctx := context.Background()
+	nodeRegistry := registry.NewNodeRegistry()
+	modelRegistry := registry.NewModelRegistry()
+	toolRegistry := registry.NewToolRegistry()
+	if err := modelRegistry.Register(ctx, mockmodel.NewProvider()); err != nil {
+		t.Fatalf("register mock model provider: %v", err)
+	}
+	for _, reg := range []registry.NodeRegistration{textinput.Registration(), textoutput.Registration(), mediaoutput.Registration(), agent.Registration(), taskInputRegistration(), failingNodeRegistration()} {
+		if err := nodeRegistry.Register(reg); err != nil {
+			t.Fatalf("register node type %s: %v", reg.Metadata.Type, err)
+		}
+	}
+	lookupReg := lookup.Registration()
+	if opts.lookupExecutor != nil {
+		lookupReg.Executor = opts.lookupExecutor
+	}
+	for _, reg := range append([]registry.ToolRegistration{lookupReg}, opts.tools...) {
+		if err := toolRegistry.Register(reg); err != nil {
+			t.Fatalf("register tool %s: %v", reg.Metadata.Name, err)
+		}
+	}
+	compiler := runtime.NewCompiler(nodeRegistry, clock)
+	svc := NewExecutionService(Deps{
+		UoW: uow, Nodes: nodeRegistry, Models: modelRegistry, Tools: toolRegistry, Compiler: compiler,
+		Clock: clock, IDs: store.NewUUIDGenerator(), Queue: queue,
+		Callback:      CallbackConfig{BaseURL: "https://emberling.test", SigningSecret: []byte("return-test-signing-secret"), PendingTTL: time.Hour},
+		ApprovalHooks: opts.approvalHooks,
+		RunnerID:      opts.runnerID,
+	})
+	return svc, compiler
+}
+
+// restart replaces the harness's service with a new process image over the same database
+// and clock: a fresh ExecutionService, registries and RunnerID, and nothing carried over
+// in memory. It returns the service it replaced, so a test can prove it did no work.
+func (h *returnHarness) restart(opts returnHarnessOptions) *ExecutionService {
+	h.t.Helper()
+	previous := h.svc
+	h.svc, _ = newReturnService(h.t, h.uow, h.clock, h.queue, opts)
+	h.queue.mu.Lock()
+	h.queue.svc = h.svc
+	h.queue.mu.Unlock()
+	return previous
 }
 
 func (h *returnHarness) advance() AdvanceOutcome {

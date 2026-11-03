@@ -19,6 +19,7 @@ const (
 	IDPrefixAgentContextVersion = "ctxv"
 	IDPrefixAgentStateVersion   = "statev"
 	IDPrefixWorkspacePatch      = "wpatch"
+	IDPrefixApproval            = "approval"
 	IDPrefixChangeRequest       = "cr"
 )
 

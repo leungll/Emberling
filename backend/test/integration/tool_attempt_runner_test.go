@@ -27,9 +27,11 @@ type orphanScanRow struct {
 	suffix    string
 	runnerID  *string
 	tokenHash *string
-	// terminated ends the Agent Run before the scan; expired puts its deadline before now.
+	// terminated ends the Agent Run before the scan; expired puts its deadline before now;
+	// paused stops the Agent Run's clock for a human decision before the scan.
 	terminated bool
 	expired    bool
+	paused     bool
 }
 
 // seedOrphanScanRow commits an Agent Run on its own NodeRun of the seeded Run, a decided
@@ -81,6 +83,11 @@ func seedOrphanScanRow(ctx context.Context, t *testing.T, uow store.UnitOfWork, 
 		if row.terminated {
 			if _, err := tx.AgentRuns().Terminate(ctx, agentRunID, domain.TerminationToolError, fixtureTime,
 				&domain.ExecutionError{Code: "TOOL_ERROR", Message: "seeded"}); err != nil {
+				return err
+			}
+		}
+		if row.paused {
+			if err := tx.AgentRuns().Pause(ctx, agentRunID, domain.PauseApproval, fixtureTime); err != nil {
 				return err
 			}
 		}
@@ -155,6 +162,41 @@ func TestToolAttemptStore_ListOrphanStarted_ExcludesCurrentRunnerNullRunnerAndAs
 	}
 	if len(got) != 1 {
 		t.Errorf("orphans with limit 1 = %d, want 1", len(got))
+	}
+}
+
+// TestToolAttemptStore_ListOrphanStarted_IncludesPausedAgentRunPastDeadline proves the
+// orphan scan does not read a paused Agent Run's deadline as expiry: while the clock is
+// stopped the deadline is stale, and a STARTED Attempt of a stopped process under such an
+// Agent Run is still an orphan, whether or not the frozen deadline has passed.
+func TestToolAttemptStore_ListOrphanStarted_IncludesPausedAgentRunPastDeadline(t *testing.T) {
+	ctx := context.Background()
+	uow := postgres.NewUnitOfWork(testdb.Open(t))
+	f := seedRun(ctx, t, uow)
+	now := fixtureTime.Add(time.Hour)
+	previous := "runner-previous"
+
+	pausedExpired := seedOrphanScanRow(ctx, t, uow, f, orphanScanRow{suffix: "paused_expired", runnerID: &previous, expired: true, paused: true}, now)
+	pausedLive := seedOrphanScanRow(ctx, t, uow, f, orphanScanRow{suffix: "paused_live", runnerID: &previous, paused: true}, now)
+	runningExpired := seedOrphanScanRow(ctx, t, uow, f, orphanScanRow{suffix: "running_expired", runnerID: &previous, expired: true}, now)
+
+	var got []domain.ToolAttempt
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		got, err = tx.ToolAttempts().ListOrphanStarted(ctx, "runner-current", now, 10)
+		return err
+	}); err != nil {
+		t.Fatalf("ListOrphanStarted: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, attempt := range got {
+		ids[attempt.ID] = true
+	}
+	if !ids[pausedExpired] || !ids[pausedLive] {
+		t.Errorf("orphans = %v, want both Attempts under paused Agent Runs (%s, %s)", ids, pausedExpired, pausedLive)
+	}
+	if ids[runningExpired] {
+		t.Errorf("orphans = %v, want the Attempt under the expired, running Agent Run left to the timeout path", ids)
 	}
 }
 

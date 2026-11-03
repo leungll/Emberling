@@ -130,6 +130,7 @@ func (t *cbTx) ExecutionFacts() store.ExecutionFactRepository             { retu
 func (t *cbTx) ProviderSlots() store.ProviderSlotRepository               { return noSlotsRepo{} }
 func (t *cbTx) AgentWorkspaces() store.AgentWorkspaceRepository           { return nil }
 func (t *cbTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
+func (t *cbTx) Approvals() store.ApprovalRepository                       { return nil }
 func (t *cbTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
 
 type cbDefinitionRepo struct{ tx *cbTx }

@@ -31,13 +31,15 @@ const verifyContainerPrefix = containerPrefix + "verify-"
 // verifyContainerScript unpacks the patched checkout streamed on stdin and runs the steps,
 // each between sentinel lines carrying its name and exit status, so the runner can split
 // one output stream back into steps. The module files are hashed before and after so a
-// verification that changed them is detected.
+// verification that changed them is detected. govulncheck is pointed at the snapshot with
+// its -db flag: it does not read a database location from the environment, and with no
+// network the public database would be unreachable and the scan would never run.
 const verifyContainerScript = `cd /work && mkdir -p .gotmp && tar xf - || exit 91
 step() { name=$1; shift; printf '\036STEP %s\n' "$name"; "$@" 2>&1; printf '\036EXIT %s\n' "$?"; }
 step modfiles-before sha256sum go.mod go.sum
 step modules go list -m -json all
 step tests go test -json ./...
-step scan govulncheck -json ./...
+step scan govulncheck -db file:///vulndb -json ./...
 step modfiles-after sha256sum go.mod go.sum
 exit 0`
 
@@ -118,7 +120,6 @@ func (d *DockerVerifier) createArgs(name string) []string {
 		"-e", "GOPATH=/tmp/gopath",
 		"-e", "GOTMPDIR=/work/.gotmp",
 		"-e", "GOMODCACHE=/modcache",
-		"-e", "GOVULNDB=file:///vulndb",
 		"-e", "GOFLAGS=-mod=readonly",
 		"-e", "GOPROXY=off",
 		"-e", "GOSUMDB=off",

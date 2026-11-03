@@ -15,15 +15,19 @@ const (
 	ItemAdvanceRun ItemKind = iota + 1
 	// ItemAgentTurn means "this persisted Agent Turn of this Run was committed READY."
 	ItemAgentTurn
+	// ItemAgentAction means "this Agent Action of this Run was approved and its STARTED
+	// Attempt committed; the Tool call is still to be made."
+	ItemAgentAction
 )
 
 // Item is one unit of queued work. An item carries only its work type, the
 // persisted object's ID and the Run ID -- never authoritative state or execution input,
 // which the use case re-reads from PostgreSQL.
 type Item struct {
-	Kind   ItemKind
-	RunID  string
-	TurnID string
+	Kind     ItemKind
+	RunID    string
+	TurnID   string
+	ActionID string
 }
 
 // defaultQueueCapacity bounds Queue when NewQueue is given a non-positive capacity. It
@@ -59,6 +63,15 @@ func (q *Queue) EnqueueAdvance(runID string) bool {
 // with the same bound and the same meaning of a false result as EnqueueAdvance.
 func (q *Queue) EnqueueAgentTurn(runID, turnID string) bool {
 	return q.offer(Item{Kind: ItemAgentTurn, RunID: runID, TurnID: turnID})
+}
+
+// EnqueueAgentAction offers an approved Agent Action whose STARTED Attempt has committed
+// to the queue without blocking, with the same bound as EnqueueAdvance. A refusal here is
+// still never an error for the caller, but it is not rediscovered by the Reconciler of the
+// same process: the Attempt names this process as its runner, so only a restart's orphan
+// scan returns it. The service logs a refusal for that reason.
+func (q *Queue) EnqueueAgentAction(runID, actionID string) bool {
+	return q.offer(Item{Kind: ItemAgentAction, RunID: runID, ActionID: actionID})
 }
 
 func (q *Queue) offer(item Item) bool {

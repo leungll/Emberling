@@ -16,6 +16,7 @@ type Executor interface {
 	Advance(ctx context.Context, runID string) (service.AdvanceOutcome, error)
 	Execute(ctx context.Context, outcome service.AdvanceOutcome) error
 	AdvanceAgentTurn(ctx context.Context, turnID string, claimSource domain.ClaimSource) error
+	ContinueAgentAction(ctx context.Context, actionID string) error
 }
 
 // Hooks lets a caller observe or synchronize on Pool activity without sleeps
@@ -96,6 +97,8 @@ func (p *Pool) run(ctx context.Context) {
 			switch item.Kind {
 			case ItemAgentTurn:
 				p.processAgentTurn(ctx, item)
+			case ItemAgentAction:
+				p.processAgentAction(ctx, item)
 			default:
 				p.processItem(ctx, item.RunID)
 			}
@@ -158,6 +161,26 @@ func (p *Pool) processAgentTurn(ctx context.Context, item Item) {
 	}
 	if err := p.executor.AdvanceAgentTurn(ctx, item.TurnID, domain.ClaimImmediate); err != nil {
 		p.logger.Error("work: advance agent turn failed", "run_id", item.RunID, "agent_turn_id", item.TurnID, "error", err)
+	}
+	if p.hooks.AfterExecute != nil {
+		p.hooks.AfterExecute(item.RunID)
+	}
+}
+
+// processAgentAction makes the Tool call of an approved Agent Action whose STARTED Attempt
+// the approval transaction committed. Like a Turn, it runs under the Pool's context and
+// never the request's: the person's decision was answered once the approval committed, and
+// the call that follows belongs to the worker, stopping only when the Pool stops. An error
+// leaves the Attempt to the orphan scan of a later process.
+func (p *Pool) processAgentAction(ctx context.Context, item Item) {
+	if ctx.Err() != nil {
+		return
+	}
+	if p.hooks.BeforeExecute != nil {
+		p.hooks.BeforeExecute(item.RunID)
+	}
+	if err := p.executor.ContinueAgentAction(ctx, item.ActionID); err != nil {
+		p.logger.Error("work: continue agent action failed", "run_id", item.RunID, "agent_action_id", item.ActionID, "error", err)
 	}
 	if p.hooks.AfterExecute != nil {
 		p.hooks.AfterExecute(item.RunID)

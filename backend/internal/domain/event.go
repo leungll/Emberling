@@ -55,6 +55,20 @@ const (
 	EventAgentStateUpdated      EventType = "AGENT_STATE_UPDATED"
 	EventAgentCompleted         EventType = "AGENT_COMPLETED"
 	EventAgentFailed            EventType = "AGENT_FAILED"
+
+	// The authorization and human-wait vocabulary. The approval and pause paths write the
+	// first four. RELEASE_OUTCOME_UNKNOWN and RELEASE_VOIDED are written by the release
+	// reconciliation path, AGENT_ACTION_WAITING_HUMAN by the human-wait path and
+	// AGENT_COMPLETION_EVALUATED by the goal-based completion check; those paths do not
+	// exist yet, the vocabulary and the database constraint already admit them.
+	EventAgentActionWaitingApproval EventType = "AGENT_ACTION_WAITING_APPROVAL"
+	EventApprovalDecided            EventType = "APPROVAL_DECIDED"
+	EventAgentPaused                EventType = "AGENT_PAUSED"
+	EventAgentResumed               EventType = "AGENT_RESUMED"
+	EventReleaseOutcomeUnknown      EventType = "RELEASE_OUTCOME_UNKNOWN"
+	EventReleaseVoided              EventType = "RELEASE_VOIDED"
+	EventAgentActionWaitingHuman    EventType = "AGENT_ACTION_WAITING_HUMAN"
+	EventAgentCompletionEvaluated   EventType = "AGENT_COMPLETION_EVALUATED"
 )
 
 var eventTypes = map[EventType]struct{}{
@@ -70,6 +84,11 @@ var eventTypes = map[EventType]struct{}{
 	EventAgentActionWaiting: {}, EventAgentActionCompleted: {},
 	EventAgentActionFailed: {}, EventAgentStateUpdated: {},
 	EventAgentCompleted: {}, EventAgentFailed: {},
+
+	EventAgentActionWaitingApproval: {}, EventApprovalDecided: {},
+	EventAgentPaused: {}, EventAgentResumed: {},
+	EventReleaseOutcomeUnknown: {}, EventReleaseVoided: {},
+	EventAgentActionWaitingHuman: {}, EventAgentCompletionEvaluated: {},
 }
 
 func (t EventType) IsValid() bool {

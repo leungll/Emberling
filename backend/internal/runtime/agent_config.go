@@ -276,18 +276,14 @@ func normaliseAllowedPath(allowed string) (string, error) {
 	return cleaned, nil
 }
 
-// AgentGoal is the task goal an Agent Run is frozen to: prepare the change only, or fix
-// and deploy it. The goal decides whether a release Tool is available to the Agent.
-type AgentGoal string
+// AgentGoal is the domain's task goal, re-exported so the pure goal resolution and its
+// callers name one type.
+type AgentGoal = domain.AgentGoal
 
 const (
-	AgentGoalPrepareOnly  AgentGoal = "PREPARE_ONLY"
-	AgentGoalFixAndDeploy AgentGoal = "FIX_AND_DEPLOY"
+	AgentGoalPrepareOnly  = domain.AgentGoalPrepareOnly
+	AgentGoalFixAndDeploy = domain.AgentGoalFixAndDeploy
 )
-
-func (g AgentGoal) IsValid() bool {
-	return g == AgentGoalPrepareOnly || g == AgentGoalFixAndDeploy
-}
 
 // ResolveAgentGoal reads the Agent Run's goal from the node input at config.GoalPointer.
 // It is a pure decision made once, in the transaction that starts the Agent Run; the

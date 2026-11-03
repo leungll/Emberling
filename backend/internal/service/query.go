@@ -217,6 +217,9 @@ type AgentTraceTurn struct {
 	// Manifest is the Context Manifest written with the Turn's claim, nil while the Turn
 	// has not been claimed.
 	Manifest *domain.AgentTurnManifest
+	// Approval is the human decision requested for the Action, nil when its authorization
+	// never asked for one.
+	Approval *domain.Approval
 }
 
 // AgentTrace reads one Agent NodeRun's Agent Run, Turns, Decisions, Actions, Tool
@@ -274,6 +277,14 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 				return err
 			}
 			round.Decision = &decision
+
+			approval, err := tx.Approvals().GetByActionID(ctx, action.ID)
+			switch {
+			case err == nil:
+				round.Approval = &approval
+			case !errors.Is(err, domain.ErrNotFound):
+				return err
+			}
 
 			attempts, err := tx.ToolAttempts().ListByActionID(ctx, action.ID)
 			if err != nil {

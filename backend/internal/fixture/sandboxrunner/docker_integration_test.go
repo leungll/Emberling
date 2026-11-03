@@ -163,7 +163,7 @@ func TestDockerVerification_NetworkAccess_TestFails(t *testing.T) {
 new file mode 100644
 --- /dev/null
 +++ b/tests/network_test.go
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,15 @@
 +package tests
 +
 +import (

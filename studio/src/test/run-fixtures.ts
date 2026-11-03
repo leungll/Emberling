@@ -142,6 +142,9 @@ function action(id: string, extra: Partial<AgentActionTrace> = {}): AgentActionT
     claimSource: 'IMMEDIATE',
     completionSource: 'SYNC_EXECUTION',
     failureSource: null,
+    authorization: null,
+    authorizationReason: null,
+    approval: null,
     ...extra,
   };
 }
@@ -199,6 +202,9 @@ export function agentTrace(
       currentContextVersion: 1,
       currentStateVersion: 1,
       deadline: null,
+      pausedAt: null,
+      pauseReason: null,
+      goal: null,
       terminatedAt: null,
       error: null,
       ...extra,

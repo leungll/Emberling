@@ -207,6 +207,7 @@ export const runs = {
     passingAnswer: 'Passing on its answer',
     waitingToReport: (who: string, tool: string) => `Waiting for ${who} to report ${tool}`,
     waitingToReportBack: (who: string) => `Waiting for ${who} to report back`,
+    waitingForApproval: (tool: string) => `Waiting for a person to approve ${tool}`,
     usedAllCalls: (n: number) => `Used all ${plural(n, 'generation call')}`,
     blockedNeedsReview: (tool: string) =>
       `Blocked from calling ${tool}: it needs a passed review first`,
@@ -334,6 +335,7 @@ export const runs = {
     turnDeciding: 'deciding',
     turnCalled: (tool: string) => `called ${tool}`,
     turnCalling: (tool: string) => `calling ${tool}`,
+    turnAwaitingApproval: (tool: string) => `waiting for approval to call ${tool}`,
     turnToolFailed: (tool: string) => `${tool} failed`,
     turnBlocked: (tool: string) => `blocked from calling ${tool}`,
     group: (a: number, b: number, unit: string, reps: number) =>
@@ -466,6 +468,12 @@ export const runs = {
       waitingFor: 'Waiting for',
       since: 'Since',
       deadline: 'Deadline',
+      authorization: 'Authorization',
+      approval: 'Approval',
+      decidedBy: 'Decided by',
+      reason: 'Reason',
+      agentClock: 'Agent clock',
+      agentGoal: 'Goal',
       noneSet: 'None set',
       progress: 'Progress',
       latestEvent: 'Latest event',
@@ -530,6 +538,8 @@ export const runs = {
     sameError: 'Failed with the same error as',
     attemptLower: (n: number) => `attempt ${n}`,
     blocked: 'The call was blocked before it started.',
+    denied: (reason: string) => `Denied before it started: ${reason}`,
+    pausedSince: 'Paused since',
     finalLead: (step: string) => `The agent’s answer became the output of ${step}.`,
     turnLead: {
       final: 'Decided to finish and passed on its answer.',
@@ -538,6 +548,8 @@ export const runs = {
       FAILED: ', which failed.',
       BLOCKED: '; the call was blocked before it started.',
       WAITING_CALLBACK: ', which is waiting for its result.',
+      WAITING_APPROVAL: ', which is waiting for a person to approve it.',
+      WAITING_HUMAN: ', which is waiting for a person to confirm its outcome.',
       RUNNING: ', which is running.',
       other: '.',
     },
@@ -658,6 +670,15 @@ export const runs = {
       `If no result arrives by then, ${step} stops and the run fails. Emberling decides this, not this page.`,
     saved: 'Saved. The wait survives a restart of Emberling.',
     sentAt: (at: string) => `sent ${at}`,
+    approvalTitle: (step: string) => `${step} is waiting for approval`,
+    turnAsked: (n: number, tool: string) =>
+      `Turn ${n} decided to call ${tool}. The call runs only once a person approves it.`,
+    aPersonToApprove: (tool: string) => `a person to approve the call to ${tool}`,
+    approvalExpires: (step: string) =>
+      `If nobody decides by then, the approval expires and ${step} is told so. Emberling decides this, not this page.`,
+    clockPaused: 'The agent’s own time limit is paused until the decision is recorded.',
+    clockPausedFor: (reason: string) => `Paused: ${reason.toLowerCase()}.`,
+    openApproval: 'Open approval',
   },
 
   shortcuts: {

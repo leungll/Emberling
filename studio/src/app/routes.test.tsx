@@ -161,6 +161,8 @@ describe('routes', () => {
       '/runs',
       '/runs/:runId',
       '/workflows',
+      '/approvals',
+      '/approvals/:approvalId',
       '*',
       '/workflows/new',
       '/workflows/:workflowId',

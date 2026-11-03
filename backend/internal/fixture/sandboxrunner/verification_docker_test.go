@@ -55,7 +55,7 @@ func TestDockerVerifier_Verify_UsesOnlyTheFixedArgumentsAndStreamsTheCheckout(t 
 		"--tmpfs /work:exec,uid=65534,gid=65534,size=512m --tmpfs /tmp:size=1g",
 		"--memory 1g --cpus 1 --pids-limit 256",
 		"--name emberling-sandbox-verify-verify_1",
-		"-e GOPROXY=off", "-e GOFLAGS=-mod=readonly", "-e GOMODCACHE=/modcache", "-e GOVULNDB=file:///vulndb", "-e GOSUMDB=off",
+		"-e GOPROXY=off", "-e GOFLAGS=-mod=readonly", "-e GOMODCACHE=/modcache", "-e GOSUMDB=off",
 		" verify@sha256:abc sh -c ",
 	} {
 		if !strings.Contains(create, required) {
@@ -139,5 +139,51 @@ func TestDockerVerifier_Timeout_RemovesContainerAndReportsTimeout(t *testing.T) 
 	calls := docker.commands()
 	if len(calls) < 4 || calls[2] != "kill emberling-sandbox-verify-verify_3" || calls[3] != "rm -f emberling-sandbox-verify-verify_3" {
 		t.Fatalf("docker calls = %v, want kill and rm after the timed-out start", calls)
+	}
+}
+
+func TestDockerVerifier_ScanCommand_ReadsTheOfflineSnapshot(t *testing.T) {
+	f := vulnRepo(t)
+	docker := &fakeDocker{respond: func(_ context.Context, _ []string, _ io.Writer) (int, error) { return 0, nil }}
+	verifier, err := NewDockerVerifier(NewLocalRepositories(map[string]string{vulnRepoID: f.repoDir}), "verify@sha256:abc", time.Minute, docker)
+	if err != nil {
+		t.Fatalf("NewDockerVerifier: %v", err)
+	}
+	verifier.Verify(context.Background(), vulnJob("verify_3", ""))
+	calls := docker.commands()
+	if len(calls) == 0 {
+		t.Fatal("docker was not called")
+	}
+	// govulncheck takes its database only from -db; a scan without it would try to reach
+	// the public database, which the container's missing network makes impossible.
+	if !strings.Contains(calls[0], "step scan govulncheck -db file:///vulndb -json ./...") {
+		t.Fatalf("docker create %q does not run govulncheck against the offline snapshot", calls[0])
+	}
+}
+
+func TestDockerVerifier_ScanCannotReachItsDatabase_VerdictWithoutPass(t *testing.T) {
+	f := vulnRepo(t)
+	hashes := "aaa  go.mod\nbbb  go.sum\n"
+	docker := &fakeDocker{respond: func(_ context.Context, args []string, output io.Writer) (int, error) {
+		if args[0] != "start" {
+			return 0, nil
+		}
+		_, _ = io.WriteString(output, scriptOutput(map[string]string{
+			scriptStepModfilesPre: hashes, scriptStepModules: modulesClean, scriptStepTests: testsAllPass,
+			scriptStepScan:         "govulncheck: fetching vulnerabilities: Get \"https://vuln.go.dev/index/modules.json.gz\": dial tcp: connect: network is unreachable\n",
+			scriptStepModfilesPost: hashes,
+		}, map[string]int{scriptStepScan: 1}))
+		return 0, nil
+	}}
+	verifier, err := NewDockerVerifier(NewLocalRepositories(map[string]string{vulnRepoID: f.repoDir}), "verify@sha256:abc", time.Minute, docker)
+	if err != nil {
+		t.Fatalf("NewDockerVerifier: %v", err)
+	}
+	outcome := verifier.Verify(context.Background(), vulnJob("verify_4", fixturePatch(t, "fix-complete.patch")))
+	if !outcome.Verdict || outcome.Passed() || outcome.ScanRan || outcome.ScanClean || !outcome.TestsPassed || !outcome.DependenciesClean {
+		t.Fatalf("outcome = %+v, want a verdict that does not pass because only the scan is missing", outcome)
+	}
+	if !strings.Contains(string(outcome.Log), "network is unreachable") || !strings.Contains(string(outcome.Log), "govulncheck did not run to a result") {
+		t.Fatalf("log does not carry the scanner's output and the reason:\n%s", outcome.Log)
 	}
 }
