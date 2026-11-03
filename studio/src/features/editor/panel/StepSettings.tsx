@@ -22,6 +22,7 @@ type DisclosureId = (typeof DISCLOSURES)[number];
 
 const INPUT_FIELDS: Record<string, readonly string[]> = {
   text_input: ['label', 'required', 'textLength'],
+  task_input: ['label', 'required', 'schema'],
   image_input: ['label', 'required', 'acceptedMediaTypes', 'maxSizeBytes'],
   media_brief: [],
 };
@@ -196,6 +197,7 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
       parts.push(section('template', field('template')));
       break;
     case 'text_input':
+    case 'task_input':
     case 'image_input':
     case 'media_brief':
       parts.push(

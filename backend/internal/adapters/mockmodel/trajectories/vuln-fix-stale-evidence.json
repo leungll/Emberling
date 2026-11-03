@@ -1,0 +1,61 @@
+{
+  "turns": [
+    {
+      "toolCall": {
+        "toolName": "write_file",
+        "arguments": {
+          "path": "go.mod",
+          "content": "module example.com/tokenservice\n\ngo 1.24\n\nrequire github.com/golang-jwt/jwt/v5 v5.3.1\n"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "verify_patch",
+        "arguments": {
+          "patchDigest": "{{tool:0:/patchDigest}}"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "write_file",
+        "arguments": {
+          "path": "internal/auth/token.go",
+          "content": "// Package auth issues and verifies the signed access tokens of the token service. The\n// HTTP layer depends only on this package's exported API: Issuer, Identity and the three\n// sentinel errors.\npackage auth\n\nimport (\n\t\"errors\"\n\t\"fmt\"\n\t\"time\"\n\n\t\"github.com/golang-jwt/jwt/v5\"\n)\n\n// Verification errors. A caller compares with errors.Is; the message never carries the\n// token.\nvar (\n\t// ErrExpired reports a well-formed token whose expiry has passed.\n\tErrExpired = errors.New(\"auth: token has expired\")\n\t// ErrAudience reports a valid token issued for another audience.\n\tErrAudience = errors.New(\"auth: token is not for this audience\")\n\t// ErrInvalid reports a token that is malformed, tampered with or signed another way.\n\tErrInvalid = errors.New(\"auth: token is invalid\")\n)\n\n// minSecretBytes is the shortest HMAC secret an Issuer accepts.\nconst minSecretBytes = 16\n\n// Issuer signs tokens for one audience with one shared secret and verifies them again.\ntype Issuer struct {\n\tsecret   []byte\n\taudience string\n\tttl      time.Duration\n}\n\n// Identity is what a verified token says about its holder.\ntype Identity struct {\n\tSubject   string\n\tExpiresAt time.Time\n}\n\n// NewIssuer returns an Issuer for audience whose tokens live for ttl.\nfunc NewIssuer(secret []byte, audience string, ttl time.Duration) (*Issuer, error) {\n\tswitch {\n\tcase len(secret) < minSecretBytes:\n\t\treturn nil, fmt.Errorf(\"auth: secret must be at least %d bytes\", minSecretBytes)\n\tcase audience == \"\":\n\t\treturn nil, errors.New(\"auth: audience is required\")\n\tcase ttl <= 0:\n\t\treturn nil, errors.New(\"auth: ttl must be positive\")\n\t}\n\treturn &Issuer{secret: secret, audience: audience, ttl: ttl}, nil\n}\n\n// Issue signs a token for subject that expires ttl after now.\nfunc (i *Issuer) Issue(subject string, now time.Time) (string, error) {\n\tif subject == \"\" {\n\t\treturn \"\", errors.New(\"auth: subject is required\")\n\t}\n\tclaims := jwt.RegisteredClaims{\n\t\tSubject:   subject,\n\t\tAudience:  jwt.ClaimStrings{i.audience},\n\t\tIssuedAt:  jwt.NewNumericDate(now),\n\t\tExpiresAt: jwt.NewNumericDate(now.Add(i.ttl)),\n\t}\n\tsigned, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(i.secret)\n\tif err != nil {\n\t\treturn \"\", fmt.Errorf(\"auth: sign token: %w\", err)\n\t}\n\treturn signed, nil\n}\n\n// Verify checks the signature, the expiry and the audience of token and returns the\n// identity it carries.\nfunc (i *Issuer) Verify(token string) (Identity, error) {\n\tclaims := &jwt.RegisteredClaims{}\n\t_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {\n\t\treturn i.secret, nil\n\t}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithAudience(i.audience))\n\tswitch {\n\tcase errors.Is(err, jwt.ErrTokenExpired):\n\t\treturn Identity{}, ErrExpired\n\tcase errors.Is(err, jwt.ErrTokenInvalidAudience):\n\t\treturn Identity{}, ErrAudience\n\tcase err != nil:\n\t\treturn Identity{}, ErrInvalid\n\t}\n\tif claims.ExpiresAt == nil {\n\t\treturn Identity{}, ErrInvalid\n\t}\n\treturn Identity{Subject: claims.Subject, ExpiresAt: claims.ExpiresAt.Time.UTC()}, nil\n}\n"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "verify_patch",
+        "arguments": {
+          "patchDigest": "{{tool:0:/patchDigest}}"
+        }
+      }
+    },
+    {
+      "final": {
+        "outputText": {
+          "status": "PATCH_VERIFIED",
+          "advisory": "{{task:/advisory}}",
+          "patchDigest": "{{tool:3:/patchDigest}}",
+          "resultDigest": "{{tool:3:/resultDigest}}",
+          "passed": "{{tool:3:/passed}}"
+        }
+      }
+    }
+  ],
+  "onToolStatus": [
+    {
+      "status": "REJECTED",
+      "code": "STALE_PATCH",
+      "toolCall": {
+        "toolName": "verify_patch",
+        "arguments": {
+          "patchDigest": "{{tool:2:/patchDigest}}"
+        }
+      }
+    }
+  ]
+}

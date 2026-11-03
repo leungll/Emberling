@@ -2,6 +2,7 @@ import {
   ArrowRightFromLine,
   Bot,
   Braces,
+  FileJson,
   ImagePlus,
   ImageUp,
   Images,
@@ -20,6 +21,7 @@ import {
  */
 const TYPE_ICON: Record<string, LucideIcon> = {
   text_input: Type,
+  task_input: FileJson,
   image_input: ImageUp,
   media_brief: Images,
   prompt_template: Braces,

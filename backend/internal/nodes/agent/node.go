@@ -78,9 +78,12 @@ func Registration() registry.NodeRegistration {
 			DisplayName:   "Agent",
 			Category:      domain.NodeCategoryAgent,
 			ExecutionKind: domain.NodeExecutionManagedAgent,
-			Inputs:        []domain.PortMetadata{{Name: "input", DataType: domain.PortTypeText, Required: true}},
-			Outputs:       []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
-			ConfigSchema:  json.RawMessage(configSchema),
+			// The input port accepts any value: a Text Input's string or a Task Input's object.
+			// The Agent Runtime hands it to the model unchanged as the first user message and
+			// resolves the goal pointer inside it.
+			Inputs:       []domain.PortMetadata{{Name: "input", DataType: domain.PortTypeAny, Required: true}},
+			Outputs:      []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
+			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "modelId", Order: 10, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityStructuredDecision},
 				{Path: "imageModelId", Order: 15, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityReferenceImageGeneration},

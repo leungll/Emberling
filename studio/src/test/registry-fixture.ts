@@ -57,7 +57,7 @@ export const NODE_TYPES: NodeMetadata[] = [
     'agent',
     'Agent',
     'Agent',
-    [['input', 'text']],
+    [['input', 'any']],
     [['text', 'text']],
     {
       instructions: str,
@@ -99,6 +99,15 @@ export const NODE_TYPES: NodeMetadata[] = [
     { modelId: str, width: int(256) },
     ['modelId', 'width'],
     [{ path: 'modelId', widget: 'MODEL_SELECTOR', capability: 'image_generation' }],
+  ),
+  meta(
+    'task_input',
+    'Task Input',
+    'Input',
+    [],
+    [['task', 'json']],
+    { inputKey: str, label: str, required: { type: 'boolean' }, schema: { type: 'object' } },
+    ['inputKey', 'required'],
   ),
   meta(
     'image_input',

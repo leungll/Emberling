@@ -35,6 +35,19 @@ COPY --from=build /out/service /usr/local/bin/service
 COPY --from=build /out/sandboxrunner /var/lib/emberling/sandboxrunner
 ENTRYPOINT ["/usr/local/bin/service"]
 
+# Backend with git, for the compose stack: the workspace Tools read a bound repository
+# through `git archive`, which distroless cannot provide. It is not the default target: the
+# distroless stage below stays last so every other image is unchanged, and the Backend
+# still runs as nonroot with the same storage roots.
+FROM alpine:3.21 AS emberling-workspace
+RUN apk add --no-cache git ca-certificates \
+    && addgroup -g 65532 nonroot && adduser -D -u 65532 -G nonroot nonroot
+COPY --from=build /out/service /usr/local/bin/service
+COPY --from=build /out/artifactsweep /usr/local/bin/artifactsweep
+COPY --from=build --chown=nonroot:nonroot /out/assets /var/lib/emberling/assets
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/service"]
+
 # distroless/static has no shell and no package manager: the runtime image carries the
 # binary and nothing that could read a mounted Secret interactively.
 FROM gcr.io/distroless/static:nonroot
