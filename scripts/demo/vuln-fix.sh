@@ -5,6 +5,10 @@
 # public API and the sandbox runner's request record; no live credential is involved.
 #
 # Usage: scripts/demo/vuln-fix.sh verify|scope-denied|stale-evidence|restart
+#        scripts/demo/vuln-fix.sh definition verify|scope-denied|stale-evidence|restart
+#
+# "definition" prints the Definition the story would save, as JSON, and touches nothing:
+# it needs jq only, and the contract tests read it to check what the environment changes.
 #
 #   verify          the scripted Agent reads the rules and the advisory, upgrades go.mod
 #                   and the import path without adapting the code, verifies, adapts the
@@ -34,8 +38,12 @@
 # registers through EMBERLING_MODELS instead of the scripted mock model. Only the verify
 # story runs with a real model, and its checks are the ones a real model must still meet:
 # the Run completes, the report names the latest patch, and every patch_verified fact is
-# about a patch the workspace recorded. No key is read or written here; the Backend's own
-# environment supplies it. The scripted stories pass no mock mode: the failed verification
+# about a patch the workspace recorded. A real model needs more time than the scripted one,
+# so the Agent's timeoutMs becomes EMBERLING_DEMO_MODEL_TIMEOUT_MS (default 1800000, thirty
+# minutes) and the wait for the terminal Run grows to that budget plus a minute; the
+# scripted stories keep the fixture's budget. No key is read or written here; the Backend's
+# own environment supplies it (EMBERLING_MODELS, EMBERLING_MODEL_BASE_URL,
+# EMBERLING_MODEL_API_KEY and, for one model call, the optional EMBERLING_MODEL_TIMEOUT). The scripted stories pass no mock mode: the failed verification
 # is the real verdict on an upgrade that does not compile, which the mock runner judges
 # from the patch the same way the docker runner's build does, so every story holds against
 # either runner.
@@ -46,14 +54,19 @@ set -euo pipefail
 
 # shellcheck source=scripts/demo/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-require_tools docker curl jq
+require_tools jq
 
+mode=run
+if [[ "${1:-}" == definition ]]; then
+  mode=definition
+  shift
+fi
 story=${1:-}
 case "$story" in
 verify | restart) script=vuln-fix-main-verify ;;
 scope-denied) script=vuln-fix-scope-denied ;;
 stale-evidence) script=vuln-fix-stale-evidence ;;
-*) die "usage: vuln-fix.sh verify|scope-denied|stale-evidence|restart" ;;
+*) die "usage: vuln-fix.sh [definition] verify|scope-denied|stale-evidence|restart" ;;
 esac
 real_model=${EMBERLING_DEMO_MODEL:-}
 if [[ -n "$real_model" && "$story" != verify ]]; then
@@ -63,9 +76,43 @@ fi
 FIXTURE="$DEMO_ROOT/backend/test/fixtures/definitions/vuln_fix.json"
 HELD_DEADLINE_S=60
 RESTART_DEADLINE_S=120
-TERMINAL_DEADLINE_S=${EMBERLING_DEMO_VULN_TERMINAL_DEADLINE_S:-300}
 ADVISORY=GO-2025-3553
 SERVICE=token-service
+# The Agent budget the saved Definition carries: the fixture's for a scripted story, the
+# real-model budget otherwise. The wait for the terminal Run covers that budget and a
+# minute of Tool and runner work after it.
+agent_timeout_ms=$(jq '.nodes[] | select(.id == "node_agent") | .config.timeoutMs' "$FIXTURE")
+if [[ -n "$real_model" ]]; then
+  agent_timeout_ms=${EMBERLING_DEMO_MODEL_TIMEOUT_MS:-1800000}
+  [[ "$agent_timeout_ms" =~ ^[1-9][0-9]*$ ]] || die "EMBERLING_DEMO_MODEL_TIMEOUT_MS must be a positive integer of milliseconds"
+fi
+TERMINAL_DEADLINE_S=${EMBERLING_DEMO_VULN_TERMINAL_DEADLINE_S:-$((agent_timeout_ms / 1000 + 60))}
+if ((TERMINAL_DEADLINE_S < agent_timeout_ms / 1000 + 60)); then
+  TERMINAL_DEADLINE_S=$((agent_timeout_ms / 1000 + 60))
+fi
+
+# build_definition prints the Definition this story saves: the fixture with its Agent bound
+# to the scripted trajectory, or to the real model with the real-model budget.
+build_definition() {
+  if [[ -n "$real_model" ]]; then
+    jq --arg model "$real_model" --argjson timeout "$agent_timeout_ms" '
+      del(.workflowId)
+      | .name = "Vulnerability Fix (\($model))"
+      | .nodes |= map(if .id == "node_agent"
+          then .config.modelId = $model | del(.config.modelConfig) | .config.timeoutMs = $timeout
+          else . end)' "$FIXTURE"
+  else
+    jq --arg script "$script" '
+      del(.workflowId)
+      | .name = "Vulnerability Fix (\($script))"
+      | .nodes |= map(if .id == "node_agent" then .config.modelConfig.script = $script else . end)' "$FIXTURE"
+  fi
+}
+if [[ "$mode" == definition ]]; then
+  build_definition
+  exit 0
+fi
+require_tools docker curl
 
 failures=0
 pass() { printf 'PASS %s\n' "$*"; }
@@ -91,20 +138,11 @@ wait_until "sandbox runner /control/barrier" 60 runner_ready
 curl -fsS -X POST "$RUNNER_URL/control/release" >/dev/null
 
 if [[ -n "$real_model" ]]; then
-  log "creating a Definition from $(basename "$FIXTURE") bound to model $real_model"
-  definition=$(jq --arg model "$real_model" '
-    del(.workflowId)
-    | .name = "Vulnerability Fix (\($model))"
-    | .nodes |= map(if .id == "node_agent"
-        then .config.modelId = $model | del(.config.modelConfig)
-        else . end)' "$FIXTURE")
+  log "creating a Definition from $(basename "$FIXTURE") bound to model $real_model with a ${agent_timeout_ms}ms Agent budget"
 else
   log "creating a Definition from $(basename "$FIXTURE") with script $script"
-  definition=$(jq --arg script "$script" '
-    del(.workflowId)
-    | .name = "Vulnerability Fix (\($script))"
-    | .nodes |= map(if .id == "node_agent" then .config.modelConfig.script = $script else . end)' "$FIXTURE")
 fi
+definition=$(build_definition)
 created=$(curl -fsS -X POST -H 'Content-Type: application/json' \
   --data-binary "$definition" "$BACKEND_URL/api/definitions")
 workflow_id=$(jq -r '.workflowId' <<<"$created")
@@ -129,7 +167,7 @@ run_id=$(curl -fsS -X POST -H 'Content-Type: application/json' \
 log "run $run_id created"
 studio_run_link "$run_id"
 
-agent_deadline_s=$(jq '.nodes[] | select(.id == "node_agent") | .config.timeoutMs / 1000 | floor' "$FIXTURE")
+agent_deadline_s=$((agent_timeout_ms / 1000))
 demo_pause "run $run_id ($story story) started; watch the Repair Agent in Studio. The Agent deadline is ${agent_deadline_s}s from its start; keep every look well under it"
 
 agent_node_run() {
