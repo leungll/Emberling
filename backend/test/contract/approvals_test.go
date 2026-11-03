@@ -99,13 +99,13 @@ type approvalEnv struct {
 	logs     *syncBuffer
 }
 
-func newApprovalEnv(t *testing.T, token string) *approvalEnv {
+func newApprovalEnv(t *testing.T, token string, extraNodes ...registry.NodeRegistration) *approvalEnv {
 	t.Helper()
 	executor := &countingToolExecutor{}
 	logs := &syncBuffer{}
 	env := newTestEnvWithOptions(t, testEnvOptions{
 		OperatorToken:          token,
-		ExtraNodeRegistrations: []registry.NodeRegistration{taskInputRegistration()},
+		ExtraNodeRegistrations: append([]registry.NodeRegistration{taskInputRegistration()}, extraNodes...),
 		ExtraToolRegistrations: []registry.ToolRegistration{productionToolRegistration(executor)},
 		Logger:                 slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	})

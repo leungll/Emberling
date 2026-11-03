@@ -536,17 +536,48 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 func toAgentTraceChangeRequestsDTO(requests service.AgentTraceChangeRequests) agentTraceChangeRequestsDTO {
 	items := make([]changeRequestDTO, len(requests.Requests))
 	for i, request := range requests.Requests {
-		items[i] = changeRequestDTO{
-			ID:                 request.ID,
-			PatchDigest:        request.PatchDigest,
-			VerificationFactID: request.VerificationFactID,
-			ContentArtifactID:  request.ContentArtifactID,
-			ContentDigest:      request.ContentDigest,
-			ToolAttemptID:      request.ToolAttemptID,
-			CreatedAt:          utcTime(request.CreatedAt),
-		}
+		items[i] = toChangeRequestDTO(request)
 	}
 	return agentTraceChangeRequestsDTO{Items: items, Truncated: requests.Truncated}
+}
+
+func toChangeRequestDTO(request domain.ChangeRequest) changeRequestDTO {
+	return changeRequestDTO{
+		ID:                 request.ID,
+		PatchDigest:        request.PatchDigest,
+		VerificationFactID: request.VerificationFactID,
+		ContentArtifactID:  request.ContentArtifactID,
+		ContentDigest:      request.ContentDigest,
+		ToolAttemptID:      request.ToolAttemptID,
+		CreatedAt:          utcTime(request.CreatedAt),
+	}
+}
+
+func toWorkspacePatchDTO(patch domain.WorkspacePatch) workspacePatchDTO {
+	touched := patch.TouchedPaths
+	if touched == nil {
+		touched = []string{}
+	}
+	return workspacePatchDTO{
+		Seq:           patch.Seq,
+		PatchDigest:   patch.PatchDigest,
+		TouchedPaths:  touched,
+		ToolAttemptID: patch.ToolAttemptID,
+		CreatedAt:     utcTime(patch.CreatedAt),
+	}
+}
+
+func toManifestItemDTO(item domain.ManifestItem) manifestItemDTO {
+	return manifestItemDTO{
+		Kind:          item.Kind,
+		Label:         item.Label,
+		Ref:           item.Ref,
+		Version:       item.Version,
+		SHA256:        item.SHA256,
+		Length:        item.Length,
+		Included:      item.Included,
+		OmittedReason: item.OmittedReason,
+	}
 }
 
 func toAgentWorkspaceDTO(workspace *service.AgentTraceWorkspace) *agentWorkspaceDTO {
@@ -568,17 +599,7 @@ func toAgentWorkspaceDTO(workspace *service.AgentTraceWorkspace) *agentWorkspace
 		dto.DeployTarget = &deployTargetDTO{Service: target.Service, Environment: target.Environment}
 	}
 	for i, patch := range workspace.Patches {
-		touched := patch.TouchedPaths
-		if touched == nil {
-			touched = []string{}
-		}
-		dto.Patches[i] = workspacePatchDTO{
-			Seq:           patch.Seq,
-			PatchDigest:   patch.PatchDigest,
-			TouchedPaths:  touched,
-			ToolAttemptID: patch.ToolAttemptID,
-			CreatedAt:     utcTime(patch.CreatedAt),
-		}
+		dto.Patches[i] = toWorkspacePatchDTO(patch)
 	}
 	return dto
 }
@@ -620,16 +641,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 	if round.Manifest != nil {
 		dto.Manifest = make([]manifestItemDTO, 0, len(round.Manifest.Items))
 		for _, item := range round.Manifest.Items {
-			dto.Manifest = append(dto.Manifest, manifestItemDTO{
-				Kind:          item.Kind,
-				Label:         item.Label,
-				Ref:           item.Ref,
-				Version:       item.Version,
-				SHA256:        item.SHA256,
-				Length:        item.Length,
-				Included:      item.Included,
-				OmittedReason: item.OmittedReason,
-			})
+			dto.Manifest = append(dto.Manifest, toManifestItemDTO(item))
 		}
 	}
 	if round.Decision != nil {

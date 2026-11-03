@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +26,59 @@ const APPROVAL = {
   nodeRunId: 'nr_agent',
 };
 
+const CHANGE_REQUEST_CONTENT =
+  '# Change request\n\n## Patch\n\n- Patch digest: `d1d1d1`\n\n## Summary\n\nUpgrade the signing library.\n\n## Decision basis\n\n1. The advisory names the fixed release. (turn 3, manifest item `advisories/GO-2025-3553.md`)\n';
+
+const APPROVAL_DETAIL = {
+  ...APPROVAL,
+  toolName: 'deploy_change',
+  arguments: { changeRequestId: 'cr_1' },
+  changeRequest: {
+    id: 'cr_1',
+    patchDigest: 'd1d1d1',
+    verificationFactId: 'fact_1',
+    contentArtifactId: 'artifact_1',
+    contentDigest: 'c2c2c2',
+    toolAttemptId: 'tool_attempt_cr',
+    createdAt: '2026-11-02T09:59:00Z',
+    content: CHANGE_REQUEST_CONTENT,
+    decisionBasis: [
+      {
+        statement: 'The advisory names the fixed release.',
+        turnNo: 3,
+        turnId: 'turn_3',
+        manifestRef: 'advisories/GO-2025-3553.md',
+        item: {
+          kind: 'WORKSPACE_FILE',
+          label: 'advisories/GO-2025-3553.md',
+          ref: 'advisories/GO-2025-3553.md',
+          version: '0',
+          sha256: 'abcd',
+          length: 120,
+          included: true,
+          omittedReason: null,
+        },
+      },
+      {
+        statement: 'The verification passed.',
+        turnNo: 9,
+        turnId: '',
+        manifestRef: 'tool_attempt_gone',
+        item: null,
+      },
+    ],
+  },
+  patch: {
+    seq: 3,
+    patchDigest: 'd1d1d1',
+    touchedPaths: ['go.mod', 'internal/auth/token.go'],
+    toolAttemptId: 'tool_attempt_write',
+    createdAt: '2026-11-02T09:58:00Z',
+    patch:
+      'diff --git a/go.mod b/go.mod\n-require github.com/golang-jwt/jwt/v5 v5.2.1\n+require github.com/golang-jwt/jwt/v5 v5.3.1\n',
+  },
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -44,9 +97,11 @@ interface Call {
 }
 let calls: Call[];
 let decisionResponse: () => Response;
+let detailResponse: () => Response;
 
 beforeEach(() => {
   calls = [];
+  detailResponse = () => jsonResponse({ ...APPROVAL, changeRequest: null, patch: null });
   decisionResponse = () =>
     jsonResponse({
       approval: { ...APPROVAL, status: 'APPROVED', decidedBy: 'test-operator' },
@@ -77,7 +132,7 @@ beforeEach(() => {
       if (url.startsWith('/api/approvals?status='))
         return Promise.resolve(jsonResponse({ items: [] }));
       if (url === '/api/approvals/apr_1' && init?.method === 'GET') {
-        return Promise.resolve(jsonResponse(APPROVAL));
+        return Promise.resolve(detailResponse());
       }
       if (url === '/api/approvals/apr_1/decision' && init?.method === 'POST') {
         return Promise.resolve(decisionResponse());
@@ -256,8 +311,15 @@ describe('the Approval detail', () => {
         return Promise.resolve(
           jsonResponse(
             detailCalls === 1
-              ? APPROVAL
-              : { ...APPROVAL, status: 'REJECTED', decidedBy: 'someone-else', reason: 'no' },
+              ? { ...APPROVAL, changeRequest: null, patch: null }
+              : {
+                  ...APPROVAL,
+                  status: 'REJECTED',
+                  decidedBy: 'someone-else',
+                  reason: 'no',
+                  changeRequest: null,
+                  patch: null,
+                },
           ),
         );
       }
@@ -275,5 +337,59 @@ describe('the Approval detail', () => {
       expect(screen.getByText('someone-else')).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+});
+
+describe('the Approval detail with a change request', () => {
+  it('renders the change request as Markdown, links each basis item and shows the patch text', async () => {
+    detailResponse = () => jsonResponse(APPROVAL_DETAIL);
+    useOperatorStore.getState().setToken(TOKEN);
+    renderAt('/approvals/apr_1');
+    await screen.findByRole('heading', { name: 'deploy_change' });
+
+    const changeRequest = screen.getByRole('region', { name: 'Change request' });
+    expect(within(changeRequest).getByRole('heading', { name: 'Summary' })).toBeInTheDocument();
+    expect(within(changeRequest).getByText('Upgrade the signing library.')).toBeInTheDocument();
+    expect(within(changeRequest).getAllByText('d1d1d1').length).toBeGreaterThan(0);
+    expect(within(changeRequest).getByText('fact_1')).toBeInTheDocument();
+
+    expect(
+      within(changeRequest).getByText('The advisory names the fixed release.'),
+    ).toBeInTheDocument();
+    const turnLinks = within(changeRequest).getAllByRole('link', { name: /^Turn \d+$/ });
+    expect(turnLinks.map((l) => l.textContent)).toEqual(['Turn 3', 'Turn 9']);
+    expect(turnLinks[0]).toHaveAttribute('href', '/runs/run_1');
+    expect(
+      within(changeRequest).getByText('workspace file: advisories/GO-2025-3553.md'),
+    ).toBeInTheDocument();
+    expect(
+      within(changeRequest).getByText('The cited manifest item can no longer be resolved.'),
+    ).toBeInTheDocument();
+
+    const patch = screen.getByRole('region', { name: 'Patch' });
+    expect(within(patch).getByText('Workspace patch 3')).toBeInTheDocument();
+    expect(within(patch).getByText('go.mod, internal/auth/token.go')).toBeInTheDocument();
+    expect(
+      within(patch).getByText(/\+require github.com\/golang-jwt\/jwt\/v5 v5.3.1/),
+    ).toBeInTheDocument();
+    expect(document.querySelector('script')).toBeNull();
+  });
+
+  it('says so when the call names no change request and shows no patch section', async () => {
+    useOperatorStore.getState().setToken(TOKEN);
+    renderAt('/approvals/apr_1');
+    await screen.findByRole('heading', { name: 'deploy' });
+    expect(screen.getByText('This call names no change request.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Patch' })).not.toBeInTheDocument();
+  });
+
+  it('explains a change request whose patch record is missing', async () => {
+    detailResponse = () => jsonResponse({ ...APPROVAL_DETAIL, patch: null });
+    useOperatorStore.getState().setToken(TOKEN);
+    renderAt('/approvals/apr_1');
+    await screen.findByRole('heading', { name: 'deploy_change' });
+    expect(
+      screen.getByText('The workspace holds no patch with the digest this change request names.'),
+    ).toBeInTheDocument();
   });
 });

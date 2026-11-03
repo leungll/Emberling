@@ -3,6 +3,7 @@ import type {
   ApiError,
   ApprovalDecisionRequest,
   ApprovalDecisionResponse,
+  ApprovalDetail,
   ApprovalListResponse,
   ApprovalStatus,
   ApprovalView,
@@ -335,13 +336,16 @@ export function listApprovals(
   }).then((r) => r.items);
 }
 
-/** One approval with the Tool name and the committed call arguments a person decides on. */
+/**
+ * One approval with the Tool name, the committed call arguments, and the change request and
+ * patch the call names, for a person to decide on.
+ */
 export function getApproval(
   approvalId: string,
   token: string,
   signal?: AbortSignal,
-): Promise<ApprovalView> {
-  return request<ApprovalView>(`/approvals/${encodeURIComponent(approvalId)}`, {
+): Promise<ApprovalDetail> {
+  return request<ApprovalDetail>(`/approvals/${encodeURIComponent(approvalId)}`, {
     headers: operatorHeaders(token),
     ...(signal ? { signal } : {}),
   });

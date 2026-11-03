@@ -834,6 +834,11 @@ type WorkspacePatchRepository interface {
 	// workspace has not been written yet.
 	Latest(ctx context.Context, agentRunID string) (*domain.WorkspacePatch, error)
 
+	// GetByDigest returns the newest patch of the Agent Run with the given digest, text
+	// included, or nil when the Agent Run recorded no patch with that digest. It backs the
+	// approval detail, which shows the full text of the patch a change request is about.
+	GetByDigest(ctx context.Context, agentRunID, patchDigest string) (*domain.WorkspacePatch, error)
+
 	// ListSummariesByAgentRun returns up to limit patches of the Agent Run in Seq order
 	// without their text, for Trace projection. A caller that needs to know whether more
 	// exist asks for one more than it shows. A non-positive limit is an error rather than

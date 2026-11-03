@@ -48,6 +48,43 @@ type approvalViewDTO struct {
 	NodeRunID  string          `json:"nodeRunId"`
 }
 
+// approvalDetailDTO is the approval view with the material a person decides on: the change
+// request the call names, with its Markdown and resolved decision basis, and the full text
+// of the workspace patch that request is about. Both are null for a call that names no
+// change request of this Agent Run. The list keeps the view shape; only the detail carries
+// content.
+type approvalDetailDTO struct {
+	approvalViewDTO
+	ChangeRequest *approvalChangeRequestDTO `json:"changeRequest"`
+	Patch         *approvalPatchDTO         `json:"patch"`
+}
+
+// approvalChangeRequestDTO is the Trace projection of a change request plus what the Trace
+// never carries: the rendered Markdown and the decision basis with its Manifest links.
+type approvalChangeRequestDTO struct {
+	changeRequestDTO
+	Content       string             `json:"content"`
+	DecisionBasis []decisionBasisDTO `json:"decisionBasis"`
+}
+
+// decisionBasisDTO is one cited item: the statement, the Turn it names, and the Manifest
+// item the reference resolves to. turnId is empty and item null when the Turn or item is
+// no longer resolvable.
+type decisionBasisDTO struct {
+	Statement   string           `json:"statement"`
+	TurnNo      int              `json:"turnNo"`
+	TurnID      string           `json:"turnId"`
+	ManifestRef string           `json:"manifestRef"`
+	Item        *manifestItemDTO `json:"item"`
+}
+
+// approvalPatchDTO is a workspace patch summary with the cumulative patch text, which the
+// Trace never carries.
+type approvalPatchDTO struct {
+	workspacePatchDTO
+	Patch string `json:"patch"`
+}
+
 // approvalDecisionRequest is the body of POST /api/approvals/{approvalId}/decision.
 type approvalDecisionRequest struct {
 	Decision string `json:"decision"`
@@ -91,6 +128,30 @@ func toApprovalViewDTO(view service.ApprovalView) approvalViewDTO {
 	}
 }
 
+func toApprovalDetailDTO(detail service.ApprovalDetail) approvalDetailDTO {
+	dto := approvalDetailDTO{approvalViewDTO: toApprovalViewDTO(detail.ApprovalView)}
+	if request := detail.ChangeRequest; request != nil {
+		basis := make([]decisionBasisDTO, 0, len(request.Basis))
+		for _, item := range request.Basis {
+			entry := decisionBasisDTO{Statement: item.Statement, TurnNo: item.TurnNo, TurnID: item.TurnID, ManifestRef: item.ManifestRef}
+			if item.Item != nil {
+				resolved := toManifestItemDTO(*item.Item)
+				entry.Item = &resolved
+			}
+			basis = append(basis, entry)
+		}
+		dto.ChangeRequest = &approvalChangeRequestDTO{
+			changeRequestDTO: toChangeRequestDTO(request.Request),
+			Content:          request.Content,
+			DecisionBasis:    basis,
+		}
+	}
+	if patch := detail.Patch; patch != nil {
+		dto.Patch = &approvalPatchDTO{workspacePatchDTO: toWorkspacePatchDTO(*patch), Patch: patch.Patch}
+	}
+	return dto
+}
+
 // requireOperator answers 401 before any handler runs when the operator credential is
 // missing or does not match. The comparison is constant time; the presented value is
 // never logged, included in the response or passed on.
@@ -124,14 +185,15 @@ func (d Deps) listApprovals(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, listEnvelope[approvalViewDTO]{Items: items})
 }
 
-// getApproval serves GET /api/approvals/{approvalId}.
+// getApproval serves GET /api/approvals/{approvalId}: the view plus the change request and
+// patch the call names.
 func (d Deps) getApproval(w http.ResponseWriter, r *http.Request) {
-	view, err := d.Query.GetApproval(r.Context(), chi.URLParam(r, "approvalId"))
+	detail, err := d.Query.GetApprovalDetail(r.Context(), chi.URLParam(r, "approvalId"))
 	if err != nil {
 		writeError(w, d.Logger, err, codeApprovalNotFound)
 		return
 	}
-	writeJSON(w, http.StatusOK, toApprovalViewDTO(view))
+	writeJSON(w, http.StatusOK, toApprovalDetailDTO(detail))
 }
 
 // decideApproval serves POST /api/approvals/{approvalId}/decision. The authenticated

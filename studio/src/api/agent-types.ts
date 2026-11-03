@@ -95,6 +95,42 @@ export interface ApprovalDecisionResponse {
   repeated: boolean;
 }
 
+/**
+ * One approval with the material a person decides on. `changeRequest` is the request the
+ * call names through its `changeRequestId` argument, with its rendered Markdown and its
+ * decision basis; `patch` is the full text of the workspace patch that request is about.
+ * Both are `null` for a call that names no change request of this Agent Run. The list
+ * keeps the `ApprovalView` shape; only the detail carries content.
+ */
+export interface ApprovalDetail extends ApprovalView {
+  changeRequest: ApprovalChangeRequest | null;
+  patch: ApprovalPatch | null;
+}
+
+/** A recorded change request with its Markdown content and resolved decision basis. */
+export interface ApprovalChangeRequest extends ChangeRequestTrace {
+  content: string;
+  decisionBasis: DecisionBasisItem[];
+}
+
+/**
+ * One cited item of a change request's decision basis: the statement, the Turn it names
+ * and the Context Manifest item the reference resolves to. `turnId` is empty and `item`
+ * `null` when the Backend can no longer resolve the reference.
+ */
+export interface DecisionBasisItem {
+  statement: string;
+  turnNo: number;
+  turnId: string;
+  manifestRef: string;
+  item: ManifestItem | null;
+}
+
+/** A workspace patch summary with the cumulative patch text the trace never carries. */
+export interface ApprovalPatch extends WorkspacePatchTrace {
+  patch: string;
+}
+
 export type ToolAttemptStatus = 'STARTED' | 'DISPATCHED' | 'SUCCEEDED' | 'FAILED';
 
 export type AgentDecisionKind = 'TOOL_CALL' | 'FINAL';
