@@ -57,6 +57,11 @@
 #     each PROVIDER_POLL completion of a release Attempt is answered by a deployment of its
 #     operation key, and production deployed nothing else under the Runs' release Actions;
 #     a voided or abandoned operation is noted;
+#   - every release operation in a Trace's release view matches production's record of its
+#     operation key one to one by outcome (DEPLOYED, VOIDED, REFUSED, UNKNOWN), and
+#     production holds no line under the Runs' release Actions for any other key;
+#   - every occupation traces to the operation that created it, and the reason it was freed
+#     (including after the task ended) is supported by production's record of that key;
 #   - with LEDGER_REQUIRE_COMPLETED=1, no submission was lost;
 #   - when the Mock Provider has an in-flight limit, its in-flight peak never exceeded it
 #     and no acceptance in the window is marked over the limit.
@@ -102,6 +107,7 @@ events='[]'
 statuses='[]'
 bindings='[]'
 tool_calls='[]'
+release_views='[]'
 for run_id in "${run_ids[@]}"; do
   snapshot=$(curl -fsS "$BACKEND_URL/api/runs/$run_id")
   statuses=$(jq -c --arg id "$run_id" --arg status "$(jq -r '.run.status' <<<"$snapshot")" \
@@ -123,6 +129,10 @@ for run_id in "${run_ids[@]}"; do
           | {attemptId: .id, toolName, attemptNo, status, actionId: $a.id, actionStatus: $a.status,
              provider: (.callbackBinding.providerId // null), testId: (.callbackBinding.externalTaskId // null)}]' <<<"$trace")
       tool_calls=$(jq -s 'add' <(printf '%s' "$tool_calls") <(printf '%s' "$calls"))
+      views=$(jq --arg run "$run_id" '[.turns[].action | select(. != null and .release != null)
+          | {runId: $run, actionId: .id, actionStatus: .status, operations: (.release.operations // []),
+             occupation: .release.occupation}]' <<<"$trace")
+      release_views=$(jq -s 'add' <(printf '%s' "$release_views") <(printf '%s' "$views"))
     fi
     bindings=$(jq -s 'add' <(printf '%s' "$bindings") <(printf '%s' "$rows"))
   done < <(jq -r '.nodeRuns[] | [.id, .nodeType] | @tsv' <<<"$snapshot")
@@ -310,6 +320,87 @@ if [[ $(jq 'length' <<<"$release_calls") -gt 0 ]]; then
     while IFS= read -r line; do note "$line"; done
   jq -r '.[] | select(.abandoned > 0)
       | "release operation \(.operationId) was abandoned: the caller disconnected while it was held, so nothing was deployed under it"' <<<"$release_rows" |
+    while IFS= read -r line; do note "$line"; done
+fi
+
+# 6c. Each release operation's Attempt, as the Trace's release view reports it, matches
+# production's own record of that operation key one to one, including operations that were
+# voided, abandoned or settled only after a person stopped waiting:
+#   - the operation key is the Attempt's own "op_<actionId>_<attemptNo>";
+#   - DEPLOYED was deployed exactly once there and never voided;
+#   - VOIDED was voided there and never deployed;
+#   - REFUSED was neither deployed nor voided, and when it reached production, production
+#     answered it with a 4xx refusal;
+#   - UNKNOWN that no occupation still names was not deployed; the one an occupation names
+#     is judged by the occupation check below;
+#   - production holds no line of any kind under one of these Actions for an operation key
+#     the ledger does not hold.
+# 6d. Each occupation traces to the operation that created it: its operation key is one of
+# its Action's operations, and the reason it was freed is supported by production's record
+# of that key. DEPLOYED was deployed there, and a version recorded as deployed but
+# unchecked is the version production deployed; VOIDED was voided and not deployed;
+# REFUSED was refused and not deployed; NOT_DEPLOYED means no operation of the Action was
+# deployed. A SUCCEEDED Action freed its occupation as DEPLOYED. An occupation still ACTIVE
+# is noted as pending post-task reconciliation.
+if [[ $(jq 'length' <<<"$release_views") -gt 0 ]]; then
+  production_record=${production_record:-$(record_after 0 "$PRODUCTION_URL" | jq -s '.')}
+  release_lines=$(jq '[.[] | select(.kind == "release" and (.operationId | type) == "string")]' <<<"$production_record")
+  view_rows=$(jq --argjson record "$release_lines" '[.[] | . as $v | .operations[] | . as $o | {
+      runId: $v.runId, actionId: $v.actionId, operationKey, attemptNo, status, outcome,
+      keyMatches: (.operationKey == "op_\($v.actionId)_\(.attemptNo)"),
+      occupied: ($v.occupation != null and $v.occupation.operationKey == $o.operationKey),
+      arrived: ([$record[] | select(.event == "arrived" and .operationId == $o.operationKey)] | length),
+      deployed: ([$record[] | select(.event == "deployed" and .operationId == $o.operationKey and (.replayed | not))] | length),
+      voided: ([$record[] | select(.event == "voided" and .operationId == $o.operationKey)] | length),
+      refusals: ([$record[] | select(.event == "responded" and .operationId == $o.operationKey
+          and .status >= 400 and .status < 500)] | length)}]' <<<"$release_views")
+  bad_rows=$(jq '[.[] | select((.keyMatches | not)
+      or (.outcome == "DEPLOYED" and (.deployed != 1 or .voided > 0))
+      or (.outcome == "VOIDED" and (.voided < 1 or .deployed > 0))
+      or (.outcome == "REFUSED" and (.deployed > 0 or .voided > 0 or (.arrived > 0 and .refusals < 1)))
+      or (.outcome == "UNKNOWN" and (.occupied | not) and .deployed > 0)
+      or .deployed > 1)]' <<<"$view_rows")
+  outside=$(jq --argjson views "$release_views" '($views | map(.operations[].operationKey)) as $known
+      | ($views | map(.actionId) | unique) as $actions
+      | [.[] | select((.operationId as $op | $known | index($op) | not)
+          and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
+        | {event, operationId}] | unique' <<<"$release_lines")
+  if [[ $(jq 'length' <<<"$bad_rows") -eq 0 && $(jq 'length' <<<"$outside") -eq 0 ]]; then
+    pass "release_operations_match_record    $(jq -c 'map({operationKey, outcome, arrived, deployed, voided, refusals})' <<<"$view_rows")"
+  else
+    fail "release_operations_match_record    mismatched=$(jq -c '.' <<<"$bad_rows") outside-ledger=$(jq -c '.' <<<"$outside")"
+  fi
+
+  occupation_rows=$(jq --argjson rows "$view_rows" --argjson record "$release_lines" '[.[] | select(.occupation != null)
+      | . as $v | .occupation as $occ
+      | ([$rows[] | select(.actionId == $v.actionId and .operationKey == $occ.operationKey)] | first) as $op
+      | {runId, actionId, actionStatus, operationKey: $occ.operationKey, status: $occ.status,
+         reason: $occ.releaseReason, unchecked: $occ.deployedUncheckedVersion,
+         ownOperation: ($op != null), outcome: ($op.outcome // null),
+         deployed: ($op.deployed // 0), voided: ($op.voided // 0), refusals: ($op.refusals // 0),
+         deployedVersions: ([$record[] | select(.event == "deployed" and .operationId == $occ.operationKey and (.replayed | not))
+             | .version] | unique),
+         actionDeployed: ([$rows[] | select(.actionId == $v.actionId) | .deployed] | add // 0)}]' <<<"$release_views")
+  bad_occupations=$(jq '[.[] | select((.ownOperation | not)
+      or (.status == "RELEASED" and .reason == "DEPLOYED" and (.deployed != 1
+          or (.unchecked != null and ([.unchecked] != .deployedVersions))))
+      or (.status == "RELEASED" and .reason == "VOIDED" and (.voided < 1 or .deployed > 0))
+      or (.status == "RELEASED" and .reason == "REFUSED" and (.refusals < 1 or .deployed > 0))
+      or (.status == "RELEASED" and .reason == "NOT_DEPLOYED" and .actionDeployed > 0)
+      or (.status == "RELEASED" and .reason == null)
+      or (.unchecked != null and .reason != "DEPLOYED")
+      or (.actionStatus == "SUCCEEDED" and (.status != "RELEASED" or .reason != "DEPLOYED" or .outcome != "DEPLOYED")))]' <<<"$occupation_rows")
+  succeeded_without=$(jq '[.[] | select(.actionStatus == "SUCCEEDED" and .occupation == null) | .actionId]' <<<"$release_views")
+  if [[ $(jq 'length' <<<"$bad_occupations") -eq 0 && $(jq 'length' <<<"$succeeded_without") -eq 0 ]]; then
+    pass "occupation_traces_to_operation     $(jq -c 'map({actionId, operationKey, status, reason, unchecked})' <<<"$occupation_rows")"
+  else
+    fail "occupation_traces_to_operation     untraceable=$(jq -c '.' <<<"$bad_occupations") succeeded-without-occupation=$(jq -c '.' <<<"$succeeded_without")"
+  fi
+  jq -r '.[] | select(.status == "ACTIVE")
+      | "occupation of \(.actionId) under \(.operationKey) is still ACTIVE: post-task reconciliation has not settled it yet"' <<<"$occupation_rows" |
+    while IFS= read -r line; do note "$line"; done
+  jq -r '.[] | select(.unchecked != null)
+      | "occupation of \(.actionId) was freed after the task with version \(.unchecked) deployed but never checked by the Agent"' <<<"$occupation_rows" |
     while IFS= read -r line; do note "$line"; done
 fi
 
