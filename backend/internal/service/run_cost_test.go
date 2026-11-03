@@ -40,7 +40,8 @@ func costToolRegistry(t *testing.T) *registry.ToolRegistry {
 				SideEffect:    domain.SideEffectPolicy{Kind: kind, Idempotency: idempotency},
 				// review_image reads only, but asks the Agent Run's review model when one
 				// was frozen, the way a review Tool does.
-				UsesReviewModel: name == "review_image",
+				UsesReviewModel:       name == "review_image",
+				ReviewModelCapability: reviewCapabilityIf(name == "review_image"),
 			},
 			Executor: costTestTool{},
 		})
@@ -131,4 +132,13 @@ func TestRunCostOf_NoFinishedCalls_ReportsNothing(t *testing.T) {
 	if diff := cmp.Diff(RunCost{}, runCostOf(nil, costToolRegistry(t))); diff != "" {
 		t.Fatalf("run cost (-want +got):\n%s", diff)
 	}
+}
+
+// reviewCapabilityIf names the vision input capability for a review Tool, and nothing for
+// a Tool that reviews with no model.
+func reviewCapabilityIf(reviews bool) string {
+	if reviews {
+		return domain.ModelCapabilityVisionInput
+	}
+	return ""
 }

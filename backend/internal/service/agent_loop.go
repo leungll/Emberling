@@ -148,11 +148,12 @@ func (s *ExecutionService) startAgentRun(
 		}
 		imageModelID = &cfg.ImageModelID
 	}
-	// The review model is frozen the same way. Without one the review Tools apply the mock
-	// policy; a selected one that no longer resolves never falls back to it.
+	// The review model is frozen the same way, checked against every capability the
+	// allowlist's review Tools declare. Without one the review Tools that allow it apply the
+	// mock policy; a selected one that no longer resolves never falls back to it.
 	var reviewModelID *string
 	if cfg.ReviewModelID != "" {
-		if unusable := unusableModel(s.deps.Models, "review model", cfg.ReviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
+		if unusable := unusableReviewModel(s.deps.Models, cfg.ReviewModelID, reviewModelCapabilities(s.deps.Tools, cfg.AllowedTools)); unusable != nil {
 			return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil, *unusable, now)
 		}
 		reviewModelID = &cfg.ReviewModelID

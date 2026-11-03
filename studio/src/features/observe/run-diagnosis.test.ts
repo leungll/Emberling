@@ -27,6 +27,7 @@ const deploy: ToolMetadata = {
   countsTowardGenerationLimit: false,
   usesImageModel: false,
   usesReviewModel: false,
+  requiresReviewModel: false,
   records: [],
   usesWorkspace: false,
   reconcilable: false,

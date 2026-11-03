@@ -379,8 +379,9 @@ func TestTrace_ReviewModelFailure_NoSecretOrImageInTraceEventsLogs(t *testing.T)
 }
 
 // TestDefinitionSave_ReviewModelUnusable_RejectedWithPath covers a reviewModelId that is
-// not registered or does not declare vision input: saving fails at the field instead of
-// falling back to the mock review policy.
+// not registered, or that lacks the capability a review Tool of the allowlist needs from
+// it (vision input for review_asset): saving fails at the field instead of falling back to
+// the mock review policy.
 func TestDefinitionSave_ReviewModelUnusable_RejectedWithPath(t *testing.T) {
 	env := newTestEnv(t)
 	t.Run("unregistered", func(t *testing.T) {
@@ -388,8 +389,9 @@ func TestDefinitionSave_ReviewModelUnusable_RejectedWithPath(t *testing.T) {
 			"MODEL_NOT_FOUND", reviewModelPath)
 	})
 	t.Run("lacks vision input", func(t *testing.T) {
-		assertDefinitionRejected(t, env, agentGraphRequest(baseAgentConfig(map[string]any{"reviewModelId": mockmodel.ModelID})),
-			"SEMANTIC_VALIDATION_FAILED", reviewModelPath)
+		assertDefinitionRejected(t, env, agentGraphRequest(baseAgentConfig(map[string]any{
+			"reviewModelId": mockmodel.ModelID, "allowedTools": []string{"lookup", reviewasset.ToolName},
+		})), "SEMANTIC_VALIDATION_FAILED", reviewModelPath)
 	})
 }
 

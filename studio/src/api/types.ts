@@ -316,10 +316,22 @@ export interface ToolMetadata {
    */
   usesImageModel: boolean;
   /**
-   * True when the Tool reviews with the vision model optionally selected on its Agent node
-   * (`reviewModelId`); without a selection it applies the mock review policy.
+   * True when the Tool reviews with the review model optionally selected on its Agent node
+   * (`reviewModelId`); without a selection it applies the mock review policy, unless
+   * `requiresReviewModel` is set.
    */
   usesReviewModel: boolean;
+  /**
+   * The model capability the selected review model must declare for this Tool, such as
+   * `vision_input` for an image review or `structured_decision` for a text review. Absent
+   * when the Tool uses no review model.
+   */
+  reviewModelCapability?: string;
+  /**
+   * True when the Tool gives an independent second opinion: its Agent node must select a
+   * review model, and that model must differ from the node's own `modelId`.
+   */
+  requiresReviewModel: boolean;
   /**
    * The authorization the Tool's Actions need. Absent means LOW risk: the Backend treats an
    * undeclared authorization as LOW.

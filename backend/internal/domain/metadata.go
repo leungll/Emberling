@@ -311,10 +311,22 @@ type ToolMetadata struct {
 	// node. Saving a Definition requires that node to select one, and each call receives
 	// the Agent Run's frozen image Model ID; the Runtime never decides this by Tool Name.
 	UsesImageModel bool `json:"usesImageModel"`
-	// UsesReviewModel marks a Tool that reviews with the vision model optionally selected
+	// UsesReviewModel marks a Tool that reviews with the review model optionally selected
 	// on its Agent node. Each call receives the Agent Run's frozen review Model ID, or none
 	// when the node selected none; the Runtime never decides this by Tool Name.
 	UsesReviewModel bool `json:"usesReviewModel"`
+	// ReviewModelCapability names the model capability the selected review model must
+	// declare for this Tool: a vision review needs inline image input, a text review needs
+	// the strict structured output every Agent model gives. It is required with
+	// UsesReviewModel and forbidden without it; the Runtime checks the selection against it
+	// when a Definition is saved, when the Agent Run freezes the model and when a call is
+	// claimed. Omitted on the wire when undeclared.
+	ReviewModelCapability string `json:"reviewModelCapability,omitempty"`
+	// RequiresReviewModel marks a review Tool that gives an independent second opinion: its
+	// Agent node must select a review model, and that model must not be the node's own
+	// decision model. A Tool that leaves it false falls back to its mock policy when the
+	// node selects no review model. Only a Tool that declares UsesReviewModel may set it.
+	RequiresReviewModel bool `json:"requiresReviewModel"`
 	// CostSource is the stable identifier the charges of this Tool's calls are attributed
 	// to when the call is bound to no Model ID, such as a task sent to a Provider that
 	// names no model. A Tool that calls a registered model attributes its charges to that
@@ -454,6 +466,15 @@ func (m ToolMetadata) Validate() error {
 		if !m.UsesWorkspace {
 			errs = append(errs, errors.New("workspacePatchDigestPath is only allowed on a tool that uses the workspace"))
 		}
+	}
+	switch {
+	case m.UsesReviewModel && m.ReviewModelCapability == "":
+		errs = append(errs, errors.New("usesReviewModel requires reviewModelCapability to name the capability the review model must declare"))
+	case !m.UsesReviewModel && m.ReviewModelCapability != "":
+		errs = append(errs, errors.New("reviewModelCapability is only allowed on a tool that uses the review model"))
+	}
+	if m.RequiresReviewModel && !m.UsesReviewModel {
+		errs = append(errs, errors.New("requiresReviewModel is only allowed on a tool that uses the review model"))
 	}
 
 	if len(errs) == 0 {
