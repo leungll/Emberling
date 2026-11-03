@@ -198,6 +198,8 @@ func (t *execFakeTx) ProviderSlots() store.ProviderSlotRepository               
 func (t *execFakeTx) AgentWorkspaces() store.AgentWorkspaceRepository           { return nil }
 func (t *execFakeTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
 func (t *execFakeTx) Approvals() store.ApprovalRepository                       { return nil }
+func (t *execFakeTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
+func (t *execFakeTx) HumanWaits() store.HumanWaitRepository                     { return nil }
 
 type execFakeDefinitionRepo struct{ def domain.Definition }
 

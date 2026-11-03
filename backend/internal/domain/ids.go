@@ -20,6 +20,8 @@ const (
 	IDPrefixAgentStateVersion   = "statev"
 	IDPrefixWorkspacePatch      = "wpatch"
 	IDPrefixApproval            = "approval"
+	IDPrefixReleaseOccupation   = "occupation"
+	IDPrefixHumanWait           = "hwait"
 )
 
 // IDGenerator produces new domain identifiers. It is an interface so that tests which

@@ -229,9 +229,10 @@ var agentActionTransitions = map[AgentActionStatus][]AgentActionStatus{
 	// Action it holds the execution right on, so it starts from RUNNING.
 	AgentActionReady:   {AgentActionRunning, AgentActionFailed},
 	AgentActionRunning: {AgentActionWaitingCallback, AgentActionWaitingApproval, AgentActionWaitingHuman, AgentActionSucceeded, AgentActionFailed},
-	// A waiting asynchronous call resolves, or hands over to a human wait; it never goes
-	// back to RUNNING to re-decide.
-	AgentActionWaitingCallback: {AgentActionWaitingHuman, AgentActionSucceeded, AgentActionFailed},
+	// A waiting asynchronous call resolves, or hands over to a human wait. It goes back to
+	// RUNNING on one path only: a release whose operation production confirmed void is
+	// re-released with a new Attempt of the same committed Decision; nothing is re-decided.
+	AgentActionWaitingCallback: {AgentActionRunning, AgentActionWaitingHuman, AgentActionSucceeded, AgentActionFailed},
 	// An approved Action returns to RUNNING: the same committed Decision is executed once,
 	// with the arguments the approval covered. A rejected or expired one fails.
 	AgentActionWaitingApproval: {AgentActionRunning, AgentActionFailed},

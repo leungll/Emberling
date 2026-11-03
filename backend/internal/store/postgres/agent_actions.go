@@ -248,6 +248,55 @@ func (r *agentActionRepository) ResumeApproved(ctx context.Context, actionID str
 	return nil
 }
 
+// MarkWaitingHuman hands an Action whose release got no definite answer before its confirm
+// deadline to a person. Requiring the expected status makes the deadline scan lose to a
+// production answer that committed first.
+func (r *agentActionRepository) MarkWaitingHuman(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time) error {
+	if (from != domain.AgentActionRunning && from != domain.AgentActionWaitingCallback) || !from.CanTransitionTo(domain.AgentActionWaitingHuman) {
+		return &domain.InvalidStateTransitionError{
+			Entity: "AgentAction", ID: actionID, From: string(from), To: string(domain.AgentActionWaitingHuman),
+		}
+	}
+	const update = `
+		UPDATE agent_actions
+		   SET status = 'WAITING_HUMAN', waiting_at = $3
+		 WHERE id = $1 AND status = $2`
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.MarkWaitingHuman", update, actionID, string(from), now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_actions.MarkWaitingHuman: action=%s %s -> WAITING_HUMAN: %w",
+			actionID, from, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_actions.MarkWaitingHuman", actionID, affected)
+	}
+	return nil
+}
+
+// ResumeForRelease takes a waiting release Action back to RUNNING so the same committed
+// Decision is released again under a new operation. Requiring WAITING_CALLBACK ties it to
+// the void answer's single winner.
+func (r *agentActionRepository) ResumeForRelease(ctx context.Context, actionID string, now time.Time) error {
+	const update = `
+		UPDATE agent_actions
+		   SET status = 'RUNNING', started_at = $2
+		 WHERE id = $1 AND status = 'WAITING_CALLBACK'`
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.ResumeForRelease", update, actionID, now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_actions.ResumeForRelease: action=%s WAITING_CALLBACK -> RUNNING: %w",
+			actionID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_actions.ResumeForRelease", actionID, affected)
+	}
+	return nil
+}
+
 // MarkTimedOut conditionally fails an Action that is still READY, RUNNING or
 // WAITING_CALLBACK. Only the Agent timeout transaction may use it: the expired deadline
 // ends the current Action in whichever non-terminal state it sits, including the READY one

@@ -54,6 +54,8 @@ type Tx interface {
 	AgentWorkspaces() AgentWorkspaceRepository
 	WorkspacePatches() WorkspacePatchRepository
 	Approvals() ApprovalRepository
+	ReleaseOccupations() ReleaseOccupationRepository
+	HumanWaits() HumanWaitRepository
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
@@ -586,6 +588,18 @@ type AgentActionRepository interface {
 	// the transaction that recorded its approval. It returns domain.ErrStaleClaim when
 	// the row is not WAITING_APPROVAL.
 	ResumeApproved(ctx context.Context, actionID string, now time.Time) error
+
+	// MarkWaitingHuman conditionally moves an Action from `from` (RUNNING or
+	// WAITING_CALLBACK) to WAITING_HUMAN when its release passed the confirm deadline
+	// without a definite production answer. It returns domain.ErrStaleClaim when the row
+	// is no longer in `from`, which is how a poll answer that committed first wins.
+	MarkWaitingHuman(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time) error
+
+	// ResumeForRelease conditionally moves a WAITING_CALLBACK Action back to RUNNING for
+	// the one path that re-releases the same committed Decision after production confirmed
+	// the previous operation void. It returns domain.ErrStaleClaim when the row is not
+	// WAITING_CALLBACK.
+	ResumeForRelease(ctx context.Context, actionID string, now time.Time) error
 }
 
 // ApprovalRepository persists human approval requests and implements the single
@@ -612,6 +626,50 @@ type ApprovalRepository interface {
 	Decide(ctx context.Context, approvalID string, status domain.ApprovalStatus, now time.Time, decidedBy, reason *string) (bool, error)
 }
 
+// ReleaseOccupationRepository persists which approved release Action holds a deploy
+// target. The partial unique index on ACTIVE target keys is the only arbiter of occupation
+// uniqueness; no process-local check stands in for it.
+type ReleaseOccupationRepository interface {
+	// Acquire inserts an ACTIVE occupation with INSERT ... ON CONFLICT DO NOTHING and
+	// reports whether the row was written. false means the target is held by another
+	// ACTIVE occupation; the caller returns the call to the Agent as TARGET_OCCUPIED.
+	Acquire(ctx context.Context, occupation domain.ReleaseOccupation) (bool, error)
+	Get(ctx context.Context, id string) (domain.ReleaseOccupation, error)
+	// GetActiveByTarget returns the ACTIVE occupation of a target, or domain.ErrNotFound
+	// when the target is free. It is the read-only check the ask path uses before any
+	// approval exists.
+	GetActiveByTarget(ctx context.Context, targetKey string) (domain.ReleaseOccupation, error)
+	ListByActionID(ctx context.Context, actionID string) ([]domain.ReleaseOccupation, error)
+	// SetOperationKey names the operation that now holds the target after a re-release.
+	// A row no longer ACTIVE returns domain.ErrStaleClaim.
+	SetOperationKey(ctx context.Context, id, operationKey string) error
+	// Release conditionally moves ACTIVE to RELEASED with released_at and the reason. A
+	// row no longer ACTIVE returns domain.ErrStaleClaim.
+	Release(ctx context.Context, id string, reason domain.ReleaseReason, now time.Time) error
+}
+
+// HumanWaitRepository persists the human wait a release Action enters when production
+// gives no confirmation before the confirm deadline.
+type HumanWaitRepository interface {
+	// Create inserts the OPEN wait in the transaction that moved its Action to
+	// WAITING_HUMAN. UNIQUE (action_id) makes a second wait for the same Action lose.
+	Create(ctx context.Context, wait domain.HumanWait) error
+	Get(ctx context.Context, id string) (domain.HumanWait, error)
+	GetByActionID(ctx context.Context, actionID string) (domain.HumanWait, error)
+	// Close conditionally settles an OPEN wait with a terminal status, closed_at, the
+	// closing identity (nil unless a person closed it) and the outcome. A false result
+	// means another closing already committed and nothing was written.
+	Close(ctx context.Context, id string, status domain.HumanWaitStatus, now time.Time, closedBy, outcome *string) (bool, error)
+}
+
+// DueConfirmDeadline identifies one release Attempt whose confirm deadline has passed while
+// its Action still waits for production. ActionID is for logging only; the use case
+// re-reads every fact itself.
+type DueConfirmDeadline struct {
+	AttemptID string
+	ActionID  string
+}
+
 // AgentTurnManifestRepository persists one Context Manifest per Turn. It has no update
 // method: a Manifest records what one model request carried, and that request is never
 // re-issued.
@@ -633,7 +691,9 @@ type AgentTurnManifestRepository interface {
 // ToolAttemptRepository preserves every real Tool call of a TOOL_CALL Action.
 type ToolAttemptRepository interface {
 	// Create inserts the STARTED Attempt in the transaction that claims the Action.
-	// UNIQUE (action_id, attempt_no) rejects a duplicated dispatch.
+	// UNIQUE (action_id, attempt_no) rejects a duplicated dispatch. A release Attempt's
+	// OperationKey and ConfirmDeadline are written by the same INSERT; UNIQUE
+	// (operation_key) rejects a second Attempt under the same operation.
 	Create(ctx context.Context, attempt domain.ToolAttempt) error
 	Get(ctx context.Context, attemptID string) (domain.ToolAttempt, error)
 	ListByActionID(ctx context.Context, actionID string) ([]domain.ToolAttempt, error)
@@ -700,6 +760,31 @@ type ToolAttemptRepository interface {
 	// completed_at and the uncertain determination once. A row no longer STARTED returns
 	// domain.ErrStaleClaim.
 	MarkInterrupted(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError, uncertain bool) error
+
+	// MarkOutcomeUnknown records that the Runtime stopped knowing whether a release
+	// Attempt's operation took effect: a STARTED Attempt becomes DISPATCHED, the first
+	// unknown time is written once and never moved, and the next poll is scheduled at
+	// nextPollAt so the query path takes over. It reports whether this call set the
+	// unknown time, which is when the caller writes the RELEASE_OUTCOME_UNKNOWN Event. A
+	// row that is neither STARTED nor DISPATCHED returns domain.ErrStaleClaim.
+	MarkOutcomeUnknown(ctx context.Context, attemptID string, now, nextPollAt time.Time) (first bool, err error)
+
+	// MarkVoidRequested writes void_requested_at once on a DISPATCHED Attempt; a later
+	// resend of a lost void request leaves the first time in place. A row no longer
+	// DISPATCHED returns domain.ErrStaleClaim.
+	MarkVoidRequested(ctx context.Context, attemptID string, now time.Time) error
+
+	// MarkFailedDefinite conditionally moves an Attempt from `from` to FAILED with
+	// uncertain = false: production gave a definite answer that nothing took effect, so the
+	// Attempt is closed as a known non-effect, not as an interrupted call. A row no longer
+	// in `from` returns domain.ErrStaleClaim.
+	MarkFailedDefinite(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, execErr domain.ExecutionError) error
+
+	// ListDueConfirmDeadlines returns release Attempts that are still STARTED or
+	// DISPATCHED, whose confirm deadline is at or before now and whose Action is RUNNING
+	// or WAITING_CALLBACK, oldest deadline first, bounded by limit. It discovers persisted
+	// work only; opening the human wait is the use case's conditional update.
+	ListDueConfirmDeadlines(ctx context.Context, now time.Time, limit int) ([]DueConfirmDeadline, error)
 
 	// CountByAgentRunForTools counts the Tool Attempts of one Agent Run whose Tool is
 	// one of toolNames, in every Attempt status. This is the number of generation calls

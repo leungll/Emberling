@@ -169,9 +169,11 @@ type AgentAction struct {
 
 // ToolAttempt records one real Tool call made by a TOOL_CALL Action. Synchronous and
 // asynchronous Tools share the entity; an async call additionally reaches DISPATCHED and
-// resumes through its Callback Binding. The MVP does not retry an Agent Tool, so an
-// Action creates at most one Attempt; AttemptNo exists so Tool calls carry the same audit
-// and callback target model as Node Attempts.
+// resumes through its Callback Binding. An Agent Tool call is not retried on failure: an
+// Action creates one Attempt, and only a reconcilable release Tool creates a new Attempt,
+// after production has confirmed that the previous operation was voided. AttemptNo orders
+// those Attempts and gives Tool calls the same audit and callback target model as Node
+// Attempts.
 type ToolAttempt struct {
 	ID        string            `json:"id"`
 	ActionID  string            `json:"actionId"`
@@ -213,6 +215,12 @@ type ToolAttempt struct {
 	// only by a release Tool's dispatch path and are nil for every other Attempt.
 	OperationKey        *string    `json:"-"`
 	OutcomeUnknownSince *time.Time `json:"-"`
+	// ConfirmDeadline is when a release Attempt without a definite production answer hands
+	// its Action to a human wait; VoidRequestedAt is when the Runtime first asked
+	// production to void the operation. Both are written only for release Attempts and are
+	// internal reconciliation facts.
+	ConfirmDeadline *time.Time `json:"-"`
+	VoidRequestedAt *time.Time `json:"-"`
 }
 
 // AgentContextVersion is one immutable entry of the message chain the next model call

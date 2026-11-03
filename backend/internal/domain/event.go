@@ -58,9 +58,9 @@ const (
 
 	// The authorization and human-wait vocabulary. The approval and pause paths write the
 	// first four. RELEASE_OUTCOME_UNKNOWN and RELEASE_VOIDED are written by the release
-	// reconciliation path, AGENT_ACTION_WAITING_HUMAN by the human-wait path and
-	// AGENT_COMPLETION_EVALUATED by the goal-based completion check; those paths do not
-	// exist yet, the vocabulary and the database constraint already admit them.
+	// reconciliation path and AGENT_ACTION_WAITING_HUMAN when a release's confirm deadline
+	// passes. AGENT_COMPLETION_EVALUATED is written by the goal-based completion check,
+	// which does not exist yet; the vocabulary and the database constraint already admit it.
 	EventAgentActionWaitingApproval EventType = "AGENT_ACTION_WAITING_APPROVAL"
 	EventApprovalDecided            EventType = "APPROVAL_DECIDED"
 	EventAgentPaused                EventType = "AGENT_PAUSED"
