@@ -242,6 +242,19 @@ func eventTypeCounts(events []map[string]any) map[string]int {
 // of the approval contract: a production Tool call waits for a person, the approval list
 // and the Agent Trace show the wait, the decision through the API runs the Tool once and
 // the Run completes with the approval and the pause visible in the projections.
+// assertAnsweredWithoutMaterials checks how a goal-bound story ends when the Agent answers
+// without recording any of the materials its goal requires: the completion check ends the
+// Run FAILED with TASK_INCOMPLETE. These stories are about Tool authorization, not about the
+// task result, so this is the only completion fact they assert.
+func assertAnsweredWithoutMaterials(t *testing.T, snapshot map[string]any) {
+	t.Helper()
+	run, _ := snapshot["run"].(map[string]any)
+	runErr, _ := run["error"].(map[string]any)
+	if run["status"] != "FAILED" || runErr["code"] != "TASK_INCOMPLETE" {
+		t.Fatalf("run = status %v error %v, want FAILED with TASK_INCOMPLETE from the completion check; snapshot=%v", run["status"], run["error"], snapshot)
+	}
+}
+
 func TestApprovals_ApproveThroughAPI_ExecutesToolAndProjectsApproval(t *testing.T) {
 	env := newApprovalEnv(t, testOperatorToken)
 	runID, agentNodeRunID := env.startApprovalRun(t, domain.AgentGoalFixAndDeploy)
@@ -295,10 +308,7 @@ func TestApprovals_ApproveThroughAPI_ExecutesToolAndProjectsApproval(t *testing.
 	}
 
 	snapshot := env.waitForTerminal(t, runID, approvalWait)
-	run, _ := snapshot["run"].(map[string]any)
-	if run["status"] != "COMPLETED" {
-		t.Fatalf("run status = %v, want COMPLETED; snapshot=%v", run["status"], snapshot)
-	}
+	assertAnsweredWithoutMaterials(t, snapshot)
 	if env.executor.calls.Load() != 1 {
 		t.Errorf("production tool calls = %d, want 1", env.executor.calls.Load())
 	}
@@ -375,10 +385,7 @@ func TestApprovals_RejectThenApprove_409(t *testing.T) {
 	}
 
 	snapshot := env.waitForTerminal(t, runID, approvalWait)
-	run, _ := snapshot["run"].(map[string]any)
-	if run["status"] != "COMPLETED" {
-		t.Fatalf("run status = %v, want COMPLETED after the Agent answered the rejection; snapshot=%v", run["status"], snapshot)
-	}
+	assertAnsweredWithoutMaterials(t, snapshot)
 	status, traceBody := getAgentTrace(t, env.testEnv, runID, agentNodeRunID)
 	if status != http.StatusOK {
 		t.Fatalf("GET agent trace status = %d", status)
@@ -521,10 +528,7 @@ func TestApprovals_PrepareOnlyGoal_DeniesProductionToolWithoutApproval(t *testin
 	}
 	runID, _ := decodeBody[map[string]any](t, body)["id"].(string)
 	snapshot := env.waitForTerminal(t, runID, approvalWait)
-	run, _ := snapshot["run"].(map[string]any)
-	if run["status"] != "COMPLETED" {
-		t.Fatalf("run status = %v, want COMPLETED; snapshot=%v", run["status"], snapshot)
-	}
+	assertAnsweredWithoutMaterials(t, snapshot)
 	if env.executor.calls.Load() != 0 {
 		t.Errorf("production tool calls = %d, want 0 under PREPARE_ONLY", env.executor.calls.Load())
 	}

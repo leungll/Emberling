@@ -155,6 +155,38 @@ export interface AgentRunTrace {
   goal: AgentGoal | null;
   terminatedAt: string | null;
   error: ExecutionError | null;
+  /**
+   * The goal-based completion verdict. `null` while the Agent Run runs and for an Agent Run
+   * without a goal, which the Backend never evaluates.
+   */
+  completion: AgentCompletion | null;
+}
+
+/**
+ * The task result the Backend decided for an Agent Run with a frozen goal. The first three
+ * outcomes succeed the Agent's step; INCOMPLETE and RELEASE_UNKNOWN fail it.
+ */
+export type CompletionOutcome =
+  'READY_FOR_APPROVAL' | 'DEPLOYED' | 'DEPLOYED_CHECK_FAILED' | 'RELEASE_UNKNOWN' | 'INCOMPLETE';
+
+/** One item the completion check went through; `refs` name the records it rested on. */
+export interface CompletionCheck {
+  name: string;
+  passed: boolean;
+  refs: string[];
+}
+
+/** One fact an INCOMPLETE task still lacks. */
+export interface CompletionMissing {
+  code: string;
+  description: string;
+}
+
+export interface AgentCompletion {
+  outcome: CompletionOutcome;
+  checks: CompletionCheck[];
+  missing: CompletionMissing[];
+  evaluatedAt: string;
 }
 
 /**

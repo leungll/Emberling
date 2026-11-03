@@ -197,6 +197,9 @@ type AgentTrace struct {
 	// ChangeRequests are the change requests the Agent Run recorded, read in the same
 	// transaction, without their content.
 	ChangeRequests AgentTraceChangeRequests
+	// Completion is the goal-based completion verdict, nil while the Agent Run has not
+	// terminated and for an Agent Run that froze no goal.
+	Completion *domain.AgentCompletion
 }
 
 // AgentTraceTurn is one round: the Turn, the single Decision and Action it committed (both
@@ -367,7 +370,12 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		if err != nil {
 			return err
 		}
-		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget, Workspace: workspace, ChangeRequests: changeRequests}
+		completion, err := agentCompletionOf(ctx, tx, agentRun.ID)
+		if err != nil {
+			return err
+		}
+		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget,
+			Workspace: workspace, ChangeRequests: changeRequests, Completion: completion}
 		return nil
 	})
 	if err != nil {

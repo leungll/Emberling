@@ -57,6 +57,7 @@ type Tx interface {
 	ChangeRequests() ChangeRequestRepository
 	ReleaseOccupations() ReleaseOccupationRepository
 	HumanWaits() HumanWaitRepository
+	AgentCompletions() AgentCompletionRepository
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
@@ -620,6 +621,12 @@ type ApprovalRepository interface {
 	// the Reconciler can rediscover the expiry work. It claims nothing.
 	ListExpiredPending(ctx context.Context, now time.Time, limit int) ([]domain.Approval, error)
 
+	// ListByAgentRun returns up to limit approvals requested by one Agent Run, oldest
+	// request first (requested_at then id). The completion check reads them to see whether
+	// a release was approved. A non-positive limit is an error rather than an unbounded
+	// read.
+	ListByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.Approval, error)
+
 	// Decide conditionally settles a PENDING approval with a terminal status, decided_at,
 	// the deciding identity (nil for an expiry) and the reason. The `status = 'PENDING'`
 	// predicate decides the single winner between approve, reject and expiry; a false
@@ -948,6 +955,20 @@ type ChangeRequestRepository interface {
 	// exist asks for one more than it shows. A non-positive limit is an error rather than
 	// an unbounded read.
 	ListByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.ChangeRequest, error)
+}
+
+// AgentCompletionRepository persists the completion verdict of an Agent Run with a goal.
+// It has no update method: the verdict commits with the Agent Run's termination and is
+// never revised.
+type AgentCompletionRepository interface {
+	// Create inserts the verdict in the transaction that terminated its Agent Run. The
+	// primary key on agent_run_id makes a second verdict for the same Agent Run lose with
+	// domain.ErrConflict; a caller treats that as a programming error, never as a retry.
+	Create(ctx context.Context, completion domain.AgentCompletion) error
+
+	// Get returns the verdict of one Agent Run, or domain.ErrNotFound when none was
+	// evaluated: the Agent Run has no goal, or has not terminated.
+	Get(ctx context.Context, agentRunID string) (domain.AgentCompletion, error)
 }
 
 // QueueKey orders queued NodeRuns of one Provider: ready_at first, NodeRun id as the

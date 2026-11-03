@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
 	"github.com/leungll/Emberling/backend/internal/reconciler"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -69,10 +68,6 @@ type releaseReport struct {
 // all name that one operation.
 func TestE2E_VulnFix_Release_ApprovedDeploysOnceAndConfirmsTarget(t *testing.T) {
 	f := newVulnFixture(t)
-	artifacts := asset.NewArtifactStore(f.assetRoot, defaultTestArtifactMaxBytes)
-	if err := artifacts.VerifyReadWrite(context.Background()); err != nil {
-		t.Fatalf("artifact store: %v", err)
-	}
 	record, err := mockproduction.OpenRecord(filepath.Join(t.TempDir(), "production.jsonl"))
 	if err != nil {
 		t.Fatalf("open mock production record: %v", err)
@@ -91,7 +86,7 @@ func TestE2E_VulnFix_Release_ApprovedDeploysOnceAndConfirmsTarget(t *testing.T) 
 		Clock:         clock,
 		OperatorToken: testOperatorToken,
 		ExtraToolRegistrations: []registry.ToolRegistration{
-			changerequest.Registration(artifacts), deployrelease.Registration(productionHTTP.URL, nil),
+			deployrelease.Registration(productionHTTP.URL, nil),
 		},
 	})
 
@@ -206,10 +201,33 @@ func TestE2E_VulnFix_Release_ApprovedDeploysOnceAndConfirmsTarget(t *testing.T) 
 		t.Errorf("release_confirmed facts = %+v, want one healthy fact about %s", confirmed, latest)
 	}
 
+	// The FIX_AND_DEPLOY task is complete: approved, deployed under the latest patch and
+	// healthy, so the completion check judges it DEPLOYED and the result node receives
+	// that verdict with the Agent's report inside it.
+	if c := trace.AgentRun.Completion; c == nil || c.Outcome != "DEPLOYED" || len(c.Missing) != 0 {
+		t.Errorf("completion = %+v, want DEPLOYED with nothing missing", c)
+	} else {
+		for _, name := range []string{"release_approved", "release_confirmed_for_latest_patch", "deployed_target_healthy"} {
+			if passed, _, found := c.check(name); !found || !passed {
+				t.Errorf("completion check %s = passed %v found %v, want it passed", name, passed, found)
+			}
+		}
+	}
 	text, _ := nodeRunOutputOf(t, snapshot, "node_result")["text"].(string)
+	var verdict vulnResult
+	if err := json.Unmarshal([]byte(text), &verdict); err != nil {
+		t.Fatalf("release result %q is not JSON: %v", text, err)
+	}
+	if verdict.Outcome != "DEPLOYED" {
+		t.Errorf("release result outcome = %q, want DEPLOYED", verdict.Outcome)
+	}
+	var reportText string
+	if err := json.Unmarshal(verdict.AgentReport, &reportText); err != nil {
+		t.Fatalf("release result agentReport %s is not the Agent's text answer: %v", verdict.AgentReport, err)
+	}
 	var report releaseReport
-	if err := json.Unmarshal([]byte(text), &report); err != nil {
-		t.Fatalf("release report %q is not JSON: %v", text, err)
+	if err := json.Unmarshal([]byte(reportText), &report); err != nil {
+		t.Fatalf("release report %q is not JSON: %v", reportText, err)
 	}
 	if report.Status != "RELEASED" || report.Advisory != vulnAdvisory || report.PatchDigest != latest || report.OperationKey != wantKey || !report.Healthy || report.Version == "" || report.ChangeRequestID == "" {
 		t.Errorf("release report = %+v, want RELEASED for %s on patch %s under %s", report, vulnAdvisory, latest, wantKey)

@@ -236,7 +236,35 @@ func (s *ExecutionService) CompleteAgentFinal(ctx context.Context, actionID stri
 			return err
 		}
 
-		if err := s.succeedAgentNodeRun(ctx, tx, lock, run, nodeRun, agentRun.ID, def, plan, decision.Output, now); err != nil {
+		// The goal-based completion check runs after the Agent's answer was accepted and
+		// recorded: the Agent Run ended with FINAL_RESPONSE whatever the verdict says, and
+		// the verdict decides only how its NodeRun ends. An Agent without a goal has no
+		// check and publishes its answer as before.
+		completion, err := s.evaluateAgentCompletionLocked(ctx, tx, lock, nodeRun, agentRun, domain.TerminationFinalResponse, now)
+		if err != nil {
+			return err
+		}
+		switch {
+		case completion == nil:
+			outputBytes, outputErr := s.agentNodeOutput(nodeRun.NodeType, decision.Output)
+			if outputErr != nil {
+				return outputErr
+			}
+			err = s.succeedAgentNodeRun(ctx, tx, lock, run, nodeRun, agentRun.ID, def, plan, outputBytes, now)
+		case completion.Outcome.IsSuccess():
+			outputBytes, outputErr := s.agentCompletionNodeOutput(nodeRun.NodeType, *completion, decision.Output)
+			if outputErr != nil {
+				return outputErr
+			}
+			err = s.succeedAgentNodeRun(ctx, tx, lock, run, nodeRun, agentRun.ID, def, plan, outputBytes, now)
+		default:
+			// The Agent declared completion, but the facts the goal requires are not all
+			// there: a completed Run must not hide an unfinished task, so the NodeRun fails
+			// and names what is missing. The Agent Run keeps FINAL_RESPONSE: the model did
+			// answer.
+			err = s.failAgentNodeRun(ctx, tx, lock, run, nodeRun, &agentRun.ID, completionExecutionError(*agentRun.Goal, *completion), now)
+		}
+		if err != nil {
 			return err
 		}
 
@@ -305,6 +333,9 @@ func (s *ExecutionService) appendFinalContext(
 // Attempt, and the Agent NodeRun's result must commit with the Action's. The downstream
 // scheduling and Run aggregation that follow are the shared ones, not a second copy.
 //
+// outputBytes is the port value the caller already derived: the Agent's answer on the text
+// port, or the completion verdict around it.
+//
 // The NodeRun's TokenUsage is the sum of its Agent Run's Turn usage, written with the
 // SUCCEEDED transition; each Turn keeps its own usage as the per-call record.
 func (s *ExecutionService) succeedAgentNodeRun(
@@ -316,14 +347,9 @@ func (s *ExecutionService) succeedAgentNodeRun(
 	agentRunID string,
 	def domain.Definition,
 	plan *runtime.CompiledDefinition,
-	output json.RawMessage,
+	outputBytes json.RawMessage,
 	now time.Time,
 ) error {
-	outputBytes, err := s.agentNodeOutput(nodeRun.NodeType, output)
-	if err != nil {
-		return err
-	}
-
 	usage, err := agentRunTokenUsage(ctx, tx, agentRunID)
 	if err != nil {
 		return err
@@ -361,6 +387,29 @@ func (s *ExecutionService) succeedAgentNodeRun(
 // byte-identical port values. The structured value itself stays authoritative in the
 // Decision and in the Final Context Version; no second copy of it is stored.
 func (s *ExecutionService) agentNodeOutput(nodeType string, output json.RawMessage) (json.RawMessage, error) {
+	text, err := runtime.FinalOutputText(output)
+	if err != nil {
+		return nil, fmt.Errorf("execution: agent output for node type %q: %w", nodeType, err)
+	}
+	return s.agentNodePortValue(nodeType, text)
+}
+
+// agentCompletionNodeOutput maps an accepted completion verdict onto the Agent Node Type's
+// output port: the verdict's outcome, checks, missing items and evidence with the Agent's
+// own FINAL output as agentReport, published as canonical JSON text on the same text port
+// an object-form answer uses. The verdict row and the Final Context Version stay the
+// authoritative copies; the port value is the result the next node reads.
+func (s *ExecutionService) agentCompletionNodeOutput(nodeType string, completion runtime.CompletionResult, output json.RawMessage) (json.RawMessage, error) {
+	text, err := runtime.CompletionNodeOutput(completion, output)
+	if err != nil {
+		return nil, fmt.Errorf("execution: completion output for node type %q: %w", nodeType, err)
+	}
+	return s.agentNodePortValue(nodeType, text)
+}
+
+// agentNodePortValue wraps one text value in the Agent Node Type's single registered output
+// port, resolved from the registered Metadata rather than a constant this package restates.
+func (s *ExecutionService) agentNodePortValue(nodeType, text string) (json.RawMessage, error) {
 	reg, ok := s.deps.Nodes.Get(nodeType)
 	if !ok {
 		return nil, fmt.Errorf("execution: node type %q is not registered", nodeType)
@@ -369,12 +418,6 @@ func (s *ExecutionService) agentNodeOutput(nodeType string, output json.RawMessa
 		return nil, fmt.Errorf("execution: node type %q declares %d output ports, want exactly one",
 			nodeType, len(reg.Metadata.Outputs))
 	}
-
-	text, err := runtime.FinalOutputText(output)
-	if err != nil {
-		return nil, fmt.Errorf("execution: agent output for node type %q: %w", nodeType, err)
-	}
-
 	outputBytes, err := json.Marshal(map[string]string{reg.Metadata.Outputs[0].Name: text})
 	if err != nil {
 		return nil, fmt.Errorf("execution: encode agent node output for node type %q: %w", nodeType, err)

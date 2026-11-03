@@ -39,6 +39,7 @@ BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 \echo '  patch_verified_subject_recorded    every patch_verified fact is about a patch the same Agent workspace recorded (or the empty baseline patch)'
 \echo '  release_target_single_active       no deploy target this Run released to has more than one ACTIVE occupation, across every Run'
 \echo '  active_occupation_action_open      every ACTIVE occupation of this Run belongs to an Action that is still open, unless the Run has ended'
+\echo '  ready_for_approval_has_request     every Agent Run judged READY_FOR_APPROVAL has a change request about its latest workspace patch'
 SELECT CASE WHEN :'provider_capacity' = ''
     THEN 'checks not run: provider_slots_within_capacity (pass -v provider_capacity=<id>=<n>,... to check every Provider''s held slots against its limit)'
     ELSE '  provider_slots_within_capacity     no Provider holds more slots than its configured limit (' || :'provider_capacity' || ')' END;
@@ -313,6 +314,25 @@ v_active_occupation_action_open AS (
       AND t.status NOT IN ('COMPLETED', 'FAILED')
 ),
 
+-- The completion check judges a PREPARE_ONLY task READY_FOR_APPROVAL only when a change
+-- request names the workspace's latest patch, and it reads those rows in the transaction
+-- that terminates the Agent Run, after which neither the patches nor the requests change.
+-- A READY_FOR_APPROVAL verdict without such a request would be a verdict that rests on
+-- facts the ledger does not hold.
+v_ready_has_request AS (
+    SELECT 'agent run ' || ac.agent_run_id || ' is READY_FOR_APPROVAL without a change request about its latest patch' AS detail
+    FROM agent_completions ac
+    JOIN agent_runs ar ON ar.id = ac.agent_run_id
+    JOIN run_node_runs nr ON nr.id = ar.node_run_id
+    WHERE ac.outcome = 'READY_FOR_APPROVAL'
+      AND NOT EXISTS (
+          SELECT 1 FROM change_requests cr
+          WHERE cr.agent_run_id = ac.agent_run_id
+            AND cr.patch_digest = (SELECT p.patch_digest FROM workspace_patches p
+                                   WHERE p.agent_run_id = ac.agent_run_id
+                                   ORDER BY p.seq DESC LIMIT 1))
+),
+
 -- Admission counts the held slots under the Provider's row lock before inserting its
 -- own, so the committed count never exceeds the configured limit. The limit is not a
 -- database fact: it is passed in, and the check runs only when it was. It is a snapshot
@@ -341,7 +361,8 @@ results AS (
     UNION ALL SELECT 9, 'patch_verified_subject_recorded', detail FROM v_fact_patch_recorded
     UNION ALL SELECT 10, 'release_target_single_active', detail FROM v_release_target_single_active
     UNION ALL SELECT 11, 'active_occupation_action_open', detail FROM v_active_occupation_action_open
-    UNION ALL SELECT 12, 'provider_slots_within_capacity', detail FROM v_within_capacity
+    UNION ALL SELECT 12, 'ready_for_approval_has_request', detail FROM v_ready_has_request
+    UNION ALL SELECT 13, 'provider_slots_within_capacity', detail FROM v_within_capacity
 ),
 checks(ord, check_name) AS (
     SELECT * FROM (
@@ -349,11 +370,12 @@ checks(ord, check_name) AS (
                (4, 'no_inflight_work_in_terminal_run'), (5, 'run_status_matches_noderuns'),
                (6, 'one_external_task_per_attempt'), (7, 'at_most_one_succeeded_attempt'),
                (8, 'provider_slot_live_noderun'), (9, 'patch_verified_subject_recorded'),
-               (10, 'release_target_single_active'), (11, 'active_occupation_action_open')
+               (10, 'release_target_single_active'), (11, 'active_occupation_action_open'),
+               (12, 'ready_for_approval_has_request')
     ) AS always(ord, check_name)
     UNION ALL
     -- Listed, and so reported, only when the limits were passed in.
-    SELECT 12, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
+    SELECT 13, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
 )
 SELECT line FROM (
     SELECT c.ord, 0 AS sub,

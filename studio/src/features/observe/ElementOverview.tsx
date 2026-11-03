@@ -2,6 +2,7 @@ import { ChevronRight, CircleAlert } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 
+import { CompletionCard } from './CompletionCard';
 import { FailCard, SelectLink, WaitCard } from './Diagnosis';
 import { ElementTime, RunOffset, Tokens } from './RunFacts';
 import { StepImages, ValueView } from './ValueView';
@@ -491,12 +492,14 @@ function StepOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
         }
       : null,
   ];
+  const completion = step.trace?.agentRun.completion ?? null;
   return (
     <>
       {failure ? <FailCard failure={failure} workflowId={ctx.workflowId} /> : null}
       {wait ? (
         <WaitCard wait={wait} model={ctx.model} tools={ctx.tools} onSelect={ctx.onSelect} />
       ) : null}
+      {completion ? <CompletionCard completion={completion} /> : null}
       {sequence ? (
         <Lead>
           <Words text={sequence} tools={allowedTools(step)} />{' '}
