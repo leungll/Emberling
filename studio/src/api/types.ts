@@ -884,6 +884,32 @@ export interface AgentTrace {
   generationBudget: GenerationBudgetTrace;
   /** The frozen workspace and its recorded patches; `null` when the Agent froze none. */
   workspace: AgentWorkspaceTrace | null;
+  /** The change requests the Agent Run recorded, oldest first, without their content. */
+  changeRequests: AgentTraceChangeRequests;
+}
+
+/**
+ * The bounded change request list. `truncated` means the Agent Run recorded more requests
+ * than `items` shows.
+ */
+export interface AgentTraceChangeRequests {
+  items: ChangeRequestTrace[];
+  truncated: boolean;
+}
+
+/**
+ * One recorded change request: the patch it describes by digest, the verification fact it
+ * rests on and the text Artifact holding its rendered content, with that content's digest.
+ * The Markdown itself is read through the Artifact content route.
+ */
+export interface ChangeRequestTrace {
+  id: string;
+  patchDigest: string;
+  verificationFactId: string;
+  contentArtifactId: string;
+  contentDigest: string;
+  toolAttemptId: string;
+  createdAt: string;
 }
 
 /**

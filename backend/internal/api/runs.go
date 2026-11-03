@@ -268,6 +268,30 @@ type agentTraceResponse struct {
 	// Workspace is the frozen workspace and its recorded patches, null for an Agent Run
 	// that froze none.
 	Workspace *agentWorkspaceDTO `json:"workspace"`
+	// ChangeRequests are the change requests the Agent Run recorded, oldest first, named
+	// by their identifiers, digests and content Artifact; the rendered content is read
+	// through the Artifact content route, never carried here.
+	ChangeRequests agentTraceChangeRequestsDTO `json:"changeRequests"`
+}
+
+// agentTraceChangeRequestsDTO is the bounded change request list. Truncated reports that
+// the Agent Run recorded more requests than Items shows; the stored rows are never cut.
+type agentTraceChangeRequestsDTO struct {
+	Items     []changeRequestDTO `json:"items"`
+	Truncated bool               `json:"truncated"`
+}
+
+// changeRequestDTO projects one recorded change request: which patch it describes, which
+// verification fact it rests on and which text Artifact holds its content, with the digest
+// of that content. The decision basis and the Markdown belong to the approval view.
+type changeRequestDTO struct {
+	ID                 string    `json:"id"`
+	PatchDigest        string    `json:"patchDigest"`
+	VerificationFactID string    `json:"verificationFactId"`
+	ContentArtifactID  string    `json:"contentArtifactId"`
+	ContentDigest      string    `json:"contentDigest"`
+	ToolAttemptID      string    `json:"toolAttemptId"`
+	CreatedAt          time.Time `json:"createdAt"`
 }
 
 // agentWorkspaceDTO projects the frozen workspace binding and the summaries of its
@@ -489,8 +513,25 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			MaxGenerationCalls:  trace.Budget.MaxGenerationCalls,
 			GenerationCallsUsed: trace.Budget.Used,
 		},
-		Workspace: toAgentWorkspaceDTO(trace.Workspace),
+		Workspace:      toAgentWorkspaceDTO(trace.Workspace),
+		ChangeRequests: toAgentTraceChangeRequestsDTO(trace.ChangeRequests),
 	}
+}
+
+func toAgentTraceChangeRequestsDTO(requests service.AgentTraceChangeRequests) agentTraceChangeRequestsDTO {
+	items := make([]changeRequestDTO, len(requests.Requests))
+	for i, request := range requests.Requests {
+		items[i] = changeRequestDTO{
+			ID:                 request.ID,
+			PatchDigest:        request.PatchDigest,
+			VerificationFactID: request.VerificationFactID,
+			ContentArtifactID:  request.ContentArtifactID,
+			ContentDigest:      request.ContentDigest,
+			ToolAttemptID:      request.ToolAttemptID,
+			CreatedAt:          utcTime(request.CreatedAt),
+		}
+	}
+	return agentTraceChangeRequestsDTO{Items: items, Truncated: requests.Truncated}
 }
 
 func toAgentWorkspaceDTO(workspace *service.AgentTraceWorkspace) *agentWorkspaceDTO {
