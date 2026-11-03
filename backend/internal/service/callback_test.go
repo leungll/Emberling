@@ -131,6 +131,7 @@ func (t *cbTx) ProviderSlots() store.ProviderSlotRepository               { retu
 func (t *cbTx) AgentWorkspaces() store.AgentWorkspaceRepository           { return nil }
 func (t *cbTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
 func (t *cbTx) Approvals() store.ApprovalRepository                       { return nil }
+func (t *cbTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
 func (t *cbTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
 func (t *cbTx) HumanWaits() store.HumanWaitRepository                     { return nil }
 

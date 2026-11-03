@@ -20,6 +20,7 @@ const (
 	IDPrefixAgentStateVersion   = "statev"
 	IDPrefixWorkspacePatch      = "wpatch"
 	IDPrefixApproval            = "approval"
+	IDPrefixChangeRequest       = "cr"
 	IDPrefixReleaseOccupation   = "occupation"
 	IDPrefixHumanWait           = "hwait"
 )

@@ -204,9 +204,26 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		if err := recordToolArtifacts(ctx, tx, call, result.Artifacts, now); err != nil {
 			return err
 		}
+		// A change request the result carries is re-verified against the content Artifact
+		// recorded above, the workspace's current patch and the Run's facts, and recorded,
+		// or found already recorded with the same content, before the Attempt's result is
+		// written: the result the Agent reads names the record. A request the Runtime will
+		// not record rolls the whole result back and the call fails as an invalid Tool
+		// result below. Like the Artifacts, a recorded request is a fact of the Tool's
+		// successful result and stays with the SUCCEEDED Attempt whatever the round decides.
+		output := result.Output
+		if result.ChangeRequest != nil {
+			stored, created, err := s.recordChangeRequestLocked(ctx, tx, call, decision.Arguments, result, now)
+			if err != nil {
+				return err
+			}
+			if output, err = changeRequestResultOutput(output, stored, created); err != nil {
+				return &errChangeRequestRejected{reason: err.Error()}
+			}
+		}
 		// The conditional Attempt update is what decides that this caller, and not a stale
 		// duplicate of the same Tool call, a late callback or the timeout, owns the result.
-		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, result.Output, result.Cost); err != nil {
+		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, output, result.Cost); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}
@@ -282,7 +299,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return err
 		}
 
-		messages, err := s.appendToolRoundContext(ctx, tx, agentRun, call, decision, result.Output, now)
+		messages, err := s.appendToolRoundContext(ctx, tx, agentRun, call, decision, output, now)
 		if err != nil {
 			return err
 		}
@@ -327,6 +344,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		return nil
 	})
 	var rejected *errWorkspacePatchRejected
+	var requestRejected *errChangeRequestRejected
 	switch {
 	case errors.Is(err, errAgentTurnSuperseded):
 		return agentToolCommit{}, nil
@@ -336,6 +354,11 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		return s.commitAgentToolFailure(ctx, call, src, domain.ExecutionError{
 			Code:    codeWorkspacePatchInvalid,
 			Message: fmt.Sprintf("tool %q returned a workspace patch the runtime will not record: %s", call.toolName, rejected.reason),
+		})
+	case errors.As(err, &requestRejected):
+		return s.commitAgentToolFailure(ctx, call, src, domain.ExecutionError{
+			Code:    codeChangeRequestInvalid,
+			Message: fmt.Sprintf("tool %q returned a change request the runtime will not record: %s", call.toolName, requestRejected.reason),
 		})
 	case err != nil:
 		return agentToolCommit{}, err

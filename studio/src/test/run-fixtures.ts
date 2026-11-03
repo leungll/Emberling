@@ -213,6 +213,7 @@ export function agentTrace(
     facts: { items: [], truncated: false },
     generationBudget: { maxGenerationCalls: null, generationCallsUsed: 0 },
     workspace: null,
+    changeRequests: { items: [], truncated: false },
   };
 }
 

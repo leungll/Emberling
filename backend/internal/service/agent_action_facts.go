@@ -141,13 +141,17 @@ const requirementCandidateLimit = 8
 // never carry other argument values, which may hold signed URLs. Only persisted facts are
 // consulted: whether the Tool that produced them is still registered does not matter.
 // A Tool without requirements reads nothing.
+//
+// When every requirement holds, the facts that satisfied them are returned in declaration
+// order, so the call can cite the committed fact its result rests on without looking it up.
 func (s *ExecutionService) unmetFactRequirementLocked(
 	ctx context.Context,
 	tx store.Tx,
 	runID string,
 	requirements []domain.FactRequirement,
 	arguments json.RawMessage,
-) (*runtime.RequirementFailure, error) {
+) ([]domain.ExecutionFact, *runtime.RequirementFailure, error) {
+	var satisfied []domain.ExecutionFact
 	for _, requirement := range requirements {
 		// The matcher reads the subject and every compared argument before it looks at a
 		// single candidate. Asked with no candidates, it therefore reports either the
@@ -155,22 +159,24 @@ func (s *ExecutionService) unmetFactRequirementLocked(
 		// the subject from that answer, so the arguments are interpreted in one place.
 		_, probe := runtime.MatchRequirement(requirement, arguments, nil)
 		if probe == nil {
-			return nil, fmt.Errorf("execution: requirement %q of run %s matched without any committed fact", requirement.FactType, runID)
+			return nil, nil, fmt.Errorf("execution: requirement %q of run %s matched without any committed fact", requirement.FactType, runID)
 		}
 		if probe.Reason != runtime.RequirementNoFact {
-			return probe, nil
+			return nil, probe, nil
 		}
 		subject := probe.Subject
 
 		candidates, err := tx.ExecutionFacts().ListForRequirement(ctx, runID, requirement.FactType, &subject, requirementCandidateLimit)
 		if err != nil {
-			return nil, fmt.Errorf("execution: list facts %q about %q of run %s: %w", requirement.FactType, subject, runID, err)
+			return nil, nil, fmt.Errorf("execution: list facts %q about %q of run %s: %w", requirement.FactType, subject, runID, err)
 		}
-		if _, failure := runtime.MatchRequirement(requirement, arguments, candidates); failure != nil {
-			return failure, nil
+		match, failure := runtime.MatchRequirement(requirement, arguments, candidates)
+		if failure != nil {
+			return nil, failure, nil
 		}
+		satisfied = append(satisfied, match.Fact)
 	}
-	return nil, nil
+	return satisfied, nil, nil
 }
 
 // generationLimitReachedLocked decides whether one more call of a counted Tool would pass

@@ -41,6 +41,11 @@ type ToolAction struct {
 	// transaction, for a Tool whose Metadata declares UsesWorkspace; nil otherwise. The
 	// Tool reads it verbatim and never resolves a repository or commit of its own.
 	Workspace *WorkspaceView
+	// RequiredFacts are the committed facts that satisfied the Tool's declared fact
+	// requirements, one per requirement in declaration order, resolved in the claim
+	// transaction. A Tool that declares no requirement receives none. The Tool reads them
+	// verbatim, to cite the fact its result rests on; it never looks a fact up itself.
+	RequiredFacts []domain.ExecutionFact
 	// Callback is set only for an ASYNC Tool dispatch.
 	Callback *CallbackContext
 }
@@ -64,9 +69,9 @@ type WorkspaceView struct {
 	PatchSeq int
 	// AllowedPaths are normalised relative path prefixes inside the repository.
 	AllowedPaths []string
-	// DeployTarget is the frozen service and environment a release Tool deploys to, nil
-	// when the Agent node configured none. A release Tool reads it verbatim and never
-	// lets the model choose a target.
+	// DeployTarget is the service and environment the Agent node's workspace releases
+	// to, nil when the node configured none. A Tool that describes a change names it;
+	// no Tool decides where a release goes from it.
 	DeployTarget *domain.WorkspaceDeployTarget
 }
 
