@@ -68,9 +68,19 @@
           "rollbackPlan": "Redeploy the previous version of {{task:/service}}; the change touches no stored data.",
           "decisionBasis": [
             {
-              "statement": "The second verification passed: tests, scan and dependency check are clean for the latest patch.",
-              "turnNo": 9,
-              "manifestRef": "{{tool:6:/logArtifactId}}"
+              "statement": "RULES.md restricts the fix to go.mod and internal/auth.",
+              "turnNo": 2,
+              "manifestRef": "RULES.md"
+            },
+            {
+              "statement": "go.mod pinned the vulnerable release of the dependency before the change.",
+              "turnNo": 4,
+              "manifestRef": "go.mod"
+            },
+            {
+              "statement": "The patched go.mod passed the final verification: tests, scan and dependency check are clean.",
+              "turnNo": 8,
+              "manifestRef": "go.mod"
             }
           ]
         }

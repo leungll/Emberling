@@ -3,6 +3,7 @@
 package contract
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"reflect"
@@ -143,6 +144,19 @@ func TestDefinitions_Save_AgentWorkspaceInvalidAllowedPath_400(t *testing.T) {
 
 const authorizedTestToolName = "contract_test_release"
 
+// reconcilableTestToolExecutor is the pollable test executor with the void and target
+// queries a Tool that declares itself reconcilable must answer; the registry refuses the
+// declaration without them. The catalogue test never calls either.
+type reconcilableTestToolExecutor struct{ pollableTestToolExecutor }
+
+func (reconcilableTestToolExecutor) Void(context.Context, registry.ToolAsyncState) (registry.PollResult, error) {
+	return registry.PollResult{Status: registry.PollRunning}, nil
+}
+
+func (reconcilableTestToolExecutor) CheckTarget(context.Context, registry.ToolAsyncState) (registry.TargetState, error) {
+	return registry.TargetState{}, nil
+}
+
 // TestAPI_ToolsCatalog_AuthorizationAndRecords_Serialised proves the Tool catalogue exposes
 // the authorization, record kinds and workspace flags of a Tool that declares them, and
 // serialises a Tool that declares none as LOW risk by absence with an empty records list.
@@ -162,7 +176,7 @@ func TestAPI_ToolsCatalog_AuthorizationAndRecords_Serialised(t *testing.T) {
 			Reconcilable:           true,
 			ReturnUnmetRequirement: true,
 		},
-		Executor: pollableTestToolExecutor{},
+		Executor: reconcilableTestToolExecutor{},
 	}
 	env := newTestEnvWithOptions(t, testEnvOptions{ExtraToolRegistrations: []registry.ToolRegistration{release}})
 
