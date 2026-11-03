@@ -85,7 +85,13 @@ type runner struct {
 
 func newRunner(t *testing.T, backend Backend, controls bool) *runner {
 	t.Helper()
-	var opts []Option
+	return newRunnerWith(t, backend, nil, controls)
+}
+
+// newRunnerWith is newRunner with extra Server options.
+func newRunnerWith(t *testing.T, backend Backend, extra []Option, controls bool) *runner {
+	t.Helper()
+	opts := append([]Option{}, extra...)
 	r := &runner{}
 	if controls {
 		r.recordPath = filepath.Join(t.TempDir(), "record.jsonl")
@@ -112,6 +118,40 @@ func newRunner(t *testing.T, backend Backend, controls bool) *runner {
 		_ = r.server.Shutdown(context.Background())
 	})
 	return r
+}
+
+// restartRunner opens the record and store of a shut-down runner in a new Server, as a
+// second process would, redelivers the stored results and serves it.
+func restartRunner(t *testing.T, previous *runner, backend Backend, extra []Option) *runner {
+	t.Helper()
+	record, err := mockcontrol.OpenRecord(previous.recordPath)
+	if err != nil {
+		t.Fatalf("reopen record: %v", err)
+	}
+	t.Cleanup(func() { _ = record.Close() })
+	store, stored, err := OpenRedeliveryStore(RedeliveryPath(previous.recordPath))
+	if err != nil {
+		t.Fatalf("reopen redelivery store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	restarted := NewServer(backend, append([]Option{WithTestControls(record, store)}, extra...)...)
+	restarted.Redeliver(stored)
+	r := &runner{server: restarted, http: httptest.NewServer(restarted), recordPath: previous.recordPath}
+	t.Cleanup(func() {
+		r.http.Close()
+		_ = restarted.Shutdown(context.Background())
+	})
+	return r
+}
+
+// recordRaw reads the record file as written.
+func (r *runner) recordRaw(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(r.recordPath)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	return string(raw)
 }
 
 func (r *runner) shutdown(t *testing.T) {

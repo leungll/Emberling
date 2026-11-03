@@ -74,3 +74,17 @@ func TestAsyncToolOutcome_ResolvesDispatchedAttemptOfWaitingAction(t *testing.T)
 		t.Errorf("sync source = %+v, want STARTED / RUNNING / SYNC_EXECUTION without resume", syncToolOutcome)
 	}
 }
+
+// An asynchronous result that declares an inconsistent Execution Artifact fails the Action
+// as TOOL_RESULT_INVALID, the way a synchronous one does, before any artifact row exists.
+func TestAgentCallbackOutcome_InvalidDeclaredArtifact_IsToolResultInvalid(t *testing.T) {
+	schema := domain.ToolMetadata{Name: "verify_patch", OutputSchema: json.RawMessage(agentResumeOutputSchema)}
+	malformed := registry.ToolResult{
+		Output:    json.RawMessage(`{"key":"k1"}`),
+		Artifacts: []domain.ArtifactRef{{ArtifactID: "artifact_x", MediaType: domain.ArtifactMediaTypeTextPlain, SizeBytes: 1, SHA256: "nothex"}},
+	}
+	execErr, interpretErr := agentCallbackOutcome(malformed, nil, schema)
+	if interpretErr != nil || execErr == nil || execErr.Code != "TOOL_RESULT_INVALID" {
+		t.Fatalf("invalid artifact: execErr = %+v interpretErr = %v, want TOOL_RESULT_INVALID", execErr, interpretErr)
+	}
+}

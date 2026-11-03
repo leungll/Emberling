@@ -84,15 +84,18 @@ const DefaultHTTPAddr = ":8080"
 // Config is the fully resolved deployment configuration. It is passed by value: no part
 // of the process may mutate it after startup.
 type Config struct {
-	Database        Database
-	AssetStorage    AssetStorage
-	ModelProvider   ModelProvider
-	OpenAIModel     OpenAIModel
-	ImageModel      ImageModel
-	TaskGateway     TaskGateway
-	Production      Production
-	Callback        Callback
-	SandboxRunner   SandboxRunner
+	Database      Database
+	AssetStorage  AssetStorage
+	ModelProvider ModelProvider
+	OpenAIModel   OpenAIModel
+	ImageModel    ImageModel
+	TaskGateway   TaskGateway
+	Production    Production
+	Callback      Callback
+	SandboxRunner SandboxRunner
+	// VerifyRunner locates the sandbox runner the verify_patch Tool dispatches to; its
+	// zero value leaves the Tool unregistered.
+	VerifyRunner    VerifyRunner
 	Reconciliation  Reconciliation
 	PendingCallback PendingCallback
 	Projection      Projection
@@ -280,6 +283,7 @@ func Load(env func(string) string) (Config, error) {
 			SigningSecret: Secret{value: l.required(KeyCallbackSigningSecret)},
 		},
 		SandboxRunner: l.sandboxRunner(),
+		VerifyRunner:  l.verifyRunner(),
 		Reconciliation: Reconciliation{
 			Interval:  l.requiredDuration(KeyReconcileInterval),
 			BatchSize: l.requiredInt(KeyReconcileBatchSize),

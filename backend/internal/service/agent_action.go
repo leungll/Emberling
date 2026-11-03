@@ -766,6 +766,13 @@ func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.T
 		if refusal := workspaceWriteScopeRefusal(reg.Metadata, c.decision.Arguments, view.AllowedPaths); refusal != nil {
 			return returnVerdict(domain.ReturnScopeDenied, scopeDeniedMessage(refusal, view.AllowedPaths)), nil
 		}
+		// A Tool that acts on a named patch must name the newest one. The digest it names
+		// is compared with the view read under this lock, and a stale one is handed back as
+		// a STALE_PATCH refusal: no Attempt, no dispatch, so no result can ever bind to a
+		// superseded patch.
+		if named, stale := workspacePatchStale(reg.Metadata, c.decision.Arguments, view); stale {
+			return returnVerdict(domain.ReturnStalePatch, stalePatchMessage(named, view)), nil
+		}
 	}
 	return toolActionVerdict{inputs: inputs}, nil
 }

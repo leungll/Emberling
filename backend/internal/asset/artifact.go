@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 )
@@ -82,12 +83,35 @@ func (s *ArtifactStore) VerifyReadWrite(ctx context.Context) error {
 	return probeReadWrite(staging)
 }
 
-// Write streams r into content-addressed storage and returns its reference. Size is
-// capped while streaming; the media type is sniffed from the leading bytes and only
-// PNG, JPEG and WebP are accepted. An object already present under the derived key is a
-// success: it holds the same bytes, it is never overwritten, and its modification time is
-// refreshed so the sweeper treats it as recent. Errors never carry a path or storage key.
+// Write stores content read from r as an Execution Artifact and returns its reference. The
+// content is staged while it is hashed, capped while streaming, and the media type is
+// sniffed from the leading bytes: only PNG, JPEG and WebP are accepted. An object already
+// present under the derived key is a success: it holds the same bytes, it is never
+// overwritten, and its modification time is refreshed so the sweeper treats it as recent.
+// Errors never carry a path or storage key.
 func (s *ArtifactStore) Write(ctx context.Context, r io.Reader) (domain.ArtifactRef, error) {
+	return s.write(ctx, r, func(head []byte) (string, error) {
+		mediaType := sniffImageMediaType(head)
+		if mediaType == "" {
+			return "", fmt.Errorf("asset: artifact: content is not a supported image: %w", domain.ErrUnsupportedAssetMediaType)
+		}
+		return mediaType, nil
+	})
+}
+
+// WriteText stores content read from r as a UTF-8 text Execution Artifact, such as the log
+// a Tool keeps beside its result, under the same staging, cap and content addressing as
+// Write. The bytes are checked to be well-formed UTF-8 while they stream; anything else is
+// rejected as an unsupported media type, so a text artifact is always servable as text.
+func (s *ArtifactStore) WriteText(ctx context.Context, r io.Reader) (domain.ArtifactRef, error) {
+	return s.write(ctx, &utf8Reader{r: r}, func([]byte) (string, error) {
+		return domain.ArtifactMediaTypeTextPlain, nil
+	})
+}
+
+// write is the shared store path of Write and WriteText; classify names the media type of
+// the staged content from its leading bytes or rejects it.
+func (s *ArtifactStore) write(ctx context.Context, r io.Reader, classify func(head []byte) (string, error)) (domain.ArtifactRef, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.ArtifactRef{}, err
 	}
@@ -101,16 +125,19 @@ func (s *ArtifactStore) Write(ctx context.Context, r io.Reader) (domain.Artifact
 
 	content, err := stageContent(staging, "artifact-*", r, s.maxBytes)
 	if err != nil {
-		if errors.Is(err, errContentTooLarge) {
+		switch {
+		case errors.Is(err, errContentTooLarge):
 			return domain.ArtifactRef{}, fmt.Errorf("asset: artifact: %w", domain.ErrArtifactTooLarge)
+		case errors.Is(err, errInvalidUTF8):
+			return domain.ArtifactRef{}, fmt.Errorf("asset: artifact: content is not UTF-8 text: %w", domain.ErrUnsupportedAssetMediaType)
 		}
 		return domain.ArtifactRef{}, fmt.Errorf("asset: artifact: %w", err)
 	}
 	defer content.discard()
 
-	mediaType := sniffImageMediaType(content.head)
-	if mediaType == "" {
-		return domain.ArtifactRef{}, fmt.Errorf("asset: artifact: content is not a supported image: %w", domain.ErrUnsupportedAssetMediaType)
+	mediaType, err := classify(content.head)
+	if err != nil {
+		return domain.ArtifactRef{}, err
 	}
 	ref := domain.ArtifactRef{MediaType: mediaType, SizeBytes: content.sizeBytes, SHA256: content.sha256}
 	if ref.ArtifactID, err = domain.ArtifactIDForSHA256(content.sha256); err != nil {
@@ -138,6 +165,60 @@ func (s *ArtifactStore) Write(ctx context.Context, r io.Reader) (domain.Artifact
 		return domain.ArtifactRef{}, fmt.Errorf("asset: artifact %s: %w", ref.ArtifactID, err)
 	}
 	return ref, nil
+}
+
+// errInvalidUTF8 reports text content that is not well-formed UTF-8.
+var errInvalidUTF8 = errors.New("content is not valid UTF-8")
+
+// utf8Reader passes bytes through while checking that they form well-formed UTF-8. A rune
+// split across two reads is checked once it is complete; one still incomplete at EOF is
+// an error.
+type utf8Reader struct {
+	r     io.Reader
+	carry []byte
+	done  bool
+}
+
+func (u *utf8Reader) Read(p []byte) (int, error) {
+	if u.done {
+		return 0, io.EOF
+	}
+	n, err := u.r.Read(p)
+	if n > 0 {
+		chunk := append(u.carry, p[:n]...)
+		valid := utf8ValidPrefix(chunk)
+		if valid < 0 {
+			return 0, errInvalidUTF8
+		}
+		u.carry = append([]byte(nil), chunk[valid:]...)
+	}
+	if errors.Is(err, io.EOF) {
+		u.done = true
+		if len(u.carry) != 0 {
+			return n, errInvalidUTF8
+		}
+	}
+	return n, err
+}
+
+// utf8ValidPrefix returns how many leading bytes of b are complete, well-formed UTF-8, or
+// -1 when b holds an invalid sequence. Only an incomplete rune at the very end, at most
+// three bytes starting with a lead byte, is left out of the count.
+func utf8ValidPrefix(b []byte) int {
+	if utf8.Valid(b) {
+		return len(b)
+	}
+	start := len(b)
+	for i := len(b) - 1; i >= 0 && len(b)-i < utf8.UTFMax; i-- {
+		if b[i]&0xC0 != 0x80 {
+			start = i
+			break
+		}
+	}
+	if start < len(b) && !utf8.FullRune(b[start:]) && utf8.Valid(b[:start]) {
+		return start
+	}
+	return -1
 }
 
 // Open returns the object stored under storageKey for a read that verifies it before

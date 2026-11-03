@@ -64,7 +64,7 @@ func (s *ArtifactService) OpenRunContent(ctx context.Context, runID, artifactID 
 	if s.deps.ArtifactContent == nil {
 		return domain.Artifact{}, nil, fmt.Errorf("service artifacts.OpenRunContent: artifact=%s: artifact content storage is not configured", artifactID)
 	}
-	if !domain.IsSupportedAssetMediaType(record.Artifact.MediaType) {
+	if !domain.IsSupportedArtifactMediaType(record.Artifact.MediaType) {
 		return domain.Artifact{}, nil, fmt.Errorf("service artifacts.OpenRunContent: artifact=%s: %w", artifactID, errArtifactContentUnavailable)
 	}
 

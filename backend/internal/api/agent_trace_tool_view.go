@@ -30,6 +30,7 @@ const (
 	toolReviewAsset   = "review_asset"
 	toolGenerateVideo = "generate_video"
 	toolSandboxTest   = "sandbox_test"
+	toolVerifyPatch   = "verify_patch"
 	toolDeploy        = "deploy"
 )
 
@@ -87,6 +88,19 @@ type toolTestSummaryDTO struct {
 	Failed int64 `json:"failed"`
 }
 
+// toolVerificationDTO is a verify_patch result: the overall verdict, the three checks it is
+// made of, the test counts, and the Execution Artifact holding the runner's log, which the
+// artifact content route serves. The log text itself never enters the Trace.
+type toolVerificationDTO struct {
+	Passed            bool               `json:"passed"`
+	TestsPassed       bool               `json:"testsPassed"`
+	ScanClean         bool               `json:"scanClean"`
+	DependenciesClean bool               `json:"dependenciesClean"`
+	Tests             toolTestSummaryDTO `json:"tests"`
+	LogArtifactID     string             `json:"logArtifactId"`
+	LogTruncated      bool               `json:"logTruncated"`
+}
+
 // toolDeploymentDTO is a deploy call's target, from its arguments, and the version
 // production reported, from its result.
 type toolDeploymentDTO struct {
@@ -113,13 +127,14 @@ type withheldFieldDTO struct {
 
 // toolAttemptView is the projection's output for one Tool Attempt.
 type toolAttemptView struct {
-	Photo      *toolPhotoDTO
-	Settings   *toolSettingsDTO
-	Review     *toolReviewDTO
-	Test       *toolTestDTO
-	Deployment *toolDeploymentDTO
-	Video      *toolVideoDTO
-	Withheld   []withheldFieldDTO
+	Photo        *toolPhotoDTO
+	Settings     *toolSettingsDTO
+	Review       *toolReviewDTO
+	Test         *toolTestDTO
+	Verification *toolVerificationDTO
+	Deployment   *toolDeploymentDTO
+	Video        *toolVideoDTO
+	Withheld     []withheldFieldDTO
 }
 
 // toolViewProjector holds what every Tool Attempt of one Trace is projected against.
@@ -154,6 +169,8 @@ func (p toolViewProjector) project(attempt domain.ToolAttempt) toolAttemptView {
 		view.Review = p.projectReview(&view, result)
 	case toolSandboxTest:
 		view.Test = projectTest(result)
+	case toolVerifyPatch:
+		view.Verification = p.projectVerification(&view, result)
 	case toolDeploy:
 		deployment := &toolDeploymentDTO{}
 		if target := decodeObject(arguments["target"]); target != nil {
@@ -293,6 +310,38 @@ func projectTest(result map[string]json.RawMessage) *toolTestDTO {
 		return nil
 	}
 	return &toolTestDTO{Passed: passed, Summary: toolTestSummaryDTO{Total: total, Failed: failed}}
+}
+
+// projectVerification reads the verdicts, test counts and log artifact of a committed
+// verify_patch result. Every verdict must be a boolean and the artifact id a bounded
+// string, or nothing is shown: a partial verification card would misstate the result.
+func (p toolViewProjector) projectVerification(view *toolAttemptView, result map[string]json.RawMessage) *toolVerificationDTO {
+	if result == nil {
+		return nil
+	}
+	verification := &toolVerificationDTO{}
+	for key, target := range map[string]*bool{
+		"passed": &verification.Passed, "testsPassed": &verification.TestsPassed,
+		"scanClean": &verification.ScanClean, "dependenciesClean": &verification.DependenciesClean,
+		"logTruncated": &verification.LogTruncated,
+	} {
+		if result[key] == nil || json.Unmarshal(result[key], target) != nil {
+			return nil
+		}
+	}
+	tests := decodeObject(decodeObject(result["summary"])["tests"])
+	total, okTotal := nonNegativeInteger(tests["total"])
+	failed, okFailed := nonNegativeInteger(tests["failed"])
+	if !okTotal || !okFailed {
+		return nil
+	}
+	verification.Tests = toolTestSummaryDTO{Total: total, Failed: failed}
+	artifactID, ok := p.boundedString(view, "verification.logArtifactId", result["logArtifactId"])
+	if !ok {
+		return nil
+	}
+	verification.LogArtifactID = artifactID
+	return verification
 }
 
 func nonNegativeInteger(raw json.RawMessage) (int64, bool) {

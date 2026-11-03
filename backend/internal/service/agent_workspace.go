@@ -110,6 +110,33 @@ func workspaceWriteScopeRefusal(metadata domain.ToolMetadata, arguments json.Raw
 	return nil
 }
 
+// workspacePatchStale decides, before any Attempt exists, whether the patch digest a call
+// of a patch-bound Tool names is the digest of the workspace's newest recorded patch. It
+// returns the digest the call named and true when they differ, so the Runtime can hand a
+// STALE_PATCH refusal back to the Agent instead of binding a result to a patch the
+// workspace has moved past. A Tool that declares no digest argument is never stale. The
+// argument passed the Tool's InputSchema, so a value that is not a string is a declaration
+// defect and counts as stale: dispatching on it could bind a result to nothing.
+func workspacePatchStale(metadata domain.ToolMetadata, arguments json.RawMessage, view *registry.WorkspaceView) (string, bool) {
+	if metadata.WorkspacePatchDigestPath == "" {
+		return "", false
+	}
+	named, err := runtime.ResolveWorkspaceWritePath(arguments, metadata.WorkspacePatchDigestPath)
+	if err != nil {
+		return "", true
+	}
+	return named, named != view.PatchDigest
+}
+
+// stalePatchMessage tells the Agent which digest it named and which one the workspace holds
+// now, so it can re-read the workspace and call again with the current digest.
+func stalePatchMessage(named string, view *registry.WorkspaceView) string {
+	if named == "" {
+		return fmt.Sprintf("The call was refused before it ran: it names no patch digest. The workspace's current patch is %s (patch %d).", view.PatchDigest, view.PatchSeq)
+	}
+	return fmt.Sprintf("The call was refused before it ran: patch digest %s is not the workspace's current patch. The current patch is %s (patch %d); verify that one.", named, view.PatchDigest, view.PatchSeq)
+}
+
 // scopeDeniedMessage tells the Agent which path was refused and why. It names the path the
 // Agent asked for and the frozen prefixes, never the file content.
 func scopeDeniedMessage(refusal *runtime.WriteScopeError, allowedPaths []string) string {

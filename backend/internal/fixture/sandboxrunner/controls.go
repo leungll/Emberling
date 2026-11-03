@@ -14,8 +14,9 @@ import (
 // dispatch before it is accepted; one naming kindCallback holds a finished test's callback
 // before it is delivered.
 const (
-	kindTest     = "test"
-	kindCallback = "callback"
+	kindTest         = "test"
+	kindCallback     = "callback"
+	kindVerification = "verification"
 )
 
 // Record events the runner writes besides the barrier's own.
@@ -40,7 +41,7 @@ func WithTestControls(record *mockcontrol.Record, store *RedeliveryStore) Option
 		s.controls = &testControls{
 			record:  record,
 			store:   store,
-			barrier: mockcontrol.NewBarrier(kindTest, kindCallback),
+			barrier: mockcontrol.NewBarrier(kindTest, kindCallback, kindVerification),
 		}
 	}
 }
@@ -79,6 +80,28 @@ type (
 		PatchDigest  string `json:"patchDigest"`
 		ResultDigest string `json:"resultDigest,omitempty"`
 		Code         string `json:"code,omitempty"`
+	}
+	verificationArrival struct {
+		VerificationID string `json:"verificationId,omitempty"`
+		RepositoryID   string `json:"repositoryId,omitempty"`
+		BaseCommit     string `json:"baseCommit,omitempty"`
+		PatchDigest    string `json:"patchDigest,omitempty"`
+		Mock           string `json:"mock,omitempty"`
+		CallbackTarget string `json:"callbackTarget,omitempty"`
+	}
+	verificationRef struct {
+		VerificationID string `json:"verificationId"`
+	}
+	verificationCompletedDetail struct {
+		VerificationID    string `json:"verificationId"`
+		Status            string `json:"status"`
+		Passed            *bool  `json:"passed,omitempty"`
+		TestsPassed       *bool  `json:"testsPassed,omitempty"`
+		ScanClean         *bool  `json:"scanClean,omitempty"`
+		DependenciesClean *bool  `json:"dependenciesClean,omitempty"`
+		PatchDigest       string `json:"patchDigest"`
+		ResultDigest      string `json:"resultDigest,omitempty"`
+		Code              string `json:"code,omitempty"`
 	}
 	callbackArrival struct {
 		TestID  string `json:"testId"`
@@ -143,6 +166,32 @@ func (s *Server) recordCompleted(job Job, status string, outcome Outcome) {
 		detail.Code = truncateSummary(outcome.FailureCode)
 	}
 	s.appendLine(eventCompleted, kindTest, detail)
+}
+
+func (s *Server) recordVerificationResponse(verificationID string, status int) {
+	s.appendLine(mockcontrol.EventResponded, kindVerification, respondedDetail{TestID: verificationID, Status: status})
+}
+
+func (s *Server) recordVerificationCompleted(job VerificationJob, status string, outcome VerificationOutcome) {
+	detail := verificationCompletedDetail{VerificationID: job.VerificationID, Status: status, PatchDigest: job.PatchDigest}
+	if outcome.Verdict {
+		passed, tests, scan, deps := outcome.Passed(), outcome.TestsPassed, outcome.ScanClean, outcome.DependenciesClean
+		detail.Passed, detail.TestsPassed, detail.ScanClean, detail.DependenciesClean = &passed, &tests, &scan, &deps
+		detail.ResultDigest = VerificationResultDigest(job.BaseCommit, job.PatchDigest, outcome)
+	} else {
+		detail.Code = truncateSummary(outcome.FailureCode)
+	}
+	s.appendLine(eventCompleted, kindVerification, detail)
+}
+
+// rejectVerification answers a verification dispatch that fails before the barrier, still
+// recording its arrival with test controls.
+func (s *Server) rejectVerification(w http.ResponseWriter, arrival verificationArrival, status int, message string) {
+	if s.controls != nil {
+		_, _ = s.controls.record.Append(mockcontrol.Line{Event: mockcontrol.EventArrived, Kind: kindVerification, Detail: arrival})
+		s.recordVerificationResponse(arrival.VerificationID, status)
+	}
+	writeJSON(w, status, errorResponse{Error: message})
 }
 
 func (s *Server) recordCallback(testID, status string, attempt, httpStatus int) {
