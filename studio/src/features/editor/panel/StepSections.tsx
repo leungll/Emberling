@@ -42,9 +42,9 @@ export function SettingField({ node, field }: { node: Node; field: string }) {
       return <LongTextField {...props} />;
     case 'model': {
       const capability = meta?.uiSchema.fields.find((x) => x.path === field)?.capability;
-      const reviewTools = reviewToolsOf(node, registry.tools)
-        .map((x) => x.name)
-        .join(', ');
+      const reviewList = reviewToolsOf(node, registry.tools);
+      const reviewTools = reviewList.map((x) => x.name).join(', ');
+      const reviewRequired = reviewList.some((x) => x.requiresReviewModel);
       const hint =
         field === 'imageModelId'
           ? copy.editor.fields.imageModelHint(
@@ -53,7 +53,7 @@ export function SettingField({ node, field }: { node: Node; field: string }) {
                 .join(', '),
             )
           : field === 'reviewModelId' && reviewTools
-            ? copy.editor.fields.reviewModelHint(reviewTools)
+            ? copy.editor.fields.reviewModelHint(reviewTools, reviewRequired)
             : undefined;
       const none = field === 'reviewModelId' ? copy.editor.fields.reviewModelNone : undefined;
       return (
