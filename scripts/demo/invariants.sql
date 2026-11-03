@@ -348,6 +348,20 @@ v_ended_run_occupation_queried AS (
       AND o.next_query_at IS NULL
 ),
 
+-- A release request enters WAITING_APPROVAL in the transaction that inserts its PENDING
+-- approval, and a decision or an expiry moves the approval and the Action out of the wait
+-- together. A waiting Action without a PENDING approval would be a request no person can
+-- decide and no expiry scan would ever end.
+v_waiting_approval_pending AS (
+    SELECT 'action ' || ac.id || ' is WAITING_APPROVAL without a PENDING approval' AS detail
+    FROM agent_actions ac
+    JOIN agent_turns tu ON tu.id = ac.turn_id
+    JOIN agent_runs ar ON ar.id = tu.agent_run_id
+    JOIN node_runs nr ON nr.id = ar.node_run_id
+    WHERE nr.run_id = :'run_id' AND ac.status = 'WAITING_APPROVAL'
+      AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.action_id = ac.id AND ap.status = 'PENDING')
+),
+
 -- Admission counts the held slots under the Provider's row lock before inserting its
 -- own, so the committed count never exceeds the configured limit. The limit is not a
 -- database fact: it is passed in, and the check runs only when it was. It is a snapshot
@@ -379,6 +393,7 @@ results AS (
     UNION ALL SELECT 12, 'ready_for_approval_has_request', detail FROM v_ready_has_request
     UNION ALL SELECT 13, 'ended_run_occupation_queried', detail FROM v_ended_run_occupation_queried
     UNION ALL SELECT 14, 'provider_slots_within_capacity', detail FROM v_within_capacity
+    UNION ALL SELECT 15, 'waiting_approval_has_pending', detail FROM v_waiting_approval_pending
 ),
 checks(ord, check_name) AS (
     SELECT * FROM (
@@ -388,7 +403,7 @@ checks(ord, check_name) AS (
                (8, 'provider_slot_live_noderun'), (9, 'patch_verified_subject_recorded'),
                (10, 'release_target_single_active'), (11, 'active_occupation_action_open'),
                (12, 'ready_for_approval_has_request'),
-               (13, 'ended_run_occupation_queried')
+               (13, 'ended_run_occupation_queried'), (15, 'waiting_approval_has_pending')
     ) AS always(ord, check_name)
     UNION ALL
     -- Listed, and so reported, only when the limits were passed in.
