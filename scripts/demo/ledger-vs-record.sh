@@ -41,8 +41,9 @@
 #     NodeRun or Tool Attempt is a failure while a replayed one passes with a note;
 #   - accepted callback deliveries are at least the callback-received Events;
 #   - status queries the Provider answered with a finished task (`polled` with taskStatus
-#     SUCCEEDED or FAILED) are at least the completions whose source is PROVIDER_POLL. A
-#     poll that finds the task still RUNNING changes nothing and is only counted;
+#     SUCCEEDED or FAILED) are at least the completions whose source is PROVIDER_POLL,
+#     release Tool Attempts excepted. A poll that finds the task still RUNNING changes
+#     nothing and is only counted;
 #   - every test and every verification the Runs bound to the sandbox runner arrived,
 #     started and completed exactly once there, and the runner's 2xx callback deliveries
 #     for it are at least the callback completions of its Tool Attempt. Further 2xx
@@ -53,8 +54,9 @@
 #     otherwise, and production deployed nothing else under the Runs' deploy Actions;
 #   - every deploy_change Action deployed at most once across all of its operation keys,
 #     exactly once when it SUCCEEDED, each operation key reached production at most once,
-#     and production deployed nothing else under the Runs' release Actions; a voided or
-#     abandoned operation is noted;
+#     each PROVIDER_POLL completion of a release Attempt is answered by a deployment of its
+#     operation key, and production deployed nothing else under the Runs' release Actions;
+#     a voided or abandoned operation is noted;
 #   - with LEDGER_REQUIRE_COMPLETED=1, no submission was lost;
 #   - when the Mock Provider has an in-flight limit, its in-flight peak never exceeded it
 #     and no acceptance in the window is marked over the limit.
@@ -66,7 +68,10 @@
 #
 # The sandbox runner and production records are read whole and filtered by the ids the
 # Runs' Traces name, because a restarted runner redelivers results of earlier Runs too.
-# Their bindings and callbacks are excluded from the Mock Provider checks above.
+# Their bindings, callbacks and poll completions are excluded from the Mock Provider
+# checks above. The release Tool's Callback Binding names the production service as its
+# Provider and only routes polling there; one release Action may hold several operation
+# keys after a void, so its bindings are judged by the release check instead.
 set -euo pipefail
 
 # shellcheck source=scripts/demo/lib.sh
@@ -126,7 +131,8 @@ runner_calls=$(jq '[.[] | select(.provider == "sandboxrunner")]' <<<"$tool_calls
 runner_attempt_ids=$(jq '[.[].attemptId]' <<<"$runner_calls")
 deploy_calls=$(jq '[.[] | select(.toolName == "deploy") | . + {operationId: "op_\(.actionId)_\(.attemptNo)"}]' <<<"$tool_calls")
 release_calls=$(jq '[.[] | select(.toolName == "deploy_change") | . + {operationId: "op_\(.actionId)_\(.attemptNo)"}]' <<<"$tool_calls")
-bindings=$(jq '[.[] | select(.provider != "sandboxrunner") | del(.provider)]' <<<"$bindings")
+release_attempt_ids=$(jq '[.[] | select(.provider == "release") | .attemptId]' <<<"$tool_calls")
+bindings=$(jq '[.[] | select(.provider != "sandboxrunner" and .provider != "release") | del(.provider)]' <<<"$bindings")
 
 window=$(record_after "$record_after_seq" | jq -s '.')
 record=$(jq '[.[] | select(.kind == "task")]' <<<"$window")
@@ -207,8 +213,9 @@ polled=$(jq --argjson created "$created" '[.[] | select(.event == "polled" and (
 poll_answers=$(jq 'length' <<<"$polled")
 poll_finished=$(jq '[.[] | select(.status == 200 and (.taskStatus == "SUCCEEDED" or .taskStatus == "FAILED"))] | length' <<<"$polled")
 poll_running=$(jq '[.[] | select(.status == 200 and .taskStatus == "RUNNING")] | length' <<<"$polled")
-poll_completions=$(jq '[.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
-    and .payload.completionSource == "PROVIDER_POLL")] | length' <<<"$events")
+poll_completions=$(jq --argjson release "$release_attempt_ids" '[.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
+    and .payload.completionSource == "PROVIDER_POLL"
+    and (.payload.toolAttemptId as $id | $id == null or ($release | index($id) | not)))] | length' <<<"$events")
 if ((poll_finished >= poll_completions)); then
   pass "poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions"
 else
@@ -269,12 +276,17 @@ if [[ $(jq 'length' <<<"$deploy_calls") -gt 0 ]]; then
 fi
 
 # 6b. Each release Action deployed at most once across its operations, exactly once when it
-# SUCCEEDED, every operation key reached production at most once, and production deployed
-# nothing else under the Runs' release Actions. A voided operation is noted, never counted.
+# SUCCEEDED, every operation key reached production at most once, every PROVIDER_POLL
+# completion of a release Attempt is matched by production's deployment of that Attempt's
+# operation key, and production deployed nothing else under the Runs' release Actions. A
+# voided operation is noted, never counted. Production does not record status queries, so
+# its deployed line is the answer a successful poll must have observed.
 if [[ $(jq 'length' <<<"$release_calls") -gt 0 ]]; then
   production_record=${production_record:-$(record_after 0 "$PRODUCTION_URL" | jq -s '.')}
-  release_rows=$(jq --argjson record "$production_record" '[.[] | . as $c | {
+  release_rows=$(jq --argjson record "$production_record" --argjson events "$events" '[.[] | . as $c | {
       operationId, status, actionId, actionStatus,
+      pollCompletions: ([$events[] | select(.type == "AGENT_ACTION_COMPLETED"
+          and .payload.completionSource == "PROVIDER_POLL" and .payload.toolAttemptId == $c.attemptId)] | length),
       arrived: ([$record[] | select(.event == "arrived" and .kind == "release" and .operationId == $c.operationId)] | length),
       deployed: ([$record[] | select(.event == "deployed" and .kind == "release" and .operationId == $c.operationId and (.replayed | not))] | length),
       voided: ([$record[] | select(.event == "voided" and .kind == "release" and .operationId == $c.operationId)] | length),
@@ -285,10 +297,11 @@ if [[ $(jq 'length' <<<"$release_calls") -gt 0 ]]; then
       | [.[] | select(.event == "deployed" and .kind == "release" and (.operationId as $op | $known | index($op) | not)
           and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
         | .operationId]' <<<"$production_record")
-  bad_operations=$(jq '[.[] | select(.arrived > 1 or .deployed > 1 or (.status == "SUCCEEDED" and .deployed != 1))]' <<<"$release_rows")
+  bad_operations=$(jq '[.[] | select(.arrived > 1 or .deployed > 1 or (.status == "SUCCEEDED" and .deployed != 1)
+      or .pollCompletions > .deployed)]' <<<"$release_rows")
   bad_actions=$(jq '[.[] | select(.deployed > 1 or (.actionStatus == "SUCCEEDED" and .deployed != 1))]' <<<"$release_actions")
   if [[ $(jq 'length' <<<"$bad_operations") -eq 0 && $(jq 'length' <<<"$bad_actions") -eq 0 && $(jq 'length' <<<"$release_stray") -eq 0 ]]; then
-    pass "release_deployed_once_per_action   $(jq -c 'map({actionId, actionStatus, operations, deployed})' <<<"$release_actions") operations=$(jq -c 'map({operationId, status, arrived, deployed, voided})' <<<"$release_rows")"
+    pass "release_deployed_once_per_action   $(jq -c 'map({actionId, actionStatus, operations, deployed})' <<<"$release_actions") operations=$(jq -c 'map({operationId, status, arrived, deployed, voided, pollCompletions})' <<<"$release_rows")"
   else
     fail "release_deployed_once_per_action   operations=$(jq -c '.' <<<"$bad_operations") actions=$(jq -c '.' <<<"$bad_actions") deployed-outside-ledger=$(jq -c '.' <<<"$release_stray")"
   fi
