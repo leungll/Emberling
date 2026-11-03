@@ -546,6 +546,14 @@ func (s *ExecutionService) terminateAgentRunLocked(
 		return err
 	}
 
+	// An Agent Run with a goal gets its completion verdict in this same transaction: a
+	// human stop is RELEASE_UNKNOWN, every other termination here is INCOMPLETE with the
+	// facts it still lacks. The NodeRun keeps the termination's own error; the verdict is
+	// recorded beside it, not in place of it.
+	if _, err := s.evaluateAgentCompletionLocked(ctx, tx, lock, nodeRun, agentRun, termination, now); err != nil {
+		return err
+	}
+
 	run, err := tx.Runs().Get(ctx, nodeRun.RunID)
 	if err != nil {
 		return err

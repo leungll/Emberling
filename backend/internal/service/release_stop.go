@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
@@ -25,20 +26,19 @@ import (
 // Attempt, and the answer that arrives afterwards changes nothing about the ended task and
 // only reaches the occupation through the post-task reconciliation.
 
-// codeReleaseUnknown is the error the Action, its Attempt, the Agent Run and the Agent
-// NodeRun record when a human wait ends without a definite production answer.
-const codeReleaseUnknown = "RELEASE_UNKNOWN"
-
 // humanWaitOutcomeReleaseUnknown is the outcome a stopped or expired human wait records:
 // what the release ended as, which is not a production answer.
 const humanWaitOutcomeReleaseUnknown = "RELEASE_UNKNOWN"
 
+// releaseUnknownError is the error the Action, its Attempt, the Agent Run and the Agent
+// NodeRun record when a human wait ends without a definite production answer; it carries
+// the same code the completion verdict fails the NodeRun with.
 func releaseUnknownError(status domain.HumanWaitStatus) domain.ExecutionError {
 	if status == domain.HumanWaitExpired {
-		return domain.ExecutionError{Code: codeReleaseUnknown,
+		return domain.ExecutionError{Code: runtime.CodeReleaseUnknown,
 			Message: "the human wait deadline passed without a definite production answer; the release outcome is unknown and the target stays occupied until reconciliation settles it"}
 	}
-	return domain.ExecutionError{Code: codeReleaseUnknown,
+	return domain.ExecutionError{Code: runtime.CodeReleaseUnknown,
 		Message: "a person stopped waiting for the release outcome; it is unknown and the target stays occupied until reconciliation settles it"}
 }
 

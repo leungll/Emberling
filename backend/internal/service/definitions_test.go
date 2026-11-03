@@ -153,6 +153,7 @@ func (t *defsFakeTx) Approvals() store.ApprovalRepository                       
 func (t *defsFakeTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
 func (t *defsFakeTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
 func (t *defsFakeTx) HumanWaits() store.HumanWaitRepository                     { return nil }
+func (t *defsFakeTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 // defsFakeCallbackBindingRepo is a minimal store.CallbackBindingRepository double: only
 // ListByTargets is exercised (by QueryService.NodeRunDetail), always against an empty set,

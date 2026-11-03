@@ -134,6 +134,7 @@ func (t *cbTx) Approvals() store.ApprovalRepository                       { retu
 func (t *cbTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
 func (t *cbTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
 func (t *cbTx) HumanWaits() store.HumanWaitRepository                     { return nil }
+func (t *cbTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 type cbDefinitionRepo struct{ tx *cbTx }
 

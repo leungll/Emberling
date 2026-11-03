@@ -12,6 +12,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
 	"github.com/leungll/Emberling/backend/internal/reconciler"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/service"
 	"github.com/leungll/Emberling/backend/internal/store"
 	"github.com/leungll/Emberling/backend/internal/tools/changerequest"
@@ -82,8 +83,42 @@ func (f *releaseFixture) assertEndedReleaseUnknown(t *testing.T, action domain.A
 	if nodeRun := f.nodeRun(t); nodeRun.Status != domain.NodeRunFailed || nodeRun.Error == nil || nodeRun.Error.Code != "RELEASE_UNKNOWN" {
 		t.Errorf("agent node run = %s %+v, want FAILED RELEASE_UNKNOWN", nodeRun.Status, nodeRun.Error)
 	}
-	if run := agentRunRow(f.h.ctx, t, f.h.uow, f.run.ID); run.Status != domain.RunFailed {
-		t.Errorf("run = %s, want FAILED", run.Status)
+	if run := agentRunRow(f.h.ctx, t, f.h.uow, f.run.ID); run.Status != domain.RunFailed || run.Error == nil || run.Error.Code != runtime.CodeReleaseUnknown {
+		t.Errorf("run = %s %+v, want FAILED %s", run.Status, run.Error, runtime.CodeReleaseUnknown)
+	}
+	completion := completionOf(t, f.h, agentRun.ID)
+	if completion == nil || completion.Outcome != domain.CompletionReleaseUnknown {
+		t.Fatalf("completion verdict = %+v, want RELEASE_UNKNOWN", completion)
+	}
+	if wait.ClosedAt != nil && !completion.EvaluatedAt.Equal(*wait.ClosedAt) {
+		t.Errorf("verdict evaluated at %s, wait closed at %s: want the instant of the one ending transaction", completion.EvaluatedAt, *wait.ClosedAt)
+	}
+	// The ending transaction appends the Action failure, the Agent failure and the verdict
+	// as consecutive Events under one Run lock, all stamped with that transaction's instant.
+	events := f.events(t)
+	var evaluated []domain.Event
+	for _, event := range events {
+		if event.Type == domain.EventAgentCompletionEvaluated {
+			evaluated = append(evaluated, event)
+		}
+	}
+	if len(evaluated) != 1 {
+		t.Fatalf("AGENT_COMPLETION_EVALUATED events = %d, want exactly one", len(evaluated))
+	}
+	payload := agentLastEventPayload(t, events, domain.EventAgentCompletionEvaluated)
+	if payload["outcome"] != string(domain.CompletionReleaseUnknown) || payload["agentRunId"] != agentRun.ID {
+		t.Errorf("AGENT_COMPLETION_EVALUATED payload = %v, want the RELEASE_UNKNOWN verdict of %s", payload, agentRun.ID)
+	}
+	bySeq := make(map[int64]domain.Event, len(events))
+	for _, event := range events {
+		bySeq[event.Seq] = event
+	}
+	verdict := evaluated[0]
+	agentFailed, actionFailed := bySeq[verdict.Seq-1], bySeq[verdict.Seq-2]
+	if agentFailed.Type != domain.EventAgentFailed || actionFailed.Type != domain.EventAgentActionFailed ||
+		!agentFailed.Timestamp.Equal(verdict.Timestamp) || !actionFailed.Timestamp.Equal(verdict.Timestamp) {
+		t.Errorf("events before the verdict = %s@%s, %s@%s; want AGENT_ACTION_FAILED then AGENT_FAILED at %s",
+			actionFailed.Type, actionFailed.Timestamp, agentFailed.Type, agentFailed.Timestamp, verdict.Timestamp)
 	}
 	occupation := f.occupationOf(t, action.ID)
 	if occupation.Status != domain.ReleaseOccupationActive || occupation.NextQueryAt == nil {

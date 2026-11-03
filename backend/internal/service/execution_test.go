@@ -201,6 +201,7 @@ func (t *execFakeTx) Approvals() store.ApprovalRepository                       
 func (t *execFakeTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
 func (t *execFakeTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
 func (t *execFakeTx) HumanWaits() store.HumanWaitRepository                     { return nil }
+func (t *execFakeTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 type execFakeDefinitionRepo struct{ def domain.Definition }
 

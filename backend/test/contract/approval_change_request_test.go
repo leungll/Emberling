@@ -3,7 +3,6 @@
 package contract
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
-	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/tools/changerequest"
@@ -198,14 +196,10 @@ func doOperatorRequest(t *testing.T, env *testEnv, token, method, path string) (
 // runs the release Tool once with the same change request id.
 func TestApprovals_Detail_ShowsChangeRequestAndPatchOfTheNamedRequest(t *testing.T) {
 	f := newVulnFixture(t)
-	artifacts := asset.NewArtifactStore(f.assetRoot, defaultTestArtifactMaxBytes)
-	if err := artifacts.VerifyReadWrite(context.Background()); err != nil {
-		t.Fatalf("artifact store: %v", err)
-	}
 	executor := &countingToolExecutor{}
 	env := f.startBackend(t, testEnvOptions{
 		OperatorToken:          testOperatorToken,
-		ExtraToolRegistrations: []registry.ToolRegistration{changerequest.Registration(artifacts), releaseToolRegistration(executor)},
+		ExtraToolRegistrations: []registry.ToolRegistration{releaseToolRegistration(executor)},
 	})
 	env.provider.Script = changeRequestScript()
 
@@ -315,10 +309,25 @@ func TestApprovals_Detail_ShowsChangeRequestAndPatchOfTheNamedRequest(t *testing
 		t.Fatalf("POST decision status = %d, want 200", decided.StatusCode)
 	}
 	final := env.waitForTerminal(t, runID, e2eWait)
-	if got := runStatusOf(final); got != "COMPLETED" {
-		t.Fatalf("Run status = %q, want COMPLETED; snapshot=%v", got, final)
-	}
 	if executor.calls.Load() != 1 {
 		t.Errorf("release tool calls = %d, want exactly 1 after the approval", executor.calls.Load())
+	}
+	// The test release Tool records no release confirmation, so the FIX_AND_DEPLOY task
+	// is approved but never confirmed deployed: the completion check ends it INCOMPLETE
+	// naming the confirmation, and the Run fails rather than reporting a release nobody
+	// confirmed.
+	if got := runStatusOf(final); got != "FAILED" {
+		t.Fatalf("Run status = %q, want FAILED from the completion check; snapshot=%v", got, final)
+	}
+	trace = loadVulnTrace(t, env, runID, agentNodeRunID)
+	if trace.AgentRun.Completion == nil || trace.AgentRun.Completion.Outcome != "INCOMPLETE" {
+		t.Fatalf("completion = %+v, want INCOMPLETE", trace.AgentRun.Completion)
+	}
+	if passed, refs, found := trace.AgentRun.Completion.check("release_approved"); !found || !passed || len(refs) != 1 || refs[0] != approvalID {
+		t.Errorf("completion check release_approved = passed %v refs %v found %v, want it passed citing approval %s", passed, refs, found, approvalID)
+	}
+	codes := trace.AgentRun.Completion.missingCodes()
+	if len(codes) != 1 || codes[0] != "RELEASE_CONFIRMATION_MISSING" {
+		t.Errorf("completion.missing = %v, want exactly RELEASE_CONFIRMATION_MISSING", codes)
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/fixture/mockproduction"
 	"github.com/leungll/Emberling/backend/internal/reconciler"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -68,10 +67,6 @@ type humanStopStory struct {
 func startHumanStopStory(t *testing.T) *humanStopStory {
 	t.Helper()
 	f := newVulnFixture(t)
-	artifacts := asset.NewArtifactStore(f.assetRoot, defaultTestArtifactMaxBytes)
-	if err := artifacts.VerifyReadWrite(context.Background()); err != nil {
-		t.Fatalf("artifact store: %v", err)
-	}
 	record, err := mockproduction.OpenRecord(filepath.Join(t.TempDir(), "production.jsonl"))
 	if err != nil {
 		t.Fatalf("open mock production record: %v", err)
@@ -91,7 +86,7 @@ func startHumanStopStory(t *testing.T) *humanStopStory {
 		OperatorToken: testOperatorToken,
 		Logger:        slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		ExtraToolRegistrations: []registry.ToolRegistration{
-			changerequest.Registration(artifacts), deployrelease.Registration(productionHTTP.URL, nil),
+			deployrelease.Registration(productionHTTP.URL, nil),
 		},
 	})
 	workflowID, version := saveVulnDefinitionWith(t, env, "vuln-fix-release", func(config map[string]any) {

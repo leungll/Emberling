@@ -100,6 +100,7 @@ type tx struct {
 	changeRequests       *changeRequestRepository
 	releaseOccupations   *releaseOccupationRepository
 	humanWaits           *humanWaitRepository
+	agentCompletions     *agentCompletionRepository
 }
 
 func newTx(conn pgx.Tx) *tx {
@@ -131,6 +132,7 @@ func newTx(conn pgx.Tx) *tx {
 		changeRequests:       &changeRequestRepository{conn: conn},
 		releaseOccupations:   &releaseOccupationRepository{conn: conn},
 		humanWaits:           &humanWaitRepository{conn: conn},
+		agentCompletions:     &agentCompletionRepository{conn: conn},
 	}
 }
 
@@ -167,6 +169,7 @@ func (t *tx) Approvals() store.ApprovalRepository                   { return t.a
 func (t *tx) ChangeRequests() store.ChangeRequestRepository         { return t.changeRequests }
 func (t *tx) ReleaseOccupations() store.ReleaseOccupationRepository { return t.releaseOccupations }
 func (t *tx) HumanWaits() store.HumanWaitRepository                 { return t.humanWaits }
+func (t *tx) AgentCompletions() store.AgentCompletionRepository     { return t.agentCompletions }
 
 var (
 	_ store.UnitOfWork = (*UnitOfWork)(nil)

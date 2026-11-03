@@ -364,6 +364,42 @@ type agentRunDTO struct {
 	Goal         *domain.AgentGoal        `json:"goal"`
 	TerminatedAt *time.Time               `json:"terminatedAt"`
 	Error        *domain.ExecutionError   `json:"error"`
+	// Completion is the goal-based completion verdict: null while the Agent Run runs and
+	// for an Agent Run without a goal, which is never evaluated.
+	Completion *agentCompletionDTO `json:"completion"`
+}
+
+// agentCompletionDTO projects the completion verdict: the task result, every check with
+// the records it rested on, and what an INCOMPLETE task still lacks.
+type agentCompletionDTO struct {
+	Outcome     domain.CompletionOutcome   `json:"outcome"`
+	Checks      []domain.CompletionCheck   `json:"checks"`
+	Missing     []domain.CompletionMissing `json:"missing"`
+	EvaluatedAt time.Time                  `json:"evaluatedAt"`
+}
+
+func toAgentCompletionDTO(completion *domain.AgentCompletion) *agentCompletionDTO {
+	if completion == nil {
+		return nil
+	}
+	dto := &agentCompletionDTO{
+		Outcome:     completion.Outcome,
+		Checks:      completion.Checks,
+		Missing:     completion.Missing,
+		EvaluatedAt: utcTime(completion.EvaluatedAt),
+	}
+	if dto.Checks == nil {
+		dto.Checks = []domain.CompletionCheck{}
+	}
+	if dto.Missing == nil {
+		dto.Missing = []domain.CompletionMissing{}
+	}
+	for i := range dto.Checks {
+		if dto.Checks[i].Refs == nil {
+			dto.Checks[i].Refs = []string{}
+		}
+	}
+	return dto
 }
 
 // agentTraceTurnDTO is one round. Decision, Action and ToolAttempts are typed so that a
@@ -524,6 +560,7 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			Goal:                  trace.AgentRun.Goal,
 			TerminatedAt:          utcTimePtr(trace.AgentRun.TerminatedAt),
 			Error:                 trace.AgentRun.Error,
+			Completion:            toAgentCompletionDTO(trace.Completion),
 		},
 		Turns: turns,
 		Facts: toAgentTraceFactsDTO(trace.Facts),
