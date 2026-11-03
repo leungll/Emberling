@@ -297,6 +297,25 @@ export const en = {
       RELEASE: 'Clock stopped while the release is confirmed',
       HUMAN: 'Clock stopped while a person confirms',
     },
+    releaseOutcome: {
+      PENDING: 'Awaiting production',
+      UNKNOWN: 'Outcome unknown, being queried',
+      DEPLOYED: 'Deployed',
+      VOIDED: 'Voided',
+      REFUSED: 'Refused',
+    },
+    releaseReason: {
+      DEPLOYED: 'deployed',
+      VOIDED: 'voided',
+      REFUSED: 'refused by production',
+      NOT_DEPLOYED: 'not deployed',
+    },
+    humanWait: {
+      OPEN: 'Open',
+      STOPPED: 'Stopped',
+      EXPIRED: 'Expired',
+      RESOLVED: 'Resolved',
+    },
     attempt: {
       STARTED: 'Running',
       DISPATCHED: 'Waiting for reply',

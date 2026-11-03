@@ -208,6 +208,8 @@ export const runs = {
     waitingToReport: (who: string, tool: string) => `Waiting for ${who} to report ${tool}`,
     waitingToReportBack: (who: string) => `Waiting for ${who} to report back`,
     waitingForApproval: (tool: string) => `Waiting for a person to approve ${tool}`,
+    waitingForConfirmation: (tool: string) =>
+      `Waiting for a person to confirm the outcome of ${tool}`,
     usedAllCalls: (n: number) => `Used all ${plural(n, 'generation call')}`,
     blockedNeedsReview: (tool: string) =>
       `Blocked from calling ${tool}: it needs a passed review first`,
@@ -473,6 +475,14 @@ export const runs = {
       decidedBy: 'Decided by',
       reason: 'Reason',
       agentClock: 'Agent clock',
+      operations: 'Release operations',
+      operation: (key: string, outcome: string) => `${key}: ${outcome}`,
+      releaseTarget: 'Deploy target',
+      occupationHeld: (target: string) => `${target}, held`,
+      occupationReleased: (target: string, reason: string) => `${target}, released: ${reason}`,
+      confirmDeadline: 'Confirm by',
+      humanWait: 'Human confirmation',
+      humanWaitOutcome: (status: string, outcome: string) => `${status}: ${outcome}`,
       agentGoal: 'Goal',
       noneSet: 'None set',
       progress: 'Progress',
@@ -679,6 +689,12 @@ export const runs = {
     clockPaused: 'The agent’s own time limit is paused until the decision is recorded.',
     clockPausedFor: (reason: string) => `Paused: ${reason.toLowerCase()}.`,
     openApproval: 'Open approval',
+    humanTitle: (step: string) => `${step} is waiting for a person to confirm a release`,
+    turnReleased: (n: number, tool: string) =>
+      `Turn ${n} called ${tool}. Production has not confirmed the outcome by the confirm deadline, so a person must confirm it; the result is still polled.`,
+    aPersonToConfirm: (tool: string) => `a person to confirm the outcome of ${tool}`,
+    humanExpires: (step: string) =>
+      `If nobody confirms by then, the wait expires and ${step} is told so. Emberling decides this, not this page.`,
   },
 
   shortcuts: {

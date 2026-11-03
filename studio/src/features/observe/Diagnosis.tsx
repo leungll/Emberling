@@ -123,6 +123,7 @@ export function WaitCard({
   const actionId = wait.turn?.action?.id ?? null;
   const attemptTarget = attemptEl?.id ?? actionId;
   const approval = wait.kind === 'approval' ? wait.approval : null;
+  const human = wait.kind === 'human' ? wait.humanWait : null;
   return (
     <div
       role="group"
@@ -134,7 +135,9 @@ export function WaitCard({
         <p className="m-0 font-semibold">
           {approval
             ? d.approvalTitle(wait.step.node.name)
-            : d.waitingTitle(wait.step.node.name, who)}
+            : human
+              ? d.humanTitle(wait.step.node.name)
+              : d.waitingTitle(wait.step.node.name, who)}
         </p>
         <p className="m-0">
           {wait.turn && tool ? (
@@ -142,7 +145,9 @@ export function WaitCard({
               text={
                 approval
                   ? d.turnAsked(wait.turn.turnNo, tool)
-                  : d.turnCalled(wait.turn.turnNo, tool)
+                  : human
+                    ? d.turnReleased(wait.turn.turnNo, tool)
+                    : d.turnCalled(wait.turn.turnNo, tool)
               }
               tools={[tool]}
             />
@@ -168,6 +173,8 @@ export function WaitCard({
                       {d.openApproval}
                     </Link>
                   </span>
+                ) : human && tool ? (
+                  <Words text={d.aPersonToConfirm(tool)} tools={[tool]} />
                 ) : tool ? (
                   <span className="flex flex-col">
                     <span>
@@ -257,10 +264,14 @@ export function WaitCard({
         />
         {wait.deadline ? (
           <p className="m-0 text-fg-secondary">
-            {approval ? d.approvalExpires(wait.step.node.name) : d.timesOut(wait.step.node.name)}
+            {approval
+              ? d.approvalExpires(wait.step.node.name)
+              : human
+                ? d.humanExpires(wait.step.node.name)
+                : d.timesOut(wait.step.node.name)}
           </p>
         ) : null}
-        {approval && wait.pauseReason ? (
+        {(approval || human) && wait.pauseReason ? (
           <p className="m-0 text-fg-secondary">{d.clockPaused}</p>
         ) : null}
       </div>
