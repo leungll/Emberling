@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 448" width="1120" height="448" role="img" aria-labelledby="title desc">
+<title id="title">From one call to a complete task</title>
+<desc id="desc">A single call connects input, model and output. A complete task proceeds through decisions, actions, waits and verification. Feedback returns to decisions before delivery. Shared infrastructure preserves progress, supports recovery and connects actions and results. Conceptual task illustration.</desc>
+<defs>
+<pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="#dfe5ec" /></pattern>
+<marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 8 4 0 8Z" fill="#64748b" /></marker>
+<marker id="green" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#059669" /></marker>
+</defs>
+<style>
+text{font-family:"SFMono-Regular",Consolas,"PingFang SC","Microsoft YaHei",sans-serif;fill:#1e293b}
+.heading{font-size:13px;font-weight:600}.label{font-size:16px;font-weight:600}.sub{font-size:11px;fill:#64748b}.edge{fill:none;stroke:#64748b;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round;marker-end:url(#arrow)}
+</style>
+<rect width="1120" height="448" rx="10" fill="#f4f5f7" />
+<rect width="1120" height="448" rx="10" fill="url(#dots)" />
+<rect x="24" y="22" width="1072" height="116" rx="9" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="5 5" />
+<rect x="24" y="158" width="1072" height="198" rx="9" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="5 5" />
+
+<text x="44" y="45" class="heading" text-anchor="start" font-size="12" style=";font-size:12px">01 / A model call</text>
+<rect x="56" y="61" width="150" height="62" rx="7" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+<text x="131.0" y="87" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Input</text>
+<text x="131.0" y="107" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Question / prompt</text>
+<rect x="248" y="61" width="150" height="62" rx="7" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+<text x="323.0" y="87" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Model</text>
+<text x="323.0" y="107" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Generate a response</text>
+<rect x="440" y="61" width="150" height="62" rx="7" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+<text x="515.0" y="87" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Output</text>
+<text x="515.0" y="107" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Text / images / code</text>
+<path d="M206 92 H248" class="edge" />
+<path d="M398 92 H440" class="edge" />
+<text x="650" y="86" class="label" text-anchor="start" font-size="14" style=";font-size:14px">Produce an output</text>
+<text x="650" y="109" class="sub" text-anchor="start" font-size="10" style=";font-size:10px">One request, one step</text>
+<text x="44" y="183" class="heading" text-anchor="start" font-size="12" style=";font-size:12px">02 / A complete task</text>
+<rect x="56" y="217" width="146" height="62" rx="7" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+<text x="129.0" y="243" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Goal</text>
+<text x="129.0" y="263" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Human sets the goal</text>
+<path d="M202 248 H226" class="edge" style="stroke:#059669;marker-end:url(#green)" />
+<rect x="226" y="217" width="146" height="62" rx="7" fill="#e3f6ef" stroke="#059669" stroke-width="1.2" />
+<text x="299.0" y="243" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Decide</text>
+<text x="299.0" y="263" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Agent chooses a step</text>
+<path d="M372 248 H396" class="edge" style="stroke:#059669;marker-end:url(#green)" />
+<rect x="396" y="217" width="146" height="62" rx="7" fill="#e3f6ef" stroke="#059669" stroke-width="1.2" />
+<text x="469.0" y="243" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Act</text>
+<text x="469.0" y="263" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Use tools and services</text>
+<path d="M542 248 H566" class="edge" style="stroke:#059669;marker-end:url(#green)" />
+<rect x="566" y="217" width="146" height="62" rx="7" fill="#fff4dc" stroke="#d97706" stroke-width="1.2" />
+<text x="639.0" y="243" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Wait</text>
+<text x="639.0" y="263" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Generation / tests / review</text>
+<path d="M712 248 H736" class="edge" style="stroke:#059669;marker-end:url(#green)" />
+<rect x="736" y="217" width="146" height="62" rx="7" fill="#eae3f8" stroke="#8b5cf6" stroke-width="1.2" />
+<text x="809.0" y="243" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Verify</text>
+<text x="809.0" y="263" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Check against the goal</text>
+<path d="M882 248 H906" class="edge" style="stroke:#059669;marker-end:url(#green)" />
+<rect x="906" y="217" width="146" height="62" rx="7" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+<text x="979.0" y="243" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Deliver</text>
+<text x="979.0" y="263" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Artifacts and evidence</text>
+<path d="M809 279 V316 H299 V279" class="edge" />
+<rect x="450" y="306" width="204" height="20" rx="4" fill="#f8fafc" />
+<text x="552" y="320" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Use feedback to revise and continue</text>
+<text x="552" y="346" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Work spans model calls, external waits and process interruptions</text>
+<rect x="24" y="377" width="1072" height="49" rx="7" fill="#ffffff" stroke="#cbd5e1" />
+<text x="44" y="407" class="heading" text-anchor="start" font-size="12" style=";font-size:12px">Runtime foundation</text>
+<circle cx="273" cy="402" r="3" fill="#059669" />
+<text x="285" y="407" class="heading" text-anchor="start" font-size="12" style=";font-size:12px">Preserve task progress</text>
+<circle cx="545" cy="402" r="3" fill="#d97706" />
+<text x="557" y="407" class="heading" text-anchor="start" font-size="12" style=";font-size:12px">Manage waits and recovery</text>
+<circle cx="841" cy="402" r="3" fill="#8b5cf6" />
+<text x="853" y="407" class="heading" text-anchor="start" font-size="12" style=";font-size:12px">Link actions and results</text>
+</svg>

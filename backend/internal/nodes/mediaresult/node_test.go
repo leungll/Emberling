@@ -409,3 +409,59 @@ func TestMediaResult_Registration_DeclaresPortsAndFactInputs(t *testing.T) {
 		t.Fatalf("outputs = %s", got)
 	}
 }
+
+// A delivered example that did not pass review is refused as stale when a later image
+// generated for the same photo passed its newest review; it stays accepted while the Run
+// holds no better image for that photo. Facts arrive oldest first, so "later" is a
+// position in that order.
+func TestMediaResult_ExampleSupersededByLaterPass_RejectedAsStale(t *testing.T) {
+	cases := map[string]struct {
+		deliver   string // which photo's example the extra facts concern
+		laterPass bool   // the later image's review verdict
+		noReview  bool   // drop the delivered example's own review
+		before    bool   // place the extra image before the delivered one instead of after
+		wantStale bool
+	}{
+		"failed example, later image passed":         {deliver: "photo_c", laterPass: true, wantStale: true},
+		"failed example, no later image":             {deliver: "", wantStale: false},
+		"failed example, later image also failed":    {deliver: "photo_c", laterPass: false, wantStale: false},
+		"passed example, later image passed":         {deliver: "photo_a", laterPass: true, wantStale: false},
+		"failed example, later pass for other photo": {deliver: "photo_b", laterPass: true, wantStale: false},
+		"unreviewed example, later image passed":     {deliver: "photo_c", laterPass: true, noReview: true, wantStale: true},
+		"failed example, earlier image passed":       {deliver: "photo_c", laterPass: true, before: true, wantStale: false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			generated, reviewed := happyFacts()
+			if tc.noReview {
+				reviewed = reviewed[:len(reviewed)-1]
+			}
+			if tc.deliver != "" {
+				extraGen := genFact(tc.deliver, "gen_"+tc.deliver+"_2", testDigest)
+				extraReview := reviewFact(tc.deliver, "gen_"+tc.deliver+"_2", testPolicy, tc.laterPass)
+				if tc.before {
+					generated = append([]domain.ExecutionFact{extraGen}, generated...)
+					reviewed = append([]domain.ExecutionFact{extraReview}, reviewed...)
+				} else {
+					generated = append(generated, extraGen)
+					reviewed = append(reviewed, extraReview)
+				}
+			}
+			got, _ := runNode(t, finalValue(t, testDigest, testPhotos...), generated, reviewed)
+
+			if !tc.wantStale {
+				if !got.Accepted || len(got.Reasons) != 0 {
+					t.Fatalf("accepted = %v reasons = %+v, want accepted with no reasons", got.Accepted, got.Reasons)
+				}
+				return
+			}
+			wantRejected(t, got, reasonStaleExample, "photo_c")
+			if len(got.Reasons) != 1 || got.Reasons[0].AssetRef != "gen_photo_c" {
+				t.Fatalf("reasons = %+v, want only %s naming gen_photo_c", got.Reasons, reasonStaleExample)
+			}
+			if len(got.NotPassed) != 1 || got.NotPassed[0] != "photo_c" || got.PassedCount != 2 {
+				t.Fatalf("notPassed/passedCount = %v/%d, want [photo_c]/2: the stale example still did not pass", got.NotPassed, got.PassedCount)
+			}
+		})
+	}
+}

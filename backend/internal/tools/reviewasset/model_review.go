@@ -16,14 +16,15 @@ import (
 // VisionPolicyVersion identifies the review instructions and verdict form a review model
 // is asked with. A change to either is a new version, so a fact shows which rules a
 // verdict answered.
-const VisionPolicyVersion = "vision-review-policy-v1"
+const VisionPolicyVersion = "vision-review-policy-v2"
 
 // reviewInstructions are the versioned instructions of VisionPolicyVersion.
 const reviewInstructions = `You review one candidate image that an image model produced from an original photo.
 
-You receive the original photo, the candidate image and a style requirement. Decide whether the candidate passes. It passes only when both hold:
+You receive the original photo, the candidate image and a style requirement. Decide whether the candidate passes. It passes only when all three hold:
 1. The candidate keeps the original photo's subject recognisable: the same people, animals or objects, with their identity, pose and overall composition preserved.
 2. The candidate clearly meets the style requirement.
+3. The candidate is of deliverable quality: no deformed anatomy or faces, no duplicated or missing limbs or features, and no visible generation artifacts, text garbage or broken geometry.
 
 Answer FINAL with "passed" and "reasons". Give at most three short reasons, each under 200 characters. When the candidate fails, each reason names one concrete problem and what would fix it. When it passes, one reason may say what meets the requirement. Judge only what you see; do not call tools.`
 
