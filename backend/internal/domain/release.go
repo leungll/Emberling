@@ -80,8 +80,11 @@ type ReleaseOccupation struct {
 	ReleasedAt    *time.Time     `json:"releasedAt"`
 	ReleaseReason *ReleaseReason `json:"releaseReason"`
 	// NextQueryAt, QueryCount and DeployedUncheckedVersion belong to the post-task
-	// reconciliation of a target that was deployed without a health check. They are
-	// persisted facts the release path creates but never writes.
+	// reconciliation: when a Run ends while its release outcome is unknown, the query
+	// schedule moves onto the occupation, which keeps asking production until a definite
+	// answer frees the target. DeployedUncheckedVersion is the version production runs
+	// when that answer is DEPLOYED: it went live without the health check the ended task
+	// would have made.
 	NextQueryAt              *time.Time `json:"-"`
 	QueryCount               int        `json:"-"`
 	DeployedUncheckedVersion *string    `json:"-"`
@@ -108,7 +111,8 @@ func (s HumanWaitStatus) IsValid() bool {
 
 // HumanWait is the wait opened for a release Action whose production confirmation did not
 // arrive before its confirm deadline. It is opened OPEN and closed once: RESOLVED when
-// production later gives a definite answer, STOPPED or EXPIRED by the human-stop path.
+// production later gives a definite answer, STOPPED when an authenticated person stops
+// waiting, EXPIRED when its own deadline passes first.
 // UNIQUE (action_id) ties it to one Action, so a repeated deadline scan cannot open two.
 type HumanWait struct {
 	ID       string          `json:"id"`

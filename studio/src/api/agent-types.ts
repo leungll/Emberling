@@ -277,6 +277,18 @@ export interface ReleaseOccupationTrace {
   acquiredAt: string;
   releasedAt: string | null;
   releaseReason: ReleaseReason | null;
+  /**
+   * The next post-task query of production, set while the occupation outlives its Run with
+   * the release outcome unknown; `null` otherwise.
+   */
+  nextQueryAt: string | null;
+  /** How many post-task queries have been claimed so far. */
+  queryCount: number;
+  /**
+   * The version production runs, recorded when post-task reconciliation learned the
+   * operation deployed after the task ended: live, but never health-checked by the task.
+   */
+  deployedUncheckedVersion: string | null;
 }
 
 export type HumanWaitStatus = 'OPEN' | 'STOPPED' | 'EXPIRED' | 'RESOLVED';
@@ -294,6 +306,40 @@ export interface HumanWaitTrace {
   closedAt: string | null;
   closedBy: string | null;
   outcome: string | null;
+}
+
+/**
+ * Why a release was handed to a person: production never accounted for the operation
+ * (`OUTCOME_UNKNOWN`), or it knew the operation but had not confirmed it by the confirm
+ * deadline (`NOT_CONFIRMED`).
+ */
+export type HumanWaitReason = 'OUTCOME_UNKNOWN' | 'NOT_CONFIRMED';
+
+/**
+ * One OPEN human wait with what a person needs to decide whether to stop waiting: the
+ * target the release holds, the operation, the confirm deadline that passed and why.
+ */
+export interface HumanWaitView extends HumanWaitTrace {
+  actionId: string;
+  runId: string;
+  agentRunId: string;
+  nodeRunId: string;
+  workflowId: string;
+  toolName: string;
+  targetKey: string;
+  operationKey: string;
+  confirmDeadline: string | null;
+  reason: HumanWaitReason;
+}
+
+export interface HumanWaitListResponse {
+  items: HumanWaitView[];
+}
+
+/** The human wait after a stop; `repeated` means it had already been stopped. */
+export interface StopHumanWaitResponse {
+  humanWait: HumanWaitTrace;
+  repeated: boolean;
 }
 
 /**

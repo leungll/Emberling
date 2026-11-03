@@ -17,6 +17,8 @@ import type {
   DefinitionListItem,
   DefinitionListResponse,
   EventListResponse,
+  HumanWaitListResponse,
+  HumanWaitView,
   ModelListResponse,
   ModelMetadata,
   NodeMetadata,
@@ -27,6 +29,7 @@ import type {
   RunListResponse,
   RunSnapshot,
   SaveDefinitionRequest,
+  StopHumanWaitResponse,
   ToolListResponse,
   ToolMetadata,
   ValidateResponse,
@@ -364,4 +367,26 @@ export function decideApproval(
     `/approvals/${encodeURIComponent(approvalId)}/decision`,
     { method: 'POST', body, headers: operatorHeaders(token) },
   );
+}
+
+// --- Human waits ------------------------------------------------------------
+
+/** The OPEN human waits, earliest deadline first, behind the operator credential. */
+export function listHumanWaits(token: string, signal?: AbortSignal): Promise<HumanWaitView[]> {
+  return request<HumanWaitListResponse>('/human-waits', {
+    headers: operatorHeaders(token),
+    ...(signal ? { signal } : {}),
+  }).then((r) => r.items);
+}
+
+/**
+ * Stops waiting for production's answer: the task ends while the deploy target stays held
+ * until production answers. A wait already stopped is answered as `repeated`; one the
+ * release answer settled first, or whose task already ended, is a 409 conflict.
+ */
+export function stopHumanWait(humanWaitId: string, token: string): Promise<StopHumanWaitResponse> {
+  return request<StopHumanWaitResponse>(`/human-waits/${encodeURIComponent(humanWaitId)}/stop`, {
+    method: 'POST',
+    headers: operatorHeaders(token),
+  });
 }

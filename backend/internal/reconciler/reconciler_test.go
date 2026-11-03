@@ -94,6 +94,33 @@ type fakeTx struct {
 	agentRuns    *fakeAgentRunRepo
 	toolAttempts *fakeToolAttemptRepo
 	approvals    *fakeApprovalRepo
+	humanWaits   *fakeHumanWaitRepo
+	occupations  *fakeOccupationRepo
+}
+
+func (t *fakeTx) HumanWaits() store.HumanWaitRepository                 { return t.humanWaits }
+func (t *fakeTx) ReleaseOccupations() store.ReleaseOccupationRepository { return t.occupations }
+
+// fakeHumanWaitRepo serves the human wait expiry scan's lister; any other call panics, so a
+// scan that closed a wait itself would be caught.
+type fakeHumanWaitRepo struct {
+	store.HumanWaitRepository
+	expired []domain.HumanWait
+}
+
+func (r *fakeHumanWaitRepo) ListExpiredOpen(context.Context, time.Time, int) ([]domain.HumanWait, error) {
+	return r.expired, nil
+}
+
+// fakeOccupationRepo serves the post-task query scan's lister; claiming or releasing an
+// occupation through it panics, because only the service may.
+type fakeOccupationRepo struct {
+	store.ReleaseOccupationRepository
+	due []domain.ReleaseOccupation
+}
+
+func (r *fakeOccupationRepo) ListDueQueries(context.Context, time.Time, int) ([]domain.ReleaseOccupation, error) {
+	return r.due, nil
 }
 
 func (t *fakeTx) ToolAttempts() store.ToolAttemptRepository { return t.toolAttempts }
@@ -205,6 +232,9 @@ type fakeExecutor struct {
 	orphanCalls       []string
 	expireCalls       []string
 	humanWaitCalls    []string
+	waitExpireCalls   []string
+	occupationCalls   []string
+	occupationFunc    func(string) (service.ReleaseReconcileOutcome, error)
 }
 
 // agentCall records which Agent work item the Reconciler handed to which use case, and
@@ -257,6 +287,19 @@ func (e *fakeExecutor) OpenReleaseHumanWait(_ context.Context, attemptID string)
 	return nil
 }
 
+func (e *fakeExecutor) ExpireHumanWait(_ context.Context, humanWaitID string) error {
+	e.waitExpireCalls = append(e.waitExpireCalls, humanWaitID)
+	return nil
+}
+
+func (e *fakeExecutor) ReconcileReleaseOccupation(_ context.Context, occupationID string) (service.ReleaseReconcileOutcome, error) {
+	e.occupationCalls = append(e.occupationCalls, occupationID)
+	if e.occupationFunc != nil {
+		return e.occupationFunc(occupationID)
+	}
+	return service.ReleaseReconcileOutcome{}, nil
+}
+
 func (e *fakeExecutor) ResumeNode(_ context.Context, req service.ResumeNode) (service.ResumeOutcome, error) {
 	e.resumeCalls = append(e.resumeCalls, req)
 	if e.resumeFunc != nil {
@@ -303,6 +346,46 @@ func emptyFakeTx() *fakeTx {
 		agentRuns:    &fakeAgentRunRepo{},
 		approvals:    &fakeApprovalRepo{},
 		toolAttempts: &fakeToolAttemptRepo{},
+		humanWaits:   &fakeHumanWaitRepo{},
+		occupations:  &fakeOccupationRepo{},
+	}
+}
+
+// The release rows of the scan only discover work: every expired human wait goes to the
+// expiry use case and every due occupation query to the reconciliation use case, whose
+// outcomes are counted and whose errors are collected without stopping the pass.
+func TestReconciler_RunOnce_ExpiredHumanWaitsAndDueOccupationQueries_HandedToUseCases(t *testing.T) {
+	tx := emptyFakeTx()
+	tx.humanWaits.expired = []domain.HumanWait{{ID: "hwait_1"}, {ID: "hwait_2"}}
+	tx.occupations.due = []domain.ReleaseOccupation{{ID: "occupation_1"}, {ID: "occupation_2"}, {ID: "occupation_3"}}
+	exec := &fakeExecutor{occupationFunc: func(id string) (service.ReleaseReconcileOutcome, error) {
+		switch id {
+		case "occupation_1":
+			return service.ReleaseReconcileOutcome{Claimed: true, Released: true, Reason: domain.ReleaseReasonVoided}, nil
+		case "occupation_2":
+			return service.ReleaseReconcileOutcome{Claimed: true}, errors.New("production gave no answer")
+		default:
+			return service.ReleaseReconcileOutcome{}, nil
+		}
+	}}
+	var logs bytes.Buffer
+	report, err := newTestReconciler(t, exec, tx, &logs).RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if strings.Join(exec.waitExpireCalls, ",") != "hwait_1,hwait_2" || report.ExpiredHumanWaitsFound != 2 || report.HumanWaitsExpired != 2 {
+		t.Errorf("human wait expiry calls %v, report found %d expired %d, want both waits handed over",
+			exec.waitExpireCalls, report.ExpiredHumanWaitsFound, report.HumanWaitsExpired)
+	}
+	if strings.Join(exec.occupationCalls, ",") != "occupation_1,occupation_2,occupation_3" {
+		t.Errorf("occupation calls = %v, want all three", exec.occupationCalls)
+	}
+	if report.DueOccupationQueriesFound != 3 || report.OccupationQueriesClaimed != 2 || report.OccupationsReleased != 1 {
+		t.Errorf("report found %d claimed %d released %d, want 3/2/1",
+			report.DueOccupationQueriesFound, report.OccupationQueriesClaimed, report.OccupationsReleased)
+	}
+	if len(report.Errors) != 1 || !strings.Contains(report.Errors[0].Error(), "occupation_2") {
+		t.Errorf("errors = %v, want the one unanswered query", report.Errors)
 	}
 }
 

@@ -95,7 +95,7 @@ func (r *releaseOccupationRepository) Release(ctx context.Context, id string, re
 	}
 	const update = `
 		UPDATE release_occupations
-		   SET status = 'RELEASED', released_at = $2, release_reason = $3
+		   SET status = 'RELEASED', released_at = $2, release_reason = $3, next_query_at = NULL
 		 WHERE id = $1 AND status = 'ACTIVE'`
 	affected, err := affectedRows(ctx, r.conn, "release_occupations.Release", update, id, now, string(reason))
 	if err != nil {
@@ -109,6 +109,92 @@ func (r *releaseOccupationRepository) Release(ctx context.Context, id string, re
 	}
 	return nil
 }
+
+// ScheduleQuery writes the first post-task query time onto an ACTIVE occupation.
+func (r *releaseOccupationRepository) ScheduleQuery(ctx context.Context, id string, at time.Time) error {
+	const update = `
+		UPDATE release_occupations
+		   SET next_query_at = $2
+		 WHERE id = $1 AND status = 'ACTIVE'`
+	affected, err := affectedRows(ctx, r.conn, "release_occupations.ScheduleQuery", update, id, at)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres release_occupations.ScheduleQuery: occupation=%s is not ACTIVE: %w", id, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("release_occupations.ScheduleQuery", id, affected)
+	}
+	return nil
+}
+
+// ClaimQuery takes one due post-task query. Under READ COMMITTED a second claimer that
+// waited on the row lock re-evaluates the predicate against the moved next_query_at and
+// affects no row, so exactly one scanner queries production per due time.
+func (r *releaseOccupationRepository) ClaimQuery(ctx context.Context, id string, now, next time.Time) (bool, error) {
+	const update = `
+		UPDATE release_occupations
+		   SET next_query_at = $3, query_count = query_count + 1
+		 WHERE id = $1 AND status = 'ACTIVE' AND next_query_at IS NOT NULL AND next_query_at <= $2`
+	affected, err := affectedRows(ctx, r.conn, "release_occupations.ClaimQuery", update, id, now, next)
+	if err != nil {
+		return false, err
+	}
+	if affected > 1 {
+		return false, errUnexpectedRows("release_occupations.ClaimQuery", id, affected)
+	}
+	return affected == 1, nil
+}
+
+// ReleaseAfterRun settles an occupation whose Run already ended, from production's definite
+// answer, touching nothing but the occupation row.
+func (r *releaseOccupationRepository) ReleaseAfterRun(ctx context.Context, id string, reason domain.ReleaseReason, now time.Time, deployedUncheckedVersion *string) (bool, error) {
+	if !reason.IsValid() {
+		return false, fmt.Errorf("store/postgres release_occupations.ReleaseAfterRun: occupation=%s: unknown release reason %q", id, reason)
+	}
+	const update = `
+		UPDATE release_occupations
+		   SET status = 'RELEASED', released_at = $2, release_reason = $3, next_query_at = NULL,
+		       deployed_unchecked_version = $4
+		 WHERE id = $1 AND status = 'ACTIVE'`
+	affected, err := affectedRows(ctx, r.conn, "release_occupations.ReleaseAfterRun", update, id, now, string(reason), nullableString(deployedUncheckedVersion))
+	if err != nil {
+		return false, err
+	}
+	if affected > 1 {
+		return false, errUnexpectedRows("release_occupations.ReleaseAfterRun", id, affected)
+	}
+	return affected == 1, nil
+}
+
+// ListDueQueries discovers ACTIVE occupations of ended Runs whose post-task query is due.
+func (r *releaseOccupationRepository) ListDueQueries(ctx context.Context, now time.Time, limit int) ([]domain.ReleaseOccupation, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres release_occupations.ListDueQueries: limit must be positive, got %d", limit)
+	}
+	const query = `
+		SELECT ` + qualifiedReleaseOccupationColumns + `
+		  FROM release_occupations o
+		  JOIN runs r ON r.id = o.run_id
+		 WHERE o.status = 'ACTIVE'
+		   AND o.next_query_at IS NOT NULL AND o.next_query_at <= $1
+		   AND r.status IN ('COMPLETED', 'FAILED')
+		 ORDER BY o.next_query_at ASC, o.id ASC
+		 LIMIT $2`
+	rows, err := r.conn.Query(ctx, query, now, limit)
+	if err != nil {
+		return nil, mapError("release_occupations.ListDueQueries", err)
+	}
+	occupations, err := scanReleaseOccupations(rows)
+	if err != nil {
+		return nil, mapError("release_occupations.ListDueQueries", err)
+	}
+	return occupations, nil
+}
+
+const qualifiedReleaseOccupationColumns = `o.id, o.target_key, o.run_id, o.action_id, o.operation_key, o.status, o.acquired_at,
+	o.released_at, o.release_reason, o.next_query_at, o.query_count, o.deployed_unchecked_version`
 
 func (r *releaseOccupationRepository) queryOne(ctx context.Context, op, query string, arg any) (domain.ReleaseOccupation, error) {
 	rows, err := r.conn.Query(ctx, query, arg)

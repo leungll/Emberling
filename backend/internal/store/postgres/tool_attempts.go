@@ -420,6 +420,22 @@ func (r *toolAttemptRepository) MarkOutcomeUnknown(ctx context.Context, attemptI
 	return first, nil
 }
 
+// RecordOutcomeUnknownSince writes the first unknown time of a FAILED uncertain Attempt.
+func (r *toolAttemptRepository) RecordOutcomeUnknownSince(ctx context.Context, attemptID string, now time.Time) (bool, error) {
+	const update = `
+		UPDATE tool_attempts
+		   SET outcome_unknown_since = $2
+		 WHERE id = $1 AND status = 'FAILED' AND uncertain IS TRUE AND outcome_unknown_since IS NULL`
+	affected, err := affectedRows(ctx, r.conn, "tool_attempts.RecordOutcomeUnknownSince", update, attemptID, now)
+	if err != nil {
+		return false, err
+	}
+	if affected > 1 {
+		return false, errUnexpectedRows("tool_attempts.RecordOutcomeUnknownSince", attemptID, affected)
+	}
+	return affected == 1, nil
+}
+
 // MarkVoidRequested records the first void request; a resend of a lost request keeps it.
 func (r *toolAttemptRepository) MarkVoidRequested(ctx context.Context, attemptID string, now time.Time) error {
 	const update = `

@@ -33,6 +33,9 @@ const (
 	codeApprovalNotFound          = "APPROVAL_NOT_FOUND"
 	codeApprovalConflict          = "APPROVAL_CONFLICT"
 	codeApprovalNotActionable     = "APPROVAL_NOT_ACTIONABLE"
+	codeHumanWaitNotFound         = "HUMAN_WAIT_NOT_FOUND"
+	codeHumanWaitResolved         = "HUMAN_WAIT_RESOLVED"
+	codeHumanWaitClosed           = "HUMAN_WAIT_CLOSED"
 )
 
 // status422Codes names the runtime.ValidationError codes the interface contract groups
@@ -163,6 +166,32 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error, notFoundC
 	if errors.As(err, &approvalNotActionable) {
 		writeErrorEnvelope(w, http.StatusConflict, codeApprovalNotActionable,
 			"the run this approval belongs to has ended; the approval is still undecided and expires at its deadline", nil)
+		return
+	}
+
+	var humanWaitConflict *service.HumanWaitConflictError
+	if errors.As(err, &humanWaitConflict) {
+		if humanWaitConflict.Resolved() {
+			writeErrorEnvelope(w, http.StatusConflict, codeHumanWaitResolved,
+				"production gave a definite answer first; the release was settled by it and the wait can no longer be stopped",
+				map[string]any{"status": humanWaitConflict.Status})
+			return
+		}
+		if humanWaitConflict.RunEnded {
+			writeErrorEnvelope(w, http.StatusConflict, codeHumanWaitClosed,
+				"the run this wait belongs to has already ended; there is nothing left to stop, and the wait closes at its deadline",
+				map[string]any{"runEnded": true})
+			return
+		}
+		writeErrorEnvelope(w, http.StatusConflict, codeHumanWaitClosed,
+			"the wait has already ended; there is nothing left to stop",
+			map[string]any{"status": humanWaitConflict.Status})
+		return
+	}
+
+	var humanWaitRequest *service.HumanWaitRequestError
+	if errors.As(err, &humanWaitRequest) {
+		writeErrorEnvelope(w, http.StatusBadRequest, codeValidationFailed, humanWaitRequest.Reason, nil)
 		return
 	}
 

@@ -484,6 +484,10 @@ export const runs = {
       releaseTarget: 'Deploy target',
       occupationHeld: (target: string) => `${target}, held`,
       occupationReleased: (target: string, reason: string) => `${target}, released: ${reason}`,
+      postTaskQuery: 'Next production check',
+      uncheckedVersion: 'Running version',
+      uncheckedVersionValue: (version: string) =>
+        `${version}, deployed after the run ended and not health-checked`,
       confirmDeadline: 'Confirm by',
       humanWait: 'Human confirmation',
       humanWaitOutcome: (status: string, outcome: string) => `${status}: ${outcome}`,

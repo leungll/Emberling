@@ -59,6 +59,8 @@ type Advancer interface {
 	HandleOrphanToolAttempt(ctx context.Context, attemptID string) error
 	ExpireApproval(ctx context.Context, approvalID string) error
 	OpenReleaseHumanWait(ctx context.Context, attemptID string) error
+	ExpireHumanWait(ctx context.Context, humanWaitID string) error
+	ReconcileReleaseOccupation(ctx context.Context, occupationID string) (service.ReleaseReconcileOutcome, error)
 }
 
 // defaultBatchLimit bounds one RunOnce scan of ListReadyOrRetryable/ListExpired. MVP
@@ -140,6 +142,16 @@ type Report struct {
 	// OpenReleaseHumanWait calls that returned without error.
 	DueConfirmDeadlinesFound int
 	HumanWaitsOpened         int
+	// ExpiredHumanWaitsFound is how many OPEN human waits had passed their deadline;
+	// HumanWaitsExpired counts the ExpireHumanWait calls that returned without error.
+	ExpiredHumanWaitsFound int
+	HumanWaitsExpired      int
+	// DueOccupationQueriesFound is how many ACTIVE occupations of ended Runs had a due
+	// post-task query; OccupationQueriesClaimed counts the queries this pass claimed and
+	// OccupationsReleased the subset whose definite answer freed the target.
+	DueOccupationQueriesFound int
+	OccupationQueriesClaimed  int
+	OccupationsReleased       int
 	// DuePollsFound is how many DISPATCHED Attempts ListDuePolls found with a due poll.
 	// PollsClaimed counts the polls this pass claimed whose answer either resolved
 	// nothing or won the resume; PollsResumed is the subset that won the resume.
@@ -325,6 +337,9 @@ func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *R
 	if err := r.scanDueConfirmDeadlines(ctx, now, report); err != nil {
 		return err
 	}
+	if err := r.scanExpiredHumanWaits(ctx, now, report); err != nil {
+		return err
+	}
 
 	var turns []domain.AgentTurn
 	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
@@ -418,6 +433,57 @@ func (r *Reconciler) scanDueConfirmDeadlines(ctx context.Context, now time.Time,
 	return nil
 }
 
+// scanExpiredHumanWaits hands every OPEN human wait whose deadline has passed to the human
+// wait expiry use case, which ends the release exactly as a person's stop would. A stop or
+// a production answer that commits first wins, and the expiry then writes nothing.
+func (r *Reconciler) scanExpiredHumanWaits(ctx context.Context, now time.Time, report *Report) error {
+	var expired []domain.HumanWait
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		expired, err = tx.HumanWaits().ListExpiredOpen(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list expired human waits: %w", err)
+	}
+	report.ExpiredHumanWaitsFound = len(expired)
+	for _, wait := range expired {
+		if err := r.cfg.Executor.ExpireHumanWait(ctx, wait.ID); err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: expire human wait %s: %w", wait.ID, err))
+			continue
+		}
+		report.HumanWaitsExpired++
+	}
+	return nil
+}
+
+// scanDueOccupationQueries hands every ACTIVE occupation of an ended Run whose post-task
+// query is due to the release reconciliation use case, which owns the conditional claim,
+// the single production query and the write to the occupation. It only discovers the work.
+func (r *Reconciler) scanDueOccupationQueries(ctx context.Context, now time.Time, report *Report) error {
+	var due []domain.ReleaseOccupation
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		due, err = tx.ReleaseOccupations().ListDueQueries(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list due occupation queries: %w", err)
+	}
+	report.DueOccupationQueriesFound = len(due)
+	for _, occupation := range due {
+		outcome, err := r.cfg.Executor.ReconcileReleaseOccupation(ctx, occupation.ID)
+		if outcome.Claimed {
+			report.OccupationQueriesClaimed++
+		}
+		if outcome.Released {
+			report.OccupationsReleased++
+		}
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: reconcile occupation %s: %w", occupation.ID, err))
+		}
+	}
+	return nil
+}
+
 // scanExpiredApprovals hands every PENDING approval whose deadline has passed to the
 // approval expiry use case. It runs before the Agent deadline scan: an Agent waiting on an
 // approval is paused and therefore never listed as expired, and once the expiry resumes it
@@ -453,7 +519,10 @@ func (r *Reconciler) scanDuePolls(ctx context.Context, now time.Time, report *Re
 	if err := r.scanDueNodePolls(ctx, now, report); err != nil {
 		return err
 	}
-	return r.scanDueToolPolls(ctx, now, report)
+	if err := r.scanDueToolPolls(ctx, now, report); err != nil {
+		return err
+	}
+	return r.scanDueOccupationQueries(ctx, now, report)
 }
 
 // scanDueNodePolls is the Node Attempt row of the due-poll scan.

@@ -284,8 +284,9 @@ const (
 	TerminationModelError    AgentTermination = "MODEL_ERROR"
 	TerminationToolError     AgentTermination = "TOOL_ERROR"
 	TerminationInvalidAction AgentTermination = "INVALID_ACTION"
-	// TerminationHumanStopped is written by a human stop of the Agent Run; no path writes
-	// it yet, the vocabulary and the database constraint admit it.
+	// TerminationHumanStopped ends an Agent Run whose release was handed to a person and
+	// that person stopped waiting, or the human wait's own deadline passed: the release
+	// outcome is unknown and the deploy target stays occupied until reconciliation.
 	TerminationHumanStopped AgentTermination = "HUMAN_STOPPED"
 )
 

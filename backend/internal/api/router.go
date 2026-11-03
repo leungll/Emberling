@@ -60,15 +60,22 @@ func NewRouter(deps Deps) http.Handler {
 			r.Get("/{runId}/artifacts/{artifactId}/content", deps.getArtifactContent)
 		})
 
-		// The approval routes exist only when an operator credential is configured: a
-		// deployment without one has no way to decide an approval, so the routes are not
-		// registered rather than registered and always refusing.
+		// The approval and human wait routes exist only when an operator credential is
+		// configured: a deployment without one has no way to decide an approval or stop a
+		// wait, so the routes are not registered rather than registered and always refusing.
 		if deps.Operator.Token != "" {
 			r.Route("/approvals", func(r chi.Router) {
 				r.Use(deps.requireOperator)
 				r.Get("/", deps.listApprovals)
 				r.Get("/{approvalId}", deps.getApproval)
 				r.Post("/{approvalId}/decision", deps.decideApproval)
+			})
+			// Stopping a release human wait is a human fact with the same authentication
+			// as an approval decision; the list shows release targets and operations.
+			r.Route("/human-waits", func(r chi.Router) {
+				r.Use(deps.requireOperator)
+				r.Get("/", deps.listHumanWaits)
+				r.Post("/{humanWaitId}/stop", deps.stopHumanWait)
 			})
 		}
 	})

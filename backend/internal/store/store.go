@@ -651,9 +651,35 @@ type ReleaseOccupationRepository interface {
 	// SetOperationKey names the operation that now holds the target after a re-release.
 	// A row no longer ACTIVE returns domain.ErrStaleClaim.
 	SetOperationKey(ctx context.Context, id, operationKey string) error
-	// Release conditionally moves ACTIVE to RELEASED with released_at and the reason. A
-	// row no longer ACTIVE returns domain.ErrStaleClaim.
+	// Release conditionally moves ACTIVE to RELEASED with released_at and the reason, and
+	// clears any scheduled post-task query. A row no longer ACTIVE returns
+	// domain.ErrStaleClaim.
 	Release(ctx context.Context, id string, reason domain.ReleaseReason, now time.Time) error
+
+	// ScheduleQuery hands the query schedule of an ACTIVE occupation to the occupation
+	// itself, in the transaction that ends its Run while the release outcome is unknown:
+	// next_query_at is written and the post-task reconciliation takes over. A row no
+	// longer ACTIVE returns domain.ErrStaleClaim.
+	ScheduleQuery(ctx context.Context, id string, at time.Time) error
+
+	// ClaimQuery conditionally claims one post-task query of an ACTIVE occupation whose
+	// next_query_at is due at now: it moves next_query_at to next and increments
+	// query_count. The due predicate is the single arbiter between two scanners of the
+	// same occupation; false means the query is not due, another claimer won, or the
+	// occupation is no longer ACTIVE, and nothing was written.
+	ClaimQuery(ctx context.Context, id string, now, next time.Time) (bool, error)
+
+	// ReleaseAfterRun conditionally moves an ACTIVE occupation whose Run already ended to
+	// RELEASED with the reason production's definite answer gives, clearing its query
+	// schedule. deployedUncheckedVersion records the version production runs when the
+	// answer is DEPLOYED: it went live without the health check the ended task would have
+	// made. It reports false when the occupation is no longer ACTIVE.
+	ReleaseAfterRun(ctx context.Context, id string, reason domain.ReleaseReason, now time.Time, deployedUncheckedVersion *string) (bool, error)
+
+	// ListDueQueries returns ACTIVE occupations whose Run has ended and whose next_query_at
+	// is at or before now, oldest due first, bounded by limit. Read-only discovery of the
+	// post-task reconciliation work.
+	ListDueQueries(ctx context.Context, now time.Time, limit int) ([]domain.ReleaseOccupation, error)
 }
 
 // HumanWaitRepository persists the human wait a release Action enters when production
@@ -668,6 +694,13 @@ type HumanWaitRepository interface {
 	// closing identity (nil unless a person closed it) and the outcome. A false result
 	// means another closing already committed and nothing was written.
 	Close(ctx context.Context, id string, status domain.HumanWaitStatus, now time.Time, closedBy, outcome *string) (bool, error)
+
+	// ListOpen returns the OPEN waits, earliest deadline first, bounded by limit.
+	ListOpen(ctx context.Context, limit int) ([]domain.HumanWait, error)
+
+	// ListExpiredOpen returns OPEN waits whose deadline is at or before now, earliest
+	// deadline first, bounded by limit: the persisted human-wait expiry work.
+	ListExpiredOpen(ctx context.Context, now time.Time, limit int) ([]domain.HumanWait, error)
 }
 
 // DueConfirmDeadline identifies one release Attempt whose confirm deadline has passed while
@@ -776,6 +809,12 @@ type ToolAttemptRepository interface {
 	// unknown time, which is when the caller writes the RELEASE_OUTCOME_UNKNOWN Event. A
 	// row that is neither STARTED nor DISPATCHED returns domain.ErrStaleClaim.
 	MarkOutcomeUnknown(ctx context.Context, attemptID string, now, nextPollAt time.Time) (first bool, err error)
+
+	// RecordOutcomeUnknownSince writes outcome_unknown_since on a release Attempt that has
+	// already completed with an uncertain outcome, only when it is still empty, and changes
+	// nothing else. It serves the post-task reconciliation, which learns after the Run ended
+	// that production does not know the operation. It reports whether this call wrote it.
+	RecordOutcomeUnknownSince(ctx context.Context, attemptID string, now time.Time) (bool, error)
 
 	// MarkVoidRequested writes void_requested_at once on a DISPATCHED Attempt; a later
 	// resend of a lost void request leaves the first time in place. A row no longer
