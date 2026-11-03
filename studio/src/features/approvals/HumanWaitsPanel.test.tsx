@@ -168,7 +168,7 @@ describe('the human wait panel', () => {
   it('reports a task that already ended', async () => {
     stopResponse = () =>
       jsonResponse(
-        { error: { code: 'HUMAN_WAIT_CLOSED', message: 'run ended', details: { status: 'OPEN' } } },
+        { error: { code: 'HUMAN_WAIT_CLOSED', message: 'run ended', details: { runEnded: true } } },
         409,
       );
     renderPanel();

@@ -27,7 +27,7 @@ func TestPostReconcileBackoff_QueriesSoFar_DoublesFromPollIntervalUpToCap(t *tes
 	}
 }
 
-func TestReleaseUnknownSince_AttemptFacts_OnlyUncertainOutcomesHaveAStart(t *testing.T) {
+func TestReleaseUnknownSince_AttemptFacts_OnlyProductionNotKnowingStartsTheGrace(t *testing.T) {
 	unknown := time.Date(2026, 11, 2, 12, 1, 0, 0, time.UTC)
 	completed := unknown.Add(time.Minute)
 	yes, no := true, false
@@ -37,7 +37,7 @@ func TestReleaseUnknownSince_AttemptFacts_OnlyUncertainOutcomesHaveAStart(t *tes
 		want    *time.Time
 	}{
 		{"production lost the operation", domain.ToolAttempt{Status: domain.ToolAttemptFailed, OutcomeUnknownSince: &unknown, Uncertain: &yes, CompletedAt: &completed}, &unknown},
-		{"failed with an uncertain outcome", domain.ToolAttempt{Status: domain.ToolAttemptFailed, Uncertain: &yes, CompletedAt: &completed}, &completed},
+		{"stopped while production still had it", domain.ToolAttempt{Status: domain.ToolAttemptFailed, Uncertain: &yes, CompletedAt: &completed}, nil},
 		{"definite refusal", domain.ToolAttempt{Status: domain.ToolAttemptFailed, Uncertain: &no, CompletedAt: &completed}, nil},
 		{"still dispatched and known", domain.ToolAttempt{Status: domain.ToolAttemptDispatched}, nil},
 	}

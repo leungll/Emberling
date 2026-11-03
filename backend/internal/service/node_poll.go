@@ -25,10 +25,16 @@ type PollAttempt struct {
 // sleeping.
 type PollHooks struct {
 	// AfterClaim runs after the claim transaction committed and before the Provider is
-	// queried, for a Node Attempt and a Tool Attempt poll alike. A non-nil error stops the
+	// queried, for a Node Attempt poll, a Tool Attempt poll and the post-task reconciliation
+	// of a release target alike. A non-nil error stops the
 	// poll there and is returned, which leaves the world exactly as a process crash at
 	// that point would: one poll consumed and the next poll time already pushed back.
 	AfterClaim func(ctx context.Context, attemptID string) error
+	// AfterAnswer runs in the post-task reconciliation of a release target after production
+	// answered and before the result transaction, with the release Attempt's id. A non-nil
+	// error stops there and is returned, which leaves the world as a crash between the
+	// answer and its recording would: the answer lost, the next query already scheduled.
+	AfterAnswer func(ctx context.Context, attemptID string) error
 }
 
 // PollAttemptKind classifies what one PollAttempt or PollToolAttempt call did.

@@ -51,15 +51,17 @@ type StopHumanWaitOutcome struct {
 
 // HumanWaitConflictError refuses a stop that can no longer take effect. Status is the
 // wait's current status: RESOLVED when a definite production answer settled the release
-// first, EXPIRED when the wait's deadline ended it first, OPEN when the Run or the Agent
-// Run has already ended and only the expiry will close the wait. Nothing was written.
+// first, EXPIRED when the wait's deadline ended it first. RunEnded is true instead when the
+// wait is still OPEN but the Run or the Agent Run it belongs to has already ended, so only
+// the expiry will close it. Nothing was written.
 type HumanWaitConflictError struct {
 	HumanWaitID string
 	Status      domain.HumanWaitStatus
+	RunEnded    bool
 }
 
 func (e *HumanWaitConflictError) Error() string {
-	if e.Status == domain.HumanWaitOpen {
+	if e.RunEnded {
 		return fmt.Sprintf("execution: human wait %s belongs to a run that has ended and can no longer be stopped", e.HumanWaitID)
 	}
 	return fmt.Sprintf("execution: human wait %s is already %s", e.HumanWaitID, e.Status)
@@ -118,7 +120,8 @@ func (s *ExecutionService) humanWaitConflict(ctx context.Context, humanWaitID st
 	}); err != nil {
 		return err
 	}
-	return &HumanWaitConflictError{HumanWaitID: humanWaitID, Status: wait.Status}
+	// A wait another path left OPEN can only belong to a Run that ended meanwhile.
+	return &HumanWaitConflictError{HumanWaitID: humanWaitID, Status: wait.Status, RunEnded: wait.Status == domain.HumanWaitOpen}
 }
 
 // endHumanWait is the single transaction both endings share.
@@ -176,16 +179,32 @@ func (s *ExecutionService) endHumanWait(ctx context.Context, humanWaitID string,
 		actionable := !lock.Status().IsTerminal() && action.Status == domain.AgentActionWaitingHuman && agentRun.Termination == nil
 		if !actionable {
 			if stop {
-				return &HumanWaitConflictError{HumanWaitID: wait.ID, Status: domain.HumanWaitOpen}
+				return &HumanWaitConflictError{HumanWaitID: wait.ID, Status: wait.Status, RunEnded: true}
 			}
 			// Nothing is left to end; the wait still closes so the expiry scan stops
-			// listing it. No Run fact changes and no Event is appended.
+			// listing it. No Run fact changes and no Event is appended. An ended Run whose
+			// release still holds the target without a query schedule hands that schedule
+			// to the occupation here, writing the occupation row alone, so the target is
+			// never held by work nobody will pick up.
 			won, err := tx.HumanWaits().Close(ctx, wait.ID, domain.HumanWaitExpired, now, nil, &releaseOutcome)
 			if err != nil {
 				return err
 			}
 			if !won {
 				return errAgentTurnSuperseded
+			}
+			if !lock.Status().IsTerminal() {
+				return nil
+			}
+			occupation, err := activeOccupationOfAction(ctx, tx, action.ID)
+			if err != nil || occupation == nil || occupation.NextQueryAt != nil {
+				return err
+			}
+			if err := tx.ReleaseOccupations().ScheduleQuery(ctx, occupation.ID, now); err != nil {
+				if errors.Is(err, domain.ErrStaleClaim) {
+					return errAgentTurnSuperseded
+				}
+				return err
 			}
 			return nil
 		}
@@ -257,6 +276,9 @@ func (s *ExecutionService) endReleaseHumanWaitLocked(
 			return err
 		}
 	}
+	// The Agent Run terminates a few lines below, but it resumes first so the paused time
+	// is settled exactly as every other resume settles it (AGENT_RESUMED and the deadline
+	// moved by the pause), and no terminated Agent Run is left looking paused.
 	if agentRun.PausedAt != nil {
 		if agentRun, err = s.resumeAgentLocked(ctx, tx, lock, nodeRun, agentRun, now); err != nil {
 			return err

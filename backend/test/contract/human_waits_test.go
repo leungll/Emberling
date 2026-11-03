@@ -151,6 +151,29 @@ func (s *humanStopStory) openWait(t *testing.T) map[string]any {
 	return nil
 }
 
+// awaitOpenWait drives reconciler passes until the confirm deadline opened the story's
+// human wait, and returns it as the list shows it.
+func (s *humanStopStory) awaitOpenWait(t *testing.T) map[string]any {
+	t.Helper()
+	for pass := 1; pass <= 20; pass++ {
+		s.pass(t, 3*time.Second)
+		if wait := s.openWait(t); wait != nil {
+			return wait
+		}
+	}
+	t.Fatalf("no human wait opened after 20 reconciler passes\n%s", runStateDump(t, s.env, s.runID))
+	return nil
+}
+
+// errorDetails returns the details object of an error envelope.
+func errorDetails(t *testing.T, raw []byte) map[string]any {
+	t.Helper()
+	envelope := decodeBody[map[string]any](t, raw)
+	inner, _ := envelope["error"].(map[string]any)
+	details, _ := inner["details"].(map[string]any)
+	return details
+}
+
 // releaseView reads the release view of the story's release Action from the Agent Trace,
 // with the raw Trace body.
 func (s *humanStopStory) releaseView(t *testing.T) ([]byte, humanStopRelease) {
@@ -179,14 +202,7 @@ func (s *humanStopStory) releaseView(t *testing.T) ([]byte, humanStopRelease) {
 func TestE2E_HumanStop_StopThroughAPI_TaskEndsAndLateDeployFreesTargetUnchecked(t *testing.T) {
 	s := startHumanStopStory(t)
 
-	var wait map[string]any
-	for pass := 1; wait == nil; pass++ {
-		if pass > 20 {
-			t.Fatalf("no human wait opened after %d reconciler passes\n%s", pass-1, runStateDump(t, s.env, s.runID))
-		}
-		s.pass(t, 3*time.Second)
-		wait = s.openWait(t)
-	}
+	wait := s.awaitOpenWait(t)
 	waitID, _ := wait["id"].(string)
 	if wait["actionId"] != s.actionID || wait["targetKey"] != "token-service/staging" || wait["operationKey"] != "op_"+s.actionID+"_1" ||
 		wait["reason"] != "NOT_CONFIRMED" || wait["toolName"] != deployrelease.ToolName || wait["confirmDeadline"] == nil || wait["deadline"] == nil {
@@ -302,5 +318,75 @@ func TestHumanWaits_TokenNotConfigured_RoutesAbsent(t *testing.T) {
 		if resp.StatusCode != http.StatusNotFound || errorCode(t, body) != "NOT_FOUND" {
 			t.Errorf("%s %s = %d %s, want 404 NOT_FOUND", tc.method, tc.path, resp.StatusCode, body)
 		}
+	}
+}
+
+// TestHumanWaits_StopAfterProductionAnswered_409Resolved proves the stop route's answer
+// when production's DEPLOYED answer settled the release first: 409 HUMAN_WAIT_RESOLVED with
+// the wait's RESOLVED status, the Run completed as the answer decided and no stop recorded.
+func TestHumanWaits_StopAfterProductionAnswered_409Resolved(t *testing.T) {
+	s := startHumanStopStory(t)
+	waitID, _ := s.awaitOpenWait(t)["id"].(string)
+	s.production.ResumeCompletion()
+	for pass := 1; s.openWait(t) != nil; pass++ {
+		if pass > 20 {
+			t.Fatalf("the answer did not resolve the wait after %d passes", pass-1)
+		}
+		s.pass(t, 3*time.Second)
+	}
+	// The resolved release hands the Agent its answer; let it finish so the count below
+	// sees only what the stop could add.
+	if got := runStatusOf(s.env.waitForTerminal(t, s.runID, e2eWait)); got != "COMPLETED" {
+		t.Fatalf("Run status after the answer = %q, want COMPLETED", got)
+	}
+	events := len(s.env.listEvents(t, s.runID))
+
+	resp, body := s.operator.doOperator(t, testOperatorToken, http.MethodPost, "/api/human-waits/"+waitID+"/stop", nil)
+	if resp.StatusCode != http.StatusConflict || errorCode(t, body) != "HUMAN_WAIT_RESOLVED" {
+		t.Fatalf("stop after the answer = %d %s, want 409 HUMAN_WAIT_RESOLVED", resp.StatusCode, body)
+	}
+	if details := errorDetails(t, body); details["status"] != "RESOLVED" {
+		t.Errorf("conflict details = %v, want status RESOLVED", details)
+	}
+	if n := len(s.env.listEvents(t, s.runID)); n != events {
+		t.Errorf("the refused stop wrote %d events", n-events)
+	}
+	if _, view := s.releaseView(t); view.HumanWait == nil || view.HumanWait.Status != "RESOLVED" || view.HumanWait.ClosedBy != nil {
+		t.Errorf("human wait after the refused stop = %+v, want RESOLVED, closed by nobody", view.HumanWait)
+	}
+}
+
+// TestHumanWaits_StopOfWaitOfEndedRun_409ClosedRunEnded proves the stop route's answer for
+// a wait still OPEN whose Run already ended -- the state a Run left behind before it handed
+// the query schedule to the occupation: the list leaves the wait out, and a stop is 409
+// HUMAN_WAIT_CLOSED whose details say the Run ended instead of naming the OPEN status.
+func TestHumanWaits_StopOfWaitOfEndedRun_409ClosedRunEnded(t *testing.T) {
+	s := startHumanStopStory(t)
+	waitID, _ := s.awaitOpenWait(t)["id"].(string)
+	if resp, body := s.operator.doOperator(t, testOperatorToken, http.MethodPost, "/api/human-waits/"+waitID+"/stop", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST stop status = %d, body=%s", resp.StatusCode, body)
+	}
+	s.env.waitForTerminal(t, s.runID, e2eWait)
+	if _, err := s.env.pool.Exec(context.Background(), `UPDATE human_waits SET status = 'OPEN', closed_at = NULL, closed_by = NULL, outcome = NULL WHERE id = $1`, waitID); err != nil {
+		t.Fatalf("reopen the wait: %v", err)
+	}
+	if s.openWait(t) != nil {
+		t.Errorf("the wait list shows a wait whose run has ended")
+	}
+	events := len(s.env.listEvents(t, s.runID))
+
+	resp, body := s.operator.doOperator(t, testOperatorToken, http.MethodPost, "/api/human-waits/"+waitID+"/stop", nil)
+	if resp.StatusCode != http.StatusConflict || errorCode(t, body) != "HUMAN_WAIT_CLOSED" {
+		t.Fatalf("stop of a wait of an ended run = %d %s, want 409 HUMAN_WAIT_CLOSED", resp.StatusCode, body)
+	}
+	details := errorDetails(t, body)
+	if details["runEnded"] != true {
+		t.Errorf("conflict details = %v, want runEnded true", details)
+	}
+	if _, named := details["status"]; named {
+		t.Errorf("conflict details = %v, want no wait status for a wait of an ended run", details)
+	}
+	if n := len(s.env.listEvents(t, s.runID)); n != events {
+		t.Errorf("the refused stop wrote %d events", n-events)
 	}
 }

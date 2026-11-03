@@ -810,6 +810,12 @@ type ToolAttemptRepository interface {
 	// row that is neither STARTED nor DISPATCHED returns domain.ErrStaleClaim.
 	MarkOutcomeUnknown(ctx context.Context, attemptID string, now, nextPollAt time.Time) (first bool, err error)
 
+	// RecordOutcomeUnknownSince writes outcome_unknown_since on a release Attempt that has
+	// already completed with an uncertain outcome, only when it is still empty, and changes
+	// nothing else. It serves the post-task reconciliation, which learns after the Run ended
+	// that production does not know the operation. It reports whether this call wrote it.
+	RecordOutcomeUnknownSince(ctx context.Context, attemptID string, now time.Time) (bool, error)
+
 	// MarkVoidRequested writes void_requested_at once on a DISPATCHED Attempt; a later
 	// resend of a lost void request leaves the first time in place. A row no longer
 	// DISPATCHED returns domain.ErrStaleClaim.

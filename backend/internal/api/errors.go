@@ -177,8 +177,14 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error, notFoundC
 				map[string]any{"status": humanWaitConflict.Status})
 			return
 		}
+		if humanWaitConflict.RunEnded {
+			writeErrorEnvelope(w, http.StatusConflict, codeHumanWaitClosed,
+				"the run this wait belongs to has already ended; there is nothing left to stop, and the wait closes at its deadline",
+				map[string]any{"runEnded": true})
+			return
+		}
 		writeErrorEnvelope(w, http.StatusConflict, codeHumanWaitClosed,
-			"the wait or the run it belongs to has already ended; there is nothing left to stop",
+			"the wait has already ended; there is nothing left to stop",
 			map[string]any{"status": humanWaitConflict.Status})
 		return
 	}

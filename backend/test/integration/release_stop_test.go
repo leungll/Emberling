@@ -5,6 +5,8 @@ package integration
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -487,26 +489,56 @@ func TestHumanStop_RepeatedStop_RepeatedWithoutWrites(t *testing.T) {
 	}
 }
 
-// endedRunOccupationViolations is the invariant report's check that every ACTIVE
-// occupation of an ended Run carries a post-task query schedule, as the same predicate.
+// invariantReportPath is the demo invariant report, read from the repository so the test
+// runs the check the report runs rather than a copy of it.
+const invariantReportPath = "../../../scripts/demo/invariants.sql"
+
+// invariantCheckSQL returns the body of the named check of the invariant report: the CTE
+// v_<name> AS ( ... ), cut at its closing parenthesis.
+func invariantCheckSQL(t *testing.T, cte string) string {
+	t.Helper()
+	raw, err := os.ReadFile(invariantReportPath)
+	if err != nil {
+		t.Fatalf("read the invariant report: %v", err)
+	}
+	text := string(raw)
+	head := cte + " AS ("
+	start := strings.Index(text, head)
+	if start < 0 {
+		t.Fatalf("the invariant report has no %s check", cte)
+	}
+	body := text[start+len(head):]
+	depth := 1
+	for i, r := range body {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return body[:i]
+			}
+		}
+	}
+	t.Fatalf("the %s check of the invariant report is not closed", cte)
+	return ""
+}
+
+// endedRunOccupationViolations runs the invariant report's ended_run_occupation_queried
+// check and returns how many violations it reports. The check reads no psql variable.
 func endedRunOccupationViolations(t *testing.T, f *releaseFixture) int {
 	t.Helper()
+	check := invariantCheckSQL(t, "v_ended_run_occupation_queried")
 	var n int
-	if err := f.h.pool.QueryRow(f.h.ctx, `
-		SELECT count(*)
-		  FROM release_occupations o
-		  JOIN runs r ON r.id = o.run_id
-		 WHERE o.status = 'ACTIVE'
-		   AND r.status IN ('COMPLETED', 'FAILED')
-		   AND o.next_query_at IS NULL`).Scan(&n); err != nil {
-		t.Fatalf("invariant query: %v", err)
+	if err := f.h.pool.QueryRow(f.h.ctx, "SELECT count(*) FROM ("+check+") AS violations").Scan(&n); err != nil {
+		t.Fatalf("run the ended_run_occupation_queried check: %v", err)
 	}
 	return n
 }
 
 // Invariant: a Run that ended while its release outcome is unknown leaves its ACTIVE
-// occupation with a post-task query schedule; the check does report an occupation that
-// lacks one.
+// occupation with a post-task query schedule; the report's own check does report an
+// occupation that lacks one.
 func TestReleaseInvariant_EndedRunActiveOccupation_HasQuerySchedule(t *testing.T) {
 	f := newReleaseFixture(t, releaseFixtureOptions{bounds: humanWaitBounds})
 	action, wait := f.startToHumanWait(t, "wf_invariant_ended_occupation")

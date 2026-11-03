@@ -36,8 +36,9 @@ type HumanWaitView struct {
 // maxHumanWaitListItems bounds the human wait list read.
 const maxHumanWaitListItems = 200
 
-// ListOpenHumanWaits returns the OPEN human waits, earliest deadline first, in one
-// consistent read.
+// ListOpenHumanWaits returns the OPEN human waits a person can still act on, earliest
+// deadline first, in one consistent read. A wait whose Run has already ended is left out:
+// stopping it would change nothing, and its own deadline closes it.
 func (s *QueryService) ListOpenHumanWaits(ctx context.Context) ([]HumanWaitView, error) {
 	var views []HumanWaitView
 	err := s.deps.UoW.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
@@ -47,41 +48,47 @@ func (s *QueryService) ListOpenHumanWaits(ctx context.Context) ([]HumanWaitView,
 		}
 		views = make([]HumanWaitView, 0, len(waits))
 		for _, wait := range waits {
-			view, err := humanWaitView(ctx, tx, wait)
+			view, live, err := humanWaitView(ctx, tx, wait)
 			if err != nil {
 				return err
 			}
-			views = append(views, view)
+			if live {
+				views = append(views, view)
+			}
 		}
 		return nil
 	})
 	return views, err
 }
 
-func humanWaitView(ctx context.Context, tx store.Tx, wait domain.HumanWait) (HumanWaitView, error) {
+// humanWaitView builds the view of one wait; live is false when its Run has ended.
+func humanWaitView(ctx context.Context, tx store.Tx, wait domain.HumanWait) (view HumanWaitView, live bool, err error) {
 	action, err := tx.AgentActions().Get(ctx, wait.ActionID)
 	if err != nil {
-		return HumanWaitView{}, err
+		return HumanWaitView{}, false, err
 	}
 	turn, err := tx.AgentTurns().Get(ctx, action.TurnID)
 	if err != nil {
-		return HumanWaitView{}, err
+		return HumanWaitView{}, false, err
 	}
 	agentRun, err := tx.AgentRuns().Get(ctx, turn.AgentRunID)
 	if err != nil {
-		return HumanWaitView{}, err
+		return HumanWaitView{}, false, err
 	}
 	run, err := tx.Runs().Get(ctx, wait.RunID)
 	if err != nil {
-		return HumanWaitView{}, err
+		return HumanWaitView{}, false, err
 	}
-	view := HumanWaitView{
+	if run.Status.IsTerminal() {
+		return HumanWaitView{}, false, nil
+	}
+	view = HumanWaitView{
 		Wait: wait, WorkflowID: run.WorkflowID, NodeRunID: agentRun.NodeRunID, AgentRunID: agentRun.ID,
 		Reason: HumanWaitReasonNotConfirmed,
 	}
 	occupations, err := tx.ReleaseOccupations().ListByActionID(ctx, action.ID)
 	if err != nil {
-		return HumanWaitView{}, err
+		return HumanWaitView{}, false, err
 	}
 	if n := len(occupations); n > 0 {
 		view.TargetKey = occupations[n-1].TargetKey
@@ -89,7 +96,7 @@ func humanWaitView(ctx context.Context, tx store.Tx, wait domain.HumanWait) (Hum
 	}
 	attempts, err := tx.ToolAttempts().ListByActionID(ctx, action.ID)
 	if err != nil {
-		return HumanWaitView{}, err
+		return HumanWaitView{}, false, err
 	}
 	if n := len(attempts); n > 0 {
 		latest := attempts[n-1]
@@ -102,5 +109,5 @@ func humanWaitView(ctx context.Context, tx store.Tx, wait domain.HumanWait) (Hum
 			view.OperationKey = *latest.OperationKey
 		}
 	}
-	return view, nil
+	return view, true, nil
 }
