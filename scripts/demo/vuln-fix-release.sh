@@ -77,6 +77,35 @@
 #                   anyway. Expects the request FAILED as GOAL_DENIED from AUTHORIZATION
 #                   before any approval or Attempt, nothing at production and the task
 #                   judged READY_FOR_APPROVAL.
+#
+# The two stop stories give the release a fifteen-second confirm deadline, so the release
+# reaches a person while the audience watches, and the person stops waiting through the
+# human wait API with the same operator credential:
+#
+#   release-unreachable-stop
+#                   production answers every release request and query with 503 from
+#                   before the approval, so the operation's outcome stays unknown until the
+#                   confirm deadline hands it to a person, who stops waiting. A second task
+#                   then asks to release to the same target while production is still
+#                   unreachable; production comes back, and once post-task reconciliation
+#                   has freed the target a third task releases to it. Expects the stopped
+#                   task FAILED as RELEASE_UNKNOWN (HUMAN_STOPPED), its human wait opened as
+#                   OUTCOME_UNKNOWN and STOPPED, the target still ACTIVE with a query
+#                   schedule after the stop, the second task's request FAILED as
+#                   TARGET_OCCUPIED from AUTHORIZATION before any approval or Attempt, the
+#                   target RELEASED as VOIDED with no unchecked version, production never
+#                   having received the first operation and having voided it, no Event
+#                   added to the stopped Run, and the third task COMPLETED as DEPLOYED with
+#                   production deploying its operation once.
+#   stop-then-deployed
+#                   production accepts the approved release but holds its completion, so
+#                   the release is unconfirmed at the confirm deadline and a person stops
+#                   waiting; production then completes the deployment. Expects the task
+#                   FAILED as RELEASE_UNKNOWN with its human wait opened as NOT_CONFIRMED
+#                   and STOPPED, the target RELEASED as DEPLOYED afterwards with the version
+#                   production deployed recorded as live but unchecked, no release_confirmed
+#                   fact and no Event added to the stopped Run, and production deploying
+#                   the operation once.
 
 # --- The release stories: wait for each release request, decide it, inject the fault.
 
@@ -122,6 +151,52 @@ production_line() {
     jq -e -s --arg event "$1" --arg op "$2" 'any(.[]; .kind == "release" and .event == $event and .operationId == $op)' >/dev/null
 }
 
+# open_human_wait_of RUN sets human_wait to the OPEN human wait of RUN as the operator list
+# shows it, and fails while there is none.
+human_wait=""
+open_human_wait_of() {
+  local items
+  items=$(curl -fsS -H "$OPERATOR_HEADER" "$BACKEND_URL/api/human-waits") || return 1
+  human_wait=$(jq -c --arg run "$1" '[.items[] | select(.runId == $run)] | first // empty' <<<"$items")
+  [[ -n "$human_wait" ]]
+}
+# release_view_of RUN ACTION prints the release view of ACTION in RUN's Agent Trace.
+release_view_of() {
+  agent_trace_of "$1" | jq -c --arg id "$2" '[.turns[].action | select(. != null and .id == $id) | .release] | first // {}'
+}
+occupation_released() {
+  release_view_of "$run_id" "$release_action_id" | jq -e '.occupation.status == "RELEASED"' >/dev/null
+}
+# The confirm deadline plus a few Reconciler passes, and the post-task query backoff a
+# target freed after production comes back may have reached.
+STOP_DEADLINE_S=120
+FREED_DEADLINE_S=300
+# stop_after_confirm_deadline waits until the confirm deadline handed the release of the
+# story's Run to a person, stops that wait as the operator and waits for the Run to end.
+opened_wait='{}'
+stop_answer='{}'
+stopped_events=0
+stopped_events_after=0
+occupation_after_stop='{}'
+stop_after_confirm_deadline() {
+  local wait_id
+  wait_until "the release of run $run_id to wait for a person after its confirm deadline" "$STOP_DEADLINE_S" open_human_wait_of "$run_id"
+  opened_wait=$human_wait
+  wait_id=$(jq -r '.id' <<<"$opened_wait")
+  log "human wait $wait_id opened: $(jq -c '{reason, operationKey, targetKey}' <<<"$opened_wait")"
+  demo_pause "the release passed its confirm deadline without an answer and waits for a person (human wait $wait_id); next: the operator stops waiting"
+  stop_answer=$(curl -fsS -X POST -H "$OPERATOR_HEADER" "$BACKEND_URL/api/human-waits/$wait_id/stop" |
+    jq -c '{status: .humanWait.status, closedBy: .humanWait.closedBy, repeated}')
+  log "human wait $wait_id stopped: $stop_answer"
+  wait_until "run $run_id to end after the stop" "$TERMINAL_DEADLINE_S" run_terminal_of "$run_id"
+  stopped_events=$(run_events "$run_id" | jq 'length')
+  occupation_after_stop=$(release_view_of "$run_id" "$release_action_id" | jq -c '.occupation')
+}
+later_run_ids=""
+contender_run_id=""
+successor_run_id=""
+successor_action_id=""
+
 release_approval_id=""
 release_action_id=""
 second_approval_id=""
@@ -151,6 +226,8 @@ drive_release_story() {
     ;;
   release-refused) production_faults "{\"reject\":true,\"rejectCode\":\"$REFUSAL_CODE\"}" ;;
   unhealthy) production_faults '{"unhealthy":true}' ;;
+  release-unreachable-stop) production_faults '{"unreachable":true}' ;;
+  stop-then-deployed) production_completion true ;;
   esac
   await_request "$request_run"
   release_approval_id=$request_approval
@@ -261,7 +338,55 @@ drive_release_story() {
   release-refused | unhealthy)
     approve "$release_approval_id"
     ;;
+  release-unreachable-stop)
+    approve "$release_approval_id"
+    stop_after_confirm_deadline
+    demo_pause "the task ended as RELEASE_UNKNOWN and $RELEASE_SERVICE/$RELEASE_ENVIRONMENT stays occupied; next: a second task asks to release to it while production is still unreachable"
+    contender_run_id=$(create_run)
+    wait_until "run $contender_run_id to become COMPLETED or FAILED" "$TERMINAL_DEADLINE_S" run_terminal_of "$contender_run_id"
+    demo_pause "the second task was refused as TARGET_OCCUPIED; next: production comes back and post-task reconciliation voids the operation it never received, which frees the target"
+    production_faults '{}'
+    wait_until "post-task reconciliation to free $RELEASE_SERVICE/$RELEASE_ENVIRONMENT" "$FREED_DEADLINE_S" occupation_released
+    stopped_events_after=$(run_events "$run_id" | jq 'length')
+    demo_pause "the target is free and the stopped Run gained no Event; next: a third task releases to the same target"
+    successor_run_id=$(create_run)
+    await_request "$successor_run_id"
+    successor_action_id=$request_action
+    approve "$request_approval"
+    wait_until "run $successor_run_id to become COMPLETED or FAILED" "$TERMINAL_DEADLINE_S" run_terminal_of "$successor_run_id"
+    later_run_ids="$contender_run_id,$successor_run_id"
+    ;;
+  stop-then-deployed)
+    approve "$release_approval_id"
+    wait_until "production to accept $first_key" "$HELD_DEADLINE_S" production_line arrived "$first_key"
+    stop_after_confirm_deadline
+    demo_pause "the task ended as RELEASE_UNKNOWN with the target occupied; next: production finishes the deployment after the task ended"
+    production_completion false
+    wait_until "post-task reconciliation to free $RELEASE_SERVICE/$RELEASE_ENVIRONMENT" "$FREED_DEADLINE_S" occupation_released
+    stopped_events_after=$(run_events "$run_id" | jq 'length')
+    ;;
   esac
+}
+
+# check_stopped REASON: the person stopped the release wait the confirm deadline opened for
+# REASON, and the task ended as RELEASE_UNKNOWN with the target still occupied and a
+# post-task query scheduled; the stopped Run gained no Event afterwards.
+check_stopped() {
+  local release
+  release=$(release_of "$release_action_id")
+  check run_failed_release_unknown "status=$run_status node_error=$agent_node_error" \
+    test "$run_status" = FAILED -a "$agent_node_error" = RELEASE_UNKNOWN
+  check stopped_by_person "termination=$termination completion=$outcome" \
+    test "$termination" = HUMAN_STOPPED -a "$outcome" = RELEASE_UNKNOWN
+  check handed_to_person_after_deadline "wait=$(jq -c '{reason, operationKey}' <<<"$opened_wait") stop=$stop_answer" \
+    jq -e --arg r "$1" --arg k "$first_key" --argjson stop "$stop_answer" \
+    '.reason == $r and .operationKey == $k and $stop.status == "STOPPED" and $stop.repeated == false and ($stop.closedBy | length) > 0' <<<"$opened_wait"
+  check human_wait_stopped "humanWait=$(jq -c '.humanWait' <<<"$release")" \
+    jq -e '.humanWait.status == "STOPPED" and .humanWait.outcome == "RELEASE_UNKNOWN"' <<<"$release"
+  check target_held_after_stop "occupation=$occupation_after_stop" \
+    jq -e --arg k "$first_key" '.status == "ACTIVE" and .operationKey == $k and .nextQueryAt != null' <<<"$occupation_after_stop"
+  check ended_run_gained_no_event "events at the stop=$stopped_events at the end=$stopped_events_after" \
+    test "$stopped_events" -gt 0 -a "$stopped_events" -eq "$stopped_events_after"
 }
 
 # check_deployed_once ACTION: the task COMPLETED judged DEPLOYED, ACTION's release
@@ -485,6 +610,51 @@ check_release_story() {
     check report_prepared_only "report=$report" \
       jq -e --arg d "$latest_digest" '.status == "PREPARED_ONLY" and .code == "GOAL_DENIED" and .patchDigest == $d' <<<"$report"
     summary="refusal=$(jq -r '.code' <<<"$goal_refusal") approvals=$prepared_approvals production_lines=$(jq 'length' <<<"$production") completion=$outcome status=$run_status"
+    ;;
+  release-unreachable-stop)
+    release_action=$(release_of "$release_action_id")
+    unknown_events=$(jq -c '[.[] | select(.type == "RELEASE_OUTCOME_UNKNOWN") | .payload.operationKey]' <<<"$events")
+    contender_status=$(run_status_of "$contender_run_id")
+    contender_trace=$(agent_trace_of "$contender_run_id")
+    contender_release=$(jq -c '[.turns[] | select(.decision.tool == "deploy_change" and .action != null)
+        | {status: .action.status, code: (.action.error.code // null), failureSource: (.action.failureSource // null),
+           approval: .action.approval, attempts: (.toolAttempts | length)}]' <<<"$contender_trace")
+    contender_outcome=$(jq -r '.agentRun.completion.outcome // "none"' <<<"$contender_trace")
+    successor_status=$(run_status_of "$successor_run_id")
+    successor_trace=$(agent_trace_of "$successor_run_id")
+    successor_outcome=$(jq -r '.agentRun.completion.outcome // "none"' <<<"$successor_trace")
+    successor_release=$(jq -c --arg id "$successor_action_id" '[.turns[].action | select(. != null and .id == $id)
+        | {status, occupation: (.release.occupation | {status, releaseReason})}] | first // {}' <<<"$successor_trace")
+    successor_key="op_${successor_action_id}_1"
+    check_stopped OUTCOME_UNKNOWN
+    check outcome_unknown_once "unknown=$unknown_events" jq -e --arg k "$first_key" '. == [$k]' <<<"$unknown_events"
+    check second_task_refused_target_occupied "status=$contender_status completion=$contender_outcome release=$contender_release" \
+      jq -e --arg s "$contender_status" --arg o "$contender_outcome" 'length == 1 and .[0].status == "FAILED" and .[0].code == "TARGET_OCCUPIED"
+        and .[0].failureSource == "AUTHORIZATION" and .[0].approval == null and .[0].attempts == 0
+        and $s == "FAILED" and $o == "INCOMPLETE"' <<<"$contender_release"
+    check target_freed_as_voided "occupation=$(jq -c '.occupation' <<<"$release_action")" \
+      jq -e '.occupation.status == "RELEASED" and .occupation.releaseReason == "VOIDED"
+        and .occupation.nextQueryAt == null and .occupation.deployedUncheckedVersion == null' <<<"$release_action"
+    check production_voided_never_received "arrived=$(production_of "$first_key" arrived) voided=$(production_of "$first_key" voided) deployed=$(production_of "$first_key" deployed)" \
+      test "$(production_of "$first_key" arrived)" -eq 0 -a "$(production_of "$first_key" voided)" -eq 1 -a "$(production_of "$first_key" deployed)" -eq 0
+    check third_task_deployed_once "status=$successor_status completion=$successor_outcome release=$successor_release deployed=$(production_of "$successor_key" deployed)" \
+      test "$successor_status" = COMPLETED -a "$successor_outcome" = DEPLOYED -a "$(jq -r '.status' <<<"$successor_release")" = SUCCEEDED \
+      -a "$(jq -r '.occupation.releaseReason' <<<"$successor_release")" = DEPLOYED -a "$(production_of "$successor_key" deployed)" -eq 1 \
+      -a "$(deployed_under "$successor_action_id")" -eq 1
+    summary="stopped=$run_id:$outcome wait=$(jq -r '.reason' <<<"$opened_wait") contender=$contender_run_id:$(jq -r '.[0].code // "none"' <<<"$contender_release") occupation=$(jq -r '.occupation.releaseReason' <<<"$release_action") successor=$successor_run_id:$successor_outcome"
+    run_status="$run_status (contender $contender_status, successor $successor_status)"
+    ;;
+  stop-then-deployed)
+    release_action=$(release_of "$release_action_id")
+    deployed_version=$(jq -r --arg k "$first_key" '[.[] | select(.event == "deployed" and .operationId == $k) | .version] | first // ""' <<<"$production")
+    check_stopped NOT_CONFIRMED
+    check target_freed_with_unchecked_version "occupation=$(jq -c '.occupation' <<<"$release_action") production_version=$deployed_version" \
+      jq -e --arg v "$deployed_version" '$v != "" and .occupation.status == "RELEASED" and .occupation.releaseReason == "DEPLOYED"
+        and .occupation.deployedUncheckedVersion == $v and .occupation.nextQueryAt == null' <<<"$release_action"
+    check never_checked_by_the_task "release_facts=$release_facts" test "$(jq 'length' <<<"$release_facts")" -eq 0
+    check production_deployed_once "arrived=$(production_of "$first_key" arrived) deployed=$(production_of "$first_key" deployed) under_action=$(deployed_under "$release_action_id")" \
+      test "$(production_of "$first_key" arrived)" -eq 1 -a "$(production_of "$first_key" deployed)" -eq 1 -a "$(deployed_under "$release_action_id")" -eq 1
+    summary="operation=$first_key wait=$(jq -r '.reason' <<<"$opened_wait") occupation=$(jq -r '.occupation.releaseReason' <<<"$release_action") unchecked_version=$(jq -r '.occupation.deployedUncheckedVersion' <<<"$release_action") completion=$outcome status=$run_status"
     ;;
   esac
 }

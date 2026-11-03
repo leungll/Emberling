@@ -5,10 +5,11 @@
 # public API and the sandbox runner's request record; no live credential is involved.
 #
 # Usage: scripts/demo/vuln-fix.sh [definition] STORY
-#   STORY is verify, scope-denied, stale-evidence or restart (the repair and its
-#   verification), or one of the release stories: main, restart-during-approval,
+#   STORY is verify, scope-denied, stale-evidence, restart or incomplete-final (the repair
+#   and its verification), or one of the release stories: main, restart-during-approval,
 #   duplicate-approval, reject-resubmit, release-crash-deployed, release-crash-voided,
-#   void-exhausted, target-occupied, release-refused, unhealthy, prepare-only.
+#   void-exhausted, target-occupied, release-refused, unhealthy, prepare-only,
+#   release-unreachable-stop, stop-then-deployed.
 #
 # "definition" prints the Definition the story would save, as JSON, and touches nothing:
 # it needs jq only, and the contract tests read it to check what the environment changes.
@@ -47,8 +48,16 @@
 #                   started that verification once and received exactly one more, the
 #                   committed Decisions to grow by exactly the Turns after the held one
 #                   (no Decision asked again) and the Run COMPLETED, READY_FOR_APPROVAL.
+#   incomplete-final
+#                   the Agent fails the verification of the unadapted upgrade, adapts the
+#                   code and declares completion at once, without verifying the adapted
+#                   patch or recording a change request. Expects a FAILED Run whose Agent
+#                   answered FINAL and was judged INCOMPLETE with exactly
+#                   PATCH_VERIFICATION_MISSING and CHANGE_REQUEST_MISSING, the latest-patch
+#                   and change-request checks failed, one verification at the runner, of an
+#                   earlier patch, no change request and eight committed Decisions.
 #
-# The release stories, main to prepare-only, are described in vuln-fix-release.sh.
+# The release stories, main to stop-then-deployed, are described in vuln-fix-release.sh.
 #
 # EMBERLING_DEMO_MODEL=<model id> binds the Agent to a real decision model the Backend
 # registers through EMBERLING_MODELS instead of the scripted mock model. Only the verify
@@ -75,15 +84,16 @@
 # the Definition carries covers the wait.
 #
 # Writes RUN_ID, WORKFLOW_ID, RECORD_AFTER, RUN_STATUS and SUMMARY to $DEMO_STATE when it
-# is set, for ledger-vs-record.sh and the demo summary; target-occupied lists both Runs.
+# is set, for ledger-vs-record.sh and the demo summary; target-occupied lists both Runs and
+# release-unreachable-stop all three, the stopped Run first.
 set -euo pipefail
 
 # shellcheck source=scripts/demo/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_tools jq
 
-RELEASE_STORIES="main restart-during-approval duplicate-approval reject-resubmit release-crash-deployed release-crash-voided void-exhausted target-occupied release-refused unhealthy prepare-only"
-STORIES="verify scope-denied stale-evidence restart $RELEASE_STORIES"
+RELEASE_STORIES="main restart-during-approval duplicate-approval reject-resubmit release-crash-deployed release-crash-voided void-exhausted target-occupied release-refused unhealthy prepare-only release-unreachable-stop stop-then-deployed"
+STORIES="verify scope-denied stale-evidence restart incomplete-final $RELEASE_STORIES"
 usage="usage: vuln-fix.sh [definition] ${STORIES// /|}"
 
 mode=run
@@ -95,10 +105,12 @@ story=${1:-}
 case "$story" in
 verify | restart) script=vuln-fix-main-verify ;;
 scope-denied) script=vuln-fix-scope-denied ;;
+incomplete-final) script=vuln-fix-incomplete-final ;;
 stale-evidence) script=vuln-fix-stale-evidence ;;
 reject-resubmit) script=vuln-fix-rejected-resubmit ;;
 main | restart-during-approval | duplicate-approval | release-crash-deployed | release-crash-voided | \
-  void-exhausted | target-occupied | release-refused | unhealthy | prepare-only) script=vuln-fix-release ;;
+  void-exhausted | target-occupied | release-refused | unhealthy | prepare-only | release-unreachable-stop | \
+  stop-then-deployed) script=vuln-fix-release ;;
 *) die "$usage" ;;
 esac
 real_model=${EMBERLING_DEMO_MODEL:-}
@@ -124,8 +136,9 @@ OPERATOR_TOKEN=${EMBERLING_OPERATOR_TOKEN:-}
 OPERATOR_HEADER="X-Emberling-Operator-Token: $OPERATOR_TOKEN"
 # The release target the release stories bind the Agent to, and how long each release wait
 # is allowed: a short void grace where an unknown operation is meant to be voided while the
-# audience watches; a long confirm deadline, so no human wait opens by itself. A person
-# deciding by hand gets the whole manual wait as the approval deadline.
+# audience watches; a long confirm deadline, so no human wait opens by itself, except in
+# the two stop stories, where the release is meant to reach a person while the audience
+# watches. A person deciding by hand gets the whole manual wait as the approval deadline.
 RELEASE_SERVICE=token-service
 RELEASE_ENVIRONMENT=staging
 RELEASE_APPROVAL_TIMEOUT_MS=600000
@@ -137,6 +150,10 @@ RELEASE_HUMAN_WAIT_TIMEOUT_MS=600000
 RELEASE_MAX_RETRIES=1
 case "$story" in
 release-crash-voided | void-exhausted) RELEASE_VOID_GRACE_MS=10000 ;;
+release-unreachable-stop | stop-then-deployed)
+  RELEASE_VOID_GRACE_MS=10000
+  RELEASE_CONFIRM_TIMEOUT_MS=15000
+  ;;
 *) RELEASE_VOID_GRACE_MS=60000 ;;
 esac
 # The resubmitting Agent makes four more Decisions than the main story; a real model gets
@@ -421,8 +438,8 @@ if ((release_story)); then
       turnNo: $turn, actionId: $a.id, actionStatus: $a.status, code: ($a.error.code // null), failureSource: ($a.failureSource // null),
       approval: ($a.approval | if . == null then null else {id, status, reason} end),
       operations: [($a.release.operations // [])[] | {operationKey, outcome, status}],
-      occupation: ($a.release.occupation | if . == null then null else {status, releaseReason, operationKey} end),
-      humanWait: ($a.release.humanWait | if . == null then null else {status, outcome} end),
+      occupation: ($a.release.occupation | if . == null then null else {status, releaseReason, operationKey, nextQueryAt, deployedUncheckedVersion} end),
+      humanWait: ($a.release.humanWait | if . == null then null else {status, outcome, closedBy} end),
       attempts: [.toolAttempts[] | select(.toolName == "deploy_change")
         | {attemptNo, status, code: (.error.code // null), provider: (.callbackBinding.providerId // null), operationKey: (.callbackBinding.externalTaskId // null)}]}]' <<<"$trace")
   release_facts=$(jq -c '[.facts.items[] | select(.factType == "release_confirmed") | {subject, verdict, toolAttemptId}]' <<<"$trace")
@@ -552,12 +569,31 @@ else
     check report_names_latest "result=$result" report_names_latest
     summary="attempt=$held_attempt_before verification=$held_verification decisions=$decisions_before/$decisions runner_verifications=$arrivals_before/$runner_arrival_count callback_completions=$callback_completions completion=$outcome status=$run_status"
     ;;
+  incomplete-final)
+    missing=$(jq -c '[.missing[]?.code]' <<<"$completion")
+    check_states=$(jq -c '[.checks[]? | {(.name): .passed}] | add // {}' <<<"$completion")
+    check run_failed_task_incomplete "status=$run_status node_error=$agent_node_error" \
+      test "$run_status" = FAILED -a "$agent_node_error" = TASK_INCOMPLETE
+    check agent_declared_completion "termination=$termination last=$(jq -c '.turns | last | .decision.kind' <<<"$trace")" \
+      test "$termination" = FINAL_RESPONSE -a "$(jq -r '.turns | last | .decision.kind' <<<"$trace")" = FINAL
+    check judged_incomplete_missing_listed "completion=$outcome missing=$missing" \
+      jq -e --arg o "$outcome" '$o == "INCOMPLETE" and . == ["PATCH_VERIFICATION_MISSING", "CHANGE_REQUEST_MISSING"]' <<<"$missing"
+    check failed_checks_named "checks=$check_states" \
+      jq -e '.workspace_patch_recorded == true and .agent_declared_completion == true
+        and .latest_patch_verified == false and .change_request_binds_latest_patch == false' <<<"$check_states"
+    check only_an_earlier_patch_verified "latest=$latest_digest facts=$facts arrivals=$runner_arrivals" \
+      jq -e --arg d "$latest_digest" --argjson a "$runner_arrivals" 'length == 1 and .[0].subject != $d and ($a | length) == 1 and $a[0] != $d' <<<"$facts"
+    check no_change_request "change_requests=$change_requests" test "$(jq 'length' <<<"$change_requests")" -eq 0
+    check eight_decisions_committed "decisions=$decisions" test "$decisions" -eq 8
+    summary="missing=$(jq -r 'join(",")' <<<"$missing") verifications=$(jq 'length' <<<"$verifications") runner_verifications=$runner_arrival_count decisions=$decisions completion=$outcome status=$run_status"
+    ;;
   *) check_release_story ;;
   esac
 fi
 
 state_run_ids=$run_id
 [[ -n "$holder_run_id" ]] && state_run_ids="$run_id,$holder_run_id"
+[[ -n "$later_run_ids" ]] && state_run_ids+=",$later_run_ids"
 if [[ -n "${DEMO_STATE:-}" ]]; then
   printf 'RUN_ID=%s\nWORKFLOW_ID=%s\nRECORD_AFTER=%s\nRUN_STATUS=%s\nSUMMARY=%s\n' \
     "$state_run_ids" "$workflow_id" "$record_after_seq" "$run_status" "$summary" >"$DEMO_STATE"

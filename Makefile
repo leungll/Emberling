@@ -294,6 +294,8 @@ check-fast:
 ##   vuln-restart-during-verify
 ##                         SIGKILL while the verification callback is held; after the
 ##                         restart no Decision is asked again, no verification runs twice.
+##   vuln-incomplete-final the Agent declares completion before verifying its latest patch
+##                         or recording a change request; judged INCOMPLETE, both listed.
 ##   vuln-main             the verified patch is described in a change request, a person
 ##                         approves its release and production deploys it once.
 ##   vuln-restart-during-approval
@@ -316,6 +318,14 @@ check-fast:
 ##                         to the Agent.
 ##   vuln-unhealthy        deployed but unhealthy, reported as a failed check.
 ##   vuln-prepare-only     a PREPARE_ONLY task's release request is refused by its goal.
+##   vuln-release-unreachable-stop
+##                         production unreachable past the confirm deadline; a person stops
+##                         waiting, the task ends RELEASE_UNKNOWN with the target held and a
+##                         second task is refused; once production is back the operation is
+##                         voided, the target freed and a third task releases to it.
+##   vuln-stop-then-deployed
+##                         production deploys after a person stopped waiting; the target is
+##                         freed with the version recorded as live but unchecked.
 ##   Every release variant but vuln-prepare-only decides an approval and runs only with
 ##   EMBERLING_OPERATOR_TOKEN (at least 32 bytes) set; EMBERLING_DEMO_APPROVAL=manual
 ##   makes vuln-main wait for a person on the Studio approval page.

@@ -58,6 +58,11 @@
 #                                       vuln-fix.sh restart: SIGKILL while the verification
 #                                       callback is held; after the restart no Decision is
 #                                       asked again and no verification runs twice;
+#                   vuln-incomplete-final
+#                                       vuln-fix.sh incomplete-final: the Agent declares
+#                                       completion before verifying its latest patch or
+#                                       recording a change request; the task is judged
+#                                       INCOMPLETE and both missing facts are listed;
 #                   vuln-main           vuln-fix.sh main: the verified patch is described in
 #                                       a change request, a person approves its release, the
 #                                       approval occupies the deploy target and the mock
@@ -101,10 +106,24 @@
 #                                       target is unhealthy, reported as a failed check;
 #                   vuln-prepare-only   vuln-fix.sh prepare-only: a PREPARE_ONLY task's
 #                                       release request is refused by its goal before any
-#                                       approval.
-#                 Every release variant but vuln-prepare-only decides an approval, so it runs
-#                 only when EMBERLING_OPERATOR_TOKEN (at least 32 bytes) is set in the shell;
-#                 the Backend reads the same value, and "all" leaves them out without it.
+#                                       approval;
+#                   vuln-release-unreachable-stop
+#                                       vuln-fix.sh release-unreachable-stop: production is
+#                                       unreachable past the confirm deadline and a person
+#                                       stops waiting; the task ends RELEASE_UNKNOWN with the
+#                                       target held, a second task is refused as
+#                                       TARGET_OCCUPIED, and once production is back the
+#                                       never-received operation is voided, the target freed
+#                                       and a third task releases to it;
+#                   vuln-stop-then-deployed
+#                                       vuln-fix.sh stop-then-deployed: a person stops waiting
+#                                       for an unconfirmed release that production deploys
+#                                       afterwards; the target is freed as DEPLOYED with the
+#                                       version recorded as live but unchecked.
+#                 Every release variant but vuln-prepare-only decides an approval (the stop
+#                 variants also stop a human wait), so it runs only when
+#                 EMBERLING_OPERATOR_TOKEN (at least 32 bytes) is set in the shell; the
+#                 Backend reads the same value, and "all" leaves them out without it.
 #                 EMBERLING_DEMO_APPROVAL=manual makes vuln-main print the Studio approval
 #                 page and wait (EMBERLING_DEMO_APPROVAL_WAIT_S, default 1800) for a person.
 #                 Each photo, delivery and vuln variant is followed by the invariant report as well.
@@ -207,12 +226,12 @@ run)
   # The release variants that decide an approval, which need the operator credential.
   approval_variants=(vuln-main vuln-restart-during-approval vuln-duplicate-approval vuln-reject-resubmit
     vuln-release-crash-deployed vuln-release-crash-voided vuln-void-exhausted vuln-target-occupied
-    vuln-release-refused vuln-unhealthy)
+    vuln-release-refused vuln-unhealthy vuln-release-unreachable-stop vuln-stop-then-deployed)
   case "${EMBERLING_DEMO_VARIANT:-all}" in
   all)
     variants=(held-before-accept after-accept photo-set photo-gate photo-limit photo-sync-crash
       photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery
-      vuln-verify vuln-scope-denied vuln-stale-evidence vuln-restart-during-verify vuln-prepare-only)
+      vuln-verify vuln-scope-denied vuln-stale-evidence vuln-restart-during-verify vuln-incomplete-final vuln-prepare-only)
     operator_token=${EMBERLING_OPERATOR_TOKEN:-}
     if [[ ${#operator_token} -ge 32 ]]; then
       variants+=("${approval_variants[@]}")
@@ -222,10 +241,10 @@ run)
     ;;
   held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | photo-video-restart | \
     delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery | \
-    vuln-verify | vuln-scope-denied | vuln-stale-evidence | vuln-restart-during-verify | vuln-prepare-only | \
-    vuln-main | vuln-restart-during-approval | vuln-duplicate-approval | vuln-reject-resubmit | \
+    vuln-verify | vuln-scope-denied | vuln-stale-evidence | vuln-restart-during-verify | vuln-incomplete-final | \
+    vuln-prepare-only | vuln-main | vuln-restart-during-approval | vuln-duplicate-approval | vuln-reject-resubmit | \
     vuln-release-crash-deployed | vuln-release-crash-voided | vuln-void-exhausted | vuln-target-occupied | \
-    vuln-release-refused | vuln-unhealthy)
+    vuln-release-refused | vuln-unhealthy | vuln-release-unreachable-stop | vuln-stop-then-deployed)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
   serving)
@@ -236,7 +255,7 @@ run)
     serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout | serving-capacity)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, vuln-verify, vuln-scope-denied, vuln-stale-evidence, vuln-restart-during-verify, vuln-main, vuln-restart-during-approval, vuln-duplicate-approval, vuln-reject-resubmit, vuln-release-crash-deployed, vuln-release-crash-voided, vuln-void-exhausted, vuln-target-occupied, vuln-release-refused, vuln-unhealthy, vuln-prepare-only, serving or one serving-* variant" ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, vuln-verify, vuln-scope-denied, vuln-stale-evidence, vuln-restart-during-verify, vuln-incomplete-final, vuln-main, vuln-restart-during-approval, vuln-duplicate-approval, vuln-reject-resubmit, vuln-release-crash-deployed, vuln-release-crash-voided, vuln-void-exhausted, vuln-target-occupied, vuln-release-refused, vuln-unhealthy, vuln-prepare-only, vuln-release-unreachable-stop, vuln-stop-then-deployed, serving or one serving-* variant" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -265,10 +284,11 @@ run)
     vuln-scope-denied) script=vuln-fix.sh story=scope-denied ;;
     vuln-stale-evidence) script=vuln-fix.sh story=stale-evidence ;;
     vuln-restart-during-verify) script=vuln-fix.sh story=restart ;;
+    vuln-incomplete-final) script=vuln-fix.sh story=incomplete-final ;;
     vuln-main) script=vuln-fix.sh story=main ;;
     vuln-restart-during-approval | vuln-duplicate-approval | vuln-reject-resubmit | vuln-release-crash-deployed | \
       vuln-release-crash-voided | vuln-void-exhausted | vuln-target-occupied | vuln-release-refused | vuln-unhealthy | \
-      vuln-prepare-only) script=vuln-fix.sh story=${variant#vuln-} ;;
+      vuln-prepare-only | vuln-release-unreachable-stop | vuln-stop-then-deployed) script=vuln-fix.sh story=${variant#vuln-} ;;
     serving-*) script=serving.sh story=${variant#serving-} ;;
     esac
     printf '\n==== variant %s (%s%s) ====\n' "$variant" "$script" "${story:+ $story}"
