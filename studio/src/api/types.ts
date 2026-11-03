@@ -228,7 +228,10 @@ export interface UiSchemaField {
   order: number;
   group: UiGroup;
   widget: UiWidget;
-  /** Model capability the Model Selector filters on. Only meaningful for model widgets. */
+  /**
+   * Model capability the Model Selector filters on. Only meaningful for model widgets; absent,
+   * the selector lists every registered model and the Backend checks the capability on save.
+   */
   capability?: string;
 }
 

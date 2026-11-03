@@ -87,7 +87,10 @@ func Registration() registry.NodeRegistration {
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "modelId", Order: 10, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityStructuredDecision},
 				{Path: "imageModelId", Order: 15, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityReferenceImageGeneration},
-				{Path: "reviewModelId", Order: 17, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityVisionInput},
+				// reviewModelId lists every registered model: the capability a review model must
+				// declare depends on which review Tools the allowlist holds, and the Backend
+				// checks it when the Definition is saved.
+				{Path: "reviewModelId", Order: 17, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector},
 				{Path: "instructions", Order: 20, Group: domain.UIGroupBasic, Widget: domain.UIWidgetTextArea},
 				{Path: "allowedTools", Order: 30, Group: domain.UIGroupBasic, Widget: domain.UIWidgetToolSelector},
 				{Path: "maxTurns", Order: 40, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},

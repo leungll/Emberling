@@ -396,8 +396,10 @@ func TestDefinitionSave_ReviewModelUnusable_RejectedWithPath(t *testing.T) {
 }
 
 // TestCatalog_ReviewModel_ExposedInCatalog covers the catalogue side of the review model
-// selection: review_asset declares usesReviewModel, a vision model lists vision_input,
-// and the Agent node offers reviewModelId as a model selector filtered by it.
+// selection: review_asset declares usesReviewModel with vision_input as the capability it
+// needs, a vision model lists vision_input, and the Agent node offers reviewModelId as a
+// model selector without a capability filter, since the capability depends on the review
+// Tools allowed and the Backend checks it on save.
 func TestCatalog_ReviewModel_ExposedInCatalog(t *testing.T) {
 	upstream := newVisionUpstream(t, answerVerdict(`{"passed":true,"reasons":[]}`))
 	opts := testEnvOptions{}
@@ -428,7 +430,10 @@ func TestCatalog_ReviewModel_ExposedInCatalog(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /api/node-types status = %d, body=%s", resp.StatusCode, body)
 	}
-	if !strings.Contains(string(body), `{"path":"reviewModelId","order":17,"group":"MODEL","widget":"MODEL_SELECTOR","capability":"vision_input"}`) {
-		t.Errorf("agent node uiSchema does not offer reviewModelId filtered by vision_input: %s", body)
+	if got := string(tools[reviewasset.ToolName]["reviewModelCapability"]); got != `"vision_input"` {
+		t.Errorf("%s.reviewModelCapability = %s, want vision_input", reviewasset.ToolName, got)
+	}
+	if !strings.Contains(string(body), `{"path":"reviewModelId","order":17,"group":"MODEL","widget":"MODEL_SELECTOR"}`) {
+		t.Errorf("agent node uiSchema does not offer reviewModelId as an unfiltered model selector: %s", body)
 	}
 }

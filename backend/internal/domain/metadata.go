@@ -130,7 +130,8 @@ type UIField struct {
 	Order int     `json:"order"`
 	Group UIGroup `json:"group"`
 	// Widget is the control hint; Capability filters the Model Selector list and must be
-	// empty for every other Widget.
+	// empty for every other Widget. A Model Selector without a Capability lists every
+	// registered model, and the Backend checks the capability the selection needs on save.
 	Widget     UIWidget `json:"widget"`
 	Capability string   `json:"capability,omitempty"`
 }

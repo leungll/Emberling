@@ -84,7 +84,7 @@ export const NODE_TYPES: NodeMetadata[] = [
     [
       { path: 'modelId', widget: 'MODEL_SELECTOR', capability: 'structured_decision' },
       { path: 'imageModelId', widget: 'MODEL_SELECTOR', capability: 'reference_image_generation' },
-      { path: 'reviewModelId', widget: 'MODEL_SELECTOR', capability: 'vision_input' },
+      { path: 'reviewModelId', widget: 'MODEL_SELECTOR' },
     ],
   ),
   meta(
