@@ -61,6 +61,37 @@ wait_until() {
   done
 }
 
+# await_running RUN_ID DESCRIPTION SECONDS COMMAND... waits like wait_until for a condition
+# that can only come true while the Run is still running: a PENDING approval, an open human
+# wait, a request held at a service. When the Run reaches COMPLETED or FAILED first, the
+# condition can no longer come true, so it stops at once instead of waiting out the
+# deadline: it prints the Run's status and the error code of its failed NodeRun, calls
+# run_ended_hook RUN_ID STATUS CODE DESCRIPTION when the script defines one, and exits 1.
+await_running() {
+  local run_id=$1 description=$2 seconds=$3 snapshot status code
+  shift 3
+  local deadline=$((SECONDS + seconds))
+  until "$@"; do
+    if snapshot=$(curl -fsS "$BACKEND_URL/api/runs/$run_id" 2>/dev/null); then
+      status=$(jq -r '.run.status' <<<"$snapshot")
+      if [[ "$status" == COMPLETED || "$status" == FAILED ]]; then
+        # The condition may have come true just before the Run ended.
+        "$@" && return 0
+        code=$(jq -r '[.nodeRuns[] | .error.code // empty] | first // "none"' <<<"$snapshot")
+        printf 'run %s ended %s (error %s) while waiting for: %s\n' "$run_id" "$status" "$code" "$description" >&2
+        if declare -F run_ended_hook >/dev/null; then
+          run_ended_hook "$run_id" "$status" "$code" "$description"
+        fi
+        exit 1
+      fi
+    fi
+    if ((SECONDS >= deadline)); then
+      die "timed out after ${seconds}s waiting for: $description"
+    fi
+    sleep 0.5
+  done
+}
+
 backend_ready() {
   curl -fsS -o /dev/null "$BACKEND_URL/ready" 2>/dev/null
 }

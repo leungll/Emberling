@@ -149,6 +149,7 @@ func TestDemoVulnFix_ReleaseStories_DefinitionsSave(t *testing.T) {
 		"reject-resubmit": "vuln-fix-rejected-resubmit", "release-crash-deployed": "vuln-fix-release",
 		"release-crash-voided": "vuln-fix-release", "void-exhausted": "vuln-fix-release", "target-occupied": "vuln-fix-release",
 		"release-refused": "vuln-fix-release", "unhealthy": "vuln-fix-release", "prepare-only": "vuln-fix-release",
+		"release-unreachable-stop": "vuln-fix-release", "stop-then-deployed": "vuln-fix-release",
 	}
 	for story, script := range stories {
 		t.Run(story, func(t *testing.T) {
@@ -166,6 +167,51 @@ func TestDemoVulnFix_ReleaseStories_DefinitionsSave(t *testing.T) {
 				t.Fatalf("POST /api/definitions (%s) status = %d, body=%s", story, resp.StatusCode, body)
 			}
 		})
+	}
+}
+
+// TestDemoVulnFix_StopStories_ConfirmDeadlineHandsTheReleaseToAPerson proves the two stop
+// stories give the release a confirm deadline short enough for the human wait to open
+// while the audience watches, a human wait long enough for the script to stop it, and a
+// void grace for the operation production never received.
+func TestDemoVulnFix_StopStories_ConfirmDeadlineHandsTheReleaseToAPerson(t *testing.T) {
+	for _, story := range []string{"release-unreachable-stop", "stop-then-deployed"} {
+		config := agentConfigOf(t, demoDefinition(t, story, "EMBERLING_DEMO_MODEL=", "EMBERLING_DEMO_APPROVAL="))
+		if config["releaseConfirmTimeoutMs"] != float64(15000) || config["humanWaitTimeoutMs"] != float64(600000) ||
+			config["voidGraceMs"] != float64(10000) {
+			t.Errorf("%s release bounds = confirm %v human %v grace %v, want 15000, 600000 and 10000", story,
+				config["releaseConfirmTimeoutMs"], config["humanWaitTimeoutMs"], config["voidGraceMs"])
+		}
+	}
+	main := agentConfigOf(t, demoDefinition(t, "main", "EMBERLING_DEMO_MODEL=", "EMBERLING_DEMO_APPROVAL="))
+	if main["releaseConfirmTimeoutMs"] != float64(120000) {
+		t.Errorf("main releaseConfirmTimeoutMs = %v, want 120000: no human wait opens by itself", main["releaseConfirmTimeoutMs"])
+	}
+}
+
+// TestDemoVulnFix_IncompleteFinal_DefinitionSaves proves the incomplete-final story binds
+// its trajectory to the repair Definition without the release Tools, and that the Backend
+// accepts it.
+func TestDemoVulnFix_IncompleteFinal_DefinitionSaves(t *testing.T) {
+	f := newVulnFixture(t)
+	env := f.startBackend(t, testEnvOptions{})
+	fx := demoDefinition(t, "incomplete-final", "EMBERLING_DEMO_MODEL=", "EMBERLING_DEMO_APPROVAL=")
+	config := agentConfigOf(t, fx)
+	modelConfig, _ := config["modelConfig"].(map[string]any)
+	if modelConfig["script"] != "vuln-fix-incomplete-final" || config["timeoutMs"] != float64(300000) {
+		t.Fatalf("agent config = %v, want script vuln-fix-incomplete-final and the fixture's budget", config)
+	}
+	tools, _ := config["allowedTools"].([]any)
+	for _, tool := range tools {
+		if tool == "deploy_change" {
+			t.Errorf("allowedTools = %v, want no release Tool for a repair story", tools)
+		}
+	}
+	resp, body := env.doJSON(t, http.MethodPost, "/api/definitions", map[string]any{
+		"name": fx.Name, "description": fx.Description, "nodes": fx.Nodes, "edges": fx.Edges,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /api/definitions (incomplete-final) status = %d, body=%s", resp.StatusCode, body)
 	}
 }
 
