@@ -340,6 +340,10 @@ type deliveryTrace struct {
 			FailureSource *string `json:"failureSource"`
 		} `json:"action"`
 		ToolAttempts []deliveryToolAttempt `json:"toolAttempts"`
+		Manifest     []struct {
+			Kind string `json:"kind"`
+			Ref  string `json:"ref"`
+		} `json:"manifest"`
 	} `json:"turns"`
 	Facts struct {
 		Items []struct {

@@ -310,8 +310,13 @@ check-fast:
 ##   serving-capacity      the Backend restarted with two slots on the image Provider;
 ##                         at most two image tasks in flight, the rest queue as READY.
 ## EMBERLING_DEMO_STUDIO=1 turns on the Studio demo mode described under demo-studio.
-## EMBERLING_DEMO_MODEL=<model id> runs vuln-verify against a real decision model the
-## Backend registers through EMBERLING_MODELS; the key stays in the shell environment.
+## EMBERLING_DEMO_MODEL=<model id> runs vuln-verify against a real decision model. The
+## Backend registers it from EMBERLING_MODELS, EMBERLING_MODEL_BASE_URL and
+## EMBERLING_MODEL_API_KEY (optionally EMBERLING_MODEL_TIMEOUT) in the shell environment;
+## set nothing else (an image key without image models stops the Backend). The Agent gets
+## the EMBERLING_DEMO_MODEL_TIMEOUT_MS budget, thirty minutes by default.
+## EMBERLING_DEMO_RUNNER=docker starts the docker sandbox runner (profile sandbox-docker,
+## needs SANDBOXRUNNER_VERIFY_IMAGE) instead of the mock runner.
 ## Needs Docker, git, curl and jq; deliberately not part of `check`.
 demo:
 	@bash scripts/demo/demo.sh run

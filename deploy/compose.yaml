@@ -204,12 +204,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      # The deploy and sandbox_test Tools call these two services. They exist only under
-      # the mock profile, so they are optional: without it the backend starts alone.
+      # The deploy Tool calls the mock production service, which exists only under the
+      # mock profile, so it is optional: without it the backend starts alone. The sandbox
+      # runner is deliberately not listed: the Tools reach it only at call time, and either
+      # runner service may be the one serving its address, so naming the mock runner here
+      # would start it beside a docker runner and fail on the shared port.
       mockproduction:
-        condition: service_started
-        required: false
-      sandboxrunner:
         condition: service_started
         required: false
     ports:

@@ -58,9 +58,19 @@
 #                                       asked again and no verification runs twice.
 #                 Each photo, delivery and vuln variant is followed by the invariant report as well.
 #                 The vuln variants bind the Agent to the example repository, which this
-#                 script generates under deploy/.demo/repositories before the stack starts;
+#                 script generates under deploy/.demo/repositories before the stack starts.
 #                 EMBERLING_DEMO_MODEL=<model id> runs vuln-verify against a real decision
-#                 model the Backend registers (see vuln-fix.sh).
+#                 model: the Backend registers it from EMBERLING_MODELS,
+#                 EMBERLING_MODEL_BASE_URL and EMBERLING_MODEL_API_KEY (optionally
+#                 EMBERLING_MODEL_TIMEOUT for one model call) in the shell environment;
+#                 nothing else is needed, and an image key without image models makes
+#                 the Backend refuse to start. vuln-fix.sh gives the Agent the
+#                 EMBERLING_DEMO_MODEL_TIMEOUT_MS budget (default thirty minutes).
+#                 EMBERLING_DEMO_RUNNER=docker starts the sandbox runner with its docker
+#                 backend (compose profile sandbox-docker, which needs
+#                 SANDBOXRUNNER_VERIFY_IMAGE) instead of the mock runner, so the vuln
+#                 stories verify patches with a real `go test`; the delivery variants'
+#                 mock test modes are not available then.
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
 #                 The serving variants run only when named, or all nine with
 #                 EMBERLING_DEMO_VARIANT=serving. Each is serving.sh STORY, many users of
@@ -114,12 +124,27 @@ REPOSITORIES_DIR="$DEMO_ROOT/deploy/.demo/repositories"
 case "${1:-}" in
 run)
   require_tools git
+  # The sandbox runner the stack starts: the mock runner answers tests and verifications
+  # from its mock backends; the docker runner runs them in containers and takes the same
+  # service address, so the backend needs no other setting.
+  runner_service=sandboxrunner
+  runner_profile=()
+  case "${EMBERLING_DEMO_RUNNER:-mock}" in
+  mock) ;;
+  docker)
+    [[ -n "${SANDBOXRUNNER_VERIFY_IMAGE:-}" ]] ||
+      die "EMBERLING_DEMO_RUNNER=docker needs SANDBOXRUNNER_VERIFY_IMAGE, the digest-pinned verification image built by deploy/sandboxrunner-verify/build.sh"
+    runner_service=sandboxrunner-docker
+    runner_profile=(--profile sandbox-docker)
+    ;;
+  *) die "EMBERLING_DEMO_RUNNER must be mock or docker" ;;
+  esac
   log "generating the example repository under $REPOSITORIES_DIR"
   sh "$DEMO_ROOT/backend/internal/fixture/vulnrepo/generate.sh" "$REPOSITORIES_DIR/vuln-demo"
-  log "building the backend, mockprovider, mockproduction and sandboxrunner images (cached when sources are unchanged)"
-  compose build --quiet mockprovider mockproduction sandboxrunner backend
-  log "starting postgres, mockprovider, mockproduction, sandboxrunner and backend"
-  compose up -d --wait postgres mockprovider mockproduction sandboxrunner backend
+  log "building the backend, mockprovider, mockproduction and $runner_service images (cached when sources are unchanged)"
+  compose "${runner_profile[@]+"${runner_profile[@]}"}" build --quiet mockprovider mockproduction "$runner_service" backend
+  log "starting postgres, mockprovider, mockproduction, $runner_service and backend"
+  compose "${runner_profile[@]+"${runner_profile[@]}"}" up -d --wait postgres mockprovider mockproduction "$runner_service" backend
   if studio_mode; then
     log "building and starting studio (EMBERLING_DEMO_STUDIO=1)"
     compose build --quiet studio
@@ -233,7 +258,9 @@ run)
   [[ "$overall" -eq 0 ]]
   ;;
 down)
-  compose down --remove-orphans
+  # The sandbox-docker profile is named so a docker runner started by EMBERLING_DEMO_RUNNER
+  # stops too.
+  compose --profile sandbox-docker down --remove-orphans
   volumes=$(compose config --format json | jq -r '.volumes')
   for key in emberling-mockprovider-record emberling-mockproduction-record emberling-sandboxrunner-record; do
     record_volume=$(jq -r --arg key "$key" '.[$key].name // empty' <<<"$volumes")
