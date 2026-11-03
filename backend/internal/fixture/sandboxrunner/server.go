@@ -291,9 +291,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 	if !ok {
+		s.recordTestPoll(testID, http.StatusNotFound, "")
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown testId"})
 		return
 	}
+	s.recordTestPoll(testID, http.StatusOK, response.Status)
 	writeJSON(w, http.StatusOK, response)
 }
 

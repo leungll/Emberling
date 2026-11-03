@@ -367,9 +367,11 @@ func (s *Server) handleVerificationStatus(w http.ResponseWriter, r *http.Request
 	}
 	s.mu.Unlock()
 	if !ok {
+		s.recordVerificationPoll(verificationID, http.StatusNotFound, "")
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "unknown verificationId"})
 		return
 	}
+	s.recordVerificationPoll(verificationID, http.StatusOK, response.Status)
 	writeJSON(w, http.StatusOK, response)
 }
 
