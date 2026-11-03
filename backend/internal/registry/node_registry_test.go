@@ -200,13 +200,15 @@ func TestNodeRegistry_Register_ModelSelectorWithoutStringPropertyRejected(t *tes
 	}
 }
 
-func TestNodeRegistry_Register_ModelSelectorWithoutCapabilityRejected(t *testing.T) {
+// A Model Selector without a capability lists every registered model; the capability the
+// selection needs is then checked when the Definition is saved.
+func TestNodeRegistry_Register_ModelSelectorWithoutCapabilityAccepted(t *testing.T) {
 	reg := validSyncNodeRegistration()
 	reg.Metadata.UISchema.Fields = []domain.UIField{
 		{Path: "inputKey", Order: 10, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector},
 	}
-	if err := NewNodeRegistry().Register(reg); err == nil {
-		t.Fatal("Register() error = nil, want MODEL_SELECTOR missing-capability error")
+	if err := NewNodeRegistry().Register(reg); err != nil {
+		t.Fatalf("Register() error = %v, want an unfiltered MODEL_SELECTOR accepted", err)
 	}
 }
 

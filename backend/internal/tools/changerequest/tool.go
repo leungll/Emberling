@@ -5,12 +5,15 @@
 //
 // The Agent names the patch by digest and supplies the summary, impact, rollback plan and
 // the decision basis: statements it relied on, each pointing at an item of a Turn's Context
-// Manifest. Everything else in the request comes from committed facts the Runtime resolved
-// in the claim transaction: the workspace view names the repository, base commit, current
-// patch and deploy target, and the required facts carry the verification the patch passed.
-// The Runtime refuses a digest that is not the current patch and a patch without a passing
-// verification before this Tool is called, and checks every manifest reference; the Tool
-// only renders and never looks a fact up itself.
+// Manifest. When the patch was reviewed by the independent review model, the Agent may
+// attach that review by citing its fact and list the review findings it left unresolved, so
+// the approver sees them. Everything else in the request comes from committed facts the
+// Runtime resolved in the claim transaction: the workspace view names the repository, base
+// commit, current patch and deploy target, and the required facts carry the verification
+// the patch passed and the cited review. The Runtime refuses a digest that is not the
+// current patch and a patch without a passing verification before this Tool is called, and
+// checks every manifest reference and the review citation; the Tool only renders and never
+// looks a fact up itself.
 //
 // The executor computes a result; it writes no database row. The change request becomes a
 // fact when the Runtime records it in the result transaction, under the CHANGE_REQUEST
@@ -32,6 +35,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
@@ -57,6 +61,16 @@ const MaxStatementRunes = 1000
 // repository paths, never content.
 const MaxManifestRefRunes = 256
 
+// ReviewFactType is the fact type a cited review must have; the Runtime checks the citation
+// against the Run's facts before this Tool is called.
+const ReviewFactType = "patch_reviewed"
+
+// Bounds of the unresolved review findings the Agent lists for the approver.
+const (
+	MaxUnresolvedFindings     = 16
+	MaxUnresolvedFindingRunes = 500
+)
+
 const inputSchema = `{
   "type": "object",
   "properties": {
@@ -64,6 +78,12 @@ const inputSchema = `{
     "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
     "impact": {"type": "string", "minLength": 1, "maxLength": 4000},
     "rollbackPlan": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "reviewFactId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "unresolvedFindings": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
     "decisionBasis": {
       "type": "array",
       "minItems": 1,
@@ -96,6 +116,7 @@ const outputSchema = `{
     "contentArtifactId": {"type": "string", "minLength": 1},
     "contentDigest": {"type": "string", "minLength": 64, "maxLength": 64},
     "basisCount": {"type": "integer", "minimum": 1},
+    "reviewFactId": {"type": "string", "minLength": 1},
     "changeRequestId": {"type": "string", "minLength": 1},
     "existing": {"type": "boolean"}
   },
@@ -155,21 +176,24 @@ func New(artifacts ArtifactTextStore) *Executor {
 }
 
 type arguments struct {
-	PatchDigest   string          `json:"patchDigest"`
-	Summary       string          `json:"summary"`
-	Impact        string          `json:"impact"`
-	RollbackPlan  string          `json:"rollbackPlan"`
-	DecisionBasis json.RawMessage `json:"decisionBasis"`
+	PatchDigest        string          `json:"patchDigest"`
+	Summary            string          `json:"summary"`
+	Impact             string          `json:"impact"`
+	RollbackPlan       string          `json:"rollbackPlan"`
+	ReviewFactID       string          `json:"reviewFactId"`
+	UnresolvedFindings []string        `json:"unresolvedFindings"`
+	DecisionBasis      json.RawMessage `json:"decisionBasis"`
 }
 
 // result is the Tool's own result. The Runtime adds the record identifier when it commits
-// the request.
+// the request. ReviewFactID is present only when the request attaches a review.
 type result struct {
 	PatchDigest        string `json:"patchDigest"`
 	VerificationFactID string `json:"verificationFactId"`
 	ContentArtifactID  string `json:"contentArtifactId"`
 	ContentDigest      string `json:"contentDigest"`
 	BasisCount         int    `json:"basisCount"`
+	ReviewFactID       string `json:"reviewFactId,omitempty"`
 }
 
 // Execute renders the change request, stores it as a text Artifact and returns the record.
@@ -200,14 +224,34 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 	if !found {
 		return registry.ToolExecutionResult{}, toolError("the call carries no passing " + RequiredFactType + " fact about the patch")
 	}
+	var review *domain.ExecutionFact
+	if args.ReviewFactID != "" {
+		// The Runtime resolved and checked the citation before this call; a call that
+		// cites a review it does not carry is refused rather than rendered without it.
+		cited, found := reviewOf(action.RequiredFacts, args.ReviewFactID, args.PatchDigest)
+		if !found {
+			return registry.ToolExecutionResult{}, toolError("the call carries no " + ReviewFactType + " fact matching the cited review")
+		}
+		review = &cited
+	}
+	if len(args.UnresolvedFindings) > MaxUnresolvedFindings {
+		return registry.ToolExecutionResult{}, toolError("too many unresolved findings")
+	}
+	for _, item := range args.UnresolvedFindings {
+		if strings.TrimSpace(item) == "" || utf8.RuneCountInString(item) > MaxUnresolvedFindingRunes {
+			return registry.ToolExecutionResult{}, toolError("an unresolved finding is empty or too long")
+		}
+	}
 
 	content := render(renderInput{
-		workspace:    *action.Workspace,
-		summary:      args.Summary,
-		impact:       args.Impact,
-		rollbackPlan: args.RollbackPlan,
-		verification: verification,
-		basis:        basis,
+		workspace:          *action.Workspace,
+		summary:            args.Summary,
+		impact:             args.Impact,
+		rollbackPlan:       args.RollbackPlan,
+		verification:       verification,
+		review:             review,
+		unresolvedFindings: args.UnresolvedFindings,
+		basis:              basis,
 	})
 	sum := sha256.Sum256([]byte(content))
 	contentDigest := hex.EncodeToString(sum[:])
@@ -231,6 +275,7 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 		ContentArtifactID:  ref.ArtifactID,
 		ContentDigest:      contentDigest,
 		BasisCount:         len(basis),
+		ReviewFactID:       args.ReviewFactID,
 	})
 	if err != nil {
 		return registry.ToolExecutionResult{}, fmt.Errorf("%s: encode result: %w", ToolName, err)
@@ -246,6 +291,7 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 				ContentArtifact:    ref,
 				ContentDigest:      contentDigest,
 				DecisionBasis:      canonicalBasis,
+				ReviewFactID:       args.ReviewFactID,
 			},
 		},
 	}, nil
@@ -262,6 +308,17 @@ func verificationOf(facts []domain.ExecutionFact, patchDigest string) (domain.Ex
 	return domain.ExecutionFact{}, false
 }
 
+// reviewOf selects, from the facts the Runtime resolved for the call, the cited review of
+// patchDigest.
+func reviewOf(facts []domain.ExecutionFact, factID, patchDigest string) (domain.ExecutionFact, bool) {
+	for _, fact := range facts {
+		if fact.ID == factID && fact.FactType == ReviewFactType && fact.SubjectRef == patchDigest {
+			return fact, true
+		}
+	}
+	return domain.ExecutionFact{}, false
+}
+
 // renderInput is everything the Markdown rendering reads.
 type renderInput struct {
 	workspace    registry.WorkspaceView
@@ -269,7 +326,10 @@ type renderInput struct {
 	impact       string
 	rollbackPlan string
 	verification domain.ExecutionFact
-	basis        []domain.ChangeRequestBasis
+	// review is the cited review fact, nil when the request attaches none.
+	review             *domain.ExecutionFact
+	unresolvedFindings []string
+	basis              []domain.ChangeRequestBasis
 }
 
 // render produces the change request as Markdown. The output is a pure function of its
@@ -307,6 +367,37 @@ func render(in renderInput) string {
 	writeField(&b, "Verdict", "passed")
 	for _, name := range sortedBindingNames(in.verification.Binding) {
 		writeField(&b, name, bindingValue(in.verification.Binding, name))
+	}
+	b.WriteString("\n")
+
+	// The review section names the review fact and its conclusion, and lists what the Agent
+	// left unresolved, so the approver can weigh the second opinion. The opinion text itself
+	// stays in the Artifact the fact binds.
+	b.WriteString("## Review\n\n")
+	if in.review == nil {
+		b.WriteString("No independent review is attached to this request.\n")
+	} else {
+		writeField(&b, "Fact", in.review.ID)
+		writeField(&b, "Fact type", in.review.FactType)
+		writeField(&b, "Subject", in.review.SubjectRef)
+		switch {
+		case in.review.Verdict == nil:
+			writeField(&b, "Blocking findings", "not recorded")
+		case *in.review.Verdict:
+			writeField(&b, "Blocking findings", "none")
+		default:
+			writeField(&b, "Blocking findings", "yes")
+		}
+		for _, name := range sortedBindingNames(in.review.Binding) {
+			writeField(&b, name, bindingValue(in.review.Binding, name))
+		}
+		b.WriteString("\nUnresolved findings:\n\n")
+		if len(in.unresolvedFindings) == 0 {
+			b.WriteString("- none\n")
+		}
+		for _, item := range in.unresolvedFindings {
+			b.WriteString("- " + strings.TrimSpace(item) + "\n")
+		}
 	}
 	b.WriteString("\n")
 

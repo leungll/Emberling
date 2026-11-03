@@ -55,7 +55,7 @@ func TestToolMetadataResponse_UndeclaredFacts_RequiresIsArrayAndProducesOmitted(
 		t.Fatal(err)
 	}
 	for _, field := range []string{`"requires":[]`, `"countsTowardGenerationLimit":false`, `"records":[]`,
-		`"usesWorkspace":false`, `"reconcilable":false`, `"returnUnmetRequirement":false`} {
+		`"usesWorkspace":false`, `"reconcilable":false`, `"returnUnmetRequirement":false`, `"requiresReviewModel":false`} {
 		if !strings.Contains(string(encoded), field) {
 			t.Errorf("response %s does not contain %s", encoded, field)
 		}
@@ -65,6 +65,9 @@ func TestToolMetadataResponse_UndeclaredFacts_RequiresIsArrayAndProducesOmitted(
 	}
 	if strings.Contains(string(encoded), `"authorization"`) {
 		t.Errorf("response %s contains authorization, want it omitted when undeclared (LOW risk)", encoded)
+	}
+	if strings.Contains(string(encoded), `"reviewModelCapability"`) {
+		t.Errorf("response %s contains reviewModelCapability, want it omitted when the tool uses no review model", encoded)
 	}
 	if metadata.Requires != nil || metadata.Records != nil {
 		t.Fatal("response projection mutated registered metadata")

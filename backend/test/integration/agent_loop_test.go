@@ -169,6 +169,11 @@ type agentHarness struct {
 	uow      store.UnitOfWork
 	pool     *pgxpool.Pool
 	compiler *runtime.Compiler
+	// nodes, models and tools are the Registries the service resolves against, kept so a
+	// test can run the Definition save path over the same registrations.
+	nodes    *registry.NodeRegistry
+	models   *registry.ModelRegistry
+	tools    *registry.ToolRegistry
 	clock    *execClock
 	ids      *execForcedIDs
 	provider *mockmodel.Provider
@@ -276,6 +281,7 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 	return &agentHarness{
 		t: t, ctx: ctx,
 		uow: uow, pool: pool, compiler: compiler,
+		nodes: nodeRegistry, models: modelRegistry, tools: toolRegistry,
 		clock: clock, ids: ids, provider: provider, svc: svc,
 		turns: turns, runnerID: runnerID,
 	}

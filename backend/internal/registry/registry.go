@@ -160,9 +160,9 @@ func validateNodeUIFields(nodeType string, configSchema []byte, ui domain.NodeUI
 			if !propertyHasType(property, "string") {
 				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget MODEL_SELECTOR requires a string property", nodeType, field.Path))
 			}
-			if field.Capability == "" {
-				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget MODEL_SELECTOR requires a non-empty capability", nodeType, field.Path))
-			}
+			// An empty Capability is allowed: the selector then lists every registered model
+			// and the Backend checks the capability the selection needs on save, as for a
+			// review model whose required capability depends on the Tools allowed.
 		case domain.UIWidgetToolSelector:
 			if !propertyHasStringItems(property) {
 				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget TOOL_SELECTOR requires an array of strings", nodeType, field.Path))

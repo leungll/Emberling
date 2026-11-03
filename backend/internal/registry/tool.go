@@ -43,8 +43,10 @@ type ToolAction struct {
 	Workspace *WorkspaceView
 	// RequiredFacts are the committed facts that satisfied the Tool's declared fact
 	// requirements, one per requirement in declaration order, resolved in the claim
-	// transaction. A Tool that declares no requirement receives none. The Tool reads them
-	// verbatim, to cite the fact its result rests on; it never looks a fact up itself.
+	// transaction, followed by any fact the call cited by identifier that the claim
+	// verified, such as the review fact a change request attaches. A Tool that declares no
+	// requirement and cites nothing receives none. The Tool reads them verbatim, to cite
+	// the fact its result rests on; it never looks a fact up itself.
 	RequiredFacts []domain.ExecutionFact
 	// Callback is set only for an ASYNC Tool dispatch.
 	Callback *CallbackContext
@@ -109,15 +111,19 @@ type WorkspacePatch struct {
 
 // ChangeRequest is the record a change-request Tool assembles from committed facts: the
 // patch it describes by digest, the verification fact it rests on, the Artifact holding its
-// content with that content's digest, and the decision basis it cites. Every reference is
-// to something already committed; the Runtime checks them against the Run's facts before
-// recording the request.
+// content with that content's digest, the decision basis it cites and, when the call cited
+// one, the review fact of the same patch. Every reference is to something already
+// committed; the Runtime checks them against the Run's facts before recording the request.
 type ChangeRequest struct {
 	PatchDigest        string
 	VerificationFactID string
 	ContentArtifact    domain.ArtifactRef
 	ContentDigest      string
 	DecisionBasis      json.RawMessage
+	// ReviewFactID is the review fact the request attaches, "" when the call cited none. It
+	// is checked, never stored as a column: the request's content carries the reference,
+	// and whether a patch was reviewed is read from the facts themselves.
+	ReviewFactID string
 }
 
 // ToolResultKind distinguishes a finished Tool call from a dispatch.
