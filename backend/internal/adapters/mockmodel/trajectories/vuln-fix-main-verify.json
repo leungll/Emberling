@@ -59,6 +59,29 @@
       }
     },
     {
+      "toolCall": {
+        "toolName": "create_change_request",
+        "arguments": {
+          "patchDigest": "{{latest:/patchDigest}}",
+          "summary": "Upgrade github.com/golang-jwt/jwt to v5.3.1, the release that fixes the advisory, and adapt the token verifier to the v5 claims API.",
+          "impact": "The token service verifies tokens with the patched library and rejects tokens signed with another method; its public API does not change.",
+          "rollbackPlan": "Redeploy the previous image; tokens issued meanwhile stay verifiable because the signing secret and the claims layout are unchanged.",
+          "decisionBasis": [
+            {
+              "statement": "RULES.md restricts the fix to go.mod and files under internal/auth/.",
+              "turnNo": 2,
+              "manifestRef": "RULES.md"
+            },
+            {
+              "statement": "The advisory names the vulnerable release and the release that fixes it.",
+              "turnNo": 3,
+              "manifestRef": "advisories/{{task:/advisory}}.md"
+            }
+          ]
+        }
+      }
+    },
+    {
       "final": {
         "outputText": {
           "status": "PATCH_VERIFIED",

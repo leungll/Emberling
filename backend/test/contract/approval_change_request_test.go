@@ -3,7 +3,6 @@
 package contract
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"github.com/leungll/Emberling/backend/internal/adapters/mockmodel"
-	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/tools/changerequest"
@@ -198,14 +196,10 @@ func doOperatorRequest(t *testing.T, env *testEnv, token, method, path string) (
 // runs the release Tool once with the same change request id.
 func TestApprovals_Detail_ShowsChangeRequestAndPatchOfTheNamedRequest(t *testing.T) {
 	f := newVulnFixture(t)
-	artifacts := asset.NewArtifactStore(f.assetRoot, defaultTestArtifactMaxBytes)
-	if err := artifacts.VerifyReadWrite(context.Background()); err != nil {
-		t.Fatalf("artifact store: %v", err)
-	}
 	executor := &countingToolExecutor{}
 	env := f.startBackend(t, testEnvOptions{
 		OperatorToken:          testOperatorToken,
-		ExtraToolRegistrations: []registry.ToolRegistration{changerequest.Registration(artifacts), releaseToolRegistration(executor)},
+		ExtraToolRegistrations: []registry.ToolRegistration{releaseToolRegistration(executor)},
 	})
 	env.provider.Script = changeRequestScript()
 

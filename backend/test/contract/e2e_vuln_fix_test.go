@@ -22,6 +22,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/fixture/mockcontrol"
 	"github.com/leungll/Emberling/backend/internal/fixture/sandboxrunner"
 	"github.com/leungll/Emberling/backend/internal/registry"
+	"github.com/leungll/Emberling/backend/internal/tools/changerequest"
 	"github.com/leungll/Emberling/backend/internal/tools/verifypatch"
 	"github.com/leungll/Emberling/backend/internal/tools/workspace"
 )
@@ -93,6 +94,7 @@ func (f *vulnFixture) startBackend(t *testing.T, opts testEnvOptions) *testEnv {
 	opts.ExtraToolRegistrations = append(append(
 		workspace.Registrations(workspace.NewLocalGit(map[string]string{vulnRepositoryID: f.repoPath})),
 		verifypatch.Registration(f.runner.http.URL, nil, artifacts),
+		changerequest.Registration(artifacts),
 	), opts.ExtraToolRegistrations...)
 	env := newTestEnvWithOptions(t, opts)
 	f.callbacks.setTarget(env.server.URL)
