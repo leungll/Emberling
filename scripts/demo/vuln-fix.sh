@@ -353,6 +353,26 @@ run_terminal_of() {
   [[ "$status" == COMPLETED || "$status" == FAILED ]]
 }
 
+# write_demo_state records the story's Runs, status and summary for make demo.
+write_demo_state() {
+  local state_run_ids=${run_id:-$holder_run_id}
+  [[ -n "$run_id" && -n "$holder_run_id" ]] && state_run_ids="$run_id,$holder_run_id"
+  [[ -n "${later_run_ids:-}" ]] && state_run_ids+=",$later_run_ids"
+  if [[ -n "${DEMO_STATE:-}" ]]; then
+    printf 'RUN_ID=%s\nWORKFLOW_ID=%s\nRECORD_AFTER=%s\nRUN_STATUS=%s\nSUMMARY=%s\n' \
+      "$state_run_ids" "$workflow_id" "$record_after_seq" "$run_status" "$summary" >"$DEMO_STATE"
+  fi
+}
+# A Run that ends while the story still waits for something only a running Run can do
+# fails the story at once, whatever end the story expects: the story's path needed that
+# step before the end. make demo still gets the Run for its invariant report and ledger.
+run_ended_hook() {
+  run_status="$2 (ended while waiting for: $4)"
+  summary="run $1 ended $2 with error $3 while waiting for: $4"
+  write_demo_state
+  printf '\nvulnerability fix %s story: FAILED, run %s ended %s (error %s) while waiting for: %s\n' "$story" "$1" "$2" "$3" "$4"
+}
+
 held_attempt_before=""
 decisions_before=0
 arrivals_before=0
@@ -367,11 +387,11 @@ if [[ "$story" == restart ]]; then
   callback_held() {
     curl -fsS "$RUNNER_URL/control/barrier" | jq -e '[.held[] | select(.kind == "callback")] | length >= 1' >/dev/null
   }
-  wait_until "the verify_patch Attempt to be DISPATCHED while the Agent waits for its callback" "$HELD_DEADLINE_S" agent_waiting
+  await_running "$run_id" "the verify_patch Attempt to be DISPATCHED while the Agent waits for its callback" "$HELD_DEADLINE_S" agent_waiting
   bound=$(agent_trace | jq -c '[.turns[].toolAttempts[] | select(.toolName == "verify_patch")] | first | {id, verificationId: .callbackBinding.externalTaskId}')
   held_attempt_before=$(jq -r '.id' <<<"$bound")
   held_verification=$(jq -r '.verificationId' <<<"$bound")
-  wait_until "the runner callback for verification $held_verification to be held" "$HELD_DEADLINE_S" callback_held
+  await_running "$run_id" "the runner callback for verification $held_verification to be held" "$HELD_DEADLINE_S" callback_held
   decisions_before=$(decisions_committed)
   arrivals_before=$(record_after "$runner_after" "$RUNNER_URL" | jq -s '[.[] | select(.event == "arrived" and .kind == "verification")] | length')
   log "verify_patch Attempt $held_attempt_before DISPATCHED for verification $held_verification, its callback held at the runner; $decisions_before Decisions committed, $arrivals_before verification at the runner"
@@ -591,13 +611,7 @@ else
   esac
 fi
 
-state_run_ids=$run_id
-[[ -n "$holder_run_id" ]] && state_run_ids="$run_id,$holder_run_id"
-[[ -n "$later_run_ids" ]] && state_run_ids+=",$later_run_ids"
-if [[ -n "${DEMO_STATE:-}" ]]; then
-  printf 'RUN_ID=%s\nWORKFLOW_ID=%s\nRECORD_AFTER=%s\nRUN_STATUS=%s\nSUMMARY=%s\n' \
-    "$state_run_ids" "$workflow_id" "$record_after_seq" "$run_status" "$summary" >"$DEMO_STATE"
-fi
+write_demo_state
 
 printf '\n'
 if ((failures > 0)); then

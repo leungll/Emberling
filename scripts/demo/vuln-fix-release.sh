@@ -134,7 +134,7 @@ decide() {
 request_approval=""
 request_action=""
 await_request() {
-  wait_until "run $1 to ask for a release and its approval to be PENDING" "$TERMINAL_DEADLINE_S" pending_approval_of "$1" "${2:-}"
+  await_running "$1" "run $1 to ask for a release and its approval to be PENDING" "$TERMINAL_DEADLINE_S" pending_approval_of "$1" "${2:-}"
   request_approval=$approval_id
   request_action=$(approval_of "$approval_id" | jq -r '.actionId')
 }
@@ -180,7 +180,7 @@ stopped_events_after=0
 occupation_after_stop='{}'
 stop_after_confirm_deadline() {
   local wait_id
-  wait_until "the release of run $run_id to wait for a person after its confirm deadline" "$STOP_DEADLINE_S" open_human_wait_of "$run_id"
+  await_running "$run_id" "the release of run $run_id to wait for a person after its confirm deadline" "$STOP_DEADLINE_S" open_human_wait_of "$run_id"
   opened_wait=$human_wait
   wait_id=$(jq -r '.id' <<<"$opened_wait")
   log "human wait $wait_id opened: $(jq -c '{reason, operationKey, targetKey}' <<<"$opened_wait")"
@@ -246,7 +246,7 @@ drive_release_story() {
       decided_by_person() {
         [[ "$(approval_of "$manual_pending" | jq -r '.status')" != PENDING ]]
       }
-      wait_until "a person to approve or reject $manual_pending in Studio" "$APPROVAL_WAIT_S" decided_by_person
+      await_running "$run_id" "a person to approve or reject $manual_pending in Studio" "$APPROVAL_WAIT_S" decided_by_person
       manual_decisions=$(jq -c --argjson d "$(approval_of "$manual_pending" | jq -c '{id, status, decidedBy}')" '. + [$d]' <<<"$manual_decisions")
       log "approval $manual_pending decided by a person: $(jq -c 'last' <<<"$manual_decisions")"
       next_request_or_end() {
@@ -303,7 +303,7 @@ drive_release_story() {
     ;;
   release-crash-deployed)
     approve "$release_approval_id"
-    wait_until "production to drop its answer to $first_key" "$HELD_DEADLINE_S" production_line responseDropped "$first_key"
+    await_running "$run_id" "production to drop its answer to $first_key" "$HELD_DEADLINE_S" production_line responseDropped "$first_key"
     demo_pause "production accepted $first_key, dropped its answer and holds the deployment; next: SIGKILL the backend and start it again before it learns the outcome"
     kill_and_restart_backend
     production_faults '{}'
@@ -312,7 +312,7 @@ drive_release_story() {
     ;;
   release-crash-voided)
     approve "$release_approval_id"
-    wait_until "the release request to be held by production" "$HELD_DEADLINE_S" release_held
+    await_running "$run_id" "the release request to be held by production" "$HELD_DEADLINE_S" release_held
     demo_pause "the approval occupied the deploy target and the release request is held at production while its Attempt is STARTED; next: SIGKILL the backend and start it again, so production abandons the request and the answer is never learned"
     kill_and_restart_backend
     # The held request's caller died with the old process, so production abandoned it and
@@ -326,7 +326,7 @@ drive_release_story() {
     ;;
   target-occupied)
     approve "$release_approval_id"
-    wait_until "production to receive the holder's release $first_key" "$HELD_DEADLINE_S" production_line arrived "$first_key"
+    await_running "$holder_run_id" "production to receive the holder's release $first_key" "$HELD_DEADLINE_S" production_line arrived "$first_key"
     demo_pause "run $holder_run_id holds $RELEASE_SERVICE/$RELEASE_ENVIRONMENT while production deploys $first_key; next: a second task asks to release to the same target"
     run_id=$(create_run)
     wait_until "run $run_id to become COMPLETED or FAILED" "$TERMINAL_DEADLINE_S" run_terminal_of "$run_id"
@@ -358,7 +358,7 @@ drive_release_story() {
     ;;
   stop-then-deployed)
     approve "$release_approval_id"
-    wait_until "production to accept $first_key" "$HELD_DEADLINE_S" production_line arrived "$first_key"
+    await_running "$run_id" "production to accept $first_key" "$HELD_DEADLINE_S" production_line arrived "$first_key"
     stop_after_confirm_deadline
     demo_pause "the task ended as RELEASE_UNKNOWN with the target occupied; next: production finishes the deployment after the task ended"
     production_completion false
