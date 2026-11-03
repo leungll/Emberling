@@ -39,8 +39,8 @@ const photoOutputSchema = `{
 }`
 
 // plainStringMember is the output member of every text-form request: the answer text
-// itself, with no hint that it is JSON-encoded.
-const plainStringMember = `{"type": ["string", "null"]}`
+// itself, with no hint that it is JSON-encoded, described by the kind that requires it.
+const plainStringMember = `{"type": ["string", "null"], "description": "The final answer, written as plain text. Required (non-null) when kind is FINAL. Must be null when kind is TOOL_CALL."}`
 
 // sentRequest is the part of the request body these tests read.
 type sentRequest struct {
@@ -94,10 +94,10 @@ const envelopeWithoutOutput = `{
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "kind": {"type": "string", "enum": ["TOOL_CALL", "FINAL"]},
-    "tool": {"type": ["string", "null"]},
-    "arguments": {"type": ["string", "null"], "description": "JSON-encoded value, or null when it does not apply"},
-    "statePatch": {"type": ["string", "null"], "description": "JSON-encoded value, or null when it does not apply"}
+    "kind": {"type": "string", "enum": ["TOOL_CALL", "FINAL"], "description": "TOOL_CALL requires non-null tool and arguments. FINAL requires non-null output. Set every member the chosen kind does not require to null, unless that member's description marks it optional for that kind."},
+    "tool": {"type": ["string", "null"], "description": "Name of the tool to call. Required (non-null) when kind is TOOL_CALL. Must be null when kind is FINAL."},
+    "arguments": {"type": ["string", "null"], "description": "The called tool's arguments as a JSON-encoded object that satisfies its input schema, for example \"{\\\"key\\\":\\\"value\\\"}\". Required (non-null) when kind is TOOL_CALL. Must be null when kind is FINAL."},
+    "statePatch": {"type": ["string", "null"], "description": "A JSON-encoded JSON Merge Patch object applied to the current state. Optional when kind is TOOL_CALL or FINAL; null when not used."}
   },
   "required": ["kind", "arguments", "output", "statePatch", "tool"]
 }`

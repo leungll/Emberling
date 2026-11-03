@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
@@ -36,8 +37,11 @@ const (
 // The output member is not part of the fixed envelope: each request derives it from its
 // own final output Schema (see outputMember), so the Provider generates the FINAL value
 // itself rather than an encoding of it. Mutual exclusion and the per-kind required members
-// are not expressed here; the Runtime checks them before it commits a Decision, so a
-// TOOL_CALL without a tool stays an invalid action rather than becoming a model error.
+// are not expressed structurally; the Runtime checks them before it commits a Decision, so
+// a TOOL_CALL without a tool stays an invalid action rather than becoming a model error.
+// Because the structure cannot carry those rules, every member's description states them,
+// derived from each branch's required list: which kind requires the member, for which it
+// is optional, and for which it must be null.
 type strictDecision struct {
 	// properties are the envelope members other than output, as sent to the Provider.
 	properties map[string]any
@@ -47,10 +51,23 @@ type strictDecision struct {
 	validator *jsonschema.Schema
 	// encoded lists the members that carry a JSON-encoded value.
 	encoded map[string]bool
+	// outputDescription states when the output member is required. It is attached to the
+	// text-form output member only: an object-form output member is the request's own
+	// final output Schema, sent unchanged apart from its nullability.
+	outputDescription string
 }
 
 type decisionBranch struct {
 	Properties map[string]json.RawMessage `json:"properties"`
+	Required   []string                   `json:"required"`
+}
+
+// branchRule is what one oneOf branch says about the envelope members: its kind constant,
+// the members it requires in declaration order, and the members it declares at all.
+type branchRule struct {
+	kind     string
+	required []string
+	declared map[string]bool
 }
 
 type decisionDocument struct {
@@ -73,6 +90,7 @@ func newStrictDecision(decisionSchema json.RawMessage) (strictDecision, error) {
 	}
 
 	var kinds []string
+	var rules []branchRule
 	stringMembers := map[string]bool{}
 	encoded := map[string]bool{}
 	for i, branch := range document.OneOf {
@@ -81,9 +99,24 @@ func newStrictDecision(decisionSchema json.RawMessage) (strictDecision, error) {
 		if !ok || json.Unmarshal(raw, &kind) != nil || kind.Const == nil {
 			return strictDecision{}, fmt.Errorf("decision schema branch %d has no constant %q", i, memberKind)
 		}
-		if !slices.Contains(kinds, *kind.Const) {
-			kinds = append(kinds, *kind.Const)
+		if slices.Contains(kinds, *kind.Const) {
+			return strictDecision{}, fmt.Errorf("decision schema declares kind %q in more than one branch", *kind.Const)
 		}
+		kinds = append(kinds, *kind.Const)
+		rule := branchRule{kind: *kind.Const, declared: map[string]bool{}}
+		for name := range branch.Properties {
+			rule.declared[name] = true
+		}
+		for _, name := range branch.Required {
+			if name == memberKind {
+				continue
+			}
+			if !rule.declared[name] {
+				return strictDecision{}, fmt.Errorf("decision schema branch %q requires undeclared member %q", rule.kind, name)
+			}
+			rule.required = append(rule.required, name)
+		}
+		rules = append(rules, rule)
 		for name, rawMember := range branch.Properties {
 			if name == memberKind {
 				continue
@@ -124,22 +157,22 @@ func newStrictDecision(decisionSchema json.RawMessage) (strictDecision, error) {
 	slices.Sort(names)
 
 	properties := map[string]any{
-		memberKind: map[string]any{"type": "string", "enum": kinds},
+		memberKind: map[string]any{"type": "string", "enum": kinds, "description": kindDescription(rules)},
 	}
 	for _, name := range names {
 		if name == memberOutput {
 			continue
 		}
-		property := map[string]any{"type": []string{"string", "null"}}
-		if encoded[name] {
-			property["description"] = "JSON-encoded value, or null when it does not apply"
+		properties[name] = map[string]any{
+			"type":        []string{"string", "null"},
+			"description": memberMeaning(name, encoded[name]) + " " + kindRequirement(name, rules),
 		}
-		properties[name] = property
 	}
 	strict := strictDecision{
-		properties: properties,
-		required:   append([]string{memberKind}, names...),
-		encoded:    encoded,
+		properties:        properties,
+		required:          append([]string{memberKind}, names...),
+		encoded:           encoded,
+		outputDescription: memberMeaning(memberOutput, false) + " " + kindRequirement(memberOutput, rules),
 	}
 	// Locally, output accepts any JSON value, null included.
 	answerSchema, err := strict.encode(map[string]any{})
@@ -154,6 +187,80 @@ func newStrictDecision(decisionSchema json.RawMessage) (strictDecision, error) {
 	return strict, nil
 }
 
+// memberMeaning is what a member carries. The meaning of each member is fixed by the
+// Adapter contract (parse maps every member onto one Decision field); whether the value
+// travels JSON-encoded follows the registered Schema.
+func memberMeaning(name string, encoded bool) string {
+	switch name {
+	case memberTool:
+		return "Name of the tool to call."
+	case memberArguments:
+		if encoded {
+			return `The called tool's arguments as a JSON-encoded object that satisfies its input schema, for example "{\"key\":\"value\"}".`
+		}
+		return "The called tool's arguments as an object that satisfies its input schema."
+	case memberStatePatch:
+		if encoded {
+			return "A JSON-encoded JSON Merge Patch object applied to the current state."
+		}
+		return "A JSON Merge Patch object applied to the current state."
+	case memberOutput:
+		return "The final answer, written as plain text."
+	}
+	return ""
+}
+
+// kindRequirement states, from the registered branches, for which kinds a member is
+// required, for which it is optional, and for which it must be null.
+func kindRequirement(name string, rules []branchRule) string {
+	var required, optional, absent []string
+	for _, rule := range rules {
+		switch {
+		case slices.Contains(rule.required, name):
+			required = append(required, rule.kind)
+		case rule.declared[name]:
+			optional = append(optional, rule.kind)
+		default:
+			absent = append(absent, rule.kind)
+		}
+	}
+	var sentences []string
+	if len(required) > 0 {
+		sentences = append(sentences, "Required (non-null) when kind is "+orList(required)+".")
+	}
+	if len(optional) > 0 {
+		sentences = append(sentences, "Optional when kind is "+orList(optional)+"; null when not used.")
+	}
+	if len(absent) > 0 {
+		sentences = append(sentences, "Must be null when kind is "+orList(absent)+".")
+	}
+	return strings.Join(sentences, " ")
+}
+
+// kindDescription summarises which members each registered kind requires.
+func kindDescription(rules []branchRule) string {
+	sentences := make([]string, 0, len(rules)+1)
+	for _, rule := range rules {
+		if len(rule.required) == 0 {
+			sentences = append(sentences, rule.kind+" requires no other member.")
+			continue
+		}
+		sentences = append(sentences, rule.kind+" requires non-null "+andList(rule.required)+".")
+	}
+	sentences = append(sentences, "Set every member the chosen kind does not require to null, unless that member's description marks it optional for that kind.")
+	return strings.Join(sentences, " ")
+}
+
+func orList(items []string) string  { return joinList(items, "or") }
+func andList(items []string) string { return joinList(items, "and") }
+
+func joinList(items []string, conjunction string) string {
+	if len(items) <= 1 {
+		return strings.Join(items, "")
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " " + conjunction + " " + items[len(items)-1]
+}
+
 func knownMember(name string) bool {
 	switch name {
 	case memberTool, memberArguments, memberOutput, memberStatePatch:
@@ -165,7 +272,7 @@ func knownMember(name string) bool {
 // schemaFor is the strict Decision Schema sent with one request: the fixed envelope plus
 // the output member derived from that request's final output Schema.
 func (s strictDecision) schemaFor(finalOutputSchema json.RawMessage) (json.RawMessage, error) {
-	return s.encode(outputMember(finalOutputSchema))
+	return s.encode(outputMember(finalOutputSchema, s.outputDescription))
 }
 
 func (s strictDecision) encode(output any) (json.RawMessage, error) {
@@ -194,9 +301,9 @@ func (s strictDecision) encode(output any) (json.RawMessage, error) {
 //
 // Every other request, a text-form Agent with or without a Schema and Text Generation's
 // string Schema alike, gets a nullable string whose value is the answer text itself, not a
-// JSON encoding of it.
-func outputMember(finalOutputSchema json.RawMessage) any {
-	plain := map[string]any{"type": []string{"string", "null"}}
+// JSON encoding of it, described by description.
+func outputMember(finalOutputSchema json.RawMessage, description string) any {
+	plain := map[string]any{"type": []string{"string", "null"}, "description": description}
 	if !present(finalOutputSchema) {
 		return plain
 	}
