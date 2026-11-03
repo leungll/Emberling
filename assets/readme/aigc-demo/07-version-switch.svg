@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 450" width="1120" height="450" role="img" aria-labelledby="title desc">
+<title id="title">版本切换的双轨执行</title>
+<desc id="desc">版本 1 的三个请求在等待回调时，工作流保存了版本 2。这三个请求仍按版本 1 完成，输出宽度 1024；之后提交的三个请求绑定版本 2，输出宽度 768。</desc>
+<defs>
+<pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="#dfe5ec"/></pattern>
+<marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#64748b"/></marker>
+</defs>
+<style>text{font-family:"SFMono-Regular",Consolas,"PingFang SC","Microsoft YaHei",sans-serif;fill:#1e293b}.h{font-size:15px;font-weight:600}.t{font-size:13px}.s{font-size:11.5px;fill:#64748b}.tag{font-size:11px;font-weight:600}</style>
+<rect width="1120" height="450" rx="10" fill="#f4f5f7"/>
+<rect width="1120" height="450" rx="10" fill="url(#dots)"/>
+<text x="40" y="44" class="h">版本更新时，在途请求按原版本完成，新请求进入新版本</text>
+<text x="40" y="66" class="s">版本 1 的任务回调延迟 15 秒；它们等待期间保存版本 2（图像宽度 1024 改为 768），随后再提交 3 个请求；数据来自各 Run 的版本绑定与输出</text>
+<rect x="887.6" y="30" width="192.4" height="24" rx="12" fill="#e3f6ef" stroke="#059669"/><text x="983.8" y="46" text-anchor="middle" class="tag" style="fill:#059669">真实演示运行 · 模拟 Provider</text>
+<rect x="32" y="120" width="1056" height="100" rx="9" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="52" y="152" class="h">版本 1</text><text x="52" y="172" class="s">宽度 1024</text>
+<rect x="230.0" y="136" width="781.2375000000001" height="16" rx="4" fill="#f1f5f9" stroke="#64748b"/>
+<rect x="230.51875" y="158" width="780.71875" height="16" rx="4" fill="#f1f5f9" stroke="#64748b"/>
+<rect x="230.51875" y="180" width="780.71875" height="16" rx="4" fill="#f1f5f9" stroke="#64748b"/>
+<text x="1060" y="210" text-anchor="end" class="s" style="fill:#64748b">3 个 Run 绑定版本 1，15.1 秒后仍按版本 1 完成，输出宽度 1024</text>
+<rect x="32" y="240" width="1056" height="100" rx="9" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="52" y="272" class="h">版本 2</text><text x="52" y="292" class="s">宽度 768</text>
+<rect x="239.3375" y="256" width="8" height="16" rx="4" fill="#e3f6ef" stroke="#059669"/>
+<rect x="239.3375" y="278" width="8" height="16" rx="4" fill="#e3f6ef" stroke="#059669"/>
+<rect x="239.3375" y="300" width="8" height="16" rx="4" fill="#e3f6ef" stroke="#059669"/>
+<text x="1060" y="330" text-anchor="end" class="s" style="fill:#059669">3 个 Run 绑定版本 2，立即完成，输出宽度 768</text>
+<line x1="235.1875" y1="84" x2="235.1875" y2="348" stroke="#d97706" stroke-width="1.6" stroke-dasharray="5 4"/>
+<rect x="243.1875" y="84" width="248" height="24" rx="6" fill="#fff4dc" stroke="#d97706"/><text x="253.1875" y="101" class="t" style="fill:#d97706;font-weight:600">保存版本 2，在途请求不受影响</text>
+<line x1="230" y1="356" x2="1060" y2="356" stroke="#cbd5e1"/><line x1="230.0" y1="356" x2="230.0" y2="361" stroke="#cbd5e1"/><text x="230.0" y="376" text-anchor="middle" class="s">0 秒</text><line x1="281.875" y1="356" x2="281.875" y2="361" stroke="#cbd5e1"/><text x="281.875" y="376" text-anchor="middle" class="s">1 秒</text><line x1="333.75" y1="356" x2="333.75" y2="361" stroke="#cbd5e1"/><text x="333.75" y="376" text-anchor="middle" class="s">2 秒</text><line x1="385.625" y1="356" x2="385.625" y2="361" stroke="#cbd5e1"/><text x="385.625" y="376" text-anchor="middle" class="s">3 秒</text><line x1="437.5" y1="356" x2="437.5" y2="361" stroke="#cbd5e1"/><text x="437.5" y="376" text-anchor="middle" class="s">4 秒</text><line x1="489.375" y1="356" x2="489.375" y2="361" stroke="#cbd5e1"/><text x="489.375" y="376" text-anchor="middle" class="s">5 秒</text><line x1="541.25" y1="356" x2="541.25" y2="361" stroke="#cbd5e1"/><text x="541.25" y="376" text-anchor="middle" class="s">6 秒</text><line x1="593.125" y1="356" x2="593.125" y2="361" stroke="#cbd5e1"/><text x="593.125" y="376" text-anchor="middle" class="s">7 秒</text><line x1="645.0" y1="356" x2="645.0" y2="361" stroke="#cbd5e1"/><text x="645.0" y="376" text-anchor="middle" class="s">8 秒</text><line x1="696.875" y1="356" x2="696.875" y2="361" stroke="#cbd5e1"/><text x="696.875" y="376" text-anchor="middle" class="s">9 秒</text><line x1="748.75" y1="356" x2="748.75" y2="361" stroke="#cbd5e1"/><text x="748.75" y="376" text-anchor="middle" class="s">10 秒</text><line x1="800.625" y1="356" x2="800.625" y2="361" stroke="#cbd5e1"/><text x="800.625" y="376" text-anchor="middle" class="s">11 秒</text><line x1="852.5" y1="356" x2="852.5" y2="361" stroke="#cbd5e1"/><text x="852.5" y="376" text-anchor="middle" class="s">12 秒</text><line x1="904.375" y1="356" x2="904.375" y2="361" stroke="#cbd5e1"/><text x="904.375" y="376" text-anchor="middle" class="s">13 秒</text><line x1="956.25" y1="356" x2="956.25" y2="361" stroke="#cbd5e1"/><text x="956.25" y="376" text-anchor="middle" class="s">14 秒</text><line x1="1008.125" y1="356" x2="1008.125" y2="361" stroke="#cbd5e1"/><text x="1008.125" y="376" text-anchor="middle" class="s">15 秒</text><line x1="1060.0" y1="356" x2="1060.0" y2="361" stroke="#cbd5e1"/><text x="1060.0" y="376" text-anchor="middle" class="s">16 秒</text>
+<rect x="32" y="394" width="1056" height="40" rx="9" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="52" y="419" class="t">每个 Run 创建时绑定当时的版本，之后不再改变；演示脚本还可以按比例把新请求分到 v1 / v2，或切回旧版</text>
+</svg>

@@ -31,6 +31,11 @@ const (
 	// or by more than one review model, such as the mock policy for some and a vision
 	// model for others.
 	reasonPolicyMismatch = "POLICY_MISMATCH"
+	// reasonStaleExample: an example whose newest review did not pass, or that was never
+	// reviewed, while a later image generated for the same photo passed its newest
+	// review. A delivery may include an example that did not pass only when the Run
+	// holds no better image for that photo.
+	reasonStaleExample = "STALE_EXAMPLE"
 	// reasonsTruncated closes a reason list that reached maxReasons.
 	reasonsTruncated = "REASONS_TRUNCATED"
 )
@@ -114,9 +119,11 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 	}
 
 	// Every fact subject must belong to the photo set. Facts arrive oldest first, so the
-	// last fact about an asset is its newest and supersedes the earlier ones.
+	// last fact about an asset is its newest and supersedes the earlier ones; its position
+	// orders the asset against the other generations.
 	generations := make(map[string]generation, len(generated.Facts))
-	for _, fact := range generated.Facts {
+	generatedAt := make(map[string]int, len(generated.Facts))
+	for i, fact := range generated.Facts {
 		var g generation
 		if !decodeBinding(fact, &g) {
 			reasons.add(reasonMalformedFact, "", fact.SubjectRef)
@@ -126,6 +133,7 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 			reasons.add(reasonForeignSubject, g.PhotoAssetID, fact.SubjectRef)
 		}
 		generations[fact.SubjectRef] = g
+		generatedAt[fact.SubjectRef] = i
 	}
 	reviews := make(map[string]review, len(reviewed.Facts))
 	for _, fact := range reviewed.Facts {
@@ -180,7 +188,9 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 
 	// The examples' reviews share one policy version and one review model, and the pass
 	// count comes from their newest review verdicts. An example never reviewed has not
-	// passed.
+	// passed. An example that did not pass is accepted only while the Run holds no better
+	// image for its photo: it is stale when a later generation for that photo passed.
+	latestPass := latestPassingGeneration(generated.Facts, generations, reviews)
 	policies := make(map[string]bool)
 	reviewModels := make(map[string]bool)
 	out := summary{PhotoCount: len(photos), NotPassed: []string{}}
@@ -196,6 +206,9 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 			}
 		}
 		out.NotPassed = append(out.NotPassed, p.PhotoAssetID)
+		if later, found := latestPass[p.PhotoAssetID]; ok && found && later > generatedAt[assetRef] {
+			reasons.add(reasonStaleExample, p.PhotoAssetID, assetRef)
+		}
 	}
 	if len(policies) > 1 || len(reviewModels) > 1 {
 		reasons.add(reasonPolicyMismatch, "", "")
@@ -210,6 +223,23 @@ func checkDelivery(photos []photo, final finalOutput, generated, reviewed regist
 	out.Accepted = len(out.Reasons) == 0
 	cover := exampleOf[photos[0].PhotoAssetID]
 	return out, coverExample{assetRef: cover, generation: generations[cover]}
+}
+
+// latestPassingGeneration maps each photo to the position, in the oldest-first fact
+// order, of the newest generation for it whose newest review passed and reviewed it for
+// that same photo. Photos with no passing generation are absent.
+func latestPassingGeneration(facts []domain.ExecutionFact, generations map[string]generation, reviews map[string]review) map[string]int {
+	latest := make(map[string]int)
+	for i, fact := range facts {
+		g, ok := generations[fact.SubjectRef]
+		if !ok {
+			continue
+		}
+		if r := reviews[fact.SubjectRef]; r.passed && r.PhotoAssetID == g.PhotoAssetID {
+			latest[g.PhotoAssetID] = i
+		}
+	}
+	return latest
 }
 
 // coverExample is the cover photo's declared example and the bindings of the generation

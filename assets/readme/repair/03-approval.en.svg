@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 470" width="1120" height="470" role="img" aria-labelledby="title desc">
+<title id="title">Approval handoff: approve what was reviewed</title>
+<desc id="desc">The Agent prepares a change set with a patch version, verification evidence, target and operation. A person reviews it while Emberling preserves the waiting state. Approval binds the reviewed patch, target and operation. Rejected changes return for revision. Any change requires renewed verification and approval checks. Proposed interaction for a workload in development.</desc>
+<defs>
+<pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="#dfe5ec" /></pattern>
+<marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#64748b" /></marker>
+<marker id="green" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#059669" /></marker>
+<marker id="red" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#dc2626" /></marker>
+</defs>
+<style>
+text{font-family:"SFMono-Regular",Consolas,"PingFang SC","Microsoft YaHei",sans-serif;fill:#1e293b}
+.heading{font-size:13px;font-weight:600}.label{font-size:16px;font-weight:600}.item{font-size:14px;font-weight:600}.sub{font-size:11px;fill:#64748b}.tag{font-size:11px;font-weight:600;fill:#b45309}
+.edge{fill:none;stroke:#64748b;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round;marker-end:url(#arrow)}
+.ok{stroke:#059669;marker-end:url(#green)}.no{stroke:#dc2626;marker-end:url(#red)}.dash{stroke-dasharray:5 4}
+.row{fill:#ffffff;stroke:#94a3b8;stroke-width:1.1}
+</style>
+<rect width="1120" height="470" rx="10" fill="#f4f5f7" />
+<rect width="1120" height="470" rx="10" fill="url(#dots)" />
+
+<text x="44" y="42" class="heading" font-size="12" style=";font-size:12px">03 / Approval handoff</text>
+<rect x="866" y="26" width="210" height="24" rx="12" fill="#fff7e8" stroke="#d97706" stroke-width="1" />
+<text x="971" y="42" class="tag" text-anchor="middle" font-size="10" style=";font-size:10px">IN DEVELOPMENT · PROPOSED</text>
+
+<rect x="44" y="68" width="300" height="276" rx="9" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2" />
+<text x="64" y="94" class="label" font-size="14" style=";font-size:14px">Change set</text>
+<text x="187" y="93" class="sub" font-size="10" style=";font-size:10px">Prepared by Agent</text>
+<rect x="60" y="108" width="268" height="52" rx="6" class="row" />
+<text x="76" y="130" class="item" font-size="12" style=";font-size:12px">Patch version</text>
+<text x="76" y="149" class="sub" font-size="10" style=";font-size:10px">The exact code change</text>
+<rect x="60" y="170" width="268" height="52" rx="6" class="row" />
+<text x="76" y="192" class="item" font-size="12" style=";font-size:12px">Verification</text>
+<text x="76" y="211" class="sub" font-size="10" style=";font-size:10px">Evidence for this patch version</text>
+<rect x="60" y="232" width="268" height="52" rx="6" class="row" />
+<text x="76" y="254" class="item" font-size="12" style=";font-size:12px">Target</text>
+<text x="76" y="273" class="sub" font-size="10" style=";font-size:10px">Where to deploy</text>
+<rect x="60" y="294" width="268" height="40" rx="6" class="row" />
+<text x="76" y="319" class="item" font-size="12" style=";font-size:12px">Action</text>
+<text x="160" y="319" class="sub" font-size="10" style=";font-size:10px">The exact release operation</text>
+
+<path d="M344 206 H418" class="edge" />
+<text x="381" y="197" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Submit</text>
+
+<rect x="420" y="68" width="250" height="56" rx="7" fill="#fff4dc" stroke="#d97706" stroke-width="1.2" />
+<text x="545" y="91" class="heading" text-anchor="middle" font-size="12" style=";font-size:12px">Await a human decision</text>
+<text x="545" y="111" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Emberling persists the wait</text>
+<path d="M545 124 V168" fill="none" stroke="#d97706" stroke-width="1.2" stroke-dasharray="3 4" />
+
+<rect x="420" y="170" width="250" height="72" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.4" />
+<text x="545" y="200" class="label" text-anchor="middle" font-size="14" style=";font-size:14px">Human review</text>
+<text x="545" y="222" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Review version, target and action</text>
+
+<path d="M670 190 H710 V128 H758" class="edge ok" />
+<text x="716" y="118" class="sub" style="fill:#059669;font-size:10px" font-size="10">Approve</text>
+<path d="M670 222 H710 V286 H758" class="edge no" />
+<text x="716" y="304" class="sub" style="fill:#dc2626;font-size:10px" font-size="10">Reject</text>
+
+<rect x="760" y="88" width="316" height="80" rx="7" fill="#e3f6ef" stroke="#059669" stroke-width="1.2" />
+<text x="780" y="116" class="label" font-size="14" style=";font-size:14px">Release what was approved</text>
+<text x="780" y="138" class="sub" font-size="10" style=";font-size:10px">Approval binds the reviewed patch,</text>
+<text x="780" y="155" class="sub" font-size="10" style=";font-size:10px">deployment target and operation</text>
+
+<rect x="760" y="246" width="316" height="80" rx="7" fill="#fdecec" stroke="#dc2626" stroke-width="1.2" />
+<text x="780" y="274" class="label" font-size="14" style=";font-size:14px">Revise the change</text>
+<text x="780" y="296" class="sub" font-size="10" style=";font-size:10px">Agent revises the patch or release</text>
+<text x="780" y="313" class="sub" font-size="10" style=";font-size:10px">operation based on review feedback</text>
+
+<path d="M918 326 V384 H194 V346" class="edge dash" />
+<rect x="422" y="376" width="252" height="16" rx="3" fill="#f4f5f7" />
+<text x="548" y="388" class="sub" text-anchor="middle" font-size="10" style=";font-size:10px">Recheck verification after changes, then resubmit for approval</text>
+
+<rect x="44" y="410" width="1032" height="40" rx="7" fill="#ffffff" stroke="#cbd5e1" />
+<circle cx="64" cy="430" r="3" fill="#059669" />
+<text x="76" y="434" class="heading" font-size="12" style=";font-size:12px">Approval covers the reviewed change: a different patch, target or operation requires renewed verification and approval checks.</text>
+</svg>
