@@ -239,6 +239,71 @@ export interface AgentActionTrace {
   authorizationReason: string | null;
   /** The person's decision on a call whose authorization was ASK; `null` for every other Action. */
   approval: Approval | null;
+  /** The release view of a `deploy_change` call; `null` for every other Action. */
+  release: ReleaseActionTrace | null;
+}
+
+/**
+ * What the Runtime knows about one release operation: `PENDING` while production has not
+ * answered and nothing is in doubt, `UNKNOWN` once the dispatch got no usable answer, and
+ * `DEPLOYED`, `VOIDED` or `REFUSED` once production answered for good.
+ */
+export type ReleaseOperationOutcome = 'PENDING' | 'UNKNOWN' | 'DEPLOYED' | 'VOIDED' | 'REFUSED';
+
+/** One operation the Runtime asked production for, under its own operation key. */
+export interface ReleaseOperationTrace {
+  operationKey: string;
+  toolAttemptId: string;
+  attemptNo: number;
+  status: ToolAttemptStatus;
+  outcome: ReleaseOperationOutcome;
+  /** When an unanswered operation hands its Action to a person. */
+  confirmDeadline: string | null;
+  outcomeUnknownSince: string | null;
+  voidRequestedAt: string | null;
+}
+
+export type ReleaseOccupationStatus = 'ACTIVE' | 'RELEASED';
+
+/** Why a deploy target occupation ended. */
+export type ReleaseReason = 'DEPLOYED' | 'VOIDED' | 'REFUSED' | 'NOT_DEPLOYED';
+
+/** The deploy target one approved release Action holds or held. */
+export interface ReleaseOccupationTrace {
+  id: string;
+  targetKey: string;
+  operationKey: string;
+  status: ReleaseOccupationStatus;
+  acquiredAt: string;
+  releasedAt: string | null;
+  releaseReason: ReleaseReason | null;
+}
+
+export type HumanWaitStatus = 'OPEN' | 'STOPPED' | 'EXPIRED' | 'RESOLVED';
+
+/**
+ * The wait opened when a release passed its confirm deadline without an answer. `closedBy`
+ * is an operator's identity name, never a credential; `outcome` is the production answer or
+ * the stop that closed it.
+ */
+export interface HumanWaitTrace {
+  id: string;
+  status: HumanWaitStatus;
+  openedAt: string;
+  deadline: string;
+  closedAt: string | null;
+  closedBy: string | null;
+  outcome: string | null;
+}
+
+/**
+ * The release view of a `deploy_change` Action: its operations in order, the target
+ * occupation and the human wait. Operation keys, ids, statuses and times only.
+ */
+export interface ReleaseActionTrace {
+  operations: ReleaseOperationTrace[];
+  occupation: ReleaseOccupationTrace | null;
+  humanWait: HumanWaitTrace | null;
 }
 
 /** One Tool Attempt. A retry preserves the earlier Attempt and adds a new `attemptNo`. */

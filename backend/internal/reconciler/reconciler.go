@@ -58,6 +58,7 @@ type Advancer interface {
 	TimeoutAgentRun(ctx context.Context, agentRunID string) error
 	HandleOrphanToolAttempt(ctx context.Context, attemptID string) error
 	ExpireApproval(ctx context.Context, approvalID string) error
+	OpenReleaseHumanWait(ctx context.Context, attemptID string) error
 }
 
 // defaultBatchLimit bounds one RunOnce scan of ListReadyOrRetryable/ListExpired. MVP
@@ -134,6 +135,11 @@ type Report struct {
 	// returned without error (a handling that writes nothing is a success).
 	OrphanToolAttemptsFound   int
 	OrphanToolAttemptsHandled int
+	// DueConfirmDeadlinesFound is how many release Attempts had passed their confirm
+	// deadline without a definite production answer; HumanWaitsOpened counts the
+	// OpenReleaseHumanWait calls that returned without error.
+	DueConfirmDeadlinesFound int
+	HumanWaitsOpened         int
 	// DuePollsFound is how many DISPATCHED Attempts ListDuePolls found with a due poll.
 	// PollsClaimed counts the polls this pass claimed whose answer either resolved
 	// nothing or won the resume; PollsResumed is the subset that won the resume.
@@ -316,6 +322,9 @@ func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *R
 	if err := r.scanOrphanToolAttempts(ctx, now, report); err != nil {
 		return err
 	}
+	if err := r.scanDueConfirmDeadlines(ctx, now, report); err != nil {
+		return err
+	}
 
 	var turns []domain.AgentTurn
 	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
@@ -382,6 +391,29 @@ func (r *Reconciler) scanOrphanToolAttempts(ctx context.Context, now time.Time, 
 			continue
 		}
 		report.OrphanToolAttemptsHandled++
+	}
+	return nil
+}
+
+// scanDueConfirmDeadlines hands every release Attempt that passed its confirm deadline
+// while its Action still waits on production to the release human wait use case, which
+// re-checks everything under the Run lock and owns every write.
+func (r *Reconciler) scanDueConfirmDeadlines(ctx context.Context, now time.Time, report *Report) error {
+	var due []store.DueConfirmDeadline
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		due, err = tx.ToolAttempts().ListDueConfirmDeadlines(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list due release confirm deadlines: %w", err)
+	}
+	report.DueConfirmDeadlinesFound = len(due)
+	for _, row := range due {
+		if err := r.cfg.Executor.OpenReleaseHumanWait(ctx, row.AttemptID); err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: open release human wait for tool attempt %s: %w", row.AttemptID, err))
+			continue
+		}
+		report.HumanWaitsOpened++
 	}
 	return nil
 }

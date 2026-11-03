@@ -51,6 +51,10 @@
 #   - every deploy Attempt reached the mock production service at most once under its
 #     operationId, was deployed exactly once when it SUCCEEDED and at most once
 #     otherwise, and production deployed nothing else under the Runs' deploy Actions;
+#   - every deploy_change Action deployed at most once across all of its operation keys,
+#     exactly once when it SUCCEEDED, each operation key reached production at most once,
+#     and production deployed nothing else under the Runs' release Actions; a voided or
+#     abandoned operation is noted;
 #   - with LEDGER_REQUIRE_COMPLETED=1, no submission was lost;
 #   - when the Mock Provider has an in-flight limit, its in-flight peak never exceeded it
 #     and no acceptance in the window is marked over the limit.
@@ -121,6 +125,7 @@ done
 runner_calls=$(jq '[.[] | select(.provider == "sandboxrunner")]' <<<"$tool_calls")
 runner_attempt_ids=$(jq '[.[].attemptId]' <<<"$runner_calls")
 deploy_calls=$(jq '[.[] | select(.toolName == "deploy") | . + {operationId: "op_\(.actionId)_\(.attemptNo)"}]' <<<"$tool_calls")
+release_calls=$(jq '[.[] | select(.toolName == "deploy_change") | . + {operationId: "op_\(.actionId)_\(.attemptNo)"}]' <<<"$tool_calls")
 bindings=$(jq '[.[] | select(.provider != "sandboxrunner") | del(.provider)]' <<<"$bindings")
 
 window=$(record_after "$record_after_seq" | jq -s '.')
@@ -260,6 +265,38 @@ if [[ $(jq 'length' <<<"$deploy_calls") -gt 0 ]]; then
   fi
   jq -r '.[] | select(.abandoned > 0)
       | "deployment \(.operationId) was abandoned: the caller disconnected while it was held, so nothing was deployed"' <<<"$deploy_rows" |
+    while IFS= read -r line; do note "$line"; done
+fi
+
+# 6b. Each release Action deployed at most once across its operations, exactly once when it
+# SUCCEEDED, every operation key reached production at most once, and production deployed
+# nothing else under the Runs' release Actions. A voided operation is noted, never counted.
+if [[ $(jq 'length' <<<"$release_calls") -gt 0 ]]; then
+  production_record=${production_record:-$(record_after 0 "$PRODUCTION_URL" | jq -s '.')}
+  release_rows=$(jq --argjson record "$production_record" '[.[] | . as $c | {
+      operationId, status, actionId, actionStatus,
+      arrived: ([$record[] | select(.event == "arrived" and .kind == "release" and .operationId == $c.operationId)] | length),
+      deployed: ([$record[] | select(.event == "deployed" and .kind == "release" and .operationId == $c.operationId and (.replayed | not))] | length),
+      voided: ([$record[] | select(.event == "voided" and .kind == "release" and .operationId == $c.operationId)] | length),
+      abandoned: ([$record[] | select(.event == "abandoned" and .kind == "release" and .operationId == $c.operationId)] | length)}]' <<<"$release_calls")
+  release_actions=$(jq '[group_by(.actionId)[] | {actionId: .[0].actionId, actionStatus: .[0].actionStatus,
+      operations: length, deployed: (map(.deployed) | add)}]' <<<"$release_rows")
+  release_stray=$(jq --argjson calls "$release_calls" '($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
+      | [.[] | select(.event == "deployed" and .kind == "release" and (.operationId as $op | $known | index($op) | not)
+          and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
+        | .operationId]' <<<"$production_record")
+  bad_operations=$(jq '[.[] | select(.arrived > 1 or .deployed > 1 or (.status == "SUCCEEDED" and .deployed != 1))]' <<<"$release_rows")
+  bad_actions=$(jq '[.[] | select(.deployed > 1 or (.actionStatus == "SUCCEEDED" and .deployed != 1))]' <<<"$release_actions")
+  if [[ $(jq 'length' <<<"$bad_operations") -eq 0 && $(jq 'length' <<<"$bad_actions") -eq 0 && $(jq 'length' <<<"$release_stray") -eq 0 ]]; then
+    pass "release_deployed_once_per_action   $(jq -c 'map({actionId, actionStatus, operations, deployed})' <<<"$release_actions") operations=$(jq -c 'map({operationId, status, arrived, deployed, voided})' <<<"$release_rows")"
+  else
+    fail "release_deployed_once_per_action   operations=$(jq -c '.' <<<"$bad_operations") actions=$(jq -c '.' <<<"$bad_actions") deployed-outside-ledger=$(jq -c '.' <<<"$release_stray")"
+  fi
+  jq -r '.[] | select(.voided > 0)
+      | "release operation \(.operationId) was voided at production; its Action released again under the next key or returned to the Agent"' <<<"$release_rows" |
+    while IFS= read -r line; do note "$line"; done
+  jq -r '.[] | select(.abandoned > 0)
+      | "release operation \(.operationId) was abandoned: the caller disconnected while it was held, so nothing was deployed under it"' <<<"$release_rows" |
     while IFS= read -r line; do note "$line"; done
 fi
 

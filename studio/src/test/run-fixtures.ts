@@ -145,6 +145,7 @@ function action(id: string, extra: Partial<AgentActionTrace> = {}): AgentActionT
     authorization: null,
     authorizationReason: null,
     approval: null,
+    release: null,
     ...extra,
   };
 }

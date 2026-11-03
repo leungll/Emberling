@@ -34,6 +34,10 @@ type agentActionStartedPayload struct {
 	ActionID      string             `json:"actionId"`
 	ToolAttemptID *string            `json:"toolAttemptId,omitempty"`
 	ClaimSource   domain.ClaimSource `json:"claimSource"`
+	// OperationKey and OccupationID are set for a release Attempt: the key production
+	// deduplicates the operation by and the occupation of the deploy target it holds.
+	OperationKey *string `json:"operationKey,omitempty"`
+	OccupationID *string `json:"occupationId,omitempty"`
 }
 
 // agentActionCompletedPayload is AGENT_ACTION_COMPLETED.
@@ -118,6 +122,9 @@ type agentToolCall struct {
 	// deadline is the Agent Run's single frozen deadline, which covers every Turn and
 	// every Tool call.
 	deadline time.Time
+	// release is set for the Attempt of a reconcilable release Tool, whose dispatch,
+	// polling and settlement take the release paths instead of the generic ones.
+	release *releaseCall
 }
 
 // agentCommit records what one committed Agent transaction has to wake afterwards.
@@ -178,11 +185,18 @@ func (s *ExecutionService) ExecuteAgentAction(ctx context.Context, actionID stri
 // the same STARTED Attempt, so an approved Action is executed once and never claimed twice.
 func (s *ExecutionService) executeClaimedAgentAction(ctx context.Context, call *agentToolCall) error {
 	// The Agent Run's deadline bounds the external call, so a Tool cannot hold this
-	// goroutine past the point at which the Agent Run may no longer continue.
+	// goroutine past the point at which the Agent Run may no longer continue. A release
+	// call carries its Attempt's confirm deadline here instead.
 	callCtx, cancel := context.WithDeadline(ctx, call.deadline)
 	defer cancel()
 
 	result, execErr := call.executor.Execute(callCtx, call.action)
+	if call.release != nil {
+		// A release is never a TIMEOUT or a TOOL_ERROR of the Agent: production either
+		// accepted the operation, refused it definitely, or gave no answer, and each of
+		// the three is a release fact of its own.
+		return s.recordReleaseDispatch(ctx, *call, result, execErr)
+	}
 	if execErr != nil {
 		if agentDeadlineExceeded(callCtx, execErr) {
 			// The Agent deadline expired during the call, so this is not the Tool's
@@ -462,6 +476,9 @@ type agentActionClaim struct {
 	claimSource domain.ClaimSource
 	run         domain.Run
 	plan        *runtime.CompiledDefinition
+	// occupation is the ACTIVE deploy-target occupation the Action already holds, set
+	// only by a re-release; the first release Attempt acquires one.
+	occupation *domain.ReleaseOccupation
 
 	commit     agentCommit
 	nextTurnID string
@@ -642,7 +659,7 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 		if err != nil {
 			return err
 		}
-		commit = c.commit
+		commit, nextTurnID = c.commit, c.nextTurnID
 		return nil
 	})
 	if errors.Is(err, errAgentTurnSuperseded) {
@@ -728,6 +745,15 @@ func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.T
 		// Agent has to move to the current patch either way.
 		if named, stale := workspacePatchStale(reg.Metadata, c.decision.Arguments, view); stale {
 			return returnVerdict(domain.ReturnStalePatch, stalePatchMessage(named, view)), nil
+		}
+		// A release names a change request of this Agent Run that describes the newest
+		// patch, and goes to a deploy target nothing else occupies; both are decided here,
+		// before an approval is asked for and again when it is granted.
+		if reg.Metadata.OccupiesReleaseTarget {
+			verdict, err := checkReleaseActionLocked(ctx, tx, c, view)
+			if err != nil || !verdict.ok() {
+				return verdict, err
+			}
 		}
 	}
 
@@ -867,7 +893,20 @@ func (s *ExecutionService) settleToolActionLocked(ctx context.Context, tx store.
 // one place an Attempt is created for a TOOL_CALL Action: the claim path reaches it when the
 // authorization allows the call, the approval path when a person approved it.
 func (s *ExecutionService) startToolAttemptLocked(ctx context.Context, tx store.Tx, c *agentActionClaim, inputs toolActionInputs, now time.Time) (*agentToolCall, error) {
-	// Attempt 1 is the only Attempt a TOOL_CALL Action ever gets in the MVP; attempt_no
+	if c.reg.Metadata.Reconcilable {
+		// A release Attempt carries an operation key instead of a callback credential and
+		// occupies its deploy target. A target another Action took since the checks ran is
+		// a refusal returned to the Agent, settled here with nothing of the release written.
+		call, occupied, err := s.startReleaseAttemptLocked(ctx, tx, c, inputs, now)
+		if err != nil {
+			return nil, err
+		}
+		if occupied {
+			return nil, s.settleToolActionLocked(ctx, tx, c, returnVerdict(domain.ReturnTargetOccupied, targetOccupiedMessage(*inputs.workspace.DeployTarget)), now)
+		}
+		return call, nil
+	}
+	// Attempt 1 is the only Attempt a non-release TOOL_CALL Action ever gets; attempt_no
 	// exists so a Tool call carries the same audit and callback target model as a Node
 	// Attempt. A synchronous call saves no callback token.
 	attemptID := s.deps.IDs.NewID(domain.IDPrefixToolAttempt)

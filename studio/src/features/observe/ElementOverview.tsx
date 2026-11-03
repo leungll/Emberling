@@ -843,7 +843,9 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   if (!turn || !action || !decision || !step) return null;
   const focus = ctx.failure?.focus === el.id;
   const wait =
-    (action.status === 'WAITING_CALLBACK' || action.status === 'WAITING_APPROVAL') &&
+    (action.status === 'WAITING_CALLBACK' ||
+      action.status === 'WAITING_APPROVAL' ||
+      action.status === 'WAITING_HUMAN') &&
     ctx.model.waitingStep === step
       ? ctx.wait
       : null;
@@ -884,6 +886,8 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   const claimWords = claim ? copy.status.claimSource[claim] : null;
   const approval = action.approval;
   const approvalWords = approval ? copy.status.approval[approval.status] : null;
+  const release = action.release;
+  const lastOperation = release?.operations.at(-1) ?? null;
   const authorizationWords = action.authorization
     ? copy.status.authorization[action.authorization]
     : null;
@@ -966,6 +970,62 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
                 }
               : null,
             attempts.length > 1 ? { label: f.attempts, value: String(attempts.length) } : null,
+            release?.operations.length
+              ? {
+                  label: f.operations,
+                  value: (
+                    <span className="flex flex-col">
+                      {release.operations.map((op) => (
+                        <span key={op.operationKey}>
+                          {f.operation(op.operationKey, copy.status.releaseOutcome[op.outcome])}
+                        </span>
+                      ))}
+                    </span>
+                  ),
+                }
+              : null,
+            release?.occupation
+              ? {
+                  label: f.releaseTarget,
+                  value:
+                    release.occupation.status === 'ACTIVE' || !release.occupation.releaseReason
+                      ? f.occupationHeld(release.occupation.targetKey)
+                      : f.occupationReleased(
+                          release.occupation.targetKey,
+                          copy.status.releaseReason[release.occupation.releaseReason],
+                        ),
+                }
+              : null,
+            lastOperation?.confirmDeadline &&
+            action.status !== 'SUCCEEDED' &&
+            action.status !== 'FAILED'
+              ? {
+                  label: f.confirmDeadline,
+                  value: <Timestamp iso={lastOperation.confirmDeadline} />,
+                }
+              : null,
+            release?.humanWait
+              ? {
+                  label: f.humanWait,
+                  value: (
+                    <span className="flex flex-col">
+                      <span>
+                        {release.humanWait.outcome
+                          ? f.humanWaitOutcome(
+                              copy.status.humanWait[release.humanWait.status],
+                              release.humanWait.outcome,
+                            )
+                          : copy.status.humanWait[release.humanWait.status]}
+                      </span>
+                      {release.humanWait.closedBy ? (
+                        <span className="text-fg-muted">
+                          {f.decidedBy}: {release.humanWait.closedBy}
+                        </span>
+                      ) : null}
+                    </span>
+                  ),
+                }
+              : null,
           ]}
         />
       </Section>

@@ -48,8 +48,8 @@ type returnToolMessage struct {
 // already failed in the same transaction, or nil when the refusal came before any Attempt
 // existed.
 //
-// run and plan are required when the Action is returned from WAITING_CALLBACK or
-// WAITING_APPROVAL: resuming
+// run and plan are required when the Action is returned from WAITING_CALLBACK,
+// WAITING_APPROVAL or a WAITING_HUMAN whose NodeRun waits on production: resuming
 // the Agent NodeRun re-derives the Run status from the compiled plan of the Run's immutable
 // Definition version. The caller resolves them before taking the Run lock, as every other
 // asynchronous resume does, because compiling a Definition is work no Run row lock may be
@@ -95,10 +95,15 @@ func (s *ExecutionService) returnActionToAgentLocked(
 	if !returnable {
 		return "", fmt.Errorf("%w: %q", errReturnCodeNotReturnable, code)
 	}
-	if from != domain.AgentActionRunning && from != domain.AgentActionWaitingCallback && from != domain.AgentActionWaitingApproval {
-		return "", fmt.Errorf("execution: return action %s to agent from %s: only a RUNNING, WAITING_CALLBACK or WAITING_APPROVAL action can be returned", ret.action.ID, from)
+	switch from {
+	case domain.AgentActionRunning, domain.AgentActionWaitingCallback, domain.AgentActionWaitingApproval, domain.AgentActionWaitingHuman:
+	default:
+		return "", fmt.Errorf("execution: return action %s to agent from %s: only a RUNNING, WAITING_CALLBACK, WAITING_APPROVAL or WAITING_HUMAN action can be returned", ret.action.ID, from)
 	}
-	resumesWaiting := from == domain.AgentActionWaitingCallback || from == domain.AgentActionWaitingApproval
+	// A release Action handed to a person may have been dispatched (its NodeRun waits on
+	// production) or not (its NodeRun still runs); the NodeRun says which.
+	resumesWaiting := from == domain.AgentActionWaitingCallback || from == domain.AgentActionWaitingApproval ||
+		(from == domain.AgentActionWaitingHuman && ret.nodeRun.Status == domain.NodeRunWaitingCallback)
 	if resumesWaiting && ret.plan == nil {
 		return "", fmt.Errorf("execution: return action %s to agent from %s: the caller must resolve the run and its plan before the lock", ret.action.ID, from)
 	}

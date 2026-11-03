@@ -151,6 +151,8 @@ func (t *defsFakeTx) AgentWorkspaces() store.AgentWorkspaceRepository           
 func (t *defsFakeTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
 func (t *defsFakeTx) Approvals() store.ApprovalRepository                       { return nil }
 func (t *defsFakeTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
+func (t *defsFakeTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
+func (t *defsFakeTx) HumanWaits() store.HumanWaitRepository                     { return nil }
 func (t *defsFakeTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 // defsFakeCallbackBindingRepo is a minimal store.CallbackBindingRepository double: only

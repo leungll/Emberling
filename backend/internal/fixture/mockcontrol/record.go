@@ -99,6 +99,28 @@ func OpenRecord(path string) (*Record, error) {
 	}, nil
 }
 
+// Path is the record file this Record appends to, for a fixture that replays its own
+// lines on start.
+func (r *Record) Path() string { return r.path }
+
+// ScanRecord calls visit for every well-formed line of the record file at path, in file
+// order, and reports nothing for a file that does not exist yet. A fixture uses it to
+// rebuild the state its earlier process persisted.
+func ScanRecord(path string, visit func(line []byte)) error {
+	file, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("mockcontrol: read record: %w", err)
+	}
+	defer file.Close()
+	return scanRecord(file, func(_ int64, line []byte) bool {
+		visit(line)
+		return true
+	})
+}
+
 // lastRecordSeq returns the highest seq in an existing record file, or 0 when the file
 // does not exist yet.
 func lastRecordSeq(path string) (int64, error) {

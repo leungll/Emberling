@@ -57,7 +57,20 @@
 #                   vuln-restart-during-verify
 #                                       vuln-fix.sh restart: SIGKILL while the verification
 #                                       callback is held; after the restart no Decision is
-#                                       asked again and no verification runs twice.
+#                                       asked again and no verification runs twice;
+#                   vuln-release        vuln-fix.sh release: the verified patch is described
+#                                       in a change request, a person approves its release,
+#                                       the approval occupies the deploy target and the mock
+#                                       production service deploys it once;
+#                   vuln-release-restart
+#                                       vuln-fix.sh release-restart: SIGKILL while the
+#                                       release request is held at production; the restarted
+#                                       Backend queries instead of resending, voids the
+#                                       unknown operation after the grace and releases again
+#                                       under the next key, which deploys once.
+#                 The two release variants decide an approval, so they run only when
+#                 EMBERLING_OPERATOR_TOKEN (at least 32 bytes) is set in the shell; the
+#                 Backend reads the same value, and "all" leaves them out without it.
 #                 Each photo, delivery and vuln variant is followed by the invariant report as well.
 #                 The vuln variants bind the Agent to the example repository, which this
 #                 script generates under deploy/.demo/repositories before the stack starts.
@@ -160,10 +173,16 @@ run)
     variants=(held-before-accept after-accept photo-set photo-gate photo-limit photo-sync-crash
       photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery
       vuln-verify vuln-scope-denied vuln-stale-evidence vuln-restart-during-verify)
+    operator_token=${EMBERLING_OPERATOR_TOKEN:-}
+    if [[ ${#operator_token} -ge 32 ]]; then
+      variants+=(vuln-release vuln-release-restart)
+    else
+      log "EMBERLING_OPERATOR_TOKEN is not set: the vuln-release and vuln-release-restart variants are left out"
+    fi
     ;;
   held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | photo-video-restart | \
     delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery | \
-    vuln-verify | vuln-scope-denied | vuln-stale-evidence | vuln-restart-during-verify)
+    vuln-verify | vuln-scope-denied | vuln-stale-evidence | vuln-restart-during-verify | vuln-release | vuln-release-restart)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
   serving)
@@ -174,7 +193,7 @@ run)
     serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout | serving-capacity)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, vuln-verify, vuln-scope-denied, vuln-stale-evidence, vuln-restart-during-verify, serving or one serving-* variant" ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, vuln-verify, vuln-scope-denied, vuln-stale-evidence, vuln-restart-during-verify, vuln-release, vuln-release-restart, serving or one serving-* variant" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -203,6 +222,8 @@ run)
     vuln-scope-denied) script=vuln-fix.sh story=scope-denied ;;
     vuln-stale-evidence) script=vuln-fix.sh story=stale-evidence ;;
     vuln-restart-during-verify) script=vuln-fix.sh story=restart ;;
+    vuln-release) script=vuln-fix.sh story=release ;;
+    vuln-release-restart) script=vuln-fix.sh story=release-restart ;;
     serving-*) script=serving.sh story=${variant#serving-} ;;
     esac
     printf '\n==== variant %s (%s%s) ====\n' "$variant" "$script" "${story:+ $story}"

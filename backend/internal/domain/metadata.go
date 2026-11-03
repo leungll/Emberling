@@ -365,6 +365,11 @@ type ToolMetadata struct {
 	// Runtime may query for an authoritative result after the fact. It requires a Poll
 	// declaration: reconciliation is a status query, never a resend.
 	Reconcilable bool `json:"reconcilable"`
+	// OccupiesReleaseTarget marks a reconcilable Tool whose approved call holds the Agent
+	// Run's frozen deploy target until the release settles. The approval transaction
+	// acquires the occupation for a Tool that declares it; the Runtime never decides this by
+	// Tool Name. Omitted on the wire when false.
+	OccupiesReleaseTarget bool `json:"occupiesReleaseTarget,omitempty"`
 	// ReturnUnmetRequirement makes an unmet fact requirement a definite refusal that is
 	// returned to the Agent, so it can establish the missing fact and call again, instead
 	// of ending the Agent Run. A Tool that leaves it false keeps the terminal behaviour.
@@ -451,6 +456,9 @@ func (m ToolMetadata) Validate() error {
 	errs = append(errs, validateToolRecords(m.Records)...)
 	if m.Reconcilable && (m.ExecutionKind != ToolExecutionAsync || m.Poll == nil) {
 		errs = append(errs, errors.New("reconcilable is only allowed on an ASYNC tool that declares poll"))
+	}
+	if m.OccupiesReleaseTarget && (!m.Reconcilable || !m.UsesWorkspace) {
+		errs = append(errs, errors.New("occupiesReleaseTarget is only allowed on a reconcilable tool that uses the workspace"))
 	}
 	if m.WorkspaceWritePath != "" {
 		if err := ValidateJSONPointer(m.WorkspaceWritePath); err != nil || !strings.HasPrefix(m.WorkspaceWritePath, "/") {

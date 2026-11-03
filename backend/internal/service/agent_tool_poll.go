@@ -83,6 +83,12 @@ func (s *ExecutionService) PollToolAttempt(ctx context.Context, req PollToolAtte
 			return outcome, fmt.Errorf("execution: poll tool attempt %s stopped after its claim committed: %w", req.AttemptID, err)
 		}
 	}
+	if claim.release != nil {
+		// A release is settled by production's definite answers about its operation, never
+		// by the generic resume: deployed is confirmed against the target, voided may start
+		// the next Attempt, and refused is a refusal returned to the Agent.
+		return s.pollRelease(ctx, req, claim)
+	}
 
 	result, err := claim.executor.Poll(ctx, claim.state)
 	if err != nil {
@@ -141,6 +147,8 @@ type toolPollClaim struct {
 	state      registry.ToolAsyncState
 	call       agentToolCall
 	repeatable bool
+	// release is set for the Attempt of a reconcilable release Tool.
+	release *releasePollClaim
 }
 
 // claimToolPoll is the claim transaction. It commits either nothing, a cleared poll
@@ -169,7 +177,11 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 		if err != nil {
 			return err
 		}
-		if action.Status != domain.AgentActionWaitingCallback {
+		// A release Attempt is still polled while a person watches its Action: the human
+		// wait never stops the Runtime from learning production's answer.
+		reg, ok := s.deps.Tools.Get(attempt.ToolName)
+		releaseTool := ok && reg.Metadata.Reconcilable
+		if action.Status != domain.AgentActionWaitingCallback && (!releaseTool || action.Status != domain.AgentActionWaitingHuman) {
 			skip(PollSkipActionNotWaiting)
 			return nil
 		}
@@ -206,7 +218,6 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 			return nil
 		}
 
-		reg, ok := s.deps.Tools.Get(attempt.ToolName)
 		executor, polls := pollableToolExecutor(reg, ok)
 		if !polls {
 			// The current registration no longer polls this Tool. The schedule is cleared
@@ -220,6 +231,15 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 		}
 		policy := *reg.Metadata.Poll
 
+		var release *releasePollClaim
+		var releaseTarget *domain.WorkspaceDeployTarget
+		if releaseTool {
+			release, releaseTarget, err = s.releasePollClaimLocked(ctx, tx, executor, attempt, agentRun, nodeRun)
+			if err != nil {
+				return err
+			}
+		}
+
 		claimed, err := tx.ToolAttempts().ClaimPoll(ctx, attemptID, s.deps.Clock.Now(),
 			time.Duration(policy.IntervalMs)*time.Millisecond, policy.MaxPolls)
 		if err != nil {
@@ -231,9 +251,26 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 			skip(PollSkipNotClaimed)
 			return nil
 		}
+		if release != nil && attempt.PollCount+1 >= policy.MaxPolls {
+			// The claim took the release's last poll and cleared its schedule. Nothing
+			// else changes: the target stays occupied and the Attempt stays open for the
+			// confirm deadline and a person to resolve.
+			s.deps.Logger.WarnContext(ctx, "release attempt used its last poll; no further poll is scheduled",
+				"tool_attempt_id", attemptID, "operation_key", binding.ExternalTaskID)
+		}
+		// Past the void grace of an operation whose outcome is unknown, this scan asks
+		// production to void it instead of querying it. The first request time is a
+		// committed fact of the claim; a request that is lost is simply made again by the
+		// next claim, and counts as no re-release.
+		if release != nil && release.void {
+			if err := tx.ToolAttempts().MarkVoidRequested(ctx, attemptID, s.deps.Clock.Now()); err != nil {
+				return err
+			}
+		}
 
 		claim.outcome.Kind = PollAttemptClaimedNotFinal
 		claim.executor = executor
+		claim.release = release
 		claim.state = registry.ToolAsyncState{
 			AgentRunID: agentRun.ID,
 			ActionID:   action.ID,
@@ -243,15 +280,24 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 				ProviderID:     binding.ProviderID,
 				ExternalTaskID: binding.ExternalTaskID,
 			},
+			ReleaseTarget: releaseTarget,
 		}
 		claim.call = agentToolCall{
-			runID:      nodeRun.RunID,
-			nodeRunID:  nodeRun.ID,
-			agentRunID: agentRun.ID,
-			turnID:     turn.ID,
-			actionID:   action.ID,
-			attemptID:  attempt.ID,
-			toolName:   attempt.ToolName,
+			runID:        nodeRun.RunID,
+			nodeRunID:    nodeRun.ID,
+			agentRunID:   agentRun.ID,
+			turnID:       turn.ID,
+			actionID:     action.ID,
+			attemptID:    attempt.ID,
+			toolName:     attempt.ToolName,
+			outputSchema: reg.Metadata.OutputSchema,
+		}
+		if release != nil {
+			claim.call.release = &releaseCall{operationKey: binding.ExternalTaskID, target: releaseTarget}
+			claim.call.action = registry.ToolAction{
+				RunID: nodeRun.RunID, AgentRunID: agentRun.ID, TurnID: turn.ID, ActionID: action.ID,
+				ToolName: attempt.ToolName, AttemptNo: attempt.AttemptNo, Arguments: attempt.Input,
+			}
 		}
 		// The same rule the orphan handling applies decides whether a call the Provider
 		// lost may simply be made again: no side effect, or a SAFE one.

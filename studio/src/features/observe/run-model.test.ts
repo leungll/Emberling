@@ -256,6 +256,82 @@ describe('where a run opens', () => {
     expect(m.byId.get('turn_2')?.label).toBe('Turn 2: waiting for approval to call deploy');
   });
 
+  it('shows a human wait with the wait’s own deadline once a release passed its confirm deadline', () => {
+    const humanWait = {
+      id: 'hw_1',
+      status: 'OPEN' as const,
+      openedAt: at(65),
+      deadline: at(1865),
+      closedAt: null,
+      closedBy: null,
+      outcome: null,
+    };
+    const waiting = turn(2, 'deploy_change', 5, {
+      action: {
+        status: 'WAITING_HUMAN',
+        completedAt: null,
+        completionSource: null,
+        authorization: 'ASK',
+        release: {
+          operations: [
+            {
+              operationKey: 'op_act_2_1',
+              toolAttemptId: 'att_2',
+              attemptNo: 1,
+              status: 'DISPATCHED',
+              outcome: 'PENDING',
+              confirmDeadline: at(65),
+              outcomeUnknownSince: null,
+              voidRequestedAt: null,
+            },
+          ],
+          occupation: null,
+          humanWait,
+        },
+      },
+      attempts: [
+        toolAttempt('att_2', 'deploy_change', {
+          status: 'DISPATCHED',
+          dispatchedAt: at(6),
+          completedAt: null,
+          callbackBinding: { id: 'b_2', providerId: 'release', externalTaskId: 'op_act_2_1' },
+        }),
+      ],
+      turn: { completedAt: at(5) },
+    });
+    const m = model({
+      definition: AGENT_FLOW,
+      snapshot: snapshot('PAUSED', [
+        nodeRun('in', 'text_input'),
+        nodeRun('agent', 'agent', {
+          status: 'WAITING_CALLBACK',
+          startedAt: at(2),
+          waitingAt: at(6),
+          completedAt: null,
+          latencyMs: null,
+        }),
+      ]),
+      traces: {
+        nr_agent: agentTrace([turn(1, 'lint', 3), waiting], {
+          deadline: at(600),
+          pausedAt: at(5),
+          pauseReason: 'HUMAN',
+        }),
+      },
+      events: [event(1, 'RUN_CREATED'), event(9, 'AGENT_ACTION_WAITING_HUMAN')],
+    });
+    expect(waitInfo(m)).toMatchObject({
+      kind: 'human',
+      humanWait: { id: 'hw_1', status: 'OPEN' },
+      approval: null,
+      provider: 'release',
+      task: 'op_act_2_1',
+      since: at(65),
+      deadline: at(1865),
+      pauseReason: 'HUMAN',
+    });
+  });
+
   it('shows no agent countdown while the agent clock is paused during a callback wait', () => {
     const m = waitingAgent();
     const paused = model({
