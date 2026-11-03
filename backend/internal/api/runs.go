@@ -437,6 +437,9 @@ type agentActionDTO struct {
 	Authorization       *domain.AuthorizationDecision `json:"authorization"`
 	AuthorizationReason *string                       `json:"authorizationReason"`
 	Approval            *approvalDTO                  `json:"approval"`
+	// Release is the release view of a deploy_change Action: its operations, the target
+	// occupation and the human wait. Null for every other Action.
+	Release *releaseActionDTO `json:"release"`
 }
 
 // toolAttemptDTO projects one real Tool call. CallbackBinding is typed as `any` for the
@@ -667,6 +670,7 @@ func toAgentTraceTurnDTO(round service.AgentTraceTurn) agentTraceTurnDTO {
 			Authorization:       round.Action.Authorization,
 			AuthorizationReason: round.Action.AuthorizationReason,
 			Approval:            toApprovalDTOPtr(round.Approval),
+			Release:             toReleaseActionDTO(round),
 		}
 	}
 	for _, attempt := range round.ToolAttempts {

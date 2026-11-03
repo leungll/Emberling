@@ -77,6 +77,14 @@ type Server struct {
 	targets         map[string]targetState
 	targetOrder     []string
 
+	// releases, releaseOrder, releaseFaults, completion and the pending completion timers
+	// are the asynchronous release state behind the /v2/ routes; mu guards them too.
+	releases        map[string]*release
+	releaseOrder    []string
+	releaseFaults   ReleaseFaults
+	completionDelay time.Duration
+	completion      completionGate
+
 	// controls is the test control surface (barrier and record). It is nil unless
 	// WithTestControls was passed, and every use of it is a no-op when nil.
 	controls *testControls
@@ -103,12 +111,14 @@ type target struct {
 
 func (t target) key() string { return t.Service + "/" + t.Environment }
 
-// targetState is what one target currently runs.
+// targetState is what one target currently runs. healthy is reported by the /v2/ target
+// route only; a deployment through /v1/ always leaves the target healthy.
 type targetState struct {
 	counter         int
 	version         string
 	patchDigest     string
 	lastOperationID string
+	unhealthy       bool
 }
 
 type deployRequest struct {
@@ -141,18 +151,30 @@ type errorResponse struct {
 // Record and calls StopHolding before shutting the HTTP server down.
 func NewServer(opts ...Option) *Server {
 	s := &Server{
-		now:         time.Now,
-		deployments: make(map[string]deployment),
-		targets:     make(map[string]targetState),
+		now:             time.Now,
+		deployments:     make(map[string]deployment),
+		targets:         make(map[string]targetState),
+		releases:        make(map[string]*release),
+		completionDelay: defaultCompletionDelay,
 	}
 	for _, opt := range opts {
 		opt(s)
+	}
+	if s.controls != nil {
+		s.replayReleases()
 	}
 	r := chi.NewRouter()
 	r.Get("/healthz", s.handleHealthz)
 	r.Post("/v1/deployments", s.handleDeploy)
 	r.Get("/v1/deployments/{operationId}", s.handleDeployment)
 	r.Get("/v1/targets/{service}/{environment}", s.handleTarget)
+	r.Route("/v2", func(r chi.Router) {
+		r.Use(s.unreachable)
+		r.Post("/deployments", s.handleRelease)
+		r.Get("/deployments/{operationId}", s.handleReleaseStatus)
+		r.Post("/deployments/{operationId}/void", s.handleReleaseVoid)
+		r.Get("/targets/{service}/{environment}", s.handleReleaseTarget)
+	})
 	if s.controls != nil {
 		s.mountControlRoutes(r)
 	}
@@ -213,19 +235,7 @@ func (s *Server) deploy(req deployRequest, reject bool) (deployment, bool, bool)
 	}
 
 	t := *req.Target
-	state, known := s.targets[t.key()]
-	if !known {
-		if len(s.targetOrder) >= maxTargets {
-			delete(s.targets, s.targetOrder[0])
-			s.targetOrder = s.targetOrder[1:]
-		}
-		s.targetOrder = append(s.targetOrder, t.key())
-	}
-	state.counter++
-	state.version = "v" + strconv.Itoa(state.counter)
-	state.patchDigest = req.PatchDigest
-	state.lastOperationID = req.OperationID
-	s.targets[t.key()] = state
+	state := s.advanceTarget(t, req.OperationID, req.PatchDigest, false)
 
 	created := deployment{
 		OperationID: req.OperationID,
@@ -244,6 +254,25 @@ func (s *Server) deploy(req deployRequest, reject bool) (deployment, bool, bool)
 	s.deployments[req.OperationID] = created
 	s.recordDeployed(created, false)
 	return created, false, true
+}
+
+// advanceTarget assigns the next version of target t to operationID. The caller holds s.mu.
+func (s *Server) advanceTarget(t target, operationID, patchDigest string, unhealthy bool) targetState {
+	state, known := s.targets[t.key()]
+	if !known {
+		if len(s.targetOrder) >= maxTargets {
+			delete(s.targets, s.targetOrder[0])
+			s.targetOrder = s.targetOrder[1:]
+		}
+		s.targetOrder = append(s.targetOrder, t.key())
+	}
+	state.counter++
+	state.version = "v" + strconv.Itoa(state.counter)
+	state.patchDigest = patchDigest
+	state.lastOperationID = operationID
+	state.unhealthy = unhealthy
+	s.targets[t.key()] = state
+	return state
 }
 
 func (s *Server) handleDeployment(w http.ResponseWriter, r *http.Request) {

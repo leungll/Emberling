@@ -158,6 +158,11 @@ type fakeToolAttemptRepo struct {
 	duePolls   []store.DueToolPoll
 	// duePollLimits records the limit of every ListDuePolls call.
 	duePollLimits []int
+	dueConfirm    []store.DueConfirmDeadline
+}
+
+func (r *fakeToolAttemptRepo) ListDueConfirmDeadlines(_ context.Context, _ time.Time, _ int) ([]store.DueConfirmDeadline, error) {
+	return r.dueConfirm, nil
 }
 
 func (r *fakeToolAttemptRepo) ListOrphanStarted(_ context.Context, currentRunnerID string, _ time.Time, _ int) ([]domain.ToolAttempt, error) {
@@ -199,6 +204,7 @@ type fakeExecutor struct {
 	agentTimeoutCalls []string
 	orphanCalls       []string
 	expireCalls       []string
+	humanWaitCalls    []string
 }
 
 // agentCall records which Agent work item the Reconciler handed to which use case, and
@@ -243,6 +249,11 @@ func (e *fakeExecutor) HandleOrphanToolAttempt(_ context.Context, attemptID stri
 
 func (e *fakeExecutor) ExpireApproval(_ context.Context, approvalID string) error {
 	e.expireCalls = append(e.expireCalls, approvalID)
+	return nil
+}
+
+func (e *fakeExecutor) OpenReleaseHumanWait(_ context.Context, attemptID string) error {
+	e.humanWaitCalls = append(e.humanWaitCalls, attemptID)
 	return nil
 }
 

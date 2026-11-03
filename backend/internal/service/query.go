@@ -220,6 +220,10 @@ type AgentTraceTurn struct {
 	// Approval is the human decision requested for the Action, nil when its authorization
 	// never asked for one.
 	Approval *domain.Approval
+	// Occupation is the deploy target this release Action holds or held, and HumanWait the
+	// wait opened when its confirm deadline passed; both nil for every other Action.
+	Occupation *domain.ReleaseOccupation
+	HumanWait  *domain.HumanWait
 }
 
 // AgentTrace reads one Agent NodeRun's Agent Run, Turns, Decisions, Actions, Tool
@@ -282,6 +286,22 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 			switch {
 			case err == nil:
 				round.Approval = &approval
+			case !errors.Is(err, domain.ErrNotFound):
+				return err
+			}
+			occupations, err := tx.ReleaseOccupations().ListByActionID(ctx, action.ID)
+			if err != nil {
+				return err
+			}
+			if len(occupations) > 0 {
+				// A release Action acquires one occupation; the newest row is the one that
+				// says where the target stands.
+				round.Occupation = &occupations[len(occupations)-1]
+			}
+			wait, err := tx.HumanWaits().GetByActionID(ctx, action.ID)
+			switch {
+			case err == nil:
+				round.HumanWait = &wait
 			case !errors.Is(err, domain.ErrNotFound):
 				return err
 			}

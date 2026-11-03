@@ -409,7 +409,8 @@ func (s *ExecutionService) returnWaitingApprovalLocked(ctx context.Context, tx s
 // callback credential it issues are bound to the moved deadline. A Tool whose registration
 // marks it reconcilable then pauses the Agent again at once, for the release the Runtime
 // will reconcile: the approval wait is credited back, and the release wait starts its own
-// pause, so neither counts against the Agent's time. It returns the call to make after
+// pause, so neither counts against the Agent's time; a deploy target another Action took
+// meanwhile is returned to the Agent as TARGET_OCCUPIED with the approval kept APPROVED. It returns the call to make after
 // COMMIT (nil when the Action was settled instead) and what the transaction owes.
 func (s *ExecutionService) resumeApprovedActionLocked(ctx context.Context, tx store.Tx, t approvalDecisionTarget, now time.Time) (*agentToolCall, agentCommit, string, error) {
 	if err := tx.AgentActions().ResumeApproved(ctx, t.action.ID, now); err != nil {
@@ -460,16 +461,14 @@ func (s *ExecutionService) resumeApprovedActionLocked(ctx context.Context, tx st
 	if c.agentRun, err = s.resumeAgentLocked(ctx, tx, t.lock, t.nodeRun, t.agentRun, now); err != nil {
 		return nil, agentCommit{}, "", err
 	}
-	if c.reg.Metadata.Reconcilable {
-		if c.agentRun, err = s.pauseAgentLocked(ctx, tx, t.lock, t.nodeRun, c.agentRun, domain.PauseRelease, now); err != nil {
-			return nil, agentCommit{}, "", err
-		}
-	}
+	// A reconcilable Tool's Attempt pauses the Agent again at once, for the release the
+	// Runtime will reconcile; a deploy target taken while the person decided leaves the
+	// Action settled as TARGET_OCCUPIED instead, with the clock already resumed above.
 	call, err := s.startToolAttemptLocked(ctx, tx, c, verdict.inputs, now)
 	if err != nil {
 		return nil, agentCommit{}, "", err
 	}
-	return call, c.commit, "", nil
+	return call, c.commit, c.nextTurnID, nil
 }
 
 // ExpireApproval settles a PENDING approval whose deadline has passed on the injected

@@ -40,7 +40,7 @@ type Option func(*Server)
 // and nothing is recorded.
 func WithTestControls(record *Record) Option {
 	return func(s *Server) {
-		s.controls = &testControls{record: record, barrier: mockcontrol.NewBarrier(kindDeploy)}
+		s.controls = &testControls{record: record, barrier: mockcontrol.NewBarrier(kindDeploy, kindRelease)}
 	}
 }
 
@@ -181,11 +181,14 @@ func (s *Server) respondHeldError(w http.ResponseWriter, operationID string, err
 
 // StopHolding rejects every request the barrier is holding and disables the barrier, so
 // an HTTP server shutdown that waits for in-flight handlers cannot wait on a release that
-// will never come. It is a no-op without test controls.
+// will never come. It also stops every pending asynchronous completion, so nothing is
+// written after the caller closes the record. The barrier part is a no-op without test
+// controls.
 func (s *Server) StopHolding() {
 	if s.controls != nil {
 		s.controls.barrier.Stop()
 	}
+	s.stopCompletions()
 }
 
 func (s *Server) mountControlRoutes(r chi.Router) {
@@ -194,6 +197,8 @@ func (s *Server) mountControlRoutes(r chi.Router) {
 		r.Method(http.MethodPost, "/release", mockcontrol.ReleaseHandler(s.controls.barrier))
 		r.Method(http.MethodGet, "/barrier", mockcontrol.BarrierHandler(s.controls.barrier))
 		r.Method(http.MethodGet, "/record", mockcontrol.RecordHandler(s.controls.record))
+		r.Post("/v2/faults", s.handleReleaseFaults)
+		r.Post("/v2/completion", s.handleReleaseCompletion)
 	})
 }
 

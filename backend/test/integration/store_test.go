@@ -433,8 +433,8 @@ func TestMigrations_ApplyTwice_Idempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM goose_db_version WHERE version_id > 0`).Scan(&applied); err != nil {
 		t.Fatalf("read goose version table: %v", err)
 	}
-	if applied != 18 {
-		t.Fatalf("applied migrations after two runs: want 18, got %d", applied)
+	if applied != 19 {
+		t.Fatalf("applied migrations after two runs: want 19, got %d", applied)
 	}
 }
 

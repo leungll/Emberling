@@ -118,9 +118,10 @@ func TestAgentActionStatus_Transition_WaitingResolvesWithoutRerunningModel(t *te
 	if !AgentActionWaitingCallback.CanTransitionTo(AgentActionSucceeded) {
 		t.Fatal("AgentAction WAITING_CALLBACK -> SUCCEEDED: want allowed, got rejected")
 	}
-	// A waiting Action resumes; it never goes back to RUNNING to re-decide.
-	if AgentActionWaitingCallback.CanTransitionTo(AgentActionRunning) {
-		t.Fatal("AgentAction WAITING_CALLBACK -> RUNNING: want rejected, got allowed")
+	// A waiting Action goes back to RUNNING only to re-release the same committed Decision
+	// after production confirmed a void; the approval and human waits never do.
+	if !AgentActionWaitingCallback.CanTransitionTo(AgentActionRunning) {
+		t.Fatal("AgentAction WAITING_CALLBACK -> RUNNING: want allowed for a re-release, got rejected")
 	}
 	if AgentActionSucceeded.CanTransitionTo(AgentActionFailed) {
 		t.Fatal("AgentAction SUCCEEDED -> FAILED: want rejected, got allowed")
@@ -211,6 +212,7 @@ func TestAgentActionStatus_Transition_HumanWaitsCoverEveryNewEdge(t *testing.T) 
 		{AgentActionWaitingApproval, AgentActionFailed},
 		{AgentActionRunning, AgentActionWaitingHuman},
 		{AgentActionWaitingCallback, AgentActionWaitingHuman},
+		{AgentActionWaitingCallback, AgentActionRunning},
 		{AgentActionWaitingHuman, AgentActionSucceeded},
 		{AgentActionWaitingHuman, AgentActionFailed},
 	}

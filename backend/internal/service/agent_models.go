@@ -254,3 +254,42 @@ func agentAuthorizationConfigErrors(tools *registry.ToolRegistry, nodeID string,
 	}
 	return errs
 }
+
+// releaseBoundsConfigErrors reports every release bound an Agent node leaves out while it
+// allows a Tool that occupies a release target. The Runtime substitutes none of them: the
+// confirm deadline bounds the release call and hands an unanswered release to a person, the
+// void grace decides when an unknown operation is voided, the retry count how often a voided
+// one is released again, and the human wait bound how long a person may take.
+func releaseBoundsConfigErrors(tools *registry.ToolRegistry, nodeID string, cfg runtime.AgentNodeConfig) []runtime.ValidationError {
+	releaseTool := ""
+	for _, toolName := range cfg.AllowedTools {
+		if reg, ok := tools.Get(toolName); ok && reg.Metadata.OccupiesReleaseTarget {
+			releaseTool = toolName
+			break
+		}
+	}
+	if releaseTool == "" {
+		return nil
+	}
+	var errs []runtime.ValidationError
+	for _, field := range []struct {
+		name  string
+		value *int
+	}{
+		{"releaseConfirmTimeoutMs", cfg.ReleaseConfirmTimeoutMs},
+		{"voidGraceMs", cfg.VoidGraceMs},
+		{"maxReleaseRetries", cfg.MaxReleaseRetries},
+		{"humanWaitTimeoutMs", cfg.HumanWaitTimeoutMs},
+	} {
+		if field.value != nil {
+			continue
+		}
+		errs = append(errs, runtime.ValidationError{
+			Code:    runtime.CodeSemanticValidationFailed,
+			NodeID:  nodeID,
+			Path:    "nodes[" + nodeID + "].config." + field.name,
+			Message: fmt.Sprintf("tool %q occupies a release target, so %s is required", releaseTool, field.name),
+		})
+	}
+	return errs
+}

@@ -197,6 +197,13 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return err
 		}
 		now := s.deps.Clock.Now()
+		if call.release != nil {
+			// A release concludes from whichever wait its Action is in: on production, or
+			// on a person who was handed it at the confirm deadline. The Agent NodeRun is
+			// resumed only when it is still waiting.
+			src.fromAction = action.Status
+			src.resumesWaiting = nodeRun.Status == domain.NodeRunWaitingCallback
+		}
 
 		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
 			return err
@@ -228,6 +235,16 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 				return errAgentTurnSuperseded
 			}
 			return err
+		}
+
+		// A deployed release frees its target, closes an open human wait and resumes the
+		// Agent's clock before the round is judged: production did deploy, so neither the
+		// occupation nor the wait may stay open when a state patch or the fact below fails
+		// the Action and ends the Agent Run.
+		if call.release != nil {
+			if agentRun, err = s.settleReleaseSuccessLocked(ctx, tx, lock, nodeRun, agentRun, call.actionID, now); err != nil {
+				return err
+			}
 		}
 
 		// The state patch is decided before anything else is written: a patch that cannot

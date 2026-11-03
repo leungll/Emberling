@@ -4,8 +4,8 @@
 # sandbox runner's verification, which answers by callback. Every check reads the Backend's
 # public API and the sandbox runner's request record; no live credential is involved.
 #
-# Usage: scripts/demo/vuln-fix.sh verify|scope-denied|stale-evidence|restart
-#        scripts/demo/vuln-fix.sh definition verify|scope-denied|stale-evidence|restart
+# Usage: scripts/demo/vuln-fix.sh verify|scope-denied|stale-evidence|restart|release|release-restart
+#        scripts/demo/vuln-fix.sh definition verify|scope-denied|stale-evidence|restart|release|release-restart
 #
 # "definition" prints the Definition the story would save, as JSON, and touches nothing:
 # it needs jq only, and the contract tests read it to check what the environment changes.
@@ -33,6 +33,27 @@
 #                   started that verification once and received exactly one more, the
 #                   committed Decisions to grow by exactly the Turns after the held one
 #                   (no Decision asked again) and the Run COMPLETED.
+#   release         the verify story continued to production: the Agent describes the
+#                   verified patch in a change request and asks to release it to the frozen
+#                   deploy target; a person approves through the approval API, the approval
+#                   occupies the target and starts one release operation, the mock
+#                   production service deploys it and the Runtime confirms the target.
+#                   Expects a COMPLETED Run, one deploy_change Attempt SUCCEEDED under its
+#                   operation key with a release Binding and no callback credential, the
+#                   occupation RELEASED as DEPLOYED, one healthy release_confirmed fact about
+#                   the latest patch, the approval APPROVED, production deployed once and a
+#                   RELEASED report. Needs EMBERLING_OPERATOR_TOKEN (the approval routes'
+#                   credential, at least 32 bytes) in the shell environment; the token is
+#                   sent in a header and never written anywhere.
+#   release-restart the release story with the release request held at production's
+#                   barrier; the Backend is killed with SIGKILL while the request is held,
+#                   so production abandons it and the restarted Backend never learns the
+#                   answer. Expects the orphan Attempt to enter the query state (one
+#                   RELEASE_OUTCOME_UNKNOWN), the unknown operation to be voided after the
+#                   grace (one RELEASE_VOIDED naming the next key), the first operation
+#                   abandoned, voided and never deployed at production, the second operation
+#                   deployed exactly once, the occupation RELEASED as DEPLOYED under the
+#                   second key, no Decision asked again and the Run COMPLETED.
 #
 # EMBERLING_DEMO_MODEL=<model id> binds the Agent to a real decision model the Backend
 # registers through EMBERLING_MODELS instead of the scripted mock model. Only the verify
@@ -66,12 +87,34 @@ case "$story" in
 verify | restart) script=vuln-fix-main-verify ;;
 scope-denied) script=vuln-fix-scope-denied ;;
 stale-evidence) script=vuln-fix-stale-evidence ;;
-*) die "usage: vuln-fix.sh [definition] verify|scope-denied|stale-evidence|restart" ;;
+release | release-restart) script=vuln-fix-release ;;
+*) die "usage: vuln-fix.sh [definition] verify|scope-denied|stale-evidence|restart|release|release-restart" ;;
 esac
 real_model=${EMBERLING_DEMO_MODEL:-}
 if [[ -n "$real_model" && "$story" != verify ]]; then
   die "EMBERLING_DEMO_MODEL runs the verify story only; the other stories are scripted"
 fi
+release_story=0
+case "$story" in release | release-restart) release_story=1 ;; esac
+# The release stories decide the approval through the approval API, whose credential the
+# Backend reads from its own environment. It is read here from the shell, sent in a header
+# and never printed or stored.
+OPERATOR_TOKEN=${EMBERLING_OPERATOR_TOKEN:-}
+OPERATOR_HEADER="X-Emberling-Operator-Token: $OPERATOR_TOKEN"
+# The release target the release stories bind the Agent to, and how long each release wait
+# is allowed: a short void grace for the restart story, so the unknown operation is voided
+# while the audience watches; a long confirm deadline, so no human wait opens by itself.
+RELEASE_SERVICE=token-service
+RELEASE_ENVIRONMENT=staging
+RELEASE_APPROVAL_TIMEOUT_MS=600000
+RELEASE_CONFIRM_TIMEOUT_MS=120000
+RELEASE_HUMAN_WAIT_TIMEOUT_MS=600000
+RELEASE_MAX_RETRIES=1
+case "$story" in
+release-restart) RELEASE_VOID_GRACE_MS=10000 ;;
+*) RELEASE_VOID_GRACE_MS=60000 ;;
+esac
+RELEASE_INSTRUCTIONS='Once the latest patch has passed verification, describe it with create_change_request, citing as its decision basis the workspace files it relied on, each by its path and the number of a turn whose request already carried its contents, then release it with deploy_change naming that change request; both calls return REJECTED tool messages for a definite refusal. A release needs a person to approve it; wait for the result and finish with {"status","advisory","patchDigest","changeRequestId","operationKey","version","healthy"}.'
 
 FIXTURE="$DEMO_ROOT/backend/test/fixtures/definitions/vuln_fix.json"
 HELD_DEADLINE_S=60
@@ -101,6 +144,25 @@ build_definition() {
       | .nodes |= map(if .id == "node_agent"
           then .config.modelId = $model | del(.config.modelConfig) | .config.timeoutMs = $timeout
           else . end)' "$FIXTURE"
+  elif ((release_story)); then
+    jq --arg script "$script" --arg service "$RELEASE_SERVICE" --arg environment "$RELEASE_ENVIRONMENT" \
+      --arg instructions "$RELEASE_INSTRUCTIONS" \
+      --argjson approval "$RELEASE_APPROVAL_TIMEOUT_MS" --argjson confirm "$RELEASE_CONFIRM_TIMEOUT_MS" \
+      --argjson grace "$RELEASE_VOID_GRACE_MS" --argjson retries "$RELEASE_MAX_RETRIES" --argjson human "$RELEASE_HUMAN_WAIT_TIMEOUT_MS" '
+      del(.workflowId)
+      | .name = "Vulnerability Fix (\($script))"
+      | .description = "An Agent repairs a dependency vulnerability inside a bound workspace, verifies the patch, describes it in a change request and releases it to a frozen deploy target once a person approves"
+      | .nodes |= map(if .id == "node_agent" then
+          .config.modelConfig.script = $script
+          | .config.instructions += " " + $instructions
+          | .config.allowedTools += ["create_change_request", "deploy_change"]
+          | .config.workspace.deployTarget = {service: $service, environment: $environment}
+          | .config.approvalTimeoutMs = $approval
+          | .config.releaseConfirmTimeoutMs = $confirm
+          | .config.voidGraceMs = $grace
+          | .config.maxReleaseRetries = $retries
+          | .config.humanWaitTimeoutMs = $human
+        else . end)' "$FIXTURE"
   else
     jq --arg script "$script" '
       del(.workflowId)
@@ -113,6 +175,9 @@ if [[ "$mode" == definition ]]; then
   exit 0
 fi
 require_tools docker curl
+if ((release_story)) && [[ ${#OPERATOR_TOKEN} -lt 32 ]]; then
+  die "the $story story decides an approval: set EMBERLING_OPERATOR_TOKEN (at least 32 bytes) in the shell, the same value the Backend was started with"
+fi
 
 failures=0
 pass() { printf 'PASS %s\n' "$*"; }
@@ -124,9 +189,13 @@ check() {
 }
 
 paused=0
+production_paused=0
 release_barrier() {
   if ((paused)); then
     curl -fsS -X POST "$RUNNER_URL/control/release" >/dev/null 2>&1 || true
+  fi
+  if ((production_paused)); then
+    curl -fsS -X POST "$PRODUCTION_URL/control/release" >/dev/null 2>&1 || true
   fi
 }
 trap release_barrier EXIT
@@ -136,6 +205,13 @@ wait_until "Backend /ready" 60 backend_ready
 wait_until "sandbox runner /control/barrier" 60 runner_ready
 # A barrier left paused by an interrupted earlier run would hold unrelated requests.
 curl -fsS -X POST "$RUNNER_URL/control/release" >/dev/null
+if ((release_story)); then
+  wait_until "mock production /control/barrier" 60 production_ready
+  curl -fsS -X POST "$PRODUCTION_URL/control/release" >/dev/null
+  # The approval routes are served only when the Backend has the operator credential.
+  curl -fsS -o /dev/null -H "$OPERATOR_HEADER" "$BACKEND_URL/api/approvals?status=PENDING" ||
+    die "the Backend does not serve the approval routes for this operator credential; start the stack with the same EMBERLING_OPERATOR_TOKEN"
+fi
 
 if [[ -n "$real_model" ]]; then
   log "creating a Definition from $(basename "$FIXTURE") bound to model $real_model with a ${agent_timeout_ms}ms Agent budget"
@@ -151,15 +227,21 @@ log "definition $workflow_id version $version"
 
 record_after_seq=$(record_last_seq)
 runner_after=$(record_last_seq "$RUNNER_URL")
-log "record baselines: mock provider seq=$record_after_seq runner seq=$runner_after"
+production_after=0
+if ((release_story)); then
+  production_after=$(record_last_seq "$PRODUCTION_URL")
+fi
+log "record baselines: mock provider seq=$record_after_seq runner seq=$runner_after${release_story:+ production seq=$production_after}"
 
 if [[ "$story" == restart ]]; then
   curl -fsS -X POST -H 'Content-Type: application/json' --data '{"kinds":["callback"]}' "$RUNNER_URL/control/pause" >/dev/null
   paused=1
 fi
 
-task=$(jq -cn --arg advisory "$ADVISORY" --arg service "$SERVICE" \
-  '{advisory: $advisory, goal: "PREPARE_ONLY", service: $service}')
+goal=PREPARE_ONLY
+((release_story)) && goal=FIX_AND_DEPLOY
+task=$(jq -cn --arg advisory "$ADVISORY" --arg service "$SERVICE" --arg goal "$goal" \
+  '{advisory: $advisory, goal: $goal, service: $service}')
 run_request=$(jq -n --arg wf "$workflow_id" --argjson v "$version" --argjson task "$task" \
   '{workflowId: $wf, definitionVersion: $v, input: {task: $task}}')
 run_id=$(curl -fsS -X POST -H 'Content-Type: application/json' \
@@ -217,6 +299,48 @@ if [[ "$story" == restart ]]; then
   paused=0
 fi
 
+# The release stories: wait for the Agent to ask for the release, approve it as the
+# operator, and for the restart story lose the Backend while production holds the request.
+release_approval_id=""
+release_action_id=""
+release_decisions_before=0
+if ((release_story)); then
+  pending_approval() {
+    local items
+    items=$(curl -fsS -H "$OPERATOR_HEADER" "$BACKEND_URL/api/approvals?status=PENDING") || return 1
+    release_approval_id=$(jq -r --arg run "$run_id" '[.items[] | select(.runId == $run and .toolName == "deploy_change")] | first | .id // empty' <<<"$items")
+    [[ -n "$release_approval_id" ]]
+  }
+  wait_until "the Agent to ask for the release and its approval to be PENDING" "$TERMINAL_DEADLINE_S" pending_approval
+  release_action_id=$(curl -fsS -H "$OPERATOR_HEADER" "$BACKEND_URL/api/approvals/$release_approval_id" | jq -r '.actionId')
+  release_decisions_before=$(decisions_committed)
+  log "approval $release_approval_id PENDING for the release Action $release_action_id; $release_decisions_before Decisions committed"
+  demo_pause "the Agent asked to release the change and waits for a person (approval $release_approval_id, agent clock paused for APPROVAL); open the approval in Studio. Next: approve it as the operator"
+  if [[ "$story" == release-restart ]]; then
+    curl -fsS -X POST -H 'Content-Type: application/json' --data '{"kinds":["release"]}' "$PRODUCTION_URL/control/pause" >/dev/null
+    production_paused=1
+  fi
+  decided=$(curl -fsS -X POST -H "$OPERATOR_HEADER" -H 'Content-Type: application/json' \
+    --data '{"decision":"APPROVE","reason":"Verified patch; release to staging."}' "$BACKEND_URL/api/approvals/$release_approval_id/decision")
+  log "approval decided: $(jq -c '{status: .approval.status, decidedBy: .approval.decidedBy, repeated}' <<<"$decided")"
+  if [[ "$story" == release-restart ]]; then
+    release_held() {
+      curl -fsS "$PRODUCTION_URL/control/barrier" | jq -e '[.held[] | select(.kind == "release")] | length >= 1' >/dev/null
+    }
+    wait_until "the release request to be held by production" "$HELD_DEADLINE_S" release_held
+    log "held at production: $(curl -fsS "$PRODUCTION_URL/control/barrier" | jq -c '[.held[] | {kind, operationId, arrivalSeq}]')"
+    demo_pause "the approval occupied the deploy target and the release request is held at production while its Attempt is STARTED; next: SIGKILL the backend and start it again, so production abandons the request and the answer is never learned"
+    kill_and_restart_backend
+    # The held request's caller died with the old process, so production abandoned it and
+    # nothing was deployed under the first key. The barrier opens for the re-release.
+    curl -fsS -X POST "$PRODUCTION_URL/control/release" >/dev/null
+    production_paused=0
+    demo_pause "backend back; the Reconciler finds the orphan release Attempt and queries production instead of sending it again (RELEASE_OUTCOME_UNKNOWN). Production does not know the operation, so after the $((RELEASE_VOID_GRACE_MS / 1000))s void grace it is voided (RELEASE_VOIDED) and the release is sent again under the next operation key; watch the release Action in Studio"
+  else
+    demo_pause "approved: the approval occupied the deploy target and started release operation op_${release_action_id}_1; the agent clock is paused for RELEASE while production deploys and the Runtime polls the operation; watch the release Action in Studio"
+  fi
+fi
+
 run_terminal() {
   local status
   status=$(curl -fsS "$BACKEND_URL/api/runs/$run_id" 2>/dev/null | jq -r '.run.status') || return 1
@@ -243,6 +367,22 @@ decisions=$(jq '[.[] | select(.type == "AGENT_DECISION_COMMITTED")] | length' <<
 callback_completions=$(jq '[.[] | select(.type == "AGENT_ACTION_COMPLETED" and .payload.completionSource == "CALLBACK")] | length' <<<"$events")
 runner_arrivals=$(jq -c '[.[] | select(.event == "arrived" and .kind == "verification") | .patchDigest]' <<<"$runner")
 runner_arrival_count=$(jq 'length' <<<"$runner_arrivals")
+# The release facts: the release Action's view, its Attempts, the release_confirmed facts
+# and production's release lines since the baseline. Empty for the other stories.
+releases='[]'
+release_facts='[]'
+production='[]'
+if ((release_story)); then
+  releases=$(jq -c '[.turns[] | select(.action.release != null) | .action as $a | {
+      actionId: $a.id, actionStatus: $a.status, code: ($a.error.code // null),
+      operations: [$a.release.operations[] | {operationKey, outcome, status}],
+      occupation: ($a.release.occupation | if . == null then null else {status, releaseReason, operationKey} end),
+      humanWait: ($a.release.humanWait | if . == null then null else {status, outcome} end),
+      attempts: [.toolAttempts[] | select(.toolName == "deploy_change")
+        | {attemptNo, status, code: (.error.code // null), provider: (.callbackBinding.providerId // null), operationKey: (.callbackBinding.externalTaskId // null)}]}]' <<<"$trace")
+  release_facts=$(jq -c '[.facts.items[] | select(.factType == "release_confirmed") | {subject, verdict, toolAttemptId}]' <<<"$trace")
+  production=$(record_after "$production_after" "$PRODUCTION_URL" | jq -s '[.[] | select(.kind == "release")]')
+fi
 
 printf '\nvulnerability fix %s story, run %s\n' "$story" "$run_id"
 printf 'run status: %s, agent termination: %s, verify_patch attempts: %s, workspace patches: %s, patch_verified facts: %s, runner verifications: %s, decisions committed: %s\n\n' \
@@ -311,6 +451,50 @@ else
     check last_fact_is_latest_passed "latest=$latest_digest facts=$facts" last_fact_is_latest_passed
     check report_names_latest "result=$result" report_names_latest
     summary="refusal=STALE_PATCH verifications=$(jq 'length' <<<"$verifications") runner_verifications=$runner_arrival_count first=$first_digest latest=$latest_digest status=$run_status"
+    ;;
+  release | release-restart)
+    release_action=$(jq -c --arg id "$release_action_id" '[.[] | select(.actionId == $id)] | first // {}' <<<"$releases")
+    first_key="op_${release_action_id}_1"
+    second_key="op_${release_action_id}_2"
+    production_of() { jq --arg op "$1" --arg event "$2" '[.[] | select(.operationId == $op and .event == $event)] | length' <<<"$production"; }
+    approval_status=$(curl -fsS -H "$OPERATOR_HEADER" "$BACKEND_URL/api/approvals/$release_approval_id" | jq -r '.status')
+    unknown_events=$(jq '[.[] | select(.type == "RELEASE_OUTCOME_UNKNOWN")] | length' <<<"$events")
+    voided_events=$(jq -c '[.[] | select(.type == "RELEASE_VOIDED") | .payload | {operationKey, nextOperationKey}]' <<<"$events")
+    check run_completed "status=$run_status termination=$termination" test "$run_status" = COMPLETED
+    check approval_approved "approval=$release_approval_id status=$approval_status" test "$approval_status" = APPROVED
+    check last_fact_is_latest_passed "latest=$latest_digest facts=$facts" last_fact_is_latest_passed
+    check release_fact_healthy_about_latest "latest=$latest_digest release_facts=$release_facts" \
+      jq -e --arg d "$latest_digest" 'length == 1 and .[0].subject == $d and .[0].verdict == true' <<<"$release_facts"
+    check occupation_released_as_deployed "occupation=$(jq -c '.occupation' <<<"$release_action")" \
+      jq -e '.occupation.status == "RELEASED" and .occupation.releaseReason == "DEPLOYED"' <<<"$release_action"
+    check no_human_wait_opened "humanWait=$(jq -c '.humanWait' <<<"$release_action")" jq -e '.humanWait == null' <<<"$release_action"
+    check report_released "result=$result" \
+      jq -e --arg d "$latest_digest" '.status == "RELEASED" and .patchDigest == $d and .healthy == true and (.operationKey | startswith("op_"))' <<<"$result"
+    if [[ "$story" == release ]]; then
+      check one_operation_deployed "attempts=$(jq -c '.attempts' <<<"$release_action") operations=$(jq -c '.operations' <<<"$release_action")" \
+        jq -e --arg k "$first_key" '.actionStatus == "SUCCEEDED" and (.attempts | length == 1) and .attempts[0].status == "SUCCEEDED" and .attempts[0].provider == "release" and .attempts[0].operationKey == $k
+          and (.operations | length == 1) and .operations[0].outcome == "DEPLOYED" and .occupation.operationKey == $k' <<<"$release_action"
+      check production_deployed_once "arrived=$(production_of "$first_key" arrived) deployed=$(production_of "$first_key" deployed)" \
+        test "$(production_of "$first_key" arrived)" -eq 1 -a "$(production_of "$first_key" deployed)" -eq 1
+      check no_outcome_unknown "unknown_events=$unknown_events voided=$voided_events" test "$unknown_events" -eq 0 -a "$(jq 'length' <<<"$voided_events")" -eq 0
+      check eleven_decisions_committed "decisions=$decisions" test "$decisions" -eq 11
+      summary="approval=$approval_status operation=$first_key deployed=$(production_of "$first_key" deployed) release_facts=$(jq -c 'map(.verdict)' <<<"$release_facts") latest=$latest_digest decisions=$decisions status=$run_status"
+    else
+      check voided_then_released_again "attempts=$(jq -c '.attempts' <<<"$release_action") operations=$(jq -c '.operations' <<<"$release_action")" \
+        jq -e --arg k1 "$first_key" --arg k2 "$second_key" '.actionStatus == "SUCCEEDED" and (.attempts | length == 2)
+          and .attempts[0].status == "FAILED" and .attempts[0].code == "VOIDED" and .attempts[0].operationKey == $k1
+          and .attempts[1].status == "SUCCEEDED" and .attempts[1].operationKey == $k2
+          and (.operations | map(.outcome)) == ["VOIDED", "DEPLOYED"] and .occupation.operationKey == $k2' <<<"$release_action"
+      check outcome_unknown_then_voided_events "unknown_events=$unknown_events voided=$voided_events" \
+        test "$unknown_events" -eq 1 -a "$(jq -r --arg k1 "$first_key" --arg k2 "$second_key" 'length == 1 and .[0].operationKey == $k1 and .[0].nextOperationKey == $k2' <<<"$voided_events")" = true
+      check first_operation_abandoned_never_deployed "arrived=$(production_of "$first_key" arrived) abandoned=$(production_of "$first_key" abandoned) voided=$(production_of "$first_key" voided) deployed=$(production_of "$first_key" deployed)" \
+        test "$(production_of "$first_key" arrived)" -eq 1 -a "$(production_of "$first_key" abandoned)" -eq 1 -a "$(production_of "$first_key" voided)" -eq 1 -a "$(production_of "$first_key" deployed)" -eq 0
+      check second_operation_deployed_once "arrived=$(production_of "$second_key" arrived) deployed=$(production_of "$second_key" deployed)" \
+        test "$(production_of "$second_key" arrived)" -eq 1 -a "$(production_of "$second_key" deployed)" -eq 1
+      check no_decision_asked_again "decisions before=$release_decisions_before after=$decisions" \
+        test "$release_decisions_before" -eq 10 -a "$decisions" -eq 11
+      summary="approval=$approval_status operations=$first_key:voided,$second_key:deployed unknown_events=$unknown_events decisions=$release_decisions_before/$decisions latest=$latest_digest status=$run_status"
+    fi
     ;;
   restart)
     held_after=$(jq -c --arg id "$held_attempt_before" '[.[] | select(.id == $id)] | first // {}' <<<"$verifications")

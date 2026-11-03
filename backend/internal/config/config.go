@@ -48,6 +48,7 @@ const (
 	KeyRemovedOpenAITimeout = EnvPrefix + "MODEL_OPENAI_TIMEOUT"
 
 	KeyProductionBaseURL = EnvPrefix + "PRODUCTION_BASE_URL"
+	KeyReleaseBaseURL    = EnvPrefix + "RELEASE_BASE_URL"
 
 	KeyCallbackBaseURL       = EnvPrefix + "CALLBACK_BASE_URL"
 	KeyCallbackSigningSecret = EnvPrefix + "CALLBACK_SIGNING_SECRET"
@@ -173,15 +174,23 @@ func (m OpenAIModel) Enabled() bool {
 	return m.BaseURL != "" || !m.APIKey.IsZero() || len(m.Models) > 0
 }
 
-// Production addresses the optional production deployment service the deploy Tool calls.
-// An empty BaseURL means the Tool is not registered.
+// Production addresses the optional production deployment service. BaseURL is the
+// service the deploy Tool calls; ReleaseBaseURL is the service whose reconcilable release
+// surface the deploy_change Tool calls. Each empty URL leaves its Tool unregistered, so
+// a deployment can run either workload without the other's Tool.
 type Production struct {
-	BaseURL string
+	BaseURL        string
+	ReleaseBaseURL string
 }
 
-// Enabled reports whether the production deployment service is configured.
+// Enabled reports whether the production deployment service of the deploy Tool is configured.
 func (p Production) Enabled() bool {
 	return p.BaseURL != ""
+}
+
+// ReleaseEnabled reports whether the release surface of the deploy_change Tool is configured.
+func (p Production) ReleaseEnabled() bool {
+	return p.ReleaseBaseURL != ""
 }
 
 // Callback carries the externally reachable base URL and the signing Secret used to
@@ -276,7 +285,8 @@ func Load(env func(string) string) (Config, error) {
 		ImageModel:  l.imageModel(),
 		TaskGateway: l.taskGateway(),
 		Production: Production{
-			BaseURL: l.optionalProviderURL(KeyProductionBaseURL),
+			BaseURL:        l.optionalProviderURL(KeyProductionBaseURL),
+			ReleaseBaseURL: l.optionalProviderURL(KeyReleaseBaseURL),
 		},
 		Callback: Callback{
 			BaseURL:       l.requiredURL(KeyCallbackBaseURL),

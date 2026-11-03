@@ -39,12 +39,16 @@ const (
 // the dispatch body, the callback token included, as the real runner would before
 // delivering its result.
 type verifyRunnerStub struct {
-	mu         sync.Mutex
-	token      string
-	dispatches []map[string]any
-	statusCode int
-	statusBody string
-	pollCount  int
+	mu sync.Mutex
+	// verificationID is the external task id the stub hands out; empty means the shared
+	// constant. A test with several Agent Runs in one database gives each stub its own, as
+	// a real runner would, since a Binding is keyed by Provider and external task id.
+	verificationID string
+	token          string
+	dispatches     []map[string]any
+	statusCode     int
+	statusBody     string
+	pollCount      int
 }
 
 func newVerifyRunnerStub() *verifyRunnerStub {
@@ -66,8 +70,8 @@ func (s *verifyRunnerStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.dispatches = append(s.dispatches, body)
 		s.mu.Unlock()
 		w.WriteHeader(http.StatusAccepted)
-		_, _ = io.WriteString(w, `{"verificationId":"`+verifyExternalTaskID+`"}`)
-	case r.Method == http.MethodGet && r.URL.Path == "/v1/verifications/"+verifyExternalTaskID:
+		_, _ = io.WriteString(w, `{"verificationId":"`+s.externalTaskID()+`"}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/verifications/"+s.externalTaskID():
 		s.mu.Lock()
 		s.pollCount++
 		code, body := s.statusCode, s.statusBody
@@ -77,6 +81,14 @@ func (s *verifyRunnerStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// externalTaskID is the verification id this stub hands out.
+func (s *verifyRunnerStub) externalTaskID() string {
+	if s.verificationID != "" {
+		return s.verificationID
+	}
+	return verifyExternalTaskID
 }
 
 func (s *verifyRunnerStub) dispatched(t *testing.T) (string, map[string]any) {

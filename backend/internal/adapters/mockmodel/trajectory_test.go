@@ -335,7 +335,7 @@ func TestTrajectories_EmbeddedFixtures_LoadAndAppearInTextModelConfigSchema(t *t
 	for _, want := range []string{
 		"photo-review-interrupted", "photo-set", "photo-set-limit", "photo-set-object", "photo-set-skip-review",
 		"photo-set-sync-crash", "photo-set-video-restart", "software-delivery", "software-delivery-deploy-lost",
-		"software-delivery-duplicate-callback", "vuln-fix-main-verify", "vuln-fix-scope-denied", "vuln-fix-stale-evidence",
+		"software-delivery-duplicate-callback", "vuln-fix-main-verify", "vuln-fix-release", "vuln-fix-scope-denied", "vuln-fix-stale-evidence",
 	} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("TrajectoryNames() = %v, want to contain %q", names, want)
