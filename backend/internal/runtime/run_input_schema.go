@@ -25,6 +25,40 @@ type imageInputConfig struct {
 	MaxSizeBytes       *int64   `json:"maxSizeBytes"`
 }
 
+// taskInputConfig is the subset of a task_input node's config that drives runInputSchema
+// generation. Schema is the optional JSON Schema of the task object, embedded as given
+// with sorted keys; without one the task only has to be an object.
+type taskInputConfig struct {
+	InputKey string         `json:"inputKey"`
+	Required bool           `json:"required"`
+	Schema   map[string]any `json:"schema"`
+}
+
+// taskInputSchema is the task property: the configured schema with its object type made
+// explicit and its keys sorted, or a bare object schema.
+func taskInputSchema(configured map[string]any) canonicalObject {
+	if configured == nil {
+		return canonicalObject{{Key: "type", Value: "object"}}
+	}
+	keys := make([]string, 0, len(configured)+1)
+	for key := range configured {
+		if key != "type" {
+			keys = append(keys, key)
+		}
+	}
+	keys = append(keys, "type")
+	sort.Strings(keys)
+	schema := make(canonicalObject, 0, len(keys))
+	for _, key := range keys {
+		value := configured[key]
+		if key == "type" {
+			value = "object"
+		}
+		schema = append(schema, canonicalField{Key: key, Value: value})
+	}
+	return schema
+}
+
 // nodeTypeMediaBrief is the Media Brief node, which reads a required photo set from Run
 // input. It is not an Input Node -- it also consumes a brief through an input port -- but
 // it contributes one runInputSchema property and shares the inputKey namespace with the
@@ -164,6 +198,23 @@ func buildRunInputSchema(def domain.Definition) (json.RawMessage, []ValidationEr
 				inputKey: cfg.InputKey, required: cfg.Required,
 				property: assetRefSchema(mediaTypes, cfg.MaxSizeBytes),
 			})
+
+		case NodeTypeTaskInput:
+			var cfg taskInputConfig
+			if err := json.Unmarshal(node.Config, &cfg); err != nil {
+				continue
+			}
+			if cfg.InputKey == "" {
+				errs = append(errs, ValidationError{
+					Code:    CodeInputKeyRequired,
+					NodeID:  node.ID,
+					Path:    "nodes[" + node.ID + "].config.inputKey",
+					Message: "inputKey must not be empty",
+				})
+				continue
+			}
+			keyCount[cfg.InputKey]++
+			entries = append(entries, inputEntry{inputKey: cfg.InputKey, required: cfg.Required, property: taskInputSchema(cfg.Schema)})
 
 		case nodeTypeMediaBrief:
 			var cfg mediaBriefConfig

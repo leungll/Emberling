@@ -43,10 +43,11 @@
 #   - status queries the Provider answered with a finished task (`polled` with taskStatus
 #     SUCCEEDED or FAILED) are at least the completions whose source is PROVIDER_POLL. A
 #     poll that finds the task still RUNNING changes nothing and is only counted;
-#   - every test the Runs bound to the sandbox runner arrived, started and completed
-#     exactly once there, and the runner's 2xx callback deliveries for it are at least the
-#     callback completions of its Tool Attempt. Further 2xx deliveries are duplicates the
-#     Backend answered without a new Event and are only noted;
+#   - every test and every verification the Runs bound to the sandbox runner arrived,
+#     started and completed exactly once there, and the runner's 2xx callback deliveries
+#     for it are at least the callback completions of its Tool Attempt. Further 2xx
+#     deliveries are duplicates the Backend answered without a new Event and are only
+#     noted;
 #   - every deploy Attempt reached the mock production service at most once under its
 #     operationId, was deployed exactly once when it SUCCEEDED and at most once
 #     otherwise, and production deployed nothing else under the Runs' deploy Actions;
@@ -212,22 +213,25 @@ jq -r '[.[] | select(.type == "NODE_COMPLETED")] | group_by(.payload.completionS
     | .[] | "\(length) NODE_COMPLETED event(s) with completionSource \(.[0].payload.completionSource)"' <<<"$events" |
   while IFS= read -r line; do note "$line"; done
 
-# 5. Each test bound to the sandbox runner ran there once and its callback completions
-# were delivered.
+# 5. Each test or verification bound to the sandbox runner ran there once and its callback
+# completions were delivered. The runner records a verification under its own kind and id
+# member; its callback lines carry the id in the shared testId member.
 if [[ $(jq 'length' <<<"$runner_calls") -gt 0 ]]; then
   runner_record=$(record_after 0 "$RUNNER_URL" | jq -s '.')
-  runner_rows=$(jq --argjson record "$runner_record" --argjson events "$events" '[.[] | . as $c | {
-      testId, attemptId,
-      arrived: ([$record[] | select(.event == "arrived" and .kind == "test" and .testId == $c.testId)] | length),
-      started: ([$record[] | select(.event == "started" and .testId == $c.testId)] | length),
-      completed: ([$record[] | select(.event == "completed" and .testId == $c.testId)] | length),
+  runner_rows=$(jq --argjson record "$runner_record" --argjson events "$events" '[.[] | . as $c
+      | (if $c.toolName == "verify_patch" then "verification" else "test" end) as $kind
+      | (if $kind == "verification" then "verificationId" else "testId" end) as $idKey | {
+      testId, attemptId, kind: $kind,
+      arrived: ([$record[] | select(.event == "arrived" and .kind == $kind and .[$idKey] == $c.testId)] | length),
+      started: ([$record[] | select(.event == "started" and .kind == $kind and .[$idKey] == $c.testId)] | length),
+      completed: ([$record[] | select(.event == "completed" and .kind == $kind and .[$idKey] == $c.testId)] | length),
       delivered: ([$record[] | select(.event == "callback" and .testId == $c.testId and .httpStatus >= 200 and .httpStatus < 300)] | length),
       completions: ([$events[] | select((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED")
           and ((.payload.completionSource // .payload.failureSource) == "CALLBACK")
           and .payload.toolAttemptId == $c.attemptId)] | length)}]' <<<"$runner_calls")
   bad=$(jq '[.[] | select(.arrived != 1 or .started != 1 or .completed != 1 or .delivered < .completions)]' <<<"$runner_rows")
   if [[ $(jq 'length' <<<"$bad") -eq 0 ]]; then
-    pass "runner_ran_each_bound_test_once   $(jq -c 'map({testId, arrived, started, completed, delivered, completions})' <<<"$runner_rows")"
+    pass "runner_ran_each_bound_test_once   $(jq -c 'map({testId, kind, arrived, started, completed, delivered, completions})' <<<"$runner_rows")"
   else
     fail "runner_ran_each_bound_test_once   $(jq -c '.' <<<"$bad")"
   fi

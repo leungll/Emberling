@@ -36,7 +36,9 @@ var trajectoryFiles embed.FS
 //   - "{{task:<json-pointer>}}" reads the Agent's task, the first user message, decoded
 //     as JSON (a JSON string holding a JSON document, such as a media brief's text, is
 //     decoded once more);
-//   - "{{tool:<n>:<json-pointer>}}" reads the n-th Tool result (0-based) in the request.
+//   - "{{tool:<n>:<json-pointer>}}" reads the n-th Tool result (0-based) in the request;
+//   - "{{latest:<json-pointer>}}" reads the most recent tool message in the request, be it
+//     a scripted result, the result of an inserted step or a status message.
 //
 // A placeholder that does not resolve fails the Turn explicitly instead of sending a
 // guessed value.
@@ -49,19 +51,61 @@ var trajectoryFiles embed.FS
 // one had never been part of it; an inserted FINAL ends the script with a report instead,
 // the way an Agent answers when the interrupted call cannot be verified or repeated. Each
 // condition is inserted at most once per conversation: the same status arriving again
-// fails the Turn explicitly, so a script can never loop on it.
+// fails the Turn explicitly, so a script can never loop on it. A REJECTED refusal, the
+// message the Runtime hands back for a definite refusal such as SCOPE_DENIED or
+// STALE_PATCH, is matched by its code as well, so one script can answer each refusal
+// differently.
+//
+// OnToolResult lets a script branch on a Tool result the Runtime did complete, such as a
+// verification whose "passed" member is false. A result condition names one scripted
+// result by index and the member value it matches; when that result is the latest tool
+// message and matches, the condition's Decision is inserted before the script's next Turn.
+// The inserted step is extra work the script did not list, so its result is left out of
+// the Turn index and of the "{{tool:<n>:...}}" numbering; the step after it reads what it
+// needs through "{{latest:<json-pointer>}}", the most recent tool message whatever it is.
+// A result condition is bound to one result index, so it fires at most once: the same
+// member failing again on a later result is an ordinary result, and the script continues
+// with its own Turns.
 type Trajectory struct {
-	Turns        []TrajectoryTurn      `json:"turns"`
-	OnToolStatus []TrajectoryCondition `json:"onToolStatus,omitempty"`
+	Turns        []TrajectoryTurn            `json:"turns"`
+	OnToolStatus []TrajectoryCondition       `json:"onToolStatus,omitempty"`
+	OnToolResult []TrajectoryResultCondition `json:"onToolResult,omitempty"`
 }
 
 // TrajectoryCondition is one conditional Decision, inserted when the latest tool message
 // carries Status, such as RESULT_UNCERTAIN or EXECUTION_INTERRUPTED: exactly one of a
-// scripted Tool call or a FINAL.
+// scripted Tool call or a FINAL. Code narrows a REJECTED status to one refusal code; it is
+// allowed only with that status.
 type TrajectoryCondition struct {
 	Status   string              `json:"status"`
+	Code     string              `json:"code,omitempty"`
 	ToolCall *TrajectoryToolCall `json:"toolCall,omitempty"`
 	Final    *TrajectoryFinal    `json:"final,omitempty"`
+}
+
+// key identifies the condition in the once-per-conversation accounting and in error text.
+func (c TrajectoryCondition) key() string {
+	if c.Code == "" {
+		return c.Status
+	}
+	return c.Status + "/" + c.Code
+}
+
+// TrajectoryResultCondition is one conditional Decision inserted after a scripted result
+// matches: exactly one of a scripted Tool call or a FINAL.
+type TrajectoryResultCondition struct {
+	When     *TrajectoryResultMatch `json:"when"`
+	ToolCall *TrajectoryToolCall    `json:"toolCall,omitempty"`
+	Final    *TrajectoryFinal       `json:"final,omitempty"`
+}
+
+// TrajectoryResultMatch names the scripted result a result condition inspects (Tool, the
+// 0-based index in the "{{tool:<n>:...}}" numbering), the member to read (Pointer, an RFC
+// 6901 JSON pointer) and the JSON value it must equal.
+type TrajectoryResultMatch struct {
+	Tool    int             `json:"tool"`
+	Pointer string          `json:"pointer"`
+	Equals  json.RawMessage `json:"equals"`
 }
 
 // TrajectoryTurn is one scripted Turn: exactly one of ToolCall or Final.
@@ -154,20 +198,56 @@ func parseTrajectory(raw []byte) (Trajectory, error) {
 		switch {
 		case condition.Status == "":
 			return Trajectory{}, fmt.Errorf("condition %d needs a status", index)
-		case statuses[condition.Status]:
-			return Trajectory{}, fmt.Errorf("condition %d repeats status %s", index, condition.Status)
-		case (condition.ToolCall == nil) == (condition.Final == nil):
-			return Trajectory{}, fmt.Errorf("condition %d must set exactly one of toolCall and final", index)
-		case condition.ToolCall != nil && (condition.ToolCall.ToolName == "" || !json.Valid(condition.ToolCall.Arguments)):
-			return Trajectory{}, fmt.Errorf("condition %d needs a tool call with a toolName and JSON arguments", index)
-		case condition.Final != nil && (len(condition.Final.Output) == 0) == (len(condition.Final.OutputText) == 0):
-			return Trajectory{}, fmt.Errorf("condition %d final must set exactly one of output and outputText", index)
-		case condition.Final != nil && !json.Valid(condition.Final.Output) && !json.Valid(condition.Final.OutputText):
-			return Trajectory{}, fmt.Errorf("condition %d final needs a JSON output", index)
+		case condition.Code != "" && condition.Status != rejectedStatus:
+			return Trajectory{}, fmt.Errorf("condition %d names a code, which only a %s condition may", index, rejectedStatus)
+		case statuses[condition.key()]:
+			return Trajectory{}, fmt.Errorf("condition %d repeats status %s", index, condition.key())
 		}
-		statuses[condition.Status] = true
+		if err := validateDecision(condition.ToolCall, condition.Final); err != nil {
+			return Trajectory{}, fmt.Errorf("condition %d %w", index, err)
+		}
+		statuses[condition.key()] = true
+	}
+	matched := make(map[int]bool, len(trajectory.OnToolResult))
+	for index, condition := range trajectory.OnToolResult {
+		when := condition.When
+		switch {
+		case when == nil:
+			return Trajectory{}, fmt.Errorf("result condition %d needs a when clause", index)
+		case when.Tool < 0 || when.Tool >= len(trajectory.Turns) || trajectory.Turns[when.Tool].ToolCall == nil:
+			return Trajectory{}, fmt.Errorf("result condition %d must name the index of a scripted tool call", index)
+		case matched[when.Tool]:
+			return Trajectory{}, fmt.Errorf("result condition %d repeats tool result %d", index, when.Tool)
+		case when.Pointer != "" && !strings.HasPrefix(when.Pointer, "/"):
+			return Trajectory{}, fmt.Errorf("result condition %d pointer must be empty or start with /", index)
+		case len(when.Equals) == 0 || !json.Valid(when.Equals):
+			return Trajectory{}, fmt.Errorf("result condition %d needs a JSON value to equal", index)
+		}
+		if err := validateDecision(condition.ToolCall, condition.Final); err != nil {
+			return Trajectory{}, fmt.Errorf("result condition %d %w", index, err)
+		}
+		matched[when.Tool] = true
 	}
 	return trajectory, nil
+}
+
+// rejectedStatus is the status of the tool message the Runtime appends for a definite
+// refusal handed back to the Agent; its code names the refusal.
+const rejectedStatus = "REJECTED"
+
+// validateDecision checks a conditional Decision has exactly one well-formed shape.
+func validateDecision(toolCall *TrajectoryToolCall, final *TrajectoryFinal) error {
+	switch {
+	case (toolCall == nil) == (final == nil):
+		return errors.New("must set exactly one of toolCall and final")
+	case toolCall != nil && (toolCall.ToolName == "" || !json.Valid(toolCall.Arguments)):
+		return errors.New("needs a tool call with a toolName and JSON arguments")
+	case final != nil && (len(final.Output) == 0) == (len(final.OutputText) == 0):
+		return errors.New("final must set exactly one of output and outputText")
+	case final != nil && !json.Valid(final.Output) && !json.Valid(final.OutputText):
+		return errors.New("final needs a JSON output")
+	}
+	return nil
 }
 
 // TrajectoryNames returns the embedded trajectory names, sorted.
@@ -200,15 +280,19 @@ func scriptedScenario(request registry.ModelRequest, name string) (Scenario, err
 	if !ok {
 		return Scenario{}, fmt.Errorf("script %q is not a known trajectory", name)
 	}
-	toolResults, latest, err := trajectory.scriptedResults(toolMessageContents(request.Messages))
+	contents := toolMessageContents(request.Messages)
+	toolResults, inserted, err := trajectory.scriptedResults(contents)
 	if err != nil {
 		return Scenario{}, fmt.Errorf("script %q: %w", name, err)
 	}
 	resolver := placeholderResolver{request: request, toolResults: toolResults}
-	if latest != nil {
-		scenario, err := resolver.scenario(latest.ToolCall, latest.Final)
+	if len(contents) > 0 {
+		resolver.latest = contents[len(contents)-1]
+	}
+	if inserted != nil {
+		scenario, err := resolver.scenario(inserted.toolCall, inserted.final)
 		if err != nil {
-			return Scenario{}, fmt.Errorf("script %q condition %s: %w", name, latest.Status, err)
+			return Scenario{}, fmt.Errorf("script %q condition %s: %w", name, inserted.label, err)
 		}
 		return scenario, nil
 	}
@@ -252,32 +336,60 @@ func (r placeholderResolver) scenario(toolCall *TrajectoryToolCall, final *Traje
 	return Scenario{Kind: ScenarioFinal, FinalOutput: output}, nil
 }
 
+// insertedDecision is the conditional Decision the latest tool message triggers.
+type insertedDecision struct {
+	label    string
+	toolCall *TrajectoryToolCall
+	final    *TrajectoryFinal
+}
+
 // scriptedResults splits the request's tool messages into the script's own Tool results,
-// oldest first, and the condition the latest tool message triggers, nil when it is an
-// ordinary result. A condition's status arriving more than once is refused.
-func (t Trajectory) scriptedResults(contents []json.RawMessage) ([]json.RawMessage, *TrajectoryCondition, error) {
-	if len(t.OnToolStatus) == 0 {
+// oldest first, and the conditional Decision the latest tool message triggers, nil when
+// the script continues with its own next Turn.
+//
+// A status condition's message is not a result and its inserted call's result stands in
+// for the refused one. A result condition's matched message is a result; the inserted
+// step's result, the message right after it, is not. A condition's status arriving more
+// than once is refused.
+func (t Trajectory) scriptedResults(contents []json.RawMessage) ([]json.RawMessage, *insertedDecision, error) {
+	if len(t.OnToolStatus) == 0 && len(t.OnToolResult) == 0 {
 		return contents, nil, nil
 	}
 	results := make([]json.RawMessage, 0, len(contents))
 	seen := make(map[string]int, len(t.OnToolStatus))
-	var latest *TrajectoryCondition
+	var inserted *insertedDecision
+	// skipNext marks the next ordinary tool message as the result of a step a result
+	// condition inserted, which the script does not count.
+	skipNext := false
 	for _, content := range contents {
-		latest = t.conditionFor(content)
-		if latest == nil {
-			results = append(results, content)
+		inserted = nil
+		if condition := t.conditionFor(content); condition != nil {
+			seen[condition.key()]++
+			if seen[condition.key()] > 1 {
+				return nil, nil, fmt.Errorf("tool status %s arrived %d times; its conditional decision is inserted once", condition.key(), seen[condition.key()])
+			}
+			inserted = &insertedDecision{label: condition.key(), toolCall: condition.ToolCall, final: condition.Final}
 			continue
 		}
-		seen[latest.Status]++
-		if seen[latest.Status] > 1 {
-			return nil, nil, fmt.Errorf("tool status %s arrived %d times; its conditional decision is inserted once", latest.Status, seen[latest.Status])
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		results = append(results, content)
+		if condition := t.resultConditionFor(len(results)-1, content); condition != nil {
+			inserted = &insertedDecision{
+				label:    fmt.Sprintf("result %d %s", condition.When.Tool, condition.When.Pointer),
+				toolCall: condition.ToolCall, final: condition.Final,
+			}
+			skipNext = true
 		}
 	}
-	return results, latest, nil
+	return results, inserted, nil
 }
 
 // conditionFor returns the condition whose status the tool message content carries as its
-// top-level "status" member, or nil.
+// top-level "status" member, narrowed by its "code" member when the condition names one,
+// or nil.
 func (t Trajectory) conditionFor(content json.RawMessage) *TrajectoryCondition {
 	document, err := decodeDocument(content)
 	if err != nil {
@@ -291,12 +403,50 @@ func (t Trajectory) conditionFor(content json.RawMessage) *TrajectoryCondition {
 	if !ok {
 		return nil
 	}
+	code, _ := object["code"].(string)
 	for index := range t.OnToolStatus {
-		if t.OnToolStatus[index].Status == status {
-			return &t.OnToolStatus[index]
+		condition := &t.OnToolStatus[index]
+		if condition.Status == status && (condition.Code == "" || condition.Code == code) {
+			return condition
 		}
 	}
 	return nil
+}
+
+// resultConditionFor returns the result condition bound to the scripted result at index
+// whose member equals the condition's value, or nil.
+func (t Trajectory) resultConditionFor(index int, content json.RawMessage) *TrajectoryResultCondition {
+	for i := range t.OnToolResult {
+		condition := &t.OnToolResult[i]
+		if condition.When.Tool != index {
+			continue
+		}
+		document, err := decodeDocument(content)
+		if err != nil {
+			return nil
+		}
+		value, err := resolvePointer(document, condition.When.Pointer)
+		if err != nil {
+			return nil
+		}
+		if jsonEqual(value, condition.When.Equals) {
+			return condition
+		}
+		return nil
+	}
+	return nil
+}
+
+// jsonEqual reports whether a decoded JSON value and an encoded one denote the same JSON
+// value, compared through one canonical encoding.
+func jsonEqual(value any, raw json.RawMessage) bool {
+	want, err := decodeNumbers(raw)
+	if err != nil {
+		return false
+	}
+	left, errLeft := json.Marshal(value)
+	right, errRight := json.Marshal(want)
+	return errLeft == nil && errRight == nil && bytes.Equal(left, right)
 }
 
 // toolMessageContents returns every "tool" role message's content, oldest first.
@@ -310,12 +460,14 @@ func toolMessageContents(messages []registry.ModelMessage) []json.RawMessage {
 	return contents
 }
 
-var placeholderPattern = regexp.MustCompile(`^\{\{(task|tool:(\d+)):(/.*|)\}\}$`)
+var placeholderPattern = regexp.MustCompile(`^\{\{(task|latest|tool:(\d+)):(/.*|)\}\}$`)
 
 // placeholderResolver replaces placeholders in one scripted value.
 type placeholderResolver struct {
 	request     registry.ModelRequest
 	toolResults []json.RawMessage
+	// latest is the most recent tool message of the request, nil when there is none.
+	latest json.RawMessage
 }
 
 func (r placeholderResolver) resolve(raw json.RawMessage) (json.RawMessage, error) {
@@ -377,13 +529,19 @@ func (r placeholderResolver) walk(value any) (any, error) {
 
 // source decodes the document a placeholder reads from.
 func (r placeholderResolver) source(kind, toolIndex string) (any, error) {
-	if kind == "task" {
+	switch kind {
+	case "task":
 		for _, message := range r.request.Messages {
 			if message.Role == "user" {
 				return decodeDocument(message.Content)
 			}
 		}
 		return nil, errors.New("request carries no task message")
+	case "latest":
+		if r.latest == nil {
+			return nil, errors.New("request carries no tool message")
+		}
+		return decodeDocument(r.latest)
 	}
 	index, err := strconv.Atoi(toolIndex)
 	if err != nil || index >= len(r.toolResults) {

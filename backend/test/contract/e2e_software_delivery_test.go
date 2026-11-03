@@ -206,9 +206,15 @@ func waitRecordLine(t *testing.T, baseURL, event, kind string, match func(map[st
 // waitRunnerHeld waits until the runner's barrier holds a request of kind.
 func waitRunnerHeld(t *testing.T, f *deliveryFixture, kind string) {
 	t.Helper()
+	waitBarrierHeld(t, f.runner.http.URL, kind)
+}
+
+// waitBarrierHeld waits until the barrier of the service at baseURL holds a request of kind.
+func waitBarrierHeld(t *testing.T, baseURL, kind string) {
+	t.Helper()
 	deadline := time.Now().Add(e2eWait)
 	for time.Now().Before(deadline) {
-		resp, err := (&http.Client{Timeout: e2eHTTPTimeout}).Get(f.runner.http.URL + "/control/barrier")
+		resp, err := (&http.Client{Timeout: e2eHTTPTimeout}).Get(baseURL + "/control/barrier")
 		if err != nil {
 			t.Fatalf("GET /control/barrier: %v", err)
 		}

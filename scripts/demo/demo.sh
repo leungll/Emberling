@@ -41,8 +41,26 @@
 #                   delivery-runner-redelivery
 #                                       delivery.sh redelivery: the restarted runner
 #                                       delivers a finished test again and the ledger gains
-#                                       no Event.
-#                 Each photo and delivery variant is followed by the invariant report as well.
+#                                       no Event;
+#                   vuln-verify         vuln-fix.sh verify: an Agent bound to a workspace of
+#                                       the example repository upgrades the vulnerable
+#                                       dependency without adapting the code, fails that
+#                                       verification, adapts the code and passes the second;
+#                   vuln-scope-denied   vuln-fix.sh scope-denied: a write outside the
+#                                       allowed paths is refused before any Attempt and the
+#                                       Agent continues inside them;
+#                   vuln-stale-evidence vuln-fix.sh stale-evidence: a verification of a
+#                                       digest the workspace moved past is refused and the
+#                                       latest digest is verified instead;
+#                   vuln-restart-during-verify
+#                                       vuln-fix.sh restart: SIGKILL while the verification
+#                                       callback is held; after the restart no Decision is
+#                                       asked again and no verification runs twice.
+#                 Each photo, delivery and vuln variant is followed by the invariant report as well.
+#                 The vuln variants bind the Agent to the example repository, which this
+#                 script generates under deploy/.demo/repositories before the stack starts;
+#                 EMBERLING_DEMO_MODEL=<model id> runs vuln-verify against a real decision
+#                 model the Backend registers (see vuln-fix.sh).
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
 #                 The serving variants run only when named, or all nine with
 #                 EMBERLING_DEMO_VARIANT=serving. Each is serving.sh STORY, many users of
@@ -87,8 +105,17 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_tools docker curl jq
 
+# The example repository the vuln variants bind their Agent workspace to. It is generated
+# from the checked-in source tree into a gitignored directory the compose file mounts into
+# the backend (and the docker sandbox runner) read-only; the same tree always yields the
+# same baseline commit the fixture Definition names.
+REPOSITORIES_DIR="$DEMO_ROOT/deploy/.demo/repositories"
+
 case "${1:-}" in
 run)
+  require_tools git
+  log "generating the example repository under $REPOSITORIES_DIR"
+  sh "$DEMO_ROOT/backend/internal/fixture/vulnrepo/generate.sh" "$REPOSITORIES_DIR/vuln-demo"
   log "building the backend, mockprovider, mockproduction and sandboxrunner images (cached when sources are unchanged)"
   compose build --quiet mockprovider mockproduction sandboxrunner backend
   log "starting postgres, mockprovider, mockproduction, sandboxrunner and backend"
@@ -104,10 +131,12 @@ run)
   case "${EMBERLING_DEMO_VARIANT:-all}" in
   all)
     variants=(held-before-accept after-accept photo-set photo-gate photo-limit photo-sync-crash
-      photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery)
+      photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery
+      vuln-verify vuln-scope-denied vuln-stale-evidence vuln-restart-during-verify)
     ;;
   held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | photo-video-restart | \
-    delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
+    delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery | \
+    vuln-verify | vuln-scope-denied | vuln-stale-evidence | vuln-restart-during-verify)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
   serving)
@@ -118,7 +147,7 @@ run)
     serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout | serving-capacity)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, serving or one serving-* variant" ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, vuln-verify, vuln-scope-denied, vuln-stale-evidence, vuln-restart-during-verify, serving or one serving-* variant" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -143,6 +172,10 @@ run)
     delivery-restart-during-test) script=delivery.sh story=restart ;;
     delivery-deploy-lost) script=delivery.sh story=deploy-lost ;;
     delivery-runner-redelivery) script=delivery.sh story=redelivery ;;
+    vuln-verify) script=vuln-fix.sh story=verify ;;
+    vuln-scope-denied) script=vuln-fix.sh story=scope-denied ;;
+    vuln-stale-evidence) script=vuln-fix.sh story=stale-evidence ;;
+    vuln-restart-during-verify) script=vuln-fix.sh story=restart ;;
     serving-*) script=serving.sh story=${variant#serving-} ;;
     esac
     printf '\n==== variant %s (%s%s) ====\n' "$variant" "$script" "${story:+ $story}"
@@ -163,8 +196,8 @@ run)
     require_completed=0
     [[ "$variant" == serving-* ]] && require_completed=1
 
-    # The fault scripts end with the invariant report; a photo or delivery story ends with its own
-    # checks, so the invariant report runs here.
+    # The fault scripts end with the invariant report; a photo, delivery or vuln story ends with
+    # its own checks, so the invariant report runs here.
     invariant_status=$script_status
     story_status=""
     if [[ -n "$story" ]]; then

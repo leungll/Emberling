@@ -58,3 +58,10 @@ them, for the runner tests and for scripted Agent trajectories:
 | `fix-complete.patch` | `go.mod` and `internal/auth/token.go` moved to `/v5` with the API adapted | tests pass, scan clean, dependencies clean |
 | `fix-v4.patch` | `go.mod` requires `/v4 v4.5.2` | fails: the module is not in the offline cache |
 | `keep-old-require.patch` | the complete fix, but `go.mod` still requires the old version | tests pass, but the dependency list still holds the vulnerable version |
+
+The sandbox runner's mock verification backend, which runs nothing, gives the same verdict
+as the real build for the one failure the scripted demo relies on: a patch that requires
+the new major version while the code still uses the removed claims type is reported as a
+failed test step. The scripted `vuln-fix-main-verify` trajectory writes the
+`upgrade-without-adaptation` state first and the complete fix after that failure, so it
+holds against the mock runner and the docker runner alike.

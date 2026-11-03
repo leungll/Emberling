@@ -1,0 +1,36 @@
+{
+  "turns": [
+    {
+      "toolCall": {
+        "toolName": "write_file",
+        "arguments": {
+          "path": "tests/auth_test.go",
+          "content": "package tests\n"
+        }
+      }
+    },
+    {
+      "final": {
+        "outputText": {
+          "status": "SCOPE_RESPECTED",
+          "advisory": "{{task:/advisory}}",
+          "patchDigest": "{{tool:0:/patchDigest}}",
+          "touchedPaths": "{{tool:0:/touchedPaths}}"
+        }
+      }
+    }
+  ],
+  "onToolStatus": [
+    {
+      "status": "REJECTED",
+      "code": "SCOPE_DENIED",
+      "toolCall": {
+        "toolName": "write_file",
+        "arguments": {
+          "path": "go.mod",
+          "content": "module example.com/tokenservice\n\ngo 1.24\n\nrequire github.com/golang-jwt/jwt/v5 v5.3.1\n"
+        }
+      }
+    }
+  ]
+}
