@@ -258,3 +258,56 @@ func TestParseTrajectory_MalformedResultCondition_Rejected(t *testing.T) {
 		})
 	}
 }
+
+// TestProvider_Generate_EmbeddedPlaceholder_ReadsTheAdvisoryNamedByTheTask plays the second
+// Turn of the main verify script: the read path embeds the task's advisory identifier, so
+// the Agent reads the real advisory file rather than a literal placeholder path.
+func TestProvider_Generate_EmbeddedPlaceholder_ReadsTheAdvisoryNamedByTheTask(t *testing.T) {
+	response, err := generateVulnTurn(t, "vuln-fix-main-verify", readResult)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	assertToolCall(t, response, "read_file", `{"path":"advisories/GO-2025-3553.md"}`)
+}
+
+// TestPlaceholderResolver_EmbeddedPlaceholders covers the string forms a script may use:
+// a whole-string placeholder keeps its value's type, an embedded one is text, a non-string
+// value is embedded as compact JSON, and an unresolvable embedded placeholder fails the
+// value explicitly.
+func TestPlaceholderResolver_EmbeddedPlaceholders(t *testing.T) {
+	resolver := placeholderResolver{
+		request:     scriptedVulnRequest(t, "vuln-fix-main-verify", writeGoModResult),
+		toolResults: []json.RawMessage{json.RawMessage(writeGoModResult)},
+	}
+	cases := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr string
+	}{
+		{name: "whole string keeps the array type", raw: `{"paths":"{{tool:0:/touchedPaths}}"}`, want: `{"paths":["go.mod"]}`},
+		{name: "embedded string value", raw: `{"path":"advisories/{{task:/advisory}}.md"}`, want: `{"path":"advisories/GO-2025-3553.md"}`},
+		{name: "two embedded placeholders", raw: `"{{task:/service}}@{{tool:0:/patchDigest}}"`, want: `"token-service@d1d1"`},
+		{name: "embedded non-string is compact JSON", raw: `"wrote {{tool:0:/bytesWritten}} bytes to {{tool:0:/touchedPaths}}"`, want: `"wrote 80 bytes to [\"go.mod\"]"`},
+		{name: "embedded placeholder misses its member", raw: `"advisories/{{task:/missing}}.md"`, wantErr: "placeholder {{task:/missing}}"},
+		{name: "embedded placeholder names a missing tool result", raw: `"{{tool:3:/patchDigest}} later"`, wantErr: "request carries no tool result 3"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolver.resolve(json.RawMessage(tc.raw))
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("resolve(%s) error = %v, want it to contain %q", tc.raw, err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolve(%s) error = %v", tc.raw, err)
+			}
+			if string(got) != tc.want {
+				t.Fatalf("resolve(%s) = %s, want %s", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
