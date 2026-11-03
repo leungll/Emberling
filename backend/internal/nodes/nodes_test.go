@@ -15,6 +15,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaresult"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
+	"github.com/leungll/Emberling/backend/internal/nodes/taskinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textoutput"
@@ -41,6 +42,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 	r := registry.NewNodeRegistry()
 	registrations := []registry.NodeRegistration{
 		textinput.Registration(),
+		taskinput.Registration(),
 		imageinput.Registration(),
 		mediabrief.Registration(),
 		prompttemplate.Registration(),
@@ -62,6 +64,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 	}
 	wantTypes := map[string]bool{
 		"text_input":       false,
+		"task_input":       false,
 		"image_input":      false,
 		"media_brief":      false,
 		"prompt_template":  false,

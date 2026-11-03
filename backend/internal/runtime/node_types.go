@@ -7,6 +7,7 @@ package runtime
 const (
 	NodeTypeTextInput       = "text_input"
 	NodeTypeImageInput      = "image_input"
+	NodeTypeTaskInput       = "task_input"
 	NodeTypePromptTemplate  = "prompt_template"
 	NodeTypeTextGeneration  = "text_generation"
 	NodeTypeImageGeneration = "image_generation"
@@ -15,10 +16,10 @@ const (
 	NodeTypeMediaOutput     = "media_output"
 )
 
-// isInputNodeType reports whether nodeType is one of the two Input Node types that
+// isInputNodeType reports whether nodeType is one of the Input Node types that
 // contribute a property to the generated runInputSchema.
 func isInputNodeType(nodeType string) bool {
-	return nodeType == NodeTypeTextInput || nodeType == NodeTypeImageInput
+	return nodeType == NodeTypeTextInput || nodeType == NodeTypeImageInput || nodeType == NodeTypeTaskInput
 }
 
 // isOutputNodeType reports whether nodeType is one of the two Output Node types. Each

@@ -251,6 +251,18 @@ export function CardBody({ node, meta }: { node: Node; meta: NodeMetadata }) {
       }
       break;
     }
+    case 'task_input':
+      rows.push(
+        <Row key="asks" nodeId={node.id} field="label">
+          {asks}
+        </Row>,
+      );
+      rows.push(
+        <Row key="shape" nodeId={node.id} field="schema">
+          <Muted>{t.canvas.taskObject}</Muted>
+        </Row>,
+      );
+      break;
     case 'image_input':
       rows.push(
         <Row key="asks" nodeId={node.id} field="label">
