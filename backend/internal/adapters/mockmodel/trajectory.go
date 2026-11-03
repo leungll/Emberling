@@ -32,7 +32,10 @@ var trajectoryFiles embed.FS
 // same committed Context and receives the same Decision -- never of hidden Provider state.
 //
 // Any string value in a Tool call's arguments or in a FINAL output that is exactly a
-// placeholder is replaced by the JSON value it points at, keeping that value's type:
+// placeholder is replaced by the JSON value it points at, keeping that value's type; a
+// string that embeds placeholders, such as "advisories/{{task:/advisory}}.md", stays a
+// string with each placeholder replaced by its value's text (a string as is, any other
+// value as compact JSON). The placeholders are:
 //   - "{{task:<json-pointer>}}" reads the Agent's task, the first user message, decoded
 //     as JSON (a JSON string holding a JSON document, such as a media brief's text, is
 //     decoded once more);
@@ -460,7 +463,14 @@ func toolMessageContents(messages []registry.ModelMessage) []json.RawMessage {
 	return contents
 }
 
-var placeholderPattern = regexp.MustCompile(`^\{\{(task|latest|tool:(\d+)):(/.*|)\}\}$`)
+// A placeholder's pointer cannot contain braces, so that several placeholders embedded in
+// one string stay apart.
+const placeholderSyntax = `\{\{(task|latest|tool:(\d+)):(/[^{}]*|)\}\}`
+
+var (
+	placeholderPattern         = regexp.MustCompile("^" + placeholderSyntax + "$")
+	embeddedPlaceholderPattern = regexp.MustCompile(placeholderSyntax)
+)
 
 // placeholderResolver replaces placeholders in one scripted value.
 type placeholderResolver struct {
@@ -517,22 +527,56 @@ func (r placeholderResolver) walk(value any) (any, error) {
 		}
 		return typed, nil
 	case string:
-		match := placeholderPattern.FindStringSubmatch(typed)
-		if match == nil {
-			return typed, nil
-		}
-		source, err := r.source(match[1], match[2])
-		if err != nil {
-			return nil, err
-		}
-		resolved, err := resolvePointer(source, match[3])
-		if err != nil {
-			return nil, fmt.Errorf("placeholder %s: %w", typed, err)
-		}
-		return resolved, nil
+		return r.resolveString(typed)
 	default:
 		return value, nil
 	}
+}
+
+// resolveString resolves the placeholders of one scripted string: a string that is exactly
+// one placeholder becomes the value it points at, whatever its type; a string that embeds
+// placeholders stays a string, each placeholder replaced by the text of its value.
+func (r placeholderResolver) resolveString(text string) (any, error) {
+	if match := placeholderPattern.FindStringSubmatch(text); match != nil {
+		return r.lookup(match)
+	}
+	var failure error
+	replaced := embeddedPlaceholderPattern.ReplaceAllStringFunc(text, func(placeholder string) string {
+		if failure != nil {
+			return placeholder
+		}
+		value, err := r.lookup(embeddedPlaceholderPattern.FindStringSubmatch(placeholder))
+		if err != nil {
+			failure = err
+			return placeholder
+		}
+		if asText, ok := value.(string); ok {
+			return asText
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			failure = fmt.Errorf("placeholder %s: encode value: %w", placeholder, err)
+			return placeholder
+		}
+		return string(encoded)
+	})
+	if failure != nil {
+		return nil, failure
+	}
+	return replaced, nil
+}
+
+// lookup reads the value one matched placeholder points at.
+func (r placeholderResolver) lookup(match []string) (any, error) {
+	source, err := r.source(match[1], match[2])
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := resolvePointer(source, match[3])
+	if err != nil {
+		return nil, fmt.Errorf("placeholder %s: %w", match[0], err)
+	}
+	return resolved, nil
 }
 
 // source decodes the document a placeholder reads from.

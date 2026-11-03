@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/leungll/Emberling/backend/internal/asset"
@@ -282,6 +283,24 @@ func TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch(t *tes
 	if facts[0].Subject != trace.Workspace.Patches[1].PatchDigest || facts[1].Subject != latest ||
 		facts[1].Attempt != verifications[1].attempt.ID {
 		t.Errorf("fact subjects = %+v, want the unadapted upgrade then the latest patch %s from the second verification", facts, latest)
+	}
+
+	// The second Turn reads the advisory the task names; the Turn after it carries that
+	// read in its Context Manifest under the real path, so the Agent read the advisory
+	// rather than a literal placeholder path.
+	advisoryRead := false
+	for i, turn := range trace.Turns {
+		for _, item := range turn.Manifest {
+			if strings.Contains(item.Ref, "{{") {
+				t.Errorf("turns[%d] manifest item %+v names an unresolved placeholder", i, item)
+			}
+			if i == 2 && item.Kind == "WORKSPACE_FILE" && item.Ref == "advisories/"+vulnAdvisory+".md" {
+				advisoryRead = true
+			}
+		}
+	}
+	if !advisoryRead {
+		t.Errorf("turns[2] manifest = %+v, want a WORKSPACE_FILE item for advisories/%s.md", trace.Turns[2].Manifest, vulnAdvisory)
 	}
 
 	report := vulnReportOf(t, snapshot)
