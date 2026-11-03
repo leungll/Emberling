@@ -1,213 +1,257 @@
-# Emberling
+<div align="center">
 
-**Emberling is an AI-native Execution Runtime for long-running AI applications.**
+<img src="./assets/readme/hero.svg" width="100%" alt="Emberling — Give agents the whole job. Agent Infra for Cloud Agent Workloads, with a shared Execution Runtime for AIGC and vulnerability repair and release.">
 
-It persists Workflow and Agent execution as durable facts, allowing interrupted work to continue from committed state while preserving a queryable record of Decisions, Actions and results.
+<h3>A runtime foundation for agents to take on the whole job</h3>
 
-When an Agent needs to run code, execute Shell commands or work with files, it also needs an isolated environment. Emberling manages logical execution; external Sandboxes run the code. AX is the first integration target on this roadmap.
+<p>Emberling is an <strong>Agent Runtime Platform</strong> for Cloud Agent Workloads.<br>
+Its durable, AI-native execution core brings together deterministic workflows and agent decisions,<br>
+taking work from individual calls to sustained execution, and from generated output to complete delivery.</p>
 
-```text
-Emberling = durable logical execution
-AX        = isolated physical execution
-```
+<p><code>AI-Native Runtime</code>　<code>Durable Orchestration</code>　<code>Long-Horizon Agents</code><br>
+<code>Human–Agent Collaboration</code>　<code>Verifiable Delivery</code>　<code>Full-Stack Agent Infra</code></p>
 
-Emberling persists an Agent's logical execution; AX isolates its execution environment and preserves the workspace when suspended.
+<p>English · <a href="./README.zh-CN.md">简体中文</a></p>
 
-[中文](./README.zh-CN.md)
+<p><strong><a href="#aigc">Demos</a> · <a href="#agent-infra">Agent Infra</a> · <a href="#runtime">Architecture</a> · <a href="#evolution">Roadmap</a> · <a href="#quick-start">Quick start</a></strong></p>
 
-![Emberling Studio and execution trace](./assets/ux-studio-observe.svg)
-
-> **Every execution leaves an ember.**
->
-> Emberling preserves those embers as durable execution facts—so interrupted work can recover and every run can become evidence for what comes next.
+</div>
 
 ---
 
-## Execution facts are the product
+<a id="system"></a>
 
-Emberling records what actually happened—not a reconstruction from logs. Definition versions, state transitions, Attempts, model Decisions, Tool Actions and Events form one durable execution ledger.
+## When agents take on the whole job
 
-```mermaid
-flowchart LR
-    APP["AI Application"] --> RT["Emberling Runtime"]
-    RT --> FACTS[("Execution Facts")]
+Machines expanded what physical labor could achieve. AI is expanding the possibilities of knowledge work. As models learn to generate content and write code, people are delegating more complete goals: producing content from a creative brief, researching a question and reaching a conclusion, or investigating failures, repairing software and maintaining services. The work extends through planning, execution, collaboration and verification until there is a usable result.
 
-    FACTS --> RECOVERY["Recovery"]
-    FACTS --> TRACE["Trace"]
-    FACTS -. "Phase 4" .-> EVAL["Evaluation"]
-    FACTS -. "Roadmap" .-> LEARN["Learning Runtime"]
-```
+An agent must act repeatedly on feedback, sometimes across hours of external execution and human review. **Models supply the ability to decide and act. Infrastructure keeps the task moving through waits and interruptions, all the way to delivery.**
 
-| Recover now | Understand now | Improve later |
+![From a model call to a complete task: agents choose actions from feedback, wait for results, verify and deliver. Infrastructure preserves progress, supports recovery and links results to actions.](./assets/readme/02-whole-work.en.svg)
+
+<a id="agent-infra"></a>
+
+## Agent Infra: the capabilities behind complete work
+
+**Agents need more than models. They need infrastructure to organize actions, preserve progress, connect tools, enforce boundaries and check results.** This is the Agent Infra Emberling is building toward.
+
+![Five Agent Infra domains: Business and Applications, Agent Construction and Orchestration, Production Runtime, Governance and Control, and Observability and Optimization.](./assets/readme/agent-infra-panorama.svg)
+
+Starting with a durable execution core, Emberling develops these capabilities through two progressively demanding scenarios:
+
+| Scenario | Focus | Problems to solve |
 |---|---|---|
-| Resume persisted work after callbacks and restarts | Inspect the same facts that drive the Runtime | Evaluate candidate versions on ordinary Executions |
+| **AIGC generation service**<br>Keep work running reliably | Construction and orchestration · Production runtime | How do generation rounds connect? How does work continue after a long wait? How do results reconnect after an interruption? |
+| **Vulnerability repair and release**<br>Keep delivery controlled | Extend the runtime foundation with governance, control and result verification | Has the patch passed its checks? Was the release approved? Does the deployed result meet the goal? |
 
----
+<a id="aigc"></a>
 
-## Why Emberling exists
+## Scenario 1: an AIGC generation service
 
-Calling a model is an API problem. Operating a long-running AI application is a systems problem.
+**From creative refinement to a continuously running generation service.**
 
-| The workload | The execution problem |
+A usable photo effect takes repeated generation, inspection and adjustment. Once deployed, the same template serves many requests through long waits, repeated submissions and version changes. Emberling connects agent-driven refinement with workflow-based serving.
+
+![The photo-effect workflow in Studio: a creative brief and photo set feed an Agent using Claude Opus 5.5 with generate_image and review_asset; a result check precedes delivery.](./assets/readme/aigc-demo/studio-workflow-editor.png)
+
+### 01 Generated does not mean ready
+
+A successful generation does not guarantee a usable image. The agent generates a set, inspects each result and adjusts shared settings for the next round. Emberling preserves each round's decisions and results so feedback can drive the next action.
+
+The artifacts below come from a live run: a three-photo set with the brief “handcrafted clay stop-motion style,” using Claude Opus 5.5 for decisions, Seedream 5.0 Pro for images and Claude Sonnet 5.5 for visual review. The reviewer rejected the side-profile image in the first round. The agent used that feedback to regenerate it, and the second round passed.
+
+<table>
+  <thead>
+    <tr>
+      <th>Input photo</th>
+      <th>First generation</th>
+      <th>Visual review</th>
+      <th>Second generation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><img src="./assets/readme/aigc-demo/front-input.jpg" width="180" alt="Input: front-facing portrait"></td>
+      <td><img src="./assets/readme/aigc-demo/front-round1.jpg" width="180" alt="Round 1: clay-style front-facing portrait"></td>
+      <td>Passed. Clear clay texture, recognizable subject, no malformed features or generation artifacts.</td>
+      <td><img src="./assets/readme/aigc-demo/front-round2.jpg" width="180" alt="Round 2: clay-style front-facing portrait"></td>
+    </tr>
+    <tr>
+      <td><img src="./assets/readme/aigc-demo/side-input.jpg" width="180" alt="Input: side-profile portrait"></td>
+      <td><img src="./assets/readme/aigc-demo/side-round1-failed.jpg" width="180" alt="Round 1: clay-style side profile, rejected by visual review"></td>
+      <td><strong>Rejected.</strong> The glasses became round, front-facing frames with an extra lens, rather than the original side-view rectangular frames. The eye and eyebrow shifted toward a three-quarter view, and the beard and hairline differed from the input.</td>
+      <td><img src="./assets/readme/aigc-demo/side-round2.jpg" width="180" alt="Round 2: clay-style side profile, accepted by visual review"></td>
+    </tr>
+    <tr>
+      <td><img src="./assets/readme/aigc-demo/cat-input.jpg" width="180" alt="Input: golden British Shorthair cat on a windowsill"></td>
+      <td><img src="./assets/readme/aigc-demo/cat-round1.jpg" width="180" alt="Round 1: clay-style cat"></td>
+      <td>Passed. Complete limbs and paws, intact floor tiles, and preserved subject and composition.</td>
+      <td>First-round result reused</td>
+    </tr>
+  </tbody>
+</table>
+
+Generation settings, review verdicts and their reasons are saved as execution facts. Before delivery, the result-check node checks each image against the run and its declared settings. If a rejected image is delivered despite a later accepted version being available, the set is marked invalid.
+
+<sub>Input photos from Unsplash by Štefan Štefančík, Nenad Novaković and Rick T.T., used under the Unsplash License.</sub>
+
+### 02 The service restarts. The generation task continues.
+
+An image may still be generating externally when the service restarts. Starting over can mean paying again. Emberling preserves the external task association, reconnects its result after recovery and continues delivery. Repeated submissions can also find the original work.
+
+A [demo script](./scripts/demo/build-v1.sh) builds the refined settings into a serving template, with an independent run for each subsequent request. Idempotent submission, async task takeover and callback deduplication let work outlive a request or process.
+
+### 03 More requests, bounded capacity
+
+External generation services have a fixed number of available slots, while incoming requests may exceed that capacity. Emberling manages occupied slots and queued tasks, schedules the next task when capacity becomes available, and checks occupancy after failures to prevent leaks or over-admission.
+
+### 04 Templates change. In-flight work keeps its version.
+
+When a new effect goes live, existing generation tasks still need to finish on their original version. Emberling binds each run to an immutable execution version. Demo scripts route new requests to v1 or v2, adjust the split or switch back.
+
+**Agent-driven refinement → Workflow-based serving → Durable execution and recovery → Capacity management and version binding.**
+
+<a id="repair-release"></a>
+
+## Scenario 2: from vulnerability alert to verified release
+
+**In development**
+
+A dependency vulnerability is not resolved by editing code alone. The agent must verify its patch, submit a change, wait for approval and confirm the deployed service state. Emberling connects those steps into work that can progress, be reviewed and reach a confirmed outcome.
+
+### 01 Bound the repair. Bound the actions.
+
+An agent needs to read code, change dependencies and run commands. Emberling provides a persistent workspace and an isolated execution environment, checking authorization before actions execute. Out-of-scope operations are rejected, with a reason returned to the agent so it can adjust its next action.
+
+![A Studio demo run: the Agent tries to write tests/auth_test.go in turn 1 and is rejected before execution, then completes changes and verification within the allowed scope.](./assets/readme/repair/studio-scope-denied.png)
+
+<sub>Demo run with simulated models and sandbox: the Agent first attempts to write <code>tests/auth_test.go</code>. Execution is denied because writes are limited to <code>go.mod</code> and <code>internal/auth</code>. After receiving the reason, it makes the change, verifies it and submits a change request within the permitted scope.</sub>
+
+### 02 When the code changes, verification must follow
+
+Code may change again after an initial test passes. An old report cannot establish that a new patch is valid. Emberling associates each change with its test and scan results, keeping the evidence submitted for review tied to the final patch.
+
+![A Studio demo run: after another patch edit, the Agent requests verification using the old patch digest and is rejected before execution in turn 6.](./assets/readme/repair/studio-stale-patch.png)
+
+<sub>Demo run with simulated models and sandbox: after a second patch edit, the Agent attempts verification with the old digest. Turn 6 is rejected because that digest is not the workspace's current patch. In the next turn it verifies the current patch, then submits the change request after verification passes.</sub>
+
+### 03 Prepare the change. Bring people in to approve it.
+
+Permission to prepare a repair does not imply permission to release it. The agent assembles the patch and verification evidence; a person reviews the specific version, deployment target and operation before approving. Emberling preserves the waiting state so work can continue after approval. Changes require verification and approval to be checked again.
+
+![A Studio demo run: the goal is to prepare a change only, but the Agent attempts deploy_change after submitting it and is rejected before execution.](./assets/readme/repair/studio-goal-denied.png)
+
+<sub>Demo run with simulated models and sandbox: the task only authorizes preparing a change. After submitting it, the Agent attempts to deploy and is denied because the operation affects production and the current goal does not permit it. Human approval is still in development; the diagram below shows the intended interaction.</sub>
+
+![Approval handoff: a change set with patch version, verification results, deployment target and operation goes to human review. Approval permits the reviewed release; rejection returns it for revision and renewed checks.](./assets/readme/repair/03-approval.en.svg)
+
+### 04 A release request is not a confirmed deployment
+
+A deployment may take effect even if its API response is lost. Resending the request could repeat the operation. Emberling queries the actual state by operation ID, checks the target version and deployment checks, then evaluates completion against the task goal and delivers the result, evidence and remaining work.
+
+![Deployment confirmation: after a lost response, Emberling queries the simulated release service by operation ID rather than resending the request, checks the version and deployment results, and delivers the outcome.](./assets/readme/repair/04-deploy-confirm.en.svg)
+
+**Bounded repairs. Evidence-backed verification. Approved releases. Confirmed outcomes.**
+
+<a id="runtime"></a>
+<a id="capability-map"></a>
+
+## How Emberling is being built
+
+From sustained AIGC generation to controlled software releases, both scenarios share one execution foundation. **Emberling centers on a durable, AI-native Execution Runtime: workflows organize the process, while agents act on feedback.**
+
+Around that core, the platform progressively develops orchestration, state and artifacts, governance, verification, observability and evaluation. Interfaces connect models, tools and execution environments into Agent Infra for Cloud Agent Workloads.
+
+![Emberling's capability map and construction direction: an Execution Runtime core, with Core, Build and Integrate responsibilities.](./assets/readme/infra-position.svg)
+
+| Approach | Emberling's investment |
 |---|---|
-| Model and Tool calls | Timeouts, retries, cost and uncertain outcomes |
-| External generation jobs | Suspend, callback, resume and restart recovery |
-| Agent decisions | Persist the Decision before performing the Action |
-| Business side effects | Idempotency, auditability and explicit failure boundaries |
-| Continuous improvement | Evaluate from real execution evidence, not synthetic traces |
+| **Core · Go deep on execution** | Shared state, scheduling, waits and recovery for workflows and agents; persisted decisions, side-effect-aware recovery, versions and execution records. |
+| **Build · Build around delivery** | Progressively connect orchestration, workspaces and artifacts, action authorization, result verification and execution feedback, extending into release governance and evaluation. |
+| **Integrate · Connect the ecosystem** | Bring models, context, knowledge, tools, Sandbox and AI Gateway capabilities together through interfaces on a shared execution foundation. |
 
-In-memory orchestration and application logs lose authority at exactly the moment reliability matters: a process restarts, a callback arrives twice, or an external request has an ambiguous result.
+<a id="evolution"></a>
 
----
+## Toward ongoing responsibilities
 
-## A different layer
-
-Emberling sits between AI frameworks and infrastructure primitives.
-
-| | AI workflow / agent framework | General durable engine | Emberling |
-|---|---|---|---|
-| Primary concern | Compose model and Tool calls | Execute arbitrary durable programs | Execute long-running AI applications |
-| Native facts | Messages, steps or graph state | Workflow history | Run, NodeRun, Attempt, Decision, Action and Event |
-| Agent recovery | Often process-local | Application-defined | Persisted Turn, Decision and Action boundaries |
-| AI observability | Added through tracing | Domain-agnostic | Derived from the execution ledger |
-| Learning path | Usually separate | Outside product scope | Evaluation and learning consume ordinary Executions |
-
-Emberling does not replace Temporal, and it does not compete on node catalogs. Its focus is the AI-native execution layer between application definitions and external systems.
-
----
-
-## How it works
-
-Workflow and Agent semantics share one execution core.
-
-```mermaid
-flowchart LR
-    DEF["Immutable Definition"] --> COMPILE["Compile + Validate"]
-    COMPILE --> READY["READY"]
-    READY --> RUNNING["RUNNING"]
-
-    RUNNING -->|"sync result"| SUCCEEDED["SUCCEEDED"]
-    RUNNING -->|"async dispatch"| WAITING["WAITING_CALLBACK"]
-    WAITING -->|"callback / reconciliation"| SUCCEEDED
-
-    RUNNING -->|"Agent NodeRun"| DECIDE["Persist Turn + Decision + Action"]
-    DECIDE -->|"COMMIT"| ACT["Execute Tool or FINAL"]
-    ACT -->|"Tool result"| DECIDE
-    ACT -->|"FINAL"| SUCCEEDED
-
-    SUCCEEDED --> NEXT{"Downstream?"}
-    NEXT -->|"yes"| READY
-    NEXT -->|"no"| COMPLETE["Run COMPLETED"]
-```
-
-Every transition follows one boundary:
-
-```text
-persist state + Event  →  COMMIT  →  execute external work / publish SSE
-```
-
-PostgreSQL is the source of Emberling-owned execution facts. Reconciliation rediscovers persisted `READY` work; immediate post-COMMIT execution is only the fast path.
-
----
-
-## What the MVP proves
-
-The MVP is deliberately narrow. If a feature does not strengthen or validate the execution layer, it does not belong.
-
-| Synchronous baseline | Async recovery | Persisted Agent loop |
-|---|---|---|
-| **Document Processing** | **AIGC Media Generation** | **Agent Tool Loop** |
-| Deterministic scheduling, data flow and Event-backed Trace | Dispatch, suspend, callback idempotency and Backend restart recovery | Persisted Decision/Action, sync and async Tools, Context/State and per-turn recovery |
-
-```mermaid
-flowchart LR
-    INPUT["Text Input"] --> PROMPT["Prompt Rewrite"]
-    PROMPT --> IMAGE["Image Generation"]
-    PROMPT --> CAPTION["Caption"]
-    IMAGE --> OUTPUT["Media Output"]
-    CAPTION --> OUTPUT
-
-    IMAGE -. "WAITING_CALLBACK" .-> CALLBACK["Delayed callback"]
-    CALLBACK -. "idempotent resume" .-> IMAGE
-```
-
-The signature milestone is simple to state and hard to fake:
-
-> Suspend an external task, restart the Backend, accept the callback, resume the same Execution, and finish the graph without duplicating progress.
-
----
-
-## An honest durability boundary
-
-| The MVP guarantees | The MVP does not claim |
-|---|---|
-| `WAITING_CALLBACK` survives Backend restart | Recovery of an in-flight synchronous call |
-| Persisted `READY` work is rediscovered | Exactly-once external side effects |
-| Repeated and stale callbacks cannot advance twice | Strict dispatch consistency across database and Provider |
-| A committed Agent Decision is never regenerated | Recovery across incompatible Runtime implementations |
-| A synchronous Tool call orphaned by a crash is never resent; the registered side-effect policy decides whether the Agent is told the outcome is unknown or that the call is safe to repeat, and the Agent decides the next step | Knowing whether that orphaned call took effect or was billed |
-
-This is waiting recovery with explicit side-effect boundaries—not a claim of general durable execution.
-
----
-
-## Reproduce it: the demo
-
-The demo follows one photo effect template through its life: an Agent tunes it, it is served to many users, it runs out of Provider capacity, and a new version is rolled out. Every story injects a fault into a deterministic mock Provider and checks the Execution ledger against the Provider's own request record, so the claim is verifiable rather than narrated.
-
-| Story | What the fault proves | `EMBERLING_DEMO_VARIANT` |
-|---|---|---|
-| **Submission and idempotency** | Resending one submission under one `Idempotency-Key` creates one Run; repeated callbacks add no Event; a crash while every task waits is finished by callbacks and polling | `serving-burst`, `serving-client-retry`, `serving-duplicate`, `serving-crash-held`, `serving-crash-waiting` |
-| **Lost response and takeover** | When the Provider accepts a task but its answer is lost, the keyed retry takes over the original task instead of creating a second one; a lost callback is completed by Provider polling | `serving-response-lost`, `held-before-accept`, `after-accept` |
-| **Sync versus async crash and the uncertain result** | A crash during an asynchronous call changes nothing: the callback completes the original Action once. A crash during a synchronous call is handed back to the Agent as an uncertain, counted result, never resent | `photo-video-restart`, `photo-sync-crash`, `delivery-deploy-lost` |
-| **Capacity and rollout** | A fixed slot limit per Provider holds across a restart without leaking or over-admitting; a 10% split to a new version is rolled back while in-flight Runs finish on the version they were bound to | `serving-capacity`, `serving-rollout`, `serving-version-switch` |
-
-The remaining variants are the baseline stories the faults are measured against: `photo-set`, `photo-gate` and `photo-limit` run the tuning Agent over three photos, and `delivery`, `delivery-restart-during-test` and `delivery-runner-redelivery` run an Agent that tests a patch in a sandbox and deploys it once.
-
-```sh
-make demo                                         # every photo, delivery and fault variant
-EMBERLING_DEMO_VARIANT=serving make demo          # all nine serving variants
-EMBERLING_DEMO_VARIANT=photo-sync-crash make demo # one variant
-make demo-studio                                  # the same, watched in Studio
-make demo-down
-```
-
-`make demo` needs Docker, `curl` and `jq`, and every variant ends with the invariant report and the ledger-versus-record comparison. The version split of the rollout story is `scripts/demo/traffic-split.sh`; `scripts/demo/build-v1.sh` turns a finished tuning Run into the serving template and `scripts/demo/evidence-report.sh` summarises the evidence. To run the same Definitions against real image and vision models, start from [`scripts/demo/definitions/README.md`](./scripts/demo/definitions/README.md).
-
----
-
-## Evolution roadmap
-
-Emberling has completed its foundation for asynchronous and long-running task execution. The next phases focus on reliable execution under failure, end-to-end task delivery, validation and evaluation, and ongoing agent responsibilities. Work across phases may overlap.
+From the completed execution foundation toward reliable operation, complete delivery, verification and evaluation, and eventually ongoing responsibilities.
 
 ```mermaid
 timeline
-    MVP · Async and Long-Running Execution (Completed) : Unified workflow and agent execution
-                    : Async waits and recovery after restart
-                    : Idempotent callbacks and side-effect-aware retries
-                    : Persisted decisions and full execution history
-    Phase 2 · Reliable Execution Under Failure : Multi-instance failover and external result reconciliation
-            : Fault injection and timeout and cancellation propagation
-            : Queueing by capacity, priority and budget
+    MVP · Async and long-running execution (complete) : Unified Workflow and Agent execution
+                 : Async waits and restart recovery
+                 : Idempotent callbacks and side-effect-aware retries
+                 : Durable decisions and execution traces
+    Phase 2 · Reliable execution through failures : Multi-instance takeover and external result reconciliation
+            : Fault validation and timeout/cancellation propagation
+            : Queuing by capacity, priority and budget
             : Standardized tracing and cost accounting
-    Phase 3 · End-to-End Task Delivery : External agents and parallel delegation
+    Phase 3 · Complete task delivery : External agents, parallel tools and delegation
             : Isolated sandboxes, credentials and persistent workspaces
-            : Permission checks, approvals and human decisions
-            : Acceptance based on tests and artifacts
-    Phase 4 · Validation and Evaluation : Pinned dependencies and isolated reruns
+            : Authorization, approvals and human decisions
+            : Acceptance through tests and artifacts
+    Phase 4 · Verification and evaluation : Dependency version locking and isolated reruns
             : Batch evaluation, feedback and failure attribution
-            : Version comparison, release gates and rollback
-            : Tool risk tiers and per-task cost limits
-    Phase 5 · Ongoing Responsibilities : Scheduled and event-driven work toward long-term goals
-            : Agent handoffs with narrower permissions and budgets
-            : Validated experience captured as Memory and Skills
+            : Version comparisons, release gates and rollback
+            : Tool risk levels and per-task cost limits
+    Phase 5 · Ongoing responsibilities : Scheduled and event-driven long-term goals
+            : Agent handoffs and progressively narrower authority and budgets
+            : Verified experience captured as Memory and Skills
             : Evaluation-gated self-improvement
 ```
 
-Later capabilities continue to build on the same Execution Runtime. Improved versions apply only to newly created Runs; Runs already in progress remain bound to the version selected when they were created, regardless of later configuration changes.
+Phases may overlap. Shipping individual capabilities within a scenario does not mean the whole phase is complete.
 
----
+<a id="quick-start"></a>
 
-**Project stage:** MVP complete; reliable execution under failure is next.
+## Run and explore
 
-**Target stack:** Go · PostgreSQL · React · TypeScript · React Flow
+### Start Studio
+
+Prepare Go `1.27.1`, Node.js `24.20.0`, pnpm `11.25.0`, Docker Compose and OpenSSL.
+
+```sh
+make bootstrap
+export EMBERLING_MODEL_PROVIDER_API_KEY="$(openssl rand -hex 32)"
+export EMBERLING_CALLBACK_SIGNING_SECRET="$(openssl rand -hex 32)"
+make dev
+```
+
+Open **[Studio → localhost:5173](http://localhost:5173)** to explore workflows, execution details and artifacts. The default stack uses simulated services and needs no model account. Keep the same keys across restarts.
+
+### Watch a task recover from a restart
+
+Restart the Backend while external generation is still in progress, then watch the original task reconnect its result and complete delivery. The demo uses simulated services and pauses at key steps for inspection in Studio.
+
+```sh
+EMBERLING_DEMO_VARIANT=serving-crash-waiting make demo-studio
+```
+
+Requires Docker, `curl` and `jq`. Run `make demo-down` when finished. It stops the demo and removes simulated-service request records, while preserving PostgreSQL and artifact volumes.
+
+### Explore further
+
+| What to explore | Start here |
+|---|---|
+| **Real models generating, reviewing and refining images** | [Live model demo guide](./scripts/demo/definitions/README.md), including model credential setup |
+| **Turning refinement results into a serving template** | [Template build script](./scripts/demo/build-v1.sh) |
+| **Splitting traffic between versions and switching back** | [Version routing script](./scripts/demo/traffic-split.sh) |
+| **Checking failure outcomes, execution records and costs** | [Demo report script](./scripts/demo/evidence-report.sh) |
+| **More concurrency, capacity and failure demos** | `EMBERLING_DEMO_VARIANT=serving make demo`; see [Makefile](./Makefile) for commands |
+
+### Contribute
+
+Issues and pull requests are welcome for execution reliability, model and tool integrations, and the Studio experience. See the [contribution guide](./CLAUDE.md) for development conventions.
+
+<details>
+<summary>Development checks</summary>
+
+```sh
+make check-fast  # Static checks and unit tests
+make check       # Full checks, including integration tests and Studio build
+make test-e2e    # Browser acceptance tests
+```
+
+Integration tests need an accessible test database or Docker. Browser tests require Playwright Chromium.
+
+</details>
