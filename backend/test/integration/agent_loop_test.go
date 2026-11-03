@@ -96,6 +96,9 @@ type agentHarnessOptions struct {
 	// PollHooks lets a test stop or synchronise a Provider poll between its claim commit
 	// and the Provider query. The zero value installs no hook.
 	PollHooks service.PollHooks
+	// ApprovalHooks lets a test hold an approval decision between its first read and the
+	// Run lock, so two decisions can be made to race. The zero value installs no hook.
+	ApprovalHooks service.ApprovalHooks
 	// WorkspaceRepositories are the repository identifiers the Compiler accepts in an agent
 	// node's workspace binding, as cmd/emberling hands it the configured set.
 	WorkspaceRepositories []string
@@ -249,17 +252,18 @@ func newAgentHarness(t *testing.T, opts agentHarnessOptions) *agentHarness {
 		serviceUoW = opts.WrapUoW(serviceUoW)
 	}
 	svc := service.NewExecutionService(service.Deps{
-		UoW:       serviceUoW,
-		Nodes:     nodeRegistry,
-		Models:    modelRegistry,
-		Tools:     toolRegistry,
-		Compiler:  compiler,
-		Clock:     clock,
-		IDs:       ids,
-		Notifier:  opts.Notifier,
-		Queue:     queue,
-		RunnerID:  runnerID,
-		PollHooks: opts.PollHooks,
+		UoW:           serviceUoW,
+		Nodes:         nodeRegistry,
+		Models:        modelRegistry,
+		Tools:         toolRegistry,
+		Compiler:      compiler,
+		Clock:         clock,
+		IDs:           ids,
+		Notifier:      opts.Notifier,
+		Queue:         queue,
+		RunnerID:      runnerID,
+		PollHooks:     opts.PollHooks,
+		ApprovalHooks: opts.ApprovalHooks,
 		// An ASYNC Tool's claim transaction issues an Attempt-scoped callback credential,
 		// which needs a signing secret and a callback origin.
 		Callback: service.CallbackConfig{

@@ -39,6 +39,11 @@ func (r ReleaseReason) IsValid() bool {
 	}
 }
 
+// ReleaseProviderID is the provider the Callback Binding of a release Attempt names. A
+// release is polled, never called back, so the Binding exists only to route polls to the
+// Attempt whose operation key it carries as the external task id.
+const ReleaseProviderID = "release"
+
 // ReleaseCodeVoided is the error code a release Attempt fails with when production confirms
 // that its operation was voided: nothing was deployed under that operation key.
 const ReleaseCodeVoided = "VOIDED"

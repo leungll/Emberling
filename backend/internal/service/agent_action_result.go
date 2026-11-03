@@ -197,6 +197,13 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return err
 		}
 		now := s.deps.Clock.Now()
+		if call.release != nil {
+			// A release concludes from whichever wait its Action is in: on production, or
+			// on a person who was handed it at the confirm deadline. The Agent NodeRun is
+			// resumed only when it is still waiting.
+			src.fromAction = action.Status
+			src.resumesWaiting = nodeRun.Status == domain.NodeRunWaitingCallback
+		}
 
 		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
 			return err
@@ -282,6 +289,11 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			}
 		}
 
+		if call.release != nil {
+			if agentRun, err = s.settleReleaseSuccessLocked(ctx, tx, lock, nodeRun, agentRun, call.actionID, now); err != nil {
+				return err
+			}
+		}
 		if err := tx.AgentActions().MarkSucceeded(ctx, call.actionID, src.fromAction, now); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded

@@ -37,7 +37,7 @@ const ToolName = "deploy_change"
 
 // ProviderID is the stable identifier of the production service in the Callback Binding
 // that routes polls to a release Attempt. It is not a credential.
-const ProviderID = "release"
+const ProviderID = domain.ReleaseProviderID
 
 // FactType is the fact a confirmed release records: the patch, by digest, was released
 // under an operation key as a version, and the target was healthy or not afterwards.

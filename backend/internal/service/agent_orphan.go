@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
@@ -224,6 +225,17 @@ func (s *ExecutionService) HandleOrphanToolAttempt(ctx context.Context, attemptI
 		if err != nil {
 			return err
 		}
+		// A release Attempt whose process died before the call is not failed: production
+		// may hold its operation, so the Runtime starts asking, which re-aggregates the
+		// Run and therefore needs the compiled plan, resolved before the lock.
+		reg, registered := s.deps.Tools.Get(attempt.ToolName)
+		var run domain.Run
+		var plan *runtime.CompiledDefinition
+		if registered && reg.Metadata.Reconcilable {
+			if run, plan, err = s.runPlan(ctx, tx, nodeRun.RunID); err != nil {
+				return err
+			}
+		}
 
 		lock, err := tx.Runs().LockForUpdate(ctx, nodeRun.RunID)
 		if err != nil {
@@ -257,7 +269,18 @@ func (s *ExecutionService) HandleOrphanToolAttempt(ctx context.Context, attemptI
 		if nodeRun.Status != domain.NodeRunRunning || turn.TurnNo != agentRun.CurrentTurnNo {
 			return nil
 		}
-		reg, registered := s.deps.Tools.Get(attempt.ToolName)
+		if registered && reg.Metadata.Reconcilable {
+			if action, err = tx.AgentActions().Get(ctx, action.ID); err != nil {
+				return err
+			}
+			if err := s.settleReleaseDispatchLocked(ctx, tx, releaseSettle{
+				lock: lock, run: run, plan: plan, nodeRun: nodeRun, agentRun: agentRun, turnID: turn.ID, action: action, attempt: attempt,
+			}, true, now); err != nil {
+				return err
+			}
+			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq()}
+			return nil
+		}
 		if registered && reg.Metadata.ExecutionKind != domain.ToolExecutionSync {
 			// An asynchronous Tool's call may have been accepted with its callback still
 			// to come; it stays bounded by the deadline instead.
