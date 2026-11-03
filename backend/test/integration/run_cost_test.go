@@ -44,12 +44,13 @@ func costToolRegistry(t *testing.T) *registry.ToolRegistry {
 	for name, policy := range policies {
 		err := reg.Register(registry.ToolRegistration{
 			Metadata: domain.ToolMetadata{
-				Name:            name,
-				ExecutionKind:   domain.ToolExecutionSync,
-				InputSchema:     json.RawMessage(`{"type":"object"}`),
-				OutputSchema:    json.RawMessage(`{"type":"object"}`),
-				SideEffect:      policy,
-				UsesReviewModel: name == "review_image",
+				Name:                  name,
+				ExecutionKind:         domain.ToolExecutionSync,
+				InputSchema:           json.RawMessage(`{"type":"object"}`),
+				OutputSchema:          json.RawMessage(`{"type":"object"}`),
+				SideEffect:            policy,
+				UsesReviewModel:       name == "review_image",
+				ReviewModelCapability: reviewCapabilityIf(name == "review_image"),
 			},
 			Executor: costNoopTool{},
 		})
@@ -276,4 +277,13 @@ func TestRunList_Cost_SumsKnownChargesAndCountsUnknownExternalCalls(t *testing.T
 	if diff := cmp.Diff(service.RunCost{}, page.Items[1].Cost); diff != "" {
 		t.Errorf("run_idle cost (-want +got):\n%s", diff)
 	}
+}
+
+// reviewCapabilityIf names the vision input capability for a review Tool, and nothing for
+// a Tool that reviews with no model.
+func reviewCapabilityIf(reviews bool) string {
+	if reviews {
+		return domain.ModelCapabilityVisionInput
+	}
+	return ""
 }

@@ -232,6 +232,15 @@ func TestToolMetadata_Validate_RejectsInvalidRegistration(t *testing.T) {
 		{"patch digest path without the workspace", func(m *ToolMetadata) {
 			m.WorkspacePatchDigestPath = "/patchDigest"
 		}, `workspacePatchDigestPath is only allowed`},
+		{"review model use without a capability", func(m *ToolMetadata) {
+			m.UsesReviewModel = true
+		}, `usesReviewModel requires reviewModelCapability`},
+		{"review model capability without the review model", func(m *ToolMetadata) {
+			m.ReviewModelCapability = ModelCapabilityVisionInput
+		}, `reviewModelCapability is only allowed`},
+		{"required review model without the review model", func(m *ToolMetadata) {
+			m.RequiresReviewModel = true
+		}, `requiresReviewModel is only allowed`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -346,7 +355,7 @@ func TestModelMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 }
 
 func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
-	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
+	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"requiresReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
 
 	fixture := ToolMetadata{
 		Name:          "lookup",
@@ -467,7 +476,7 @@ func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
 		Requires:      []FactRequirement{},
 		Records:       []ToolRecordKind{},
 	}
-	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
+	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"requiresReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
 	encoded, err := json.Marshal(tool)
 	if err != nil {
 		t.Fatalf("Marshal() error: %v", err)

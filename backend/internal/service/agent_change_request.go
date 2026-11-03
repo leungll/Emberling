@@ -14,13 +14,15 @@ import (
 
 // This file owns the change request as an execution fact: checking, in the claim
 // transaction, that every decision basis item a change-request call cites exists in the
-// Context Manifest of the Turn it names; re-verifying and recording, in the result
-// transaction, the change request a Tool result carries; and the Trace projection of the
-// requests an Agent Run recorded. Which Tools take part is decided by the CHANGE_REQUEST
-// record kind their registration declares, never by Tool Name.
+// Context Manifest of the Turn it names and that the review fact it may cite is a review of
+// the same patch in the same Run; re-verifying and recording, in the result transaction,
+// the change request a Tool result carries; and the Trace projection of the requests an
+// Agent Run recorded. Which Tools take part is decided by the CHANGE_REQUEST record kind
+// their registration declares, never by Tool Name.
 
 // codeDecisionBasisInvalid fails a change-request call whose decision basis cites a Turn
-// that does not exist or a Manifest item the named Turn's Manifest does not hold. The
+// that does not exist or a Manifest item the named Turn's Manifest does not hold, or whose
+// review citation names a fact that is not a review of the current patch in this Run. The
 // committed Decision is defective, so the Agent Run ends as an invalid Action before any
 // Attempt exists; the model is not asked again.
 const codeDecisionBasisInvalid = "DECISION_BASIS_INVALID"
@@ -28,8 +30,9 @@ const codeDecisionBasisInvalid = "DECISION_BASIS_INVALID"
 // codeChangeRequestInvalid fails a Tool result whose change request the Runtime will not
 // record: its content digest disagrees with the content Artifact it names, its patch digest
 // is not the workspace's current patch, its verification fact is not a passing fact about
-// that patch in this Run, or its decision basis differs from the one the claim checked. The
-// result is an invalid Tool result: nothing of it is persisted and the Attempt fails.
+// that patch in this Run, its decision basis differs from the one the claim checked, or its
+// review fact is not the cited review of that patch in this Run. The result is an invalid
+// Tool result: nothing of it is persisted and the Attempt fails.
 const codeChangeRequestInvalid = "CHANGE_REQUEST_INVALID"
 
 // maxTraceChangeRequests bounds the change requests one Agent Trace response carries.
@@ -39,6 +42,18 @@ const maxTraceChangeRequests = 64
 // decision basis in. It is part of the CHANGE_REQUEST record contract: a Tool that declares
 // the record names its basis here, so the Runtime can check it against the Manifests.
 const decisionBasisArgument = "decisionBasis"
+
+// reviewFactArgument is the optional top-level argument a change-request call attaches a
+// review by: the identifier of a review fact of the current patch. Like the decision basis
+// it is part of the CHANGE_REQUEST record contract. The claim transaction resolves the fact
+// and hands it to the Tool with the required facts; the result transaction checks it again.
+const reviewFactArgument = "reviewFactId"
+
+// reviewFactType is the fact type a cited review must have: the independent review of a
+// patch, about the patch digest, whose verdict says whether it found no blocking problem.
+// Attaching a review is optional and its verdict is not a condition of the request: the
+// approver reads the review, the Runtime does not gate on it.
+const reviewFactType = "patch_reviewed"
 
 // errDecisionBasisInvalid is the reason a call's decision basis cannot be accepted: it is
 // malformed, or cites a Turn or Manifest item the Agent Run does not have. It is distinct
@@ -82,6 +97,62 @@ func decisionBasisOfArguments(metadata domain.ToolMetadata, arguments json.RawMe
 		return nil, &errDecisionBasisInvalid{reason: err.Error()}
 	}
 	return basis, nil
+}
+
+// reviewFactOfArguments reads the review fact a call of a Tool that records a change
+// request cites. It returns "" for a Tool that declares no CHANGE_REQUEST record and for
+// arguments without the field or with a null; a field that is present but not a non-empty
+// string is an error.
+func reviewFactOfArguments(metadata domain.ToolMetadata, arguments json.RawMessage) (string, error) {
+	if !metadata.DeclaresRecord(domain.ToolRecordChangeRequest) {
+		return "", nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(arguments, &fields); err != nil {
+		return "", &errDecisionBasisInvalid{reason: "arguments are not an object"}
+	}
+	raw, present := fields[reviewFactArgument]
+	if !present || string(raw) == "null" {
+		return "", nil
+	}
+	var factID string
+	if err := json.Unmarshal(raw, &factID); err != nil || factID == "" {
+		return "", &errDecisionBasisInvalid{reason: reviewFactArgument + " is not a non-empty fact identifier"}
+	}
+	return factID, nil
+}
+
+// reviewFactMismatch says why fact is not the review of patchDigest in runID, or "" when
+// it is. The reason names the fact type and the rule, never argument values.
+func reviewFactMismatch(fact domain.ExecutionFact, runID, patchDigest string) string {
+	switch {
+	case fact.RunID != runID:
+		return "the cited review fact belongs to another run, not this run"
+	case fact.FactType != reviewFactType:
+		return fmt.Sprintf("the cited fact is a %q fact, not a %s fact", fact.FactType, reviewFactType)
+	case fact.SubjectRef != patchDigest:
+		return "the cited review fact is about another patch, not the current patch"
+	default:
+		return ""
+	}
+}
+
+// checkReviewFactLocked resolves, inside a transaction that holds the Run aggregate lock,
+// the review fact a change-request call cites and checks it is a review of patchDigest in
+// runID. A fact that does not exist or does not match is reported as
+// *errDecisionBasisInvalid; any other error is a failed read.
+func checkReviewFactLocked(ctx context.Context, tx store.Tx, runID, patchDigest, factID string) (domain.ExecutionFact, error) {
+	fact, err := tx.ExecutionFacts().Get(ctx, factID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.ExecutionFact{}, &errDecisionBasisInvalid{reason: "the cited review fact does not exist"}
+	}
+	if err != nil {
+		return domain.ExecutionFact{}, err
+	}
+	if reason := reviewFactMismatch(fact, runID, patchDigest); reason != "" {
+		return domain.ExecutionFact{}, &errDecisionBasisInvalid{reason: reason}
+	}
+	return fact, nil
 }
 
 // checkDecisionBasisLocked verifies, inside a transaction that holds the Run aggregate
@@ -196,6 +267,29 @@ func (s *ExecutionService) recordChangeRequestLocked(
 	}
 	if !sameBasis(claimed, recorded) {
 		return domain.ChangeRequest{}, false, &errChangeRequestRejected{reason: "decision basis differs from the one the call was claimed with"}
+	}
+
+	// The review the result attaches must be the one the call cited, and still a review of
+	// this patch in this Run. The fact is not stored with the request: the content carries
+	// the reference, and whether the patch was reviewed is read from the facts.
+	cited, err := reviewFactOfArguments(reg.Metadata, arguments)
+	if err != nil {
+		return domain.ChangeRequest{}, false, &errChangeRequestRejected{reason: "the call's review citation cannot be read: " + err.Error()}
+	}
+	if request.ReviewFactID != cited {
+		return domain.ChangeRequest{}, false, &errChangeRequestRejected{reason: "the review fact differs from the one the call cited"}
+	}
+	if request.ReviewFactID != "" {
+		review, err := tx.ExecutionFacts().Get(ctx, request.ReviewFactID)
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ChangeRequest{}, false, &errChangeRequestRejected{reason: "the review fact does not exist"}
+		}
+		if err != nil {
+			return domain.ChangeRequest{}, false, err
+		}
+		if reason := reviewFactMismatch(review, call.runID, request.PatchDigest); reason != "" {
+			return domain.ChangeRequest{}, false, &errChangeRequestRejected{reason: reason}
+		}
 	}
 	basis, err := json.Marshal(recorded)
 	if err != nil {

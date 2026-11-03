@@ -84,7 +84,7 @@ export const NODE_TYPES: NodeMetadata[] = [
     [
       { path: 'modelId', widget: 'MODEL_SELECTOR', capability: 'structured_decision' },
       { path: 'imageModelId', widget: 'MODEL_SELECTOR', capability: 'reference_image_generation' },
-      { path: 'reviewModelId', widget: 'MODEL_SELECTOR', capability: 'vision_input' },
+      { path: 'reviewModelId', widget: 'MODEL_SELECTOR' },
     ],
   ),
   meta(
@@ -242,6 +242,7 @@ const tool = (
   countsTowardGenerationLimit: false,
   usesImageModel: false,
   usesReviewModel: false,
+  requiresReviewModel: false,
   records: [],
   usesWorkspace: false,
   reconcilable: false,
@@ -255,7 +256,10 @@ export const TOOLS: ToolMetadata[] = [
     countsTowardGenerationLimit: true,
     usesImageModel: true,
   }),
-  tool('review_asset', 'Review a generated image asset', { usesReviewModel: true }),
+  tool('review_asset', 'Review a generated image asset', {
+    usesReviewModel: true,
+    reviewModelCapability: 'vision_input',
+  }),
 ];
 
 export function step(

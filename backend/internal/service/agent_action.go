@@ -663,7 +663,8 @@ func (s *ExecutionService) claimAgentAction(ctx context.Context, actionID string
 // order: the frozen allowlist and the current registration, the committed Decision against
 // the registered InputSchema, the frozen workspace with the written path's scope and the
 // named patch, the fact requirements the Tool declares, the frozen generation limit, the
-// frozen image and review models, and the decision basis a change request cites. It
+// frozen image and review models, and the decision basis and review fact a change request
+// cites. It
 // decides, it does not write: the caller settles a failing verdict so the approval path can
 // resume the Agent's clock first. A passing verdict carries the
 // inputs the Tool call needs. The registration it resolves is left on c for the caller.
@@ -772,12 +773,14 @@ func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.T
 	}
 
 	// A Tool that reviews with the node's review model receives the Agent Run's frozen
-	// review Model ID under the same rule. An Agent Run that froze none passes no ID,
-	// and the Tool applies its mock policy; a frozen ID that no longer resolves fails
-	// here and never falls back to that policy.
-	if reg.Metadata.UsesReviewModel && c.agentRun.ReviewModelID != nil {
+	// review Model ID under the same rule, checked against the capability the Tool's
+	// registration names. An Agent Run that froze none passes no ID to a Tool that allows
+	// it, and that Tool applies its mock policy; a Tool that requires an independent review
+	// model fails here instead. A frozen ID that no longer resolves fails here too and never
+	// falls back to a mock policy.
+	if reg.Metadata.UsesReviewModel && (c.agentRun.ReviewModelID != nil || reg.Metadata.RequiresReviewModel) {
 		inputs.reviewModelID = frozenReviewModel(c.agentRun)
-		if unusable := unusableModel(s.deps.Models, "review model", inputs.reviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
+		if unusable := unusableReviewModel(s.deps.Models, inputs.reviewModelID, []string{reg.Metadata.ReviewModelCapability}); unusable != nil {
 			return failVerdict(domain.TerminationToolError, *unusable), nil
 		}
 	}
@@ -800,6 +803,34 @@ func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.T
 			}), nil
 		}
 		return toolActionVerdict{}, basisErr
+	}
+
+	// A change request may attach the review of its patch by citing the review fact. The
+	// claim resolves the fact under the lock and checks it reviews the workspace's current
+	// patch in this Run, which the stale-patch check above has just confirmed the call
+	// names; the fact then travels with the required facts so the Tool can render it. A
+	// citation that resolves to anything else is a defect of the committed Decision and
+	// fails the Action the same way as an unresolvable decision basis.
+	reviewFactID, reviewErr := reviewFactOfArguments(reg.Metadata, c.decision.Arguments)
+	if reviewErr == nil && reviewFactID != "" {
+		if inputs.workspace == nil {
+			reviewErr = &errDecisionBasisInvalid{reason: "a review can only be attached to the patch of a workspace"}
+		} else {
+			var review domain.ExecutionFact
+			if review, reviewErr = checkReviewFactLocked(ctx, tx, c.nodeRun.RunID, inputs.workspace.PatchDigest, reviewFactID); reviewErr == nil {
+				inputs.requiredFacts = append(inputs.requiredFacts, review)
+			}
+		}
+	}
+	if reviewErr != nil {
+		var invalid *errDecisionBasisInvalid
+		if errors.As(reviewErr, &invalid) {
+			return failVerdict(domain.TerminationInvalidAction, domain.ExecutionError{
+				Code:    codeDecisionBasisInvalid,
+				Message: fmt.Sprintf("tool %q cites a review fact the runtime cannot accept: %s", c.toolName, reviewErr.Error()),
+			}), nil
+		}
+		return toolActionVerdict{}, reviewErr
 	}
 	return toolActionVerdict{inputs: inputs}, nil
 }

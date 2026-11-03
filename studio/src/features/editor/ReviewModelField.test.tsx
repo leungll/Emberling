@@ -67,7 +67,7 @@ afterEach(() => {
 });
 
 describe('Agent review model', () => {
-  it('offers only vision models, defaults to the mock policy and can be cleared', async () => {
+  it('offers every registered model, defaults to the mock policy and can be cleared', async () => {
     const user = userEvent.setup();
     renderAgent({ allowedTools: ['review_asset'] });
 
@@ -79,7 +79,12 @@ describe('Agent review model', () => {
     ).toBeInTheDocument();
     await user.click(trigger);
     const names = screen.getAllByRole('option').map((o) => o.textContent);
-    expect(names).toEqual(['Mock review policy', 'Vision Review Model']);
+    expect(names).toEqual([
+      'Mock review policy',
+      'Mock Image Model v1',
+      'Vision Review Model',
+      'Mock Text Model v1',
+    ]);
 
     await user.click(screen.getByRole('option', { name: 'Vision Review Model' }));
     expect(
