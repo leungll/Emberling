@@ -101,3 +101,92 @@ func TestDemoVulnFix_Scripted_DefinitionKeepsTheFixtureBudget(t *testing.T) {
 		t.Fatalf("modelConfig = %v, want the scripted trajectory", config["modelConfig"])
 	}
 }
+
+// TestDemoVulnFix_RealModelMain_DefinitionReleasesWithTheModelBudget proves the main story
+// with a real model keeps the release configuration (the release Tools, the frozen deploy
+// target and the release bounds), gives the model its budget and room for more Turns, and
+// that the Backend accepts the Definition it prints.
+func TestDemoVulnFix_RealModelMain_DefinitionReleasesWithTheModelBudget(t *testing.T) {
+	// A release story's Backend registers the release Tool against a mock production service.
+	env := newReleaseStory(t, releaseStoryOptions{script: "vuln-fix-release"}).env
+
+	fx := demoDefinition(t, "main", "EMBERLING_DEMO_MODEL=text-model-v1", "EMBERLING_DEMO_MODEL_TIMEOUT_MS=900000", "EMBERLING_DEMO_APPROVAL=")
+	config := agentConfigOf(t, fx)
+	if config["timeoutMs"] != float64(900000) || config["modelId"] != "text-model-v1" || config["maxTurns"] != float64(24) {
+		t.Fatalf("agent config = %v, want timeoutMs 900000, the real model and maxTurns 24", config)
+	}
+	if _, scripted := config["modelConfig"]; scripted {
+		t.Errorf("agent config keeps modelConfig %v, want the scripted trajectory removed", config["modelConfig"])
+	}
+	assertReleaseConfig(t, config, 600000)
+	resp, body := env.doJSON(t, http.MethodPost, "/api/definitions", map[string]any{
+		"name": fx.Name, "description": fx.Description, "nodes": fx.Nodes, "edges": fx.Edges,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /api/definitions (real-model main Definition) status = %d, body=%s", resp.StatusCode, body)
+	}
+}
+
+// TestDemoVulnFix_ManualApproval_DeadlineCoversTheWait proves a person deciding by hand gets
+// an approval deadline that covers the whole manual wait, so the request never expires
+// while the script still waits for them.
+func TestDemoVulnFix_ManualApproval_DeadlineCoversTheWait(t *testing.T) {
+	config := agentConfigOf(t, demoDefinition(t, "main", "EMBERLING_DEMO_MODEL=", "EMBERLING_DEMO_APPROVAL=manual", "EMBERLING_DEMO_APPROVAL_WAIT_S=3600"))
+	if config["approvalTimeoutMs"] != float64(3660000) {
+		t.Fatalf("approvalTimeoutMs = %v, want the 3600s wait plus a minute", config["approvalTimeoutMs"])
+	}
+}
+
+// TestDemoVulnFix_ReleaseStories_DefinitionsSave proves every scripted release story binds
+// its trajectory and the release configuration, and that the Backend accepts each
+// Definition it prints.
+func TestDemoVulnFix_ReleaseStories_DefinitionsSave(t *testing.T) {
+	// A release story's Backend registers the release Tool against a mock production service.
+	env := newReleaseStory(t, releaseStoryOptions{script: "vuln-fix-release"}).env
+
+	stories := map[string]string{
+		"main": "vuln-fix-release", "restart-during-approval": "vuln-fix-release", "duplicate-approval": "vuln-fix-release",
+		"reject-resubmit": "vuln-fix-rejected-resubmit", "release-crash-deployed": "vuln-fix-release",
+		"release-crash-voided": "vuln-fix-release", "void-exhausted": "vuln-fix-release", "target-occupied": "vuln-fix-release",
+		"release-refused": "vuln-fix-release", "unhealthy": "vuln-fix-release", "prepare-only": "vuln-fix-release",
+	}
+	for story, script := range stories {
+		t.Run(story, func(t *testing.T) {
+			fx := demoDefinition(t, story, "EMBERLING_DEMO_MODEL=", "EMBERLING_DEMO_APPROVAL=")
+			config := agentConfigOf(t, fx)
+			modelConfig, _ := config["modelConfig"].(map[string]any)
+			if modelConfig["script"] != script || config["timeoutMs"] != float64(300000) {
+				t.Fatalf("agent config = %v, want script %s and the fixture's budget", config, script)
+			}
+			assertReleaseConfig(t, config, 600000)
+			resp, body := env.doJSON(t, http.MethodPost, "/api/definitions", map[string]any{
+				"name": fx.Name, "description": fx.Description, "nodes": fx.Nodes, "edges": fx.Edges,
+			})
+			if resp.StatusCode != http.StatusCreated {
+				t.Fatalf("POST /api/definitions (%s) status = %d, body=%s", story, resp.StatusCode, body)
+			}
+		})
+	}
+}
+
+// assertReleaseConfig checks the release Tools, the frozen deploy target and the approval
+// deadline of a release story's agent config.
+func assertReleaseConfig(t *testing.T, config map[string]any, approvalTimeoutMs float64) {
+	t.Helper()
+	tools, _ := config["allowedTools"].([]any)
+	counts := map[any]int{}
+	for _, tool := range tools {
+		counts[tool]++
+	}
+	if counts["create_change_request"] != 1 || counts["deploy_change"] != 1 {
+		t.Errorf("allowedTools = %v, want create_change_request and deploy_change once each", tools)
+	}
+	workspace, _ := config["workspace"].(map[string]any)
+	target, _ := workspace["deployTarget"].(map[string]any)
+	if target["service"] != "token-service" || target["environment"] != "staging" {
+		t.Errorf("deployTarget = %v, want token-service/staging", workspace["deployTarget"])
+	}
+	if config["approvalTimeoutMs"] != approvalTimeoutMs || config["maxReleaseRetries"] != float64(1) {
+		t.Errorf("release bounds = approval %v retries %v, want %v and 1", config["approvalTimeoutMs"], config["maxReleaseRetries"], approvalTimeoutMs)
+	}
+}
