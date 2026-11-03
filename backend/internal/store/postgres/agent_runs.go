@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,7 +20,8 @@ type agentRunRepository struct {
 const agentRunColumns = `id, node_run_id, instructions, model_id, model_config, allowed_tools,
 	context_schema, state_schema, output_schema, max_turns, current_turn_no,
 	current_context_version, current_state_version, started_at, deadline,
-	terminated_at, termination, error, max_generation_calls, image_model_id, review_model_id`
+	terminated_at, termination, error, max_generation_calls, image_model_id, review_model_id,
+	goal, paused_at, pause_reason`
 
 // Create inserts the Agent Run with its frozen configuration. UNIQUE (node_run_id) is
 // what enforces "one Agent NodeRun has at most one Agent Run": a duplicated
@@ -36,13 +38,15 @@ func (r *agentRunRepository) Create(ctx context.Context, run domain.AgentRun) er
 
 	const insert = `
 		INSERT INTO agent_runs (` + agentRunColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+		        $22, $23, $24)`
 	if _, err := r.conn.Exec(ctx, insert,
 		run.ID, run.NodeRunID, run.Instructions, run.ModelID, run.ModelConfig, allowedTools,
 		run.ContextSchema, run.StateSchema, run.OutputSchema, run.MaxTurns, run.CurrentTurnNo,
 		run.CurrentContextVersion, run.CurrentStateVersion, run.StartedAt, run.Deadline,
 		run.TerminatedAt, nullableTermination(run.Termination), errPayload, run.MaxGenerationCalls,
 		run.ImageModelID, run.ReviewModelID,
+		nullableString((*string)(run.Goal)), run.PausedAt, nullableString((*string)(run.PauseReason)),
 	); err != nil {
 		return mapError("agent_runs.Create", err, run.ID, run.NodeRunID)
 	}
@@ -117,7 +121,8 @@ func (r *agentRunRepository) Terminate(ctx context.Context, agentRunID string, t
 // ListExpired returns the Agent Runs whose deadline has passed and that nothing has
 // terminated yet -- the persisted Agent timeout work. `termination IS NULL` is the
 // same predicate Terminate conditions on, so an Agent Run another path already closed is
-// never rediscovered as work. The limit bounds the scan batch.
+// never rediscovered as work. A paused Agent Run is not listed: its deadline is not
+// running and moves later when it resumes. The limit bounds the scan batch.
 func (r *agentRunRepository) ListExpired(ctx context.Context, before time.Time, limit int) ([]domain.AgentRun, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("store/postgres agent_runs.ListExpired: limit must be positive, got %d", limit)
@@ -125,7 +130,7 @@ func (r *agentRunRepository) ListExpired(ctx context.Context, before time.Time, 
 
 	const query = `SELECT ` + agentRunColumns + `
 		  FROM agent_runs
-		 WHERE termination IS NULL AND deadline <= $1
+		 WHERE termination IS NULL AND paused_at IS NULL AND deadline <= $1
 		 ORDER BY id ASC
 		 LIMIT $2`
 
@@ -138,6 +143,75 @@ func (r *agentRunRepository) ListExpired(ctx context.Context, before time.Time, 
 		return nil, mapError("agent_runs.ListExpired", err)
 	}
 	return runs, nil
+}
+
+// Pause stops the clock. `paused_at IS NULL` makes an overlapping pause fail: the caller
+// decides when the Agent waits, and two waits at once are its bug.
+func (r *agentRunRepository) Pause(ctx context.Context, agentRunID string, reason domain.AgentPauseReason, now time.Time) error {
+	if !reason.IsValid() {
+		return fmt.Errorf("store/postgres agent_runs.Pause: agent_run=%s: unknown pause reason %q", agentRunID, reason)
+	}
+	const update = `
+		UPDATE agent_runs
+		   SET paused_at = $2, pause_reason = $3
+		 WHERE id = $1 AND paused_at IS NULL AND termination IS NULL`
+	affected, err := affectedRows(ctx, r.conn, "agent_runs.Pause", update, agentRunID, now, string(reason))
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_runs.Pause: agent_run=%s is already paused or terminated: %w", agentRunID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_runs.Pause", agentRunID, affected)
+	}
+	return nil
+}
+
+// Resume restarts the clock. The deadline moves later by exactly the paused duration, so
+// the Agent keeps the execution time it had when it paused; a clock that did not advance
+// (or went backwards) leaves the deadline where it was. The UPDATE reads paused_at before
+// clearing it, so the shift and the clearing commit as one statement.
+func (r *agentRunRepository) Resume(ctx context.Context, agentRunID string, now time.Time) (time.Time, error) {
+	const update = `
+		UPDATE agent_runs
+		   SET deadline     = CASE WHEN $2::timestamptz > paused_at THEN deadline + ($2::timestamptz - paused_at) ELSE deadline END,
+		       paused_at    = NULL,
+		       pause_reason = NULL
+		 WHERE id = $1 AND paused_at IS NOT NULL
+		 RETURNING deadline`
+	var deadline time.Time
+	err := r.conn.QueryRow(ctx, update, agentRunID, now).Scan(&deadline)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, fmt.Errorf("store/postgres agent_runs.Resume: agent_run=%s is not paused: %w", agentRunID, domain.ErrStaleClaim)
+		}
+		return time.Time{}, mapError("agent_runs.Resume", err, agentRunID)
+	}
+	return deadline, nil
+}
+
+// SetPauseReason relabels a pause without restarting it; paused_at keeps the original
+// time so the whole wait is credited back on resume.
+func (r *agentRunRepository) SetPauseReason(ctx context.Context, agentRunID string, reason domain.AgentPauseReason) error {
+	if !reason.IsValid() {
+		return fmt.Errorf("store/postgres agent_runs.SetPauseReason: agent_run=%s: unknown pause reason %q", agentRunID, reason)
+	}
+	const update = `
+		UPDATE agent_runs
+		   SET pause_reason = $2
+		 WHERE id = $1 AND paused_at IS NOT NULL`
+	affected, err := affectedRows(ctx, r.conn, "agent_runs.SetPauseReason", update, agentRunID, string(reason))
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_runs.SetPauseReason: agent_run=%s is not paused: %w", agentRunID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_runs.SetPauseReason", agentRunID, affected)
+	}
+	return nil
 }
 
 func (r *agentRunRepository) queryOne(ctx context.Context, op, query string, arg any) (domain.AgentRun, error) {
@@ -165,6 +239,8 @@ func scanAgentRuns(rows pgx.Rows) ([]domain.AgentRun, error) {
 			allowedTools []byte
 			termination  *string
 			errPayload   []byte
+			goal         *string
+			pauseReason  *string
 		)
 		if err := rows.Scan(
 			&run.ID, &run.NodeRunID, &run.Instructions, &run.ModelID, &run.ModelConfig, &allowedTools,
@@ -172,8 +248,17 @@ func scanAgentRuns(rows pgx.Rows) ([]domain.AgentRun, error) {
 			&run.CurrentContextVersion, &run.CurrentStateVersion, &run.StartedAt, &run.Deadline,
 			&run.TerminatedAt, &termination, &errPayload, &run.MaxGenerationCalls,
 			&run.ImageModelID, &run.ReviewModelID,
+			&goal, &run.PausedAt, &pauseReason,
 		); err != nil {
 			return nil, err
+		}
+		if goal != nil {
+			value := domain.AgentGoal(*goal)
+			run.Goal = &value
+		}
+		if pauseReason != nil {
+			value := domain.AgentPauseReason(*pauseReason)
+			run.PauseReason = &value
 		}
 
 		if err := json.Unmarshal(allowedTools, &run.AllowedTools); err != nil {
@@ -191,6 +276,14 @@ func scanAgentRuns(rows pgx.Rows) ([]domain.AgentRun, error) {
 		out = append(out, run)
 	}
 	return out, rows.Err()
+}
+
+// nullableString maps an absent optional text column to SQL NULL.
+func nullableString(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 // nullableTermination maps an absent termination to SQL NULL, which is also the predicate

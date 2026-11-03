@@ -146,3 +146,41 @@ func frozenReviewModel(agentRun domain.AgentRun) string {
 	}
 	return *agentRun.ReviewModelID
 }
+
+// agentAuthorizationConfigErrors reports the configuration a production-risk Tool needs
+// on its Agent node: a goal pointer, because the authorization decision of such a Tool
+// reads the frozen goal and a node without one could only ever be refused, and an approval
+// wait bound, because a call a person must approve needs a deadline and the Runtime never
+// substitutes one. Nodes whose allowlist holds no such Tool are unaffected. Unregistered
+// Tools are reported by the caller's existence checks and skipped here.
+func agentAuthorizationConfigErrors(tools *registry.ToolRegistry, nodeID string, cfg runtime.AgentNodeConfig) []runtime.ValidationError {
+	productionTool := ""
+	for _, toolName := range cfg.AllowedTools {
+		if reg, ok := tools.Get(toolName); ok && reg.Metadata.EffectiveRisk() == domain.ToolRiskProduction {
+			productionTool = toolName
+			break
+		}
+	}
+	if productionTool == "" {
+		return nil
+	}
+	var errs []runtime.ValidationError
+	pathPrefix := "nodes[" + nodeID + "].config."
+	if cfg.GoalPointer == "" {
+		errs = append(errs, runtime.ValidationError{
+			Code:    runtime.CodeSemanticValidationFailed,
+			NodeID:  nodeID,
+			Path:    pathPrefix + "goalPointer",
+			Message: fmt.Sprintf("tool %q changes a production system, so goalPointer is required", productionTool),
+		})
+	}
+	if cfg.ApprovalTimeoutMs == nil {
+		errs = append(errs, runtime.ValidationError{
+			Code:    runtime.CodeSemanticValidationFailed,
+			NodeID:  nodeID,
+			Path:    pathPrefix + "approvalTimeoutMs",
+			Message: fmt.Sprintf("tool %q needs a human approval, so approvalTimeoutMs is required", productionTool),
+		})
+	}
+	return errs
+}

@@ -53,6 +53,7 @@ type Tx interface {
 	ProviderSlots() ProviderSlotRepository
 	AgentWorkspaces() AgentWorkspaceRepository
 	WorkspacePatches() WorkspacePatchRepository
+	Approvals() ApprovalRepository
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
@@ -432,12 +433,31 @@ type AgentRunRepository interface {
 	// UPDATE affected one row recorded why it stopped.
 	Terminate(ctx context.Context, agentRunID string, termination domain.AgentTermination, now time.Time, execErr *domain.ExecutionError) (bool, error)
 
-	// ListExpired returns Agent Runs that have not terminated and whose frozen deadline
-	// is at or before `before`, so the Reconciler can rediscover the Agent timeout work
-	// an in-process timer never performed (an Agent deadline that has passed enters the
-	// timeout use case). Terminated Agent Runs are excluded: their outcome is already
-	// committed. The limit bounds the scan batch.
+	// ListExpired returns Agent Runs that have not terminated, are not paused and whose
+	// deadline is at or before `before`, so the Reconciler can rediscover the Agent
+	// timeout work an in-process timer never performed (an Agent deadline that has passed
+	// enters the timeout use case). Terminated Agent Runs are excluded: their outcome is
+	// already committed. Paused ones are excluded because their deadline is not running.
+	// The limit bounds the scan batch.
 	ListExpired(ctx context.Context, before time.Time, limit int) ([]domain.AgentRun, error)
+
+	// Pause conditionally stops the Agent Run's clock: it writes paused_at and the reason
+	// on a row that is not paused. A row already paused affects nothing and returns
+	// domain.ErrStaleClaim, because two overlapping pauses are a programming error of the
+	// caller, never a race the database should settle.
+	Pause(ctx context.Context, agentRunID string, reason domain.AgentPauseReason, now time.Time) error
+
+	// Resume conditionally restarts the clock of a paused Agent Run: the deadline moves
+	// later by the time spent paused (now - paused_at), both pause columns are cleared,
+	// and the moved deadline is returned. A paused duration that is not positive leaves
+	// the deadline unchanged but still clears the pause. A row that is not paused returns
+	// domain.ErrStaleClaim.
+	Resume(ctx context.Context, agentRunID string, now time.Time) (time.Time, error)
+
+	// SetPauseReason conditionally changes why a paused Agent Run is paused without
+	// touching paused_at, so the paused duration keeps accumulating from the original
+	// pause. A row that is not paused returns domain.ErrStaleClaim.
+	SetPauseReason(ctx context.Context, agentRunID string, reason domain.AgentPauseReason) error
 }
 
 // AgentRunPointers is one Agent Run's recovery position: the Turn number created so far
@@ -548,8 +568,48 @@ type AgentActionRepository interface {
 	// WAITING_CALLBACK. Only the Agent timeout transaction uses it: the
 	// deadline ends the current Action in whichever of those states it is, including the
 	// READY one no executor ever claimed. It reports false when the row had already
-	// reached a terminal status, which is not an error.
+	// reached a terminal status, which is not an error. An Action waiting on a person is
+	// not touched: its Agent Run is paused and its clock is not running.
 	MarkTimedOut(ctx context.Context, actionID string, now time.Time, execErr domain.ExecutionError) (bool, error)
+
+	// SetAuthorization records the authorization decision the claim made for a RUNNING
+	// Action, with the reason of a DENY. It returns domain.ErrStaleClaim when the row is
+	// not RUNNING.
+	SetAuthorization(ctx context.Context, actionID string, decision domain.AuthorizationDecision, reason *string) error
+
+	// MarkWaitingApproval conditionally moves a RUNNING Action to WAITING_APPROVAL,
+	// stamps waiting_at and records the ASK decision, in the claim transaction that
+	// requested the approval. It returns domain.ErrStaleClaim when the row is not RUNNING.
+	MarkWaitingApproval(ctx context.Context, actionID string, now time.Time) error
+
+	// ResumeApproved conditionally moves a WAITING_APPROVAL Action back to RUNNING, in
+	// the transaction that recorded its approval. It returns domain.ErrStaleClaim when
+	// the row is not WAITING_APPROVAL.
+	ResumeApproved(ctx context.Context, actionID string, now time.Time) error
+}
+
+// ApprovalRepository persists human approval requests and implements the single
+// conditional decision that settles each one.
+type ApprovalRepository interface {
+	// Create inserts the PENDING approval in the transaction that suspended its Action.
+	// UNIQUE (action_id) makes a second request for the same Action lose in the database.
+	Create(ctx context.Context, approval domain.Approval) error
+	Get(ctx context.Context, approvalID string) (domain.Approval, error)
+	GetByActionID(ctx context.Context, actionID string) (domain.Approval, error)
+
+	// ListByStatus returns approvals in the given status, oldest request first, bounded by
+	// limit.
+	ListByStatus(ctx context.Context, status domain.ApprovalStatus, limit int) ([]domain.Approval, error)
+
+	// ListExpiredPending returns PENDING approvals whose deadline is at or before now, so
+	// the Reconciler can rediscover the expiry work. It claims nothing.
+	ListExpiredPending(ctx context.Context, now time.Time, limit int) ([]domain.Approval, error)
+
+	// Decide conditionally settles a PENDING approval with a terminal status, decided_at,
+	// the deciding identity (nil for an expiry) and the reason. The `status = 'PENDING'`
+	// predicate decides the single winner between approve, reject and expiry; a false
+	// result means another decision already committed and nothing was written.
+	Decide(ctx context.Context, approvalID string, status domain.ApprovalStatus, now time.Time, decidedBy, reason *string) (bool, error)
 }
 
 // AgentTurnManifestRepository persists one Context Manifest per Turn. It has no update

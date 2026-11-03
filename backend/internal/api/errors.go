@@ -29,6 +29,9 @@ const (
 	codeMethodNotAllowed          = "METHOD_NOT_ALLOWED"
 	codeInvalidCallbackCredential = "INVALID_CALLBACK_CREDENTIAL"
 	codeInvalidCallbackPayload    = "INVALID_CALLBACK_PAYLOAD"
+	codeInvalidOperatorCredential = "INVALID_OPERATOR_CREDENTIAL"
+	codeApprovalNotFound          = "APPROVAL_NOT_FOUND"
+	codeApprovalConflict          = "APPROVAL_CONFLICT"
 )
 
 // status422Codes names the runtime.ValidationError codes the interface contract groups
@@ -144,6 +147,20 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error, notFoundC
 	if errors.As(err, &keyMismatchErr) {
 		writeErrorEnvelope(w, http.StatusConflict, codeIdempotencyKeyMismatch,
 			"the Idempotency-Key was already used for a different submission to this workflow", nil)
+		return
+	}
+
+	var approvalConflict *service.ApprovalConflictError
+	if errors.As(err, &approvalConflict) {
+		writeErrorEnvelope(w, http.StatusConflict, codeApprovalConflict,
+			"the approval was already decided differently or can no longer be acted on",
+			map[string]any{"status": approvalConflict.Status})
+		return
+	}
+
+	var approvalRequest *service.ApprovalRequestError
+	if errors.As(err, &approvalRequest) {
+		writeErrorEnvelope(w, http.StatusBadRequest, codeValidationFailed, approvalRequest.Reason, nil)
 		return
 	}
 

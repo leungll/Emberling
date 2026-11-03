@@ -180,6 +180,19 @@ func (s *ExecutionService) startAgentRun(
 	if err != nil {
 		return fmt.Errorf("execution: encode agent context version 0 for node %q: %w", nr.NodeID, err)
 	}
+	// The goal is read once from the input the node received and frozen with the Agent
+	// Run; a node that configures no goal pointer freezes none. An input the pointer does
+	// not resolve in is a configuration failure of this Run, decided before any Agent Run
+	// exists, never a default goal.
+	var goal *domain.AgentGoal
+	if cfg.GoalPointer != "" {
+		resolved, err := runtime.ResolveAgentGoal(cfg, ports[inputPort])
+		if err != nil {
+			return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil,
+				domain.ExecutionError{Code: "AGENT_CONFIG_INVALID", Message: err.Error()}, now)
+		}
+		goal = &resolved
+	}
 
 	agentRunID := s.deps.IDs.NewID(domain.IDPrefixAgentRun)
 	deadline := now.Add(time.Duration(cfg.TimeoutMs) * time.Millisecond)
@@ -199,6 +212,7 @@ func (s *ExecutionService) startAgentRun(
 		MaxGenerationCalls: cfg.MaxGenerationCalls,
 		ImageModelID:       imageModelID,
 		ReviewModelID:      reviewModelID,
+		Goal:               goal,
 		// The Agent Run starts pointing at the facts this same transaction creates: Turn
 		// 1, Context Version 0 and State Version 0.
 		CurrentTurnNo:         1,

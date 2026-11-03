@@ -79,6 +79,9 @@ type Deps struct {
 	// CapacityHooks lets a test synchronize admission at exact points inside the claim
 	// transaction. The zero value installs no hook.
 	CapacityHooks CapacityHooks
+	// ApprovalHooks lets a test synchronize the approval decision paths. The zero value
+	// installs no hook.
+	ApprovalHooks ApprovalHooks
 	// RunnerID identifies this process instance. It is generated once per process start
 	// and written onto every Tool Attempt this process creates, so a later process can
 	// tell that nobody is executing a STARTED Attempt any more. The process entry point

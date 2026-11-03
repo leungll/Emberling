@@ -59,6 +59,18 @@ func NewRouter(deps Deps) http.Handler {
 			// content-addressed id alone, so one Run cannot read another Run's images.
 			r.Get("/{runId}/artifacts/{artifactId}/content", deps.getArtifactContent)
 		})
+
+		// The approval routes exist only when an operator credential is configured: a
+		// deployment without one has no way to decide an approval, so the routes are not
+		// registered rather than registered and always refusing.
+		if deps.Operator.Token != "" {
+			r.Route("/approvals", func(r chi.Router) {
+				r.Use(deps.requireOperator)
+				r.Get("/", deps.listApprovals)
+				r.Get("/{approvalId}", deps.getApproval)
+				r.Post("/{approvalId}/decision", deps.decideApproval)
+			})
+		}
 	})
 
 	return r

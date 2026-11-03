@@ -74,6 +74,11 @@ type Deps struct {
 	// the content.
 	AssetMaxUploadBytes int64
 
+	// Operator authenticates the approval routes. With an empty Token those routes are not
+	// registered at all; the Token is compared in constant time and never logged, echoed or
+	// written anywhere. Name is the fixed identity recorded as the deciding person.
+	Operator OperatorConfig
+
 	// TraceMaxFieldBytes bounds each Tool-call member the Agent Trace projects
 	// (config.Projection.MaxFieldBytes in cmd/emberling). A member over it is withheld and
 	// named, never cut; the persisted value is untouched.

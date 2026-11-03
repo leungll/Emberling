@@ -198,13 +198,20 @@ const (
 	AgentActionReady           AgentActionStatus = "READY"
 	AgentActionRunning         AgentActionStatus = "RUNNING"
 	AgentActionWaitingCallback AgentActionStatus = "WAITING_CALLBACK"
-	AgentActionSucceeded       AgentActionStatus = "SUCCEEDED"
-	AgentActionFailed          AgentActionStatus = "FAILED"
+	// AgentActionWaitingApproval is an Action suspended before its Tool runs until an
+	// authenticated person approves or rejects it; no Attempt exists yet.
+	AgentActionWaitingApproval AgentActionStatus = "WAITING_APPROVAL"
+	// AgentActionWaitingHuman is an Action whose Tool reported and that now waits for a
+	// human fact before it resolves.
+	AgentActionWaitingHuman AgentActionStatus = "WAITING_HUMAN"
+	AgentActionSucceeded    AgentActionStatus = "SUCCEEDED"
+	AgentActionFailed       AgentActionStatus = "FAILED"
 )
 
 func (s AgentActionStatus) IsValid() bool {
 	switch s {
-	case AgentActionReady, AgentActionRunning, AgentActionWaitingCallback, AgentActionSucceeded, AgentActionFailed:
+	case AgentActionReady, AgentActionRunning, AgentActionWaitingCallback, AgentActionWaitingApproval,
+		AgentActionWaitingHuman, AgentActionSucceeded, AgentActionFailed:
 		return true
 	default:
 		return false
@@ -220,9 +227,15 @@ var agentActionTransitions = map[AgentActionStatus][]AgentActionStatus{
 	// an expired Agent deadline ends the current
 	// Action even when no executor ever claimed it. Every other failure path reaches an
 	// Action it holds the execution right on, so it starts from RUNNING.
-	AgentActionReady:           {AgentActionRunning, AgentActionFailed},
-	AgentActionRunning:         {AgentActionWaitingCallback, AgentActionSucceeded, AgentActionFailed},
-	AgentActionWaitingCallback: {AgentActionSucceeded, AgentActionFailed},
+	AgentActionReady:   {AgentActionRunning, AgentActionFailed},
+	AgentActionRunning: {AgentActionWaitingCallback, AgentActionWaitingApproval, AgentActionWaitingHuman, AgentActionSucceeded, AgentActionFailed},
+	// A waiting asynchronous call resolves, or hands over to a human wait; it never goes
+	// back to RUNNING to re-decide.
+	AgentActionWaitingCallback: {AgentActionWaitingHuman, AgentActionSucceeded, AgentActionFailed},
+	// An approved Action returns to RUNNING: the same committed Decision is executed once,
+	// with the arguments the approval covered. A rejected or expired one fails.
+	AgentActionWaitingApproval: {AgentActionRunning, AgentActionFailed},
+	AgentActionWaitingHuman:    {AgentActionSucceeded, AgentActionFailed},
 	AgentActionSucceeded:       nil,
 	AgentActionFailed:          nil,
 }
@@ -270,12 +283,15 @@ const (
 	TerminationModelError    AgentTermination = "MODEL_ERROR"
 	TerminationToolError     AgentTermination = "TOOL_ERROR"
 	TerminationInvalidAction AgentTermination = "INVALID_ACTION"
+	// TerminationHumanStopped is written by a human stop of the Agent Run; no path writes
+	// it yet, the vocabulary and the database constraint admit it.
+	TerminationHumanStopped AgentTermination = "HUMAN_STOPPED"
 )
 
 func (t AgentTermination) IsValid() bool {
 	switch t {
 	case TerminationFinalResponse, TerminationMaxTurns, TerminationTimeout,
-		TerminationModelError, TerminationToolError, TerminationInvalidAction:
+		TerminationModelError, TerminationToolError, TerminationInvalidAction, TerminationHumanStopped:
 		return true
 	default:
 		return false

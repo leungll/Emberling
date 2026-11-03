@@ -163,6 +163,10 @@ type testEnvOptions struct {
 	// CallbackBaseURL overrides the origin minted into registry.CallbackContext.URL.
 	CallbackBaseURL string
 
+	// OperatorToken, when set, serves the approval routes behind this operator credential;
+	// left empty, the routes are not registered, as in a deployment without the setting.
+	OperatorToken string
+
 	// AssetMaxUploadBytes overrides api.Deps.AssetMaxUploadBytes and the storage layer's
 	// own streaming cap when > 0; the default (defaultTestAssetMaxUploadBytes) keeps a
 	// 413 PAYLOAD_TOO_LARGE reachable without building a 16 MiB request body.
@@ -514,6 +518,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		CallbackMaxPayloadBytes: callbackMaxPayloadBytes,
 		AssetMaxUploadBytes:     assetMaxUploadBytes,
 		TraceMaxFieldBytes:      opts.TraceMaxFieldBytes,
+		Operator:                api.OperatorConfig{Token: opts.OperatorToken, Name: testOperatorName},
 	})
 
 	server := httptest.NewServer(router)

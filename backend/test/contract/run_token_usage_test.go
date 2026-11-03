@@ -27,6 +27,23 @@ func withoutTokenUsageFieldNames(raw string) string {
 	return raw
 }
 
+// authorizationDecisionFieldNames are the JSON keys of an Action's authorization decision
+// (ALLOW, ASK or DENY, and the reason of a DENY). A secrecy scan that looks for the
+// substring "authorization", the name of the credential header, strips exactly these keys
+// first, so the decision stays projected while a header or credential value anywhere else
+// in the body still fails the scan.
+var authorizationDecisionFieldNames = []string{`"authorization":`, `"authorizationReason":`}
+
+// withoutProjectedFieldNames strips every field name the Trace projection is allowed to
+// carry although it contains a word the secrecy scans forbid.
+func withoutProjectedFieldNames(raw string) string {
+	raw = withoutTokenUsageFieldNames(raw)
+	for _, name := range authorizationDecisionFieldNames {
+		raw = strings.ReplaceAll(raw, name, `"":`)
+	}
+	return raw
+}
+
 type tokenUsageBody struct {
 	InputTokens  int `json:"inputTokens"`
 	OutputTokens int `json:"outputTokens"`

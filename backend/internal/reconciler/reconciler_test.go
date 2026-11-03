@@ -93,6 +93,7 @@ type fakeTx struct {
 	agentActions *fakeAgentActionRepo
 	agentRuns    *fakeAgentRunRepo
 	toolAttempts *fakeToolAttemptRepo
+	approvals    *fakeApprovalRepo
 }
 
 func (t *fakeTx) ToolAttempts() store.ToolAttemptRepository { return t.toolAttempts }
@@ -104,6 +105,18 @@ func (t *fakeTx) AgentTurns() store.AgentTurnRepository                 { return
 func (t *fakeTx) AgentTurnManifests() store.AgentTurnManifestRepository { return nil }
 func (t *fakeTx) AgentActions() store.AgentActionRepository             { return t.agentActions }
 func (t *fakeTx) AgentRuns() store.AgentRunRepository                   { return t.agentRuns }
+func (t *fakeTx) Approvals() store.ApprovalRepository                   { return t.approvals }
+
+// fakeApprovalRepo serves the approval expiry scan's lister. Any other call panics on the
+// embedded nil interface, so a scan that decided an approval itself would be caught.
+type fakeApprovalRepo struct {
+	store.ApprovalRepository
+	expired []domain.Approval
+}
+
+func (r *fakeApprovalRepo) ListExpiredPending(context.Context, time.Time, int) ([]domain.Approval, error) {
+	return r.expired, nil
+}
 
 // The three Agent scans of RunOnce need a lister each. Only the list methods are
 // implemented: the Reconciler is not allowed to change Agent state itself, so any other
@@ -185,6 +198,7 @@ type fakeExecutor struct {
 	agentFinalCalls   []agentCall
 	agentTimeoutCalls []string
 	orphanCalls       []string
+	expireCalls       []string
 }
 
 // agentCall records which Agent work item the Reconciler handed to which use case, and
@@ -224,6 +238,11 @@ func (e *fakeExecutor) TimeoutAgentRun(_ context.Context, agentRunID string) err
 
 func (e *fakeExecutor) HandleOrphanToolAttempt(_ context.Context, attemptID string) error {
 	e.orphanCalls = append(e.orphanCalls, attemptID)
+	return nil
+}
+
+func (e *fakeExecutor) ExpireApproval(_ context.Context, approvalID string) error {
+	e.expireCalls = append(e.expireCalls, approvalID)
 	return nil
 }
 
@@ -271,6 +290,7 @@ func emptyFakeTx() *fakeTx {
 		agentTurns:   &fakeAgentTurnRepo{},
 		agentActions: &fakeAgentActionRepo{},
 		agentRuns:    &fakeAgentRunRepo{},
+		approvals:    &fakeApprovalRepo{},
 		toolAttempts: &fakeToolAttemptRepo{},
 	}
 }
@@ -614,6 +634,31 @@ func TestReconciler_OrphanScan_HandsEachOrphanToUseCase(t *testing.T) {
 	}
 	if len(exec.agentTimeoutCalls) != 1 || len(exec.agentTurnCalls) != 1 {
 		t.Errorf("timeout calls %v, turn calls %v, want one each", exec.agentTimeoutCalls, exec.agentTurnCalls)
+	}
+}
+
+// TestReconciler_ExpiredApprovalScan_HandsEachApprovalToUseCase proves the approval expiry
+// scan only discovers work: every PENDING approval the lister returns is handed to the
+// expiry use case, before the Agent deadline scan, and the Reconciler decides nothing itself.
+func TestReconciler_ExpiredApprovalScan_HandsEachApprovalToUseCase(t *testing.T) {
+	exec := &fakeExecutor{}
+	tx := emptyFakeTx()
+	tx.approvals.expired = []domain.Approval{{ID: "approval_1"}, {ID: "approval_2"}}
+	tx.agentRuns.expired = []domain.AgentRun{{ID: "ar_expired"}}
+
+	var logBuf bytes.Buffer
+	report, err := newTestReconciler(t, exec, tx, &logBuf).RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(exec.expireCalls) != 2 || exec.expireCalls[0] != "approval_1" || exec.expireCalls[1] != "approval_2" {
+		t.Errorf("expiry use case calls = %v, want [approval_1 approval_2]", exec.expireCalls)
+	}
+	if report.ExpiredApprovalsFound != 2 || report.ApprovalsExpired != 2 {
+		t.Errorf("report = %+v, want 2 found and 2 expired", report)
+	}
+	if len(exec.agentTimeoutCalls) != 1 {
+		t.Errorf("timeout calls %v, want the expired agent run still handled", exec.agentTimeoutCalls)
 	}
 }
 
