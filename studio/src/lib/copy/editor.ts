@@ -427,8 +427,10 @@ export const editor = {
     imageModel: 'Image model',
     imageModelHint: (tools: string) => `Used when the agent calls ${tools}.`,
     reviewModel: 'Review model',
-    reviewModelHint: (tools: string) =>
-      `Reviews images when the agent calls ${tools}. Without one, reviews use the mock policy.`,
+    reviewModelHint: (tools: string, required: boolean) =>
+      required
+        ? `Used when the agent calls ${tools}. Required, and it must differ from the agent's model. Saving checks that it supports what each tool needs.`
+        : `Used when the agent calls ${tools}. Saving checks that it supports what each tool needs. Without one, reviews use the mock policy.`,
     reviewModelNone: 'Mock review policy',
     chooseModel: 'Choose a model',
     searchModels: 'Search models',
