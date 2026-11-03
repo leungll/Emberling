@@ -48,6 +48,9 @@ type ledgerCase struct {
 	// sandbox runner, and runner holds the runner's record lines, without seq.
 	verification string
 	runner       []map[string]any
+	// verificationSource is the completionSource of the verify_patch Attempt's completion
+	// Event; empty means CALLBACK.
+	verificationSource string
 }
 
 const ledgerAction = "act_ledger"
@@ -113,9 +116,13 @@ func (c ledgerCase) trace() map[string]any {
 func (c ledgerCase) events() []map[string]any {
 	var out []map[string]any
 	if c.verification != "" {
+		source := c.verificationSource
+		if source == "" {
+			source = "CALLBACK"
+		}
 		out = append(out, map[string]any{
 			"seq": 1, "type": "AGENT_ACTION_COMPLETED",
-			"payload": map[string]any{"completionSource": "CALLBACK", "toolAttemptId": "ta_verify"},
+			"payload": map[string]any{"completionSource": source, "toolAttemptId": "ta_verify"},
 		})
 	}
 	for _, op := range c.operations {

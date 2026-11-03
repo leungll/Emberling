@@ -44,10 +44,17 @@
 #   restart         the verify story with the runner's callback held at its barrier while
 #                   the first verification is DISPATCHED and the Agent waits; the Backend is
 #                   killed with SIGKILL and started again, then the callback is released.
-#                   Expects the original Attempt to complete once, the runner to have
-#                   started that verification once and received exactly one more, the
+#                   Expects the original Attempt to complete exactly once, the runner to
+#                   have started that verification once and received exactly one more, the
 #                   committed Decisions to grow by exactly the Turns after the held one
 #                   (no Decision asked again) and the Run COMPLETED, READY_FOR_APPROVAL.
+#                   The callback barrier holds only the delivery: the runner's status route
+#                   already answers the finished verification, so the original Attempt is
+#                   completed by whichever reaches the one resume path first, the released
+#                   callback or the restarted Backend's Provider poll. Both are accepted,
+#                   but the source is checked: after a poll completion the released callback
+#                   must have been delivered and answered as a duplicate that wrote no
+#                   Event. The two verifications together complete exactly twice, once each.
 #   incomplete-final
 #                   the Agent fails the verification of the unadapted upgrade, adapts the
 #                   code and declares completion at once, without verifying the adapted
@@ -443,7 +450,6 @@ result=$(jq -r '.nodeRuns[] | select(.nodeId == "node_result") | .output.text //
 report=$(jq -c '.agentReport // "{}" | if type == "string" then (fromjson? // {}) else . end' <<<"$result" 2>/dev/null || echo '{}')
 agent_node_error=$(jq -r '.nodeRuns[] | select(.nodeId == "node_agent") | .error.code // "none"' <<<"$snapshot")
 decisions=$(jq '[.[] | select(.type == "AGENT_DECISION_COMMITTED")] | length' <<<"$events")
-callback_completions=$(jq '[.[] | select(.type == "AGENT_ACTION_COMPLETED" and .payload.completionSource == "CALLBACK")] | length' <<<"$events")
 runner_arrivals=$(jq -c '[.[] | select(.event == "arrived" and .kind == "verification") | .patchDigest]' <<<"$runner")
 runner_arrival_count=$(jq 'length' <<<"$runner_arrivals")
 # The release facts: every release Turn with its approval, Attempts, operations and
@@ -573,6 +579,38 @@ else
   restart)
     held_after=$(jq -c --arg id "$held_attempt_before" '[.[] | select(.id == $id)] | first // {}' <<<"$verifications")
     held_started=$(jq --arg id "$held_verification" '[.[] | select(.event == "started" and .verificationId == $id)] | length' <<<"$runner")
+    # Every completion or failure Event of a verify_patch Attempt, with its source.
+    verify_completions=$(jq -c --argjson v "$verifications" '($v | map(.id)) as $ids | [.[]
+        | select((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED") and (.payload.toolAttemptId as $id | $ids | index($id)))
+        | {seq, attempt: .payload.toolAttemptId, source: (.payload.completionSource // .payload.failureSource)}]' <<<"$events")
+    held_completions=$(jq -c --arg id "$held_attempt_before" '[.[] | select(.attempt == $id)]' <<<"$verify_completions")
+    held_source=$(jq -r 'if length == 1 then .[0].source else "none" end' <<<"$held_completions")
+    # Every Event a callback for the held Attempt could have written.
+    held_events_filter='[.[] | select((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED" or .type == "NODE_CALLBACK_RECEIVED")
+        and .payload.toolAttemptId == $id) | {seq, type, source: (.payload.completionSource // .payload.failureSource)}]'
+    held_attempt_events=$(jq -c --arg id "$held_attempt_before" "$held_events_filter" <<<"$events")
+    held_deliveries='[]'
+    if [[ "$held_source" == PROVIDER_POLL ]]; then
+      # The poll won, so the released callback reaches the Backend after the completion;
+      # wait, bounded, for the runner to record that delivery before judging it.
+      held_delivery_deadline=$((SECONDS + HELD_DEADLINE_S))
+      while :; do
+        held_deliveries=$(record_after "$runner_after" "$RUNNER_URL" |
+          jq -sc --arg id "$held_verification" '[.[] | select(.event == "callback" and .testId == $id) | {attempt, httpStatus}]')
+        [[ "$held_deliveries" != '[]' ]] && break
+        ((SECONDS >= held_delivery_deadline)) && break
+        sleep 0.5
+      done
+      # Read the Events again: a callback answered after the first read must still have
+      # written nothing about the held Attempt.
+      held_attempt_events=$(run_events "$run_id" | jq -c --arg id "$held_attempt_before" "$held_events_filter")
+    fi
+    # After a poll completion, the released callback was delivered, answered 2xx and wrote
+    # no Event: the held Attempt's only completion Event is still the poll's.
+    held_callback_was_duplicate() {
+      jq -e 'any(.[]; .httpStatus >= 200 and .httpStatus < 300)' <<<"$held_deliveries" >/dev/null \
+        && jq -e 'length == 1 and .[0].type == "AGENT_ACTION_COMPLETED" and .[0].source == "PROVIDER_POLL"' <<<"$held_attempt_events" >/dev/null
+    }
     check run_completed "status=$run_status termination=$termination" test "$run_status" = COMPLETED
     check original_attempt_completed "before=$held_attempt_before after=$held_after" \
       jq -e '.status == "SUCCEEDED" and .actionStatus == "SUCCEEDED"' <<<"$held_after"
@@ -583,11 +621,20 @@ else
       test "$arrivals_before" -eq 1 -a "$runner_arrival_count" -eq 2
     check no_decision_asked_again "decisions before=$decisions_before after=$decisions" \
       test "$decisions_before" -eq 6 -a "$decisions" -eq 10
-    check callbacks_completed_twice "callback_completions=$callback_completions" test "$callback_completions" -eq 2
+    check original_completed_once_by_one_source "attempt=$held_attempt_before completions=$held_completions" \
+      jq -e 'length == 1 and (.[0].source == "CALLBACK" or .[0].source == "PROVIDER_POLL")' <<<"$held_completions"
+    if [[ "$held_source" == PROVIDER_POLL ]]; then
+      check released_callback_was_duplicate "verification=$held_verification deliveries=$held_deliveries attempt_events=$held_attempt_events" \
+        held_callback_was_duplicate
+    fi
+    check verifications_completed_twice "completions=$verify_completions" \
+      jq -e --argjson v "$verifications" 'length == 2 and (map(.attempt) | unique | length) == 2
+        and all(.[]; .source == "CALLBACK" or .source == "PROVIDER_POLL")
+        and (map(.attempt) | sort) == ($v | map(.id) | sort)' <<<"$verify_completions"
     check ready_for_approval "completion=$completion" ready_for_approval
     check one_change_request_for_latest "change_requests=$change_requests latest=$latest_digest" one_change_request_for_latest
     check report_names_latest "result=$result" report_names_latest
-    summary="attempt=$held_attempt_before verification=$held_verification decisions=$decisions_before/$decisions runner_verifications=$arrivals_before/$runner_arrival_count callback_completions=$callback_completions completion=$outcome status=$run_status"
+    summary="attempt=$held_attempt_before verification=$held_verification completed_by=$held_source decisions=$decisions_before/$decisions runner_verifications=$arrivals_before/$runner_arrival_count verify_completions=$(jq 'length' <<<"$verify_completions") completion=$outcome status=$run_status"
     ;;
   incomplete-final)
     missing=$(jq -c '[.missing[]?.code]' <<<"$completion")

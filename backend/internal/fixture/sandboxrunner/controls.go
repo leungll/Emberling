@@ -26,6 +26,10 @@ const (
 	eventCallback    = "callback"
 	eventLost        = "lost"
 	eventRedelivered = "redelivered"
+	// eventPolled marks one status query and the answer it got. The barrier never holds
+	// a poll: it only reads what the runner already knows, so a finished job's result is
+	// readable while its callback is held.
+	eventPolled = "polled"
 )
 
 // maxSummaryBytes bounds every caller-supplied string copied into the record.
@@ -102,6 +106,14 @@ type (
 		PatchDigest       string `json:"patchDigest"`
 		ResultDigest      string `json:"resultDigest,omitempty"`
 		Code              string `json:"code,omitempty"`
+	}
+	// polledDetail names the job a status query asked about, the HTTP status answered
+	// and, when the job was known, its status at that moment.
+	polledDetail struct {
+		TestID         string `json:"testId,omitempty"`
+		VerificationID string `json:"verificationId,omitempty"`
+		Status         int    `json:"status"`
+		TaskStatus     string `json:"taskStatus,omitempty"`
 	}
 	callbackArrival struct {
 		TestID  string `json:"testId"`
@@ -192,6 +204,16 @@ func (s *Server) rejectVerification(w http.ResponseWriter, arrival verificationA
 		s.recordVerificationResponse(arrival.VerificationID, status)
 	}
 	writeJSON(w, status, errorResponse{Error: message})
+}
+
+// recordTestPoll and recordVerificationPoll write one status query and its answer;
+// jobStatus is empty when the id was unknown.
+func (s *Server) recordTestPoll(testID string, httpStatus int, jobStatus string) {
+	s.appendLine(eventPolled, kindTest, polledDetail{TestID: truncateSummary(testID), Status: httpStatus, TaskStatus: jobStatus})
+}
+
+func (s *Server) recordVerificationPoll(verificationID string, httpStatus int, jobStatus string) {
+	s.appendLine(eventPolled, kindVerification, polledDetail{VerificationID: truncateSummary(verificationID), Status: httpStatus, TaskStatus: jobStatus})
 }
 
 func (s *Server) recordCallback(testID, status string, attempt, httpStatus int) {

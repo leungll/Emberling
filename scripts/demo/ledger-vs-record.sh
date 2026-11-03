@@ -42,8 +42,10 @@
 #   - accepted callback deliveries are at least the callback-received Events;
 #   - status queries the Provider answered with a finished task (`polled` with taskStatus
 #     SUCCEEDED or FAILED) are at least the completions whose source is PROVIDER_POLL,
-#     release Tool Attempts excepted. A poll that finds the task still RUNNING changes
-#     nothing and is only counted;
+#     release and sandbox runner Tool Attempts excepted; for each Tool Attempt bound to
+#     the sandbox runner, the runner's own `polled` lines answering its test or
+#     verification as finished are at least that Attempt's PROVIDER_POLL completions. A
+#     poll that finds the task still RUNNING changes nothing and is only counted;
 #   - every test and every verification the Runs bound to the sandbox runner arrived,
 #     started and completed exactly once there, and the runner's 2xx callback deliveries
 #     for it are at least the callback completions of its Tool Attempt. Further 2xx
@@ -223,13 +225,39 @@ polled=$(jq --slurpfile created <(printf '%s' "$created") '$created[0] as $creat
 poll_answers=$(jq 'length' <<<"$polled")
 poll_finished=$(jq '[.[] | select(.status == 200 and (.taskStatus == "SUCCEEDED" or .taskStatus == "FAILED"))] | length' <<<"$polled")
 poll_running=$(jq '[.[] | select(.status == 200 and .taskStatus == "RUNNING")] | length' <<<"$polled")
-poll_completions=$(jq --slurpfile release <(printf '%s' "$release_attempt_ids") '$release[0] as $release | [.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
+poll_completions=$(jq --slurpfile release <(printf '%s' "$release_attempt_ids") --slurpfile runner <(printf '%s' "$runner_attempt_ids") '$release[0] as $release | $runner[0] as $runner
+    | [.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
     and .payload.completionSource == "PROVIDER_POLL"
-    and (.payload.toolAttemptId as $id | $id == null or ($release | index($id) | not)))] | length' <<<"$events")
-if ((poll_finished >= poll_completions)); then
-  pass "poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions"
+    and (.payload.toolAttemptId as $id | $id == null or (($release | index($id) | not) and ($runner | index($id) | not))))] | length' <<<"$events")
+# The sandbox runner answers its own status queries: each of its tests and verifications
+# is judged by the runner's polled lines under its id, which carry the kind's id member.
+runner_record='[]'
+runner_poll_rows='[]'
+if [[ $(jq 'length' <<<"$runner_calls") -gt 0 ]]; then
+  runner_record=$(record_after 0 "$RUNNER_URL" | jq -s '.')
+  runner_poll_rows=$(jq --slurpfile record <(printf '%s' "$runner_record") --slurpfile events <(printf '%s' "$events") '$record[0] as $record | $events[0] as $events | [.[] | . as $c
+      | (if $c.toolName == "verify_patch" then "verification" else "test" end) as $kind
+      | (if $kind == "verification" then "verificationId" else "testId" end) as $idKey
+      | [$record[] | select(.event == "polled" and .kind == $kind and .[$idKey] == $c.testId)] as $polled | {
+      testId, attemptId, kind: $kind,
+      polled: ($polled | length),
+      finished: ([$polled[] | select(.status == 200 and (.taskStatus == "SUCCEEDED" or .taskStatus == "FAILED"))] | length),
+      running: ([$polled[] | select(.status == 200 and (.taskStatus == "RUNNING" or .taskStatus == "ACCEPTED"))] | length),
+      pollCompletions: ([$events[] | select((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED")
+          and ((.payload.completionSource // .payload.failureSource) == "PROVIDER_POLL")
+          and .payload.toolAttemptId == $c.attemptId)] | length)}]' <<<"$runner_calls")
+fi
+runner_polled=$(jq '[.[].polled] | add // 0' <<<"$runner_poll_rows")
+runner_finished=$(jq '[.[].finished] | add // 0' <<<"$runner_poll_rows")
+runner_running=$(jq '[.[].running] | add // 0' <<<"$runner_poll_rows")
+runner_poll_completions=$(jq '[.[].pollCompletions] | add // 0' <<<"$runner_poll_rows")
+runner_uncovered=$(jq -c '[.[] | select(.finished < .pollCompletions) | {testId, kind, finished, pollCompletions}]' <<<"$runner_poll_rows")
+poll_line="poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions runner_polled=$runner_polled runner_finished=$runner_finished runner_running=$runner_running runner_poll_completions=$runner_poll_completions"
+if ((poll_finished >= poll_completions)) && [[ "$runner_uncovered" == "[]" ]]; then
+  pass "$poll_line"
 else
-  fail "poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions"
+  fail "$poll_line"
+  [[ "$runner_uncovered" == "[]" ]] || note "runner jobs completed by poll without a finished poll answer: $runner_uncovered"
 fi
 jq -r '[.[] | select(.type == "NODE_COMPLETED")] | group_by(.payload.completionSource)
     | .[] | "\(length) NODE_COMPLETED event(s) with completionSource \(.[0].payload.completionSource)"' <<<"$events" |
@@ -239,7 +267,6 @@ jq -r '[.[] | select(.type == "NODE_COMPLETED")] | group_by(.payload.completionS
 # completions were delivered. The runner records a verification under its own kind and id
 # member; its callback lines carry the id in the shared testId member.
 if [[ $(jq 'length' <<<"$runner_calls") -gt 0 ]]; then
-  runner_record=$(record_after 0 "$RUNNER_URL" | jq -s '.')
   runner_rows=$(jq --slurpfile record <(printf '%s' "$runner_record") --slurpfile events <(printf '%s' "$events") '$record[0] as $record | $events[0] as $events | [.[] | . as $c
       | (if $c.toolName == "verify_patch" then "verification" else "test" end) as $kind
       | (if $kind == "verification" then "verificationId" else "testId" end) as $idKey | {

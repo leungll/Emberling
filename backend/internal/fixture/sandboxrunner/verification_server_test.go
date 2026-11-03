@@ -302,3 +302,105 @@ func TestVerificationResultDigest_IgnoresTheLog(t *testing.T) {
 		t.Fatal("the result digest ignores a verdict")
 	}
 }
+
+// pollLines returns the record's polled lines of kind, in record order.
+func pollLines(lines []map[string]any, kind string) []map[string]any {
+	var polled []map[string]any
+	for _, line := range lines {
+		if line["event"] == "polled" && line["kind"] == kind {
+			polled = append(polled, line)
+		}
+	}
+	return polled
+}
+
+// getStatus GETs path on the runner and returns the HTTP status and the decoded body.
+func (r *runner) getStatus(t *testing.T, path string) (int, map[string]any) {
+	t.Helper()
+	resp, err := http.Get(r.http.URL + path)
+	if err != nil {
+		t.Fatalf("get %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+	var decoded map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&decoded)
+	return resp.StatusCode, decoded
+}
+
+// The callback barrier holds only the delivery: a finished verification's status already
+// carries its result, so a poll made while the callback is held reads the outcome, and the
+// record lists that answer as a polled line.
+func TestVerification_PollWhileCallbackHeld_AnswersFinishedAndRecordsPoll(t *testing.T) {
+	rcv := newReceiver(t)
+	r := newVerificationRunner(t, true)
+	r.control(t, http.MethodPost, "/pause", `{"kinds":["callback"]}`)
+
+	id := dispatchVerification(t, r, rcv.url(), "")
+	if kind := <-r.server.controls.heldHook; kind != kindCallback {
+		t.Fatalf("held kind = %q, want %q", kind, kindCallback)
+	}
+	status, body := r.getStatus(t, verificationsPath+"/"+id)
+	if status != http.StatusOK || body["status"] != statusSucceeded {
+		t.Fatalf("poll while the callback is held = %d %v, want 200 SUCCEEDED", status, body)
+	}
+	select {
+	case d := <-rcv.got:
+		t.Fatalf("callback for %s delivered while held", d.Body.ExternalTaskID)
+	default:
+	}
+
+	polled := pollLines(r.recordLines(t), kindVerification)
+	if len(polled) != 1 {
+		t.Fatalf("record has %d verification polled lines, want 1: %v", len(polled), polled)
+	}
+	line := polled[0]
+	if line["verificationId"] != id || line["status"] != float64(http.StatusOK) || line["taskStatus"] != statusSucceeded {
+		t.Fatalf("polled line = %v, want verificationId %s, status 200, taskStatus SUCCEEDED", line, id)
+	}
+	if strings.Contains(r.recordRaw(t), testToken) {
+		t.Fatal("record holds the callback token")
+	}
+
+	r.control(t, http.MethodPost, "/release", "")
+	if got := rcv.next(t); got.Body.ExternalTaskID != id {
+		t.Fatalf("released callback for %q, want %q", got.Body.ExternalTaskID, id)
+	}
+}
+
+func TestVerification_PollUnknownID_RecordsNotFoundAnswer(t *testing.T) {
+	r := newVerificationRunner(t, true)
+	if status, _ := r.getStatus(t, verificationsPath+"/verify_0000"); status != http.StatusNotFound {
+		t.Fatalf("unknown verification answered %d, want 404", status)
+	}
+	polled := pollLines(r.recordLines(t), kindVerification)
+	if len(polled) != 1 || polled[0]["verificationId"] != "verify_0000" || polled[0]["status"] != float64(http.StatusNotFound) {
+		t.Fatalf("polled lines = %v, want one 404 answer for verify_0000", polled)
+	}
+	if _, ok := polled[0]["taskStatus"]; ok {
+		t.Fatalf("404 polled line carries a taskStatus: %v", polled[0])
+	}
+}
+
+func TestServer_PollTestStatus_RecordsEachAnswer(t *testing.T) {
+	rcv := newReceiver(t)
+	r := newRunner(t, NewMockBackend(), true)
+	testID := dispatch(t, r, rcv.url(), "")
+	rcv.next(t)
+
+	if status, body := r.getStatus(t, testsPath+"/"+testID); status != http.StatusOK || body["status"] != statusSucceeded {
+		t.Fatalf("test status = %d %v, want 200 SUCCEEDED", status, body)
+	}
+	if status, _ := r.getStatus(t, testsPath+"/test_unknown"); status != http.StatusNotFound {
+		t.Fatalf("unknown test answered %d, want 404", status)
+	}
+	polled := pollLines(r.recordLines(t), kindTest)
+	if len(polled) != 2 {
+		t.Fatalf("record has %d test polled lines, want 2: %v", len(polled), polled)
+	}
+	if polled[0]["testId"] != testID || polled[0]["status"] != float64(http.StatusOK) || polled[0]["taskStatus"] != statusSucceeded {
+		t.Fatalf("first polled line = %v, want testId %s, status 200, taskStatus SUCCEEDED", polled[0], testID)
+	}
+	if polled[1]["testId"] != "test_unknown" || polled[1]["status"] != float64(http.StatusNotFound) {
+		t.Fatalf("second polled line = %v, want a 404 answer for test_unknown", polled[1])
+	}
+}
