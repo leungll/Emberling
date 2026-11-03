@@ -53,6 +53,7 @@ type Tx interface {
 	ProviderSlots() ProviderSlotRepository
 	AgentWorkspaces() AgentWorkspaceRepository
 	WorkspacePatches() WorkspacePatchRepository
+	ChangeRequests() ChangeRequestRepository
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
@@ -679,6 +680,10 @@ type ExecutionFactRepository interface {
 	// (created_at then id, ascending), for the facts a Node Type declares it reads. A
 	// non-positive limit is an error rather than an unbounded read.
 	ListByRunAndType(ctx context.Context, runID, factType string, limit int) ([]domain.ExecutionFact, error)
+
+	// Get returns one fact by id, or domain.ErrNotFound. A record that names a fact it
+	// rests on is checked against the stored row through it.
+	Get(ctx context.Context, factID string) (domain.ExecutionFact, error)
 }
 
 // AgentContextVersionRepository persists the immutable message chain a restarted process
@@ -774,6 +779,25 @@ type WorkspacePatchRepository interface {
 	// exist asks for one more than it shows. A non-positive limit is an error rather than
 	// an unbounded read.
 	ListSummariesByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.WorkspacePatch, error)
+}
+
+// ChangeRequestRepository persists the change requests of an Agent Run.
+type ChangeRequestRepository interface {
+	// CreateOrGet inserts one change request in the Tool result transaction that accepted
+	// it, or, when the Agent Run already holds a request with the same content digest,
+	// returns that existing row with created false and writes nothing. UNIQUE
+	// (agent_run_id, content_digest) is what decides between the two; every other
+	// constraint violation surfaces as domain.ErrConflict.
+	CreateOrGet(ctx context.Context, request domain.ChangeRequest) (stored domain.ChangeRequest, created bool, err error)
+
+	// Get returns one change request by id, or domain.ErrNotFound.
+	Get(ctx context.Context, id string) (domain.ChangeRequest, error)
+
+	// ListByAgentRun returns up to limit change requests of the Agent Run, oldest first
+	// (created_at then id), for Trace projection. A caller that needs to know whether more
+	// exist asks for one more than it shows. A non-positive limit is an error rather than
+	// an unbounded read.
+	ListByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.ChangeRequest, error)
 }
 
 // QueueKey orders queued NodeRuns of one Provider: ready_at first, NodeRun id as the

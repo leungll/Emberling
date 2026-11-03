@@ -154,6 +154,23 @@ func (r *executionFactRepository) ListByRunAndType(ctx context.Context, runID, f
 	return facts, nil
 }
 
+func (r *executionFactRepository) Get(ctx context.Context, factID string) (domain.ExecutionFact, error) {
+	const query = `SELECT ` + executionFactColumns + ` FROM execution_facts WHERE id = $1`
+
+	rows, err := r.conn.Query(ctx, query, factID)
+	if err != nil {
+		return domain.ExecutionFact{}, mapError("execution_facts.Get", err, factID)
+	}
+	facts, err := scanExecutionFacts(rows)
+	if err != nil {
+		return domain.ExecutionFact{}, mapError("execution_facts.Get", err, factID)
+	}
+	if len(facts) == 0 {
+		return domain.ExecutionFact{}, mapError("execution_facts.Get", pgx.ErrNoRows, factID)
+	}
+	return facts[0], nil
+}
+
 func scanExecutionFacts(rows pgx.Rows) ([]domain.ExecutionFact, error) {
 	defer rows.Close()
 

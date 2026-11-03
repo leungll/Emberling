@@ -149,6 +149,7 @@ func (t *defsFakeTx) ExecutionFacts() store.ExecutionFactRepository             
 func (t *defsFakeTx) ProviderSlots() store.ProviderSlotRepository               { return noSlotsRepo{} }
 func (t *defsFakeTx) AgentWorkspaces() store.AgentWorkspaceRepository           { return nil }
 func (t *defsFakeTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
+func (t *defsFakeTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
 
 // defsFakeCallbackBindingRepo is a minimal store.CallbackBindingRepository double: only
 // ListByTargets is exercised (by QueryService.NodeRunDetail), always against an empty set,
