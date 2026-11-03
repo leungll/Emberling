@@ -226,6 +226,12 @@ func TestToolMetadata_Validate_RejectsInvalidRegistration(t *testing.T) {
 		{"write path without the workspace", func(m *ToolMetadata) {
 			m.Records, m.WorkspaceWritePath = []ToolRecordKind{ToolRecordWorkspacePatch}, "/path"
 		}, `workspaceWritePath is only allowed`},
+		{"patch digest path without a pointer", func(m *ToolMetadata) {
+			m.UsesWorkspace, m.WorkspacePatchDigestPath = true, "patchDigest"
+		}, `workspacePatchDigestPath must be a JSON Pointer`},
+		{"patch digest path without the workspace", func(m *ToolMetadata) {
+			m.WorkspacePatchDigestPath = "/patchDigest"
+		}, `workspacePatchDigestPath is only allowed`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

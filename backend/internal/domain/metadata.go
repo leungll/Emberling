@@ -340,6 +340,14 @@ type ToolMetadata struct {
 	// touched paths are still checked in the result transaction. Omitted on the wire when
 	// undeclared.
 	WorkspaceWritePath string `json:"workspaceWritePath,omitempty"`
+	// WorkspacePatchDigestPath is a JSON Pointer into the call's arguments naming the
+	// workspace patch digest the call is about, for a Tool that acts on the Agent Run's
+	// current patch, such as a verification. The Runtime compares it with the digest of
+	// the newest recorded patch before any Attempt exists and returns a STALE_PATCH
+	// refusal to the Agent when they differ, so a result can never be bound to a patch
+	// the workspace has moved past. Empty means the Tool declares no such argument.
+	// Omitted on the wire when undeclared.
+	WorkspacePatchDigestPath string `json:"workspacePatchDigestPath,omitempty"`
 	// Reconcilable marks an ASYNC Tool whose uncertain or lost external operation the
 	// Runtime may query for an authoritative result after the fact. It requires a Poll
 	// declaration: reconciliation is a status query, never a resend.
@@ -437,6 +445,14 @@ func (m ToolMetadata) Validate() error {
 		}
 		if !m.UsesWorkspace || !m.DeclaresRecord(ToolRecordWorkspacePatch) {
 			errs = append(errs, errors.New("workspaceWritePath is only allowed on a tool that uses the workspace and records WORKSPACE_PATCH"))
+		}
+	}
+	if m.WorkspacePatchDigestPath != "" {
+		if err := ValidateJSONPointer(m.WorkspacePatchDigestPath); err != nil || !strings.HasPrefix(m.WorkspacePatchDigestPath, "/") {
+			errs = append(errs, errors.New("workspacePatchDigestPath must be a JSON Pointer starting with \"/\""))
+		}
+		if !m.UsesWorkspace {
+			errs = append(errs, errors.New("workspacePatchDigestPath is only allowed on a tool that uses the workspace"))
 		}
 	}
 

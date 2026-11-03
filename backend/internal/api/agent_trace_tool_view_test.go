@@ -270,3 +270,31 @@ func TestToolAttemptView_OtherTools_ProjectNothing(t *testing.T) {
 		assertNoToolView(t, projectAttempt(t, photoSetRunInput, attempt, toolViewFieldBound))
 	}
 }
+
+func TestToolAttemptView_VerifyPatchSucceeded_ProjectsChecksAndLogArtifact(t *testing.T) {
+	const result = `{"passed":false,"testsPassed":true,"scanClean":true,"dependenciesClean":false,` +
+		`"baseCommit":"2706ca6f","patchDigest":"d","resultDigest":"sha256:r",` +
+		`"summary":{"tests":{"total":9,"failed":0},"scanner":"govulncheck","scanFindings":[],"vulnerableDependencies":["github.com/golang-jwt/jwt@v3.2.2+incompatible (GO-2025-3553, indirect)"],"snapshotDigest":"sha256:s"},` +
+		`"logArtifactId":"artifact_0123456789abcdef0123456789abcdef","logTruncated":true}`
+	got := projectAttempt(t, `{}`, toolAttempt("verify_patch", domain.ToolAttemptSucceeded, `{"patchDigest":"d"}`, result), toolViewFieldBound)
+
+	assertKey(t, got, "verification", `{"passed":false,"testsPassed":true,"scanClean":true,"dependenciesClean":false,`+
+		`"tests":{"total":9,"failed":0},"logArtifactId":"artifact_0123456789abcdef0123456789abcdef","logTruncated":true}`)
+	for _, key := range []string{"test", "deployment", "video", "withheld"} {
+		assertKey(t, got, key, "")
+	}
+	raw, _ := json.Marshal(got)
+	for _, forbidden := range []string{"resultDigest", "vulnerableDependencies", "GO-2025-3553", "snapshotDigest"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Errorf("projection %s carries %q, want only the verification card members", raw, forbidden)
+		}
+	}
+	dispatched := projectAttempt(t, `{}`, toolAttempt("verify_patch", domain.ToolAttemptDispatched, `{"patchDigest":"d"}`, ""), toolViewFieldBound)
+	assertNoToolView(t, dispatched)
+}
+
+func TestToolAttemptView_VerifyPatchMissingVerdict_ProjectsNothing(t *testing.T) {
+	got := projectAttempt(t, `{}`, toolAttempt("verify_patch", domain.ToolAttemptSucceeded, `{"patchDigest":"d"}`,
+		`{"passed":true,"testsPassed":true,"scanClean":true,"summary":{"tests":{"total":1,"failed":0}},"logArtifactId":"artifact_x","logTruncated":false}`), toolViewFieldBound)
+	assertNoToolView(t, got)
+}

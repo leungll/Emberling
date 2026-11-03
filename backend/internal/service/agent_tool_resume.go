@@ -147,8 +147,10 @@ func (s *ExecutionService) resumeToolAttempt(ctx context.Context, req ResumeNode
 		return outcome, nil
 	}
 
-	// An asynchronous result declares no Execution Artifacts: no async Tool saves content.
-	committed, err := s.commitAgentToolResult(ctx, call, src, registry.ToolResult{Output: output.Output, Cost: output.Cost})
+	// The Execution Artifacts an asynchronous result declares, such as a verification log,
+	// were written to content storage by the Executor before it returned; their metadata
+	// commits with the result below, the same way a synchronous result's does.
+	committed, err := s.commitAgentToolResult(ctx, call, src, registry.ToolResult{Output: output.Output, Artifacts: output.Artifacts, Cost: output.Cost})
 	if err != nil {
 		return ResumeOutcome{}, err
 	}
@@ -200,6 +202,9 @@ func agentCallbackOutcome(result registry.ToolResult, cbErr error, metadata doma
 		return nil, cbErr
 	}
 	if err := runtime.ValidateToolResult(result.Output, metadata.OutputSchema); err != nil {
+		return &domain.ExecutionError{Code: "TOOL_RESULT_INVALID", Message: err.Error()}, nil
+	}
+	if err := validateDeclaredArtifacts(result.Artifacts, metadata.Name); err != nil {
 		return &domain.ExecutionError{Code: "TOOL_RESULT_INVALID", Message: err.Error()}, nil
 	}
 	if err := validateDeclaredRecords(result, metadata.Records, metadata.Name); err != nil {

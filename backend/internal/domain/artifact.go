@@ -17,6 +17,19 @@ const artifactIDDigestChars = 32
 // same id.
 var ErrArtifactContentMismatch = errors.New("emberling: artifact does not match its content")
 
+// ArtifactMediaTypeTextPlain is the media type of a text Execution Artifact, such as the
+// log a verification Tool keeps beside its result. Text is stored as UTF-8 and the
+// parameter is part of the type, so the content route always serves it as such.
+const ArtifactMediaTypeTextPlain = "text/plain; charset=utf-8"
+
+// IsSupportedArtifactMediaType reports whether an Execution Artifact may carry mediaType:
+// the Asset image set, plus UTF-8 text. The set is wider than the upload set on purpose
+// and in one direction only: a Tool may keep a text log, but Run input still carries
+// images alone.
+func IsSupportedArtifactMediaType(mediaType string) bool {
+	return IsSupportedAssetMediaType(mediaType) || mediaType == ArtifactMediaTypeTextPlain
+}
+
 // Artifact is the Emberling-owned Metadata of one immutable binary an Execution produced,
 // such as a generated image. Like Asset, the binary lives in content storage and the
 // storage key is deliberately absent from this value: it is a system Secret that stays
@@ -60,11 +73,11 @@ func (a Artifact) Validate() error {
 	return nil
 }
 
-// Validate reports whether an ArtifactRef is internally consistent: a supported image
+// Validate reports whether an ArtifactRef is internally consistent: a supported artifact
 // media type, a positive size, a well-formed digest, and an id derived from that digest.
 // A ref that fails here never becomes an execution_artifacts row.
 func (r ArtifactRef) Validate() error {
-	if !IsSupportedAssetMediaType(r.MediaType) {
+	if !IsSupportedArtifactMediaType(r.MediaType) {
 		return fmt.Errorf("domain: artifact %s: media type %q: %w", r.ArtifactID, r.MediaType, ErrUnsupportedAssetMediaType)
 	}
 	if r.SizeBytes <= 0 {
