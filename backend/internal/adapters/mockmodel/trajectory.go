@@ -491,7 +491,15 @@ func (r placeholderResolver) resolve(raw json.RawMessage) (json.RawMessage, erro
 func (r placeholderResolver) walk(value any) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
-		for key, member := range typed {
+		// Members resolve in key order so the first unresolvable placeholder named in an
+		// error is the same on every run; a Go map ranges in random order.
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			member := typed[key]
 			resolved, err := r.walk(member)
 			if err != nil {
 				return nil, err
