@@ -61,6 +61,14 @@ func TestRelease_Approved_DeploysAndConfirmsOnce(t *testing.T) {
 	if !agentRun.Deadline.After(before.Deadline) {
 		t.Errorf("deadline %s did not move past %s after the approval wait", agentRun.Deadline, before.Deadline)
 	}
+	resumed := agentPayloadsFor(t, f.events(t), domain.EventAgentResumed, "agentRunId", agentRun.ID)
+	if len(resumed) != 1 || resumed[0]["reason"] != string(domain.PauseApproval) || resumed[0]["pausedMs"] != float64(time.Minute.Milliseconds()) {
+		t.Errorf("AGENT_RESUMED = %+v, want the approval minute credited back once", resumed)
+	}
+	paused := agentPayloadsFor(t, f.events(t), domain.EventAgentPaused, "agentRunId", agentRun.ID)
+	if len(paused) != 2 || paused[0]["reason"] != string(domain.PauseApproval) || paused[1]["reason"] != string(domain.PauseRelease) {
+		t.Errorf("AGENT_PAUSED = %+v, want APPROVAL then RELEASE", paused)
+	}
 	started := f.eventsOf(t, domain.EventAgentActionStarted, action.ID)
 	if len(started) != 1 || started[0]["operationKey"] != wantKey || started[0]["occupationId"] != occupation.ID {
 		t.Errorf("AGENT_ACTION_STARTED = %+v, want operationKey and occupationId", started)

@@ -170,6 +170,8 @@ func newReleaseFixture(t *testing.T, opts releaseFixtureOptions) *releaseFixture
 		opts.bounds = defaultReleaseBounds
 	}
 	stub := newVerifyRunnerStub()
+	// Several tasks share one database in a test; each verification needs its own id.
+	stub.verificationID = store.NewUUIDGenerator().NewID("verify")
 	runner := httptest.NewServer(stub)
 	t.Cleanup(runner.Close)
 	artifacts := asset.NewArtifactStore(t.TempDir(), 1<<20)
@@ -317,7 +319,7 @@ func (f *releaseFixture) deliverVerification(t *testing.T, passed bool) {
 	t.Helper()
 	token, _ := f.stub.dispatched(t)
 	delivered, err := f.h.svc.HandleCallback(f.h.ctx, service.HandleCallback{
-		Token: token, ExternalTaskID: verifyExternalTaskID,
+		Token: token, ExternalTaskID: f.stub.externalTaskID(),
 		Payload: verifySucceededPayload(f.repo.commit, baselineDigest(), "sha256:verified", passed),
 	})
 	if err != nil || !delivered.Accepted || delivered.Duplicate {

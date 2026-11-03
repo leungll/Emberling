@@ -899,42 +899,6 @@ func (h *returnHarness) endRunThroughSibling() {
 	}
 }
 
-// reconcilableToolName is a test Tool registered as an asynchronous, polled, reconcilable
-// production Tool: the shape of a release Tool, dispatching an external task it never
-// completes in these tests.
-const reconcilableToolName = "test_reconcilable_tool"
-
-type reconcilableToolExecutor struct {
-	mu    sync.Mutex
-	calls []registry.ToolAction
-}
-
-func (e *reconcilableToolExecutor) Execute(_ context.Context, action registry.ToolAction) (registry.ToolExecutionResult, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.calls = append(e.calls, action)
-	return registry.ToolExecutionResult{
-		Kind:         registry.ToolResultDispatched,
-		ExternalTask: &registry.ExternalTask{ProviderID: "test-release-provider", ExternalTaskID: "release-task-1"},
-	}, nil
-}
-
-func (e *reconcilableToolExecutor) OnCallback(context.Context, registry.ToolAsyncState, []byte) (registry.ToolResult, error) {
-	return registry.ToolResult{}, errors.New("the test release tool takes no callback")
-}
-
-func (e *reconcilableToolExecutor) Poll(context.Context, registry.ToolAsyncState) (registry.PollResult, error) {
-	return registry.PollResult{Status: registry.PollRunning}, nil
-}
-
-func reconcilableToolRegistration(executor *reconcilableToolExecutor) registry.ToolRegistration {
-	reg := riskToolRegistration(reconcilableToolName, domain.ToolRiskProduction, executor)
-	reg.Metadata.ExecutionKind = domain.ToolExecutionAsync
-	reg.Metadata.Poll = &domain.PollPolicy{IntervalMs: 30_000, MaxPolls: 10}
-	reg.Metadata.Reconcilable = true
-	return reg
-}
-
 func TestDecideApproval_RunEndedBeforeDecision_NotActionable(t *testing.T) {
 	executor := &recordingToolExecutor{}
 	h := newReturnHarness(t, returnHarnessOptions{
@@ -1069,67 +1033,6 @@ func TestDecideApproval_ProcessDiesBeforeWorkerCall_OrphanHandlingReturnsAction(
 	}
 	if got := h.getApprovalOf(action.ID); got.Status != domain.ApprovalApproved {
 		t.Errorf("approval = %s, want still APPROVED", got.Status)
-	}
-}
-
-func TestDecideApproval_ReconcilableTool_ResumesClockThenPausesForRelease(t *testing.T) {
-	executor := &reconcilableToolExecutor{}
-	h := newReturnHarness(t, returnHarnessOptions{
-		goal: domain.AgentGoalFixAndDeploy, approvalTimeoutMs: approvalWaitMs,
-		tools: []registry.ToolRegistration{reconcilableToolRegistration(executor)},
-	})
-	// Hold the prepared call instead of making it, so its deadline can be inspected.
-	h.queue.mu.Lock()
-	h.queue.svc = nil
-	h.queue.mu.Unlock()
-	action := h.seedDecision(reconcilableToolName, productionArguments(), domain.AgentActionReady)
-	approval := h.suspendForApproval(action)
-	originalDeadline := h.getAgentRun().Deadline
-	const paused = 11 * time.Minute
-	h.clock.Advance(paused)
-	decidedAt := h.clock.Now()
-
-	if _, err := h.decide(approval.ID, domain.ApprovalApproved, ""); err != nil {
-		t.Fatalf("approve: %v", err)
-	}
-
-	movedDeadline := originalDeadline.Add(paused)
-	call, ok := h.svc.approved.take(action.ID)
-	if !ok {
-		t.Fatalf("no prepared call for %s", action.ID)
-	}
-	if !call.deadline.Equal(movedDeadline) {
-		t.Errorf("call deadline = %v, want the moved deadline %v", call.deadline, movedDeadline)
-	}
-	if call.action.Callback == nil || call.action.Callback.Token == "" {
-		t.Fatalf("an asynchronous call was prepared without its callback credential")
-	}
-	// The credential was issued from the moved deadline: a claim of it at the old expiry
-	// plus the pending TTL is already past it, the moved one is not.
-	parsed, err := verifyCallbackToken([]byte("return-test-signing-secret"), call.action.Callback.Token, decidedAt)
-	if err != nil || parsed.AttemptID != call.attemptID {
-		t.Fatalf("prepared credential = %+v, %v, want one for attempt %s", parsed, err, call.attemptID)
-	}
-	if want := movedDeadline.Add(time.Hour); !parsed.ExpiresAt.Equal(want) {
-		t.Errorf("credential expires %v, want the moved deadline plus the pending TTL (%v), not %v", parsed.ExpiresAt, want, originalDeadline.Add(time.Hour))
-	}
-	agentRun := h.getAgentRun()
-	if !agentRun.Deadline.Equal(movedDeadline) {
-		t.Errorf("deadline = %v, want %v", agentRun.Deadline, movedDeadline)
-	}
-	if agentRun.PausedAt == nil || agentRun.PauseReason == nil || *agentRun.PauseReason != domain.PauseRelease || !agentRun.PausedAt.Equal(decidedAt) {
-		t.Errorf("agent run = paused %v for %v, want paused for RELEASE since %v", agentRun.PausedAt, agentRun.PauseReason, decidedAt)
-	}
-	resumed := h.payloadsOf(domain.EventAgentResumed)
-	pausedEvents := h.payloadsOf(domain.EventAgentPaused)
-	if len(resumed) != 1 || resumed[0]["reason"] != string(domain.PauseApproval) || resumed[0]["pausedMs"] != float64(paused.Milliseconds()) {
-		t.Errorf("AGENT_RESUMED = %v, want the approval pause credited back", resumed)
-	}
-	if len(pausedEvents) != 2 || pausedEvents[1]["reason"] != string(domain.PauseRelease) {
-		t.Errorf("AGENT_PAUSED = %v, want APPROVAL then RELEASE", pausedEvents)
-	}
-	if h.attemptCount(action.ID) != 1 {
-		t.Errorf("attempts = %d, want 1", h.attemptCount(action.ID))
 	}
 }
 
