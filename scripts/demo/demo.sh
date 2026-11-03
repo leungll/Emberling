@@ -58,23 +58,59 @@
 #                                       vuln-fix.sh restart: SIGKILL while the verification
 #                                       callback is held; after the restart no Decision is
 #                                       asked again and no verification runs twice;
-#                   vuln-release        vuln-fix.sh release: the verified patch is described
-#                                       in a change request, a person approves its release,
-#                                       the approval occupies the deploy target and the mock
+#                   vuln-main           vuln-fix.sh main: the verified patch is described in
+#                                       a change request, a person approves its release, the
+#                                       approval occupies the deploy target and the mock
 #                                       production service deploys it once;
-#                   vuln-release-restart
-#                                       vuln-fix.sh release-restart: SIGKILL while the
-#                                       release request is held at production; the restarted
-#                                       Backend queries instead of resending, voids the
-#                                       unknown operation after the grace and releases again
-#                                       under the next key, which deploys once.
-#                 The two release variants decide an approval, so they run only when
-#                 EMBERLING_OPERATOR_TOKEN (at least 32 bytes) is set in the shell; the
-#                 Backend reads the same value, and "all" leaves them out without it.
+#                   vuln-restart-during-approval
+#                                       vuln-fix.sh restart-during-approval: SIGKILL while
+#                                       the release request waits for its approval; it is
+#                                       still waiting afterwards, the Agent clock still
+#                                       paused, and no Decision is asked again;
+#                   vuln-duplicate-approval
+#                                       vuln-fix.sh duplicate-approval: the same approval
+#                                       submitted twice at once and once more later takes
+#                                       effect once and production deploys once;
+#                   vuln-reject-resubmit
+#                                       vuln-fix.sh reject-resubmit: the person rejects the
+#                                       first request with a reason; the Agent changes the
+#                                       code, verifies again, records a new change request
+#                                       and asks again, and that request is released;
+#                   vuln-release-crash-deployed
+#                                       vuln-fix.sh release-crash-deployed: production drops
+#                                       its answer and the Backend is killed; the restarted
+#                                       Backend queries and confirms the deployment instead
+#                                       of resending;
+#                   vuln-release-crash-voided
+#                                       vuln-fix.sh release-crash-voided: SIGKILL while the
+#                                       release request is held at production; the unknown
+#                                       operation is voided after the grace and released
+#                                       again under the next key, which deploys once;
+#                   vuln-void-exhausted vuln-fix.sh void-exhausted: every release outcome is
+#                                       unknown and both operations are voided; the target is
+#                                       freed and the Agent learns nothing was deployed;
+#                   vuln-target-occupied
+#                                       vuln-fix.sh target-occupied: a second task's release
+#                                       to a target a first task holds is refused before any
+#                                       approval;
+#                   vuln-release-refused
+#                                       vuln-fix.sh release-refused: production refuses the
+#                                       release; the target is freed and the reason goes
+#                                       back to the Agent;
+#                   vuln-unhealthy      vuln-fix.sh unhealthy: the release deploys but the
+#                                       target is unhealthy, reported as a failed check;
+#                   vuln-prepare-only   vuln-fix.sh prepare-only: a PREPARE_ONLY task's
+#                                       release request is refused by its goal before any
+#                                       approval.
+#                 Every release variant but vuln-prepare-only decides an approval, so it runs
+#                 only when EMBERLING_OPERATOR_TOKEN (at least 32 bytes) is set in the shell;
+#                 the Backend reads the same value, and "all" leaves them out without it.
+#                 EMBERLING_DEMO_APPROVAL=manual makes vuln-main print the Studio approval
+#                 page and wait (EMBERLING_DEMO_APPROVAL_WAIT_S, default 1800) for a person.
 #                 Each photo, delivery and vuln variant is followed by the invariant report as well.
 #                 The vuln variants bind the Agent to the example repository, which this
 #                 script generates under deploy/.demo/repositories before the stack starts.
-#                 EMBERLING_DEMO_MODEL=<model id> runs vuln-verify against a real decision
+#                 EMBERLING_DEMO_MODEL=<model id> runs vuln-verify or vuln-main against a real decision
 #                 model: the Backend registers it from EMBERLING_MODELS,
 #                 EMBERLING_MODEL_BASE_URL and EMBERLING_MODEL_API_KEY (optionally
 #                 EMBERLING_MODEL_TIMEOUT for one model call) in the shell environment;
@@ -168,21 +204,28 @@ run)
     printf 'Studio: %s\n' "$STUDIO_URL"
   fi
 
+  # The release variants that decide an approval, which need the operator credential.
+  approval_variants=(vuln-main vuln-restart-during-approval vuln-duplicate-approval vuln-reject-resubmit
+    vuln-release-crash-deployed vuln-release-crash-voided vuln-void-exhausted vuln-target-occupied
+    vuln-release-refused vuln-unhealthy)
   case "${EMBERLING_DEMO_VARIANT:-all}" in
   all)
     variants=(held-before-accept after-accept photo-set photo-gate photo-limit photo-sync-crash
       photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery
-      vuln-verify vuln-scope-denied vuln-stale-evidence vuln-restart-during-verify)
+      vuln-verify vuln-scope-denied vuln-stale-evidence vuln-restart-during-verify vuln-prepare-only)
     operator_token=${EMBERLING_OPERATOR_TOKEN:-}
     if [[ ${#operator_token} -ge 32 ]]; then
-      variants+=(vuln-release vuln-release-restart)
+      variants+=("${approval_variants[@]}")
     else
-      log "EMBERLING_OPERATOR_TOKEN is not set: the vuln-release and vuln-release-restart variants are left out"
+      log "EMBERLING_OPERATOR_TOKEN is not set: the release variants that decide an approval are left out"
     fi
     ;;
   held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | photo-video-restart | \
     delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery | \
-    vuln-verify | vuln-scope-denied | vuln-stale-evidence | vuln-restart-during-verify | vuln-release | vuln-release-restart)
+    vuln-verify | vuln-scope-denied | vuln-stale-evidence | vuln-restart-during-verify | vuln-prepare-only | \
+    vuln-main | vuln-restart-during-approval | vuln-duplicate-approval | vuln-reject-resubmit | \
+    vuln-release-crash-deployed | vuln-release-crash-voided | vuln-void-exhausted | vuln-target-occupied | \
+    vuln-release-refused | vuln-unhealthy)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
   serving)
@@ -193,7 +236,7 @@ run)
     serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout | serving-capacity)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, vuln-verify, vuln-scope-denied, vuln-stale-evidence, vuln-restart-during-verify, vuln-release, vuln-release-restart, serving or one serving-* variant" ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, vuln-verify, vuln-scope-denied, vuln-stale-evidence, vuln-restart-during-verify, vuln-main, vuln-restart-during-approval, vuln-duplicate-approval, vuln-reject-resubmit, vuln-release-crash-deployed, vuln-release-crash-voided, vuln-void-exhausted, vuln-target-occupied, vuln-release-refused, vuln-unhealthy, vuln-prepare-only, serving or one serving-* variant" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
@@ -222,8 +265,10 @@ run)
     vuln-scope-denied) script=vuln-fix.sh story=scope-denied ;;
     vuln-stale-evidence) script=vuln-fix.sh story=stale-evidence ;;
     vuln-restart-during-verify) script=vuln-fix.sh story=restart ;;
-    vuln-release) script=vuln-fix.sh story=release ;;
-    vuln-release-restart) script=vuln-fix.sh story=release-restart ;;
+    vuln-main) script=vuln-fix.sh story=main ;;
+    vuln-restart-during-approval | vuln-duplicate-approval | vuln-reject-resubmit | vuln-release-crash-deployed | \
+      vuln-release-crash-voided | vuln-void-exhausted | vuln-target-occupied | vuln-release-refused | vuln-unhealthy | \
+      vuln-prepare-only) script=vuln-fix.sh story=${variant#vuln-} ;;
     serving-*) script=serving.sh story=${variant#serving-} ;;
     esac
     printf '\n==== variant %s (%s%s) ====\n' "$variant" "$script" "${story:+ $story}"

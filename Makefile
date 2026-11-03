@@ -294,6 +294,31 @@ check-fast:
 ##   vuln-restart-during-verify
 ##                         SIGKILL while the verification callback is held; after the
 ##                         restart no Decision is asked again, no verification runs twice.
+##   vuln-main             the verified patch is described in a change request, a person
+##                         approves its release and production deploys it once.
+##   vuln-restart-during-approval
+##                         SIGKILL while the release waits for approval; still waiting
+##                         after, the Agent clock still paused, no Decision asked again.
+##   vuln-duplicate-approval
+##                         the same approval submitted twice at once takes effect once.
+##   vuln-reject-resubmit  the person rejects with a reason; the Agent changes the code,
+##                         verifies, records a new change request and asks again.
+##   vuln-release-crash-deployed
+##                         production drops its answer and the Backend is killed; the
+##                         restarted Backend queries and confirms instead of resending.
+##   vuln-release-crash-voided
+##                         SIGKILL while production holds the release; the unknown
+##                         operation is voided and released again under the next key.
+##   vuln-void-exhausted   both operations voided; the target is freed, nothing deployed.
+##   vuln-target-occupied  a second task's release to an occupied target is refused
+##                         before any approval.
+##   vuln-release-refused  production refuses; the target is freed, the reason goes back
+##                         to the Agent.
+##   vuln-unhealthy        deployed but unhealthy, reported as a failed check.
+##   vuln-prepare-only     a PREPARE_ONLY task's release request is refused by its goal.
+##   Every release variant but vuln-prepare-only decides an approval and runs only with
+##   EMBERLING_OPERATOR_TOKEN (at least 32 bytes) set; EMBERLING_DEMO_APPROVAL=manual
+##   makes vuln-main wait for a person on the Studio approval page.
 ##   serving-burst         twenty users submit the serving template at once.
 ##   serving-crash-held    SIGKILL while dispatches are held before acceptance.
 ##   serving-crash-waiting SIGKILL while every task waits for its callback; callbacks
@@ -310,7 +335,7 @@ check-fast:
 ##   serving-capacity      the Backend restarted with two slots on the image Provider;
 ##                         at most two image tasks in flight, the rest queue as READY.
 ## EMBERLING_DEMO_STUDIO=1 turns on the Studio demo mode described under demo-studio.
-## EMBERLING_DEMO_MODEL=<model id> runs vuln-verify against a real decision model. The
+## EMBERLING_DEMO_MODEL=<model id> runs vuln-verify or vuln-main against a real model. The
 ## Backend registers it from EMBERLING_MODELS, EMBERLING_MODEL_BASE_URL and
 ## EMBERLING_MODEL_API_KEY (optionally EMBERLING_MODEL_TIMEOUT) in the shell environment;
 ## set nothing else (an image key without image models stops the Backend). The Agent gets
