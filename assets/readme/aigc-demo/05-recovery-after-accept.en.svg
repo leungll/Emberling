@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 440" width="1120" height="440" role="img" aria-labelledby="title desc">
+<title id="title">Recovery after a restart past acceptance</title>
+<desc id="desc">After the Mock Provider accepts the image task, the Backend is killed and the callback 15 seconds later fails. The restarted Backend polls the Provider using the task link stored in the database; the original task returns success and the same Attempt completes once, with nothing resubmitted.</desc>
+<defs>
+<pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="#dfe5ec"/></pattern>
+<marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#64748b"/></marker>
+</defs>
+<style>text{font-family:"SFMono-Regular",Consolas,"PingFang SC","Microsoft YaHei",sans-serif;fill:#1e293b}.h{font-size:15px;font-weight:600}.t{font-size:13px}.s{font-size:11.5px;fill:#64748b}.tag{font-size:11px;font-weight:600}</style>
+<rect width="1120" height="440" rx="10" fill="#f4f5f7"/>
+<rect width="1120" height="440" rx="10" fill="url(#dots)"/>
+<text x="40" y="44" class="h">Backend killed after acceptance: the callback is lost, polling picks up the original task</text>
+<text x="40" y="66" class="s">Mock Provider callback delayed 15 s; time 0 is the image task dispatch; data from Run Events and the Mock Provider request record</text>
+<rect x="857.2" y="30" width="222.8" height="24" rx="12" fill="#e3f6ef" stroke="#059669"/><text x="968.6" y="46" text-anchor="middle" class="tag" style="fill:#059669">Real demo run · Mock Provider</text>
+<rect x="32" y="98" width="1056" height="104" rx="9" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="52" y="146" class="h">Emberling</text><text x="52" y="166" class="s">Run Events</text>
+<line x1="230" y1="150" x2="1060" y2="150" stroke="#cbd5e1" stroke-dasharray="3 4"/>
+<rect x="32" y="228" width="1056" height="104" rx="9" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="52" y="276" class="h">Mock Provider</text><text x="52" y="296" class="s">Task record</text>
+<line x1="230" y1="280" x2="1060" y2="280" stroke="#cbd5e1" stroke-dasharray="3 4"/>
+<rect x="258.5882352941176" y="132" width="733.7647058823529" height="36" rx="6" fill="#fdecec" stroke="#dc2626" stroke-dasharray="5 4"/>
+<text x="625.4705882352941" y="155" text-anchor="middle" class="t" style="fill:#dc2626;font-weight:600">Backend down: SIGKILLed after dispatch, restarted after the callback attempt</text>
+<circle cx="230.0" cy="150" r="6" fill="#64748b"/>
+<text x="230.0" y="122" text-anchor="start" class="t" style="font-weight:600;">Image task dispatched</text>
+<text x="230.0" y="188" text-anchor="start" class="s" style="">Attempt 1 recorded as dispatched</text>
+<circle cx="1009.5058823529412" cy="150" r="6" fill="#059669"/>
+<text x="1009.5058823529412" y="122" text-anchor="end" class="t" style="fill:#059669;font-weight:600;">16.4 s · the same Attempt completes</text>
+<text x="1009.5058823529412" y="188" text-anchor="end" class="s" style="">Run completes</text>
+<circle cx="230.0" cy="280" r="6" fill="#64748b"/>
+<text x="230.0" y="252" text-anchor="start" class="t" style="font-weight:600;">Task received, 202 Accepted</text>
+<text x="230.0" y="318" text-anchor="start" class="s" style="">The external task is created only once</text>
+<circle cx="946.135294117647" cy="280" r="6" fill="#dc2626"/>
+<text x="934.2235294117647" y="318" text-anchor="end" class="s" style="fill:#dc2626;">15.0 s · callback delivery fails, Backend offline</text>
+<circle cx="1009.5058823529412" cy="280" r="6" fill="#059669"/>
+<text x="1009.5058823529412" y="252" text-anchor="end" class="t" style="fill:#059669;font-weight:600;">16.4 s · polled, returns SUCCEEDED</text>
+<path d="M1019.5058823529412 276 C 1055.5058823529412 240, 1055.5058823529412 190, 1019.5058823529412 156" fill="none" stroke="#059669" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="1051.5058823529412" y="219.0" class="s" style="fill:#059669">poll result</text>
+<line x1="230" y1="348" x2="1040" y2="348" stroke="#cbd5e1"/><line x1="230.0" y1="348" x2="230.0" y2="353" stroke="#cbd5e1"/><text x="230.0" y="368" text-anchor="middle" class="s">0 s</text><line x1="277.6470588235294" y1="348" x2="277.6470588235294" y2="353" stroke="#cbd5e1"/><text x="277.6470588235294" y="368" text-anchor="middle" class="s">1 s</text><line x1="325.29411764705884" y1="348" x2="325.29411764705884" y2="353" stroke="#cbd5e1"/><text x="325.29411764705884" y="368" text-anchor="middle" class="s">2 s</text><line x1="372.94117647058823" y1="348" x2="372.94117647058823" y2="353" stroke="#cbd5e1"/><text x="372.94117647058823" y="368" text-anchor="middle" class="s">3 s</text><line x1="420.5882352941177" y1="348" x2="420.5882352941177" y2="353" stroke="#cbd5e1"/><text x="420.5882352941177" y="368" text-anchor="middle" class="s">4 s</text><line x1="468.2352941176471" y1="348" x2="468.2352941176471" y2="353" stroke="#cbd5e1"/><text x="468.2352941176471" y="368" text-anchor="middle" class="s">5 s</text><line x1="515.8823529411765" y1="348" x2="515.8823529411765" y2="353" stroke="#cbd5e1"/><text x="515.8823529411765" y="368" text-anchor="middle" class="s">6 s</text><line x1="563.5294117647059" y1="348" x2="563.5294117647059" y2="353" stroke="#cbd5e1"/><text x="563.5294117647059" y="368" text-anchor="middle" class="s">7 s</text><line x1="611.1764705882354" y1="348" x2="611.1764705882354" y2="353" stroke="#cbd5e1"/><text x="611.1764705882354" y="368" text-anchor="middle" class="s">8 s</text><line x1="658.8235294117646" y1="348" x2="658.8235294117646" y2="353" stroke="#cbd5e1"/><text x="658.8235294117646" y="368" text-anchor="middle" class="s">9 s</text><line x1="706.4705882352941" y1="348" x2="706.4705882352941" y2="353" stroke="#cbd5e1"/><text x="706.4705882352941" y="368" text-anchor="middle" class="s">10 s</text><line x1="754.1176470588235" y1="348" x2="754.1176470588235" y2="353" stroke="#cbd5e1"/><text x="754.1176470588235" y="368" text-anchor="middle" class="s">11 s</text><line x1="801.7647058823529" y1="348" x2="801.7647058823529" y2="353" stroke="#cbd5e1"/><text x="801.7647058823529" y="368" text-anchor="middle" class="s">12 s</text><line x1="849.4117647058823" y1="348" x2="849.4117647058823" y2="353" stroke="#cbd5e1"/><text x="849.4117647058823" y="368" text-anchor="middle" class="s">13 s</text><line x1="897.0588235294118" y1="348" x2="897.0588235294118" y2="353" stroke="#cbd5e1"/><text x="897.0588235294118" y="368" text-anchor="middle" class="s">14 s</text><line x1="944.7058823529412" y1="348" x2="944.7058823529412" y2="353" stroke="#cbd5e1"/><text x="944.7058823529412" y="368" text-anchor="middle" class="s">15 s</text><line x1="992.3529411764706" y1="348" x2="992.3529411764706" y2="353" stroke="#cbd5e1"/><text x="992.3529411764706" y="368" text-anchor="middle" class="s">16 s</text><line x1="1040.0" y1="348" x2="1040.0" y2="353" stroke="#cbd5e1"/><text x="1040.0" y="368" text-anchor="middle" class="s">17 s</text>
+<rect x="32" y="384" width="1056" height="40" rx="9" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="52" y="409" class="t">External tasks <tspan style='font-weight:600'>1</tspan>  ·  resubmissions <tspan style='font-weight:600'>0</tspan>  ·  same Attempt completed <tspan style='font-weight:600'>1</tspan>  ·  recovered from the dispatch record and task link committed in PostgreSQL</text>
+</svg>
