@@ -207,6 +207,7 @@ export function agentTrace(
       goal: null,
       terminatedAt: null,
       error: null,
+      completion: null,
       ...extra,
     },
     turns,

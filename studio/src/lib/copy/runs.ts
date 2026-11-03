@@ -97,6 +97,10 @@ export const runs = {
       TOOL_ERROR: (step: string | null) => `A tool call from ${step ?? 'the agent'} failed.`,
       INVALID_ACTION: (step: string | null) => `${step ?? 'The agent'}’s answer was rejected.`,
       FACT_BASIS_MISSING: () => 'A tool result couldn’t be traced to its source.',
+      TASK_INCOMPLETE: (step: string | null) =>
+        `${step ?? 'The agent'} finished without completing its task.`,
+      RELEASE_UNKNOWN: (step: string | null) =>
+        `${step ?? 'The agent'}’s release outcome is unknown.`,
     } as Record<string, (step: string | null) => string>,
     other: (step: string | null) => `${step ?? 'A step'} failed.`,
     unknown: 'The run failed.',

@@ -321,6 +321,40 @@ export const en = {
       INVALID_ACTION: 'Decision was rejected',
       HUMAN_STOPPED: 'Stopped by a person',
     },
+    /** The task result of an agent with a goal, one card per outcome. */
+    completion: {
+      title: 'Task result',
+      evaluated: 'Checked',
+      checks: 'Checks',
+      checksPassed: (passed: number, total: number) => `${passed} of ${total} passed`,
+      stillMissing: 'Still missing',
+      outcome: {
+        READY_FOR_APPROVAL: {
+          label: 'Ready for approval',
+          description:
+            'The patch is verified and the change request is written. A person approves and schedules the release from here.',
+        },
+        DEPLOYED: {
+          label: 'Deployed',
+          description:
+            'The release was approved and confirmed deployed, and the target is healthy on the patched version.',
+        },
+        DEPLOYED_CHECK_FAILED: {
+          label: 'Deployed, health check failed',
+          description:
+            'The patched version is live but its health check did not pass. The rollback plan applies.',
+        },
+        RELEASE_UNKNOWN: {
+          label: 'Release outcome unknown',
+          description:
+            'A person stopped the wait before the release result was known. The target stays occupied until reconciliation settles it.',
+        },
+        INCOMPLETE: {
+          label: 'Not complete',
+          description: 'The agent stopped before every required fact was recorded.',
+        },
+      },
+    },
     completionSource: {
       SYNC_EXECUTION: null,
       CALLBACK: 'Result arrived by callback',
