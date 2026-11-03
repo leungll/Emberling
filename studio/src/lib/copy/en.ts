@@ -548,6 +548,36 @@ export const en = {
     touchedPaths: 'Touched paths',
   },
 
+  /** Releases production has not answered, handed to a person after their confirm deadline. */
+  humanWaits: {
+    title: 'Releases waiting for a person',
+    intro:
+      'Production has not confirmed these releases. The agent is paused; you can keep waiting or stop the task.',
+    empty: 'No releases are waiting for a person.',
+    loadFailed: 'Couldn’t load the releases waiting for a person.',
+    target: 'Target',
+    operation: 'Operation',
+    confirmDeadline: 'Confirm deadline',
+    waitDeadline: 'Wait ends',
+    reasonLabel: 'Why',
+    reason: {
+      OUTCOME_UNKNOWN: 'Production has no record of this operation.',
+      NOT_CONFIRMED: 'Production knows the operation but has not confirmed it.',
+    },
+    run: 'Run',
+    stop: 'Stop waiting',
+    stopping: 'Stopping…',
+    confirmTitle: 'Stop waiting for this release?',
+    confirmBody: (target: string) =>
+      `The task ends as stopped by a person. ${target} stays held until production says whether the release deployed, so no other release can start on it before then.`,
+    confirmStop: 'Stop the task',
+    stopped: 'Stopped. The task has ended; the target stays held until production answers.',
+    repeated: 'This wait had already been stopped.',
+    resolved: 'Production answered first, so the release concluded on its own.',
+    closed: 'The task already ended. This wait closes on its own at its deadline.',
+    stopFailed: 'Couldn’t stop the wait. Try again.',
+  },
+
   glossary: {
     workflow: [
       'Workflow',

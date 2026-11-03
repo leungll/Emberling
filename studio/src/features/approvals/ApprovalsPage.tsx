@@ -2,6 +2,7 @@ import { RotateCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
+import { HumanWaitsPanel } from './HumanWaitsPanel';
 import { OperatorTokenField } from './OperatorTokenField';
 import {
   approvalErrorText,
@@ -109,6 +110,7 @@ export function ApprovalsPage() {
     <>
       <PageHeader title={a.title} actions={token ? tokenField : null} />
       <main style={{ maxWidth: 1280 }} className="mx-auto w-full flex-1 px-8 pt-8 pb-12">
+        {token ? <HumanWaitsPanel /> : null}
         <p className="m-0 mb-4 text-md text-fg-secondary">{a.intro}</p>
         <div className="overflow-hidden rounded-lg border border-border bg-surface">
           <Tabs<ApprovalStatus>

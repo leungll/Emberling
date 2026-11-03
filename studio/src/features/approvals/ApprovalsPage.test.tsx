@@ -126,6 +126,7 @@ beforeEach(() => {
         );
       }
       if (url === '/api/definitions') return Promise.resolve(jsonResponse({ items: [] }));
+      if (url === '/api/human-waits') return Promise.resolve(jsonResponse({ items: [] }));
       if (url.startsWith('/api/approvals?status=PENDING')) {
         return Promise.resolve(jsonResponse({ items: [APPROVAL] }));
       }

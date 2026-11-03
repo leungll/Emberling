@@ -993,6 +993,18 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
                         ),
                 }
               : null,
+            release?.occupation?.status === 'ACTIVE' && release.occupation.nextQueryAt
+              ? {
+                  label: f.postTaskQuery,
+                  value: <Timestamp iso={release.occupation.nextQueryAt} />,
+                }
+              : null,
+            release?.occupation?.deployedUncheckedVersion
+              ? {
+                  label: f.uncheckedVersion,
+                  value: f.uncheckedVersionValue(release.occupation.deployedUncheckedVersion),
+                }
+              : null,
             lastOperation?.confirmDeadline &&
             action.status !== 'SUCCEEDED' &&
             action.status !== 'FAILED'
