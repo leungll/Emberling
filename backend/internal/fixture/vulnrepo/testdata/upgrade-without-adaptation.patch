@@ -1,0 +1,23 @@
+diff --git a/go.mod b/go.mod
+index e701fd0..814629c 100644
+--- a/go.mod
++++ b/go.mod
+@@ -2,4 +2,4 @@ module example.com/tokenservice
+ 
+ go 1.24
+ 
+-require github.com/golang-jwt/jwt v3.2.2+incompatible
++require github.com/golang-jwt/jwt/v5 v5.3.1
+diff --git a/internal/auth/token.go b/internal/auth/token.go
+index 6beba2b..c7e04de 100644
+--- a/internal/auth/token.go
++++ b/internal/auth/token.go
+@@ -8,7 +8,7 @@ import (
+ 	"fmt"
+ 	"time"
+ 
+-	"github.com/golang-jwt/jwt"
++	"github.com/golang-jwt/jwt/v5"
+ )
+ 
+ // Verification errors. A caller compares with errors.Is; the message never carries the
