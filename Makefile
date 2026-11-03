@@ -326,6 +326,10 @@ check-fast:
 ##   vuln-stop-then-deployed
 ##                         production deploys after a person stopped waiting; the target is
 ##                         freed with the version recorded as live but unchecked.
+##   After the vuln variants, deploy/.demo/evidence/vuln-evidence.md (or
+##   EMBERLING_DEMO_EVIDENCE_DIR) summarises their evidence in five aspects with the source
+##   Runs, and lists the versions confirmed live only after a stop; see
+##   scripts/demo/vuln-evidence-report.sh to render it by hand.
 ##   Every release variant but vuln-prepare-only decides an approval and runs only with
 ##   EMBERLING_OPERATOR_TOKEN (at least 32 bytes) set; EMBERLING_DEMO_APPROVAL=manual
 ##   makes vuln-main wait for a person on the Studio approval page.
