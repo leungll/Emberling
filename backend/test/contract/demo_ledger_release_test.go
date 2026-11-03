@@ -44,6 +44,10 @@ type ledgerCase struct {
 	occupation   *ledgerOccupation
 	// record lines as production would have written them, without seq.
 	record []map[string]any
+	// verification, when set, is the external id of a verify_patch Attempt bound to the
+	// sandbox runner, and runner holds the runner's record lines, without seq.
+	verification string
+	runner       []map[string]any
 }
 
 const ledgerAction = "act_ledger"
@@ -81,14 +85,26 @@ func (c ledgerCase) trace() map[string]any {
 		}
 		release["occupation"] = occupation
 	}
+	turns := []map[string]any{}
+	if c.verification != "" {
+		turns = append(turns, map[string]any{
+			"turnNo":   0,
+			"decision": map[string]any{"kind": "TOOL_CALL", "tool": "verify_patch"},
+			"action":   map[string]any{"id": "act_verify", "status": "SUCCEEDED"},
+			"toolAttempts": []map[string]any{{
+				"id": "ta_verify", "toolName": "verify_patch", "attemptNo": 1, "status": "SUCCEEDED",
+				"callbackBinding": map[string]any{"providerId": "sandboxrunner", "externalTaskId": c.verification},
+			}},
+		})
+	}
 	return map[string]any{
 		"agentRun": map[string]any{"termination": "FINAL_RESPONSE"},
-		"turns": []map[string]any{{
+		"turns": append(turns, map[string]any{
 			"turnNo":       1,
 			"decision":     map[string]any{"kind": "TOOL_CALL", "tool": "deploy_change"},
 			"action":       map[string]any{"id": ledgerAction, "status": c.actionStatus, "release": release},
 			"toolAttempts": attempts,
-		}},
+		}),
 	}
 }
 
@@ -96,6 +112,12 @@ func (c ledgerCase) trace() map[string]any {
 // every SUCCEEDED Attempt.
 func (c ledgerCase) events() []map[string]any {
 	var out []map[string]any
+	if c.verification != "" {
+		out = append(out, map[string]any{
+			"seq": 1, "type": "AGENT_ACTION_COMPLETED",
+			"payload": map[string]any{"completionSource": "CALLBACK", "toolAttemptId": "ta_verify"},
+		})
+	}
 	for _, op := range c.operations {
 		if op.status == "SUCCEEDED" {
 			out = append(out, map[string]any{
@@ -164,6 +186,11 @@ func runLedger(t *testing.T, c ledgerCase) (string, int) {
 	mockHTTP := httptest.NewServer(mock)
 	t.Cleanup(mockHTTP.Close)
 
+	runner := http.NewServeMux()
+	runner.HandleFunc("GET /control/record", serveRecord(c.runner))
+	runnerHTTP := httptest.NewServer(runner)
+	t.Cleanup(runnerHTTP.Close)
+
 	production := http.NewServeMux()
 	production.HandleFunc("GET /control/record", serveRecord(c.record))
 	productionHTTP := httptest.NewServer(production)
@@ -172,7 +199,7 @@ func runLedger(t *testing.T, c ledgerCase) (string, int) {
 	cmd := exec.Command("bash", "../../../scripts/demo/ledger-vs-record.sh", runID, "0")
 	cmd.Env = append(os.Environ(),
 		"EMBERLING_DEMO_BACKEND_URL="+backendHTTP.URL, "EMBERLING_DEMO_MOCK_URL="+mockHTTP.URL,
-		"EMBERLING_DEMO_PRODUCTION_URL="+productionHTTP.URL, "EMBERLING_DEMO_RUNNER_URL="+mockHTTP.URL,
+		"EMBERLING_DEMO_PRODUCTION_URL="+productionHTTP.URL, "EMBERLING_DEMO_RUNNER_URL="+runnerHTTP.URL,
 		"EMBERLING_MODEL_PROVIDER_API_KEY=unused", "EMBERLING_CALLBACK_SIGNING_SECRET=unused",
 		"LEDGER_SUBMISSIONS=", "LEDGER_REQUIRE_COMPLETED=0")
 	out, err := cmd.CombinedOutput()
@@ -354,4 +381,32 @@ func TestDemoLedger_ProductionOperationOutsideLedger_Fails(t *testing.T) {
 		occupation:   &ledgerOccupation{attemptNo: 1, status: "RELEASED", reason: "DEPLOYED"},
 		record:       append(deployedOnce(1, "v1"), releaseLine("arrived", 2, nil), releaseLine("voided", 2, nil)),
 	}, "release_operations_match_record")
+}
+
+// TestDemoLedger_LargeRecords_ComparedWithoutArgumentLimit runs the comparison over runner
+// and production records of ten thousand lines each, several megabytes, as a real runner
+// writes in one demo. The records never travel on a command line, so the system's argument
+// length limit cannot fail the ledger.
+func TestDemoLedger_LargeRecords_ComparedWithoutArgumentLimit(t *testing.T) {
+	const lines = 10000
+	padding := strings.Repeat("x", 240)
+	runner := []map[string]any{
+		{"event": "arrived", "kind": "verification", "verificationId": "ver_ledger"},
+		{"event": "started", "kind": "verification", "verificationId": "ver_ledger"},
+		{"event": "completed", "kind": "verification", "verificationId": "ver_ledger"},
+		{"event": "callback", "testId": "ver_ledger", "httpStatus": 200},
+	}
+	record := deployedOnce(1, "v1")
+	for i := 0; i < lines; i++ {
+		runner = append(runner, map[string]any{"event": "log", "kind": "verification", "verificationId": fmt.Sprintf("ver_other_%d", i), "detail": padding})
+		record = append(record, map[string]any{"event": "health", "kind": "release", "service": "other", "detail": padding})
+	}
+	assertLedgerPasses(t, ledgerCase{
+		actionStatus: "SUCCEEDED",
+		operations:   []ledgerOperation{{attemptNo: 1, status: "SUCCEEDED", outcome: "DEPLOYED"}},
+		occupation:   &ledgerOccupation{attemptNo: 1, status: "RELEASED", reason: "DEPLOYED"},
+		record:       record,
+		verification: "ver_ledger",
+		runner:       runner,
+	})
 }

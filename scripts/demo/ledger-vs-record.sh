@@ -121,7 +121,7 @@ for run_id in "${run_ids[@]}"; do
         | {unit: $unit, attempt: .attemptNo, id: .callbackBinding.externalTaskId}]' <<<"$detail")
     if [[ "$node_type" == agent ]]; then
       trace=$(curl -fsS "$BACKEND_URL/api/runs/$run_id/nodes/$node_run_id/agent")
-      rows=$(jq --argjson rows "$rows" --arg unit "$node_run_id" '$rows + [paths(objects) as $p
+      rows=$(jq --slurpfile rows <(printf '%s' "$rows") --arg unit "$node_run_id" '$rows[0] as $rows | $rows + [paths(objects) as $p
           | getpath($p) | select(type == "object" and (.externalTaskId? | type) == "string")
           | {unit: ($unit + ":" + ($p | map(tostring) | join("."))), attempt: (.attemptNo // null), id: .externalTaskId,
              provider: (.providerId // null)}]' <<<"$trace")
@@ -159,7 +159,7 @@ printf 'ledger events: %s, bound external tasks: %s, record task lines: %s, reco
 created=$(jq "[.[] | select($created_line) | .externalTaskId]" <<<"$record")
 
 # 1. Every created task arrived exactly once.
-bad=$(jq --argjson created "$created" '[$created[] as $id
+bad=$(jq --slurpfile created <(printf '%s' "$created") '$created[0] as $created | [$created[] as $id
     | {id: $id, arrived: ([.[] | select(.event == "arrived" and .externalTaskId == $id)] | length)}
     | select(.arrived != 1)]' <<<"$record")
 if [[ $(jq 'length' <<<"$bad") -eq 0 ]]; then
@@ -170,14 +170,14 @@ fi
 
 # 2. Per external task id: each bound task was created exactly once and belongs to exactly
 # one dispatch unit; each task created in the window is bound; no unit has two tasks.
-tasks=$(jq -n --argjson bindings "$bindings" --argjson full "$full_record" '
+tasks=$(jq -n --slurpfile bindings <(printf '%s' "$bindings") --slurpfile full <(printf '%s' "$full_record") '$bindings[0] as $bindings | $full[0] as $full | 
     [$bindings[].id] | unique | map(. as $id | {
       id: $id,
       created: ([$full[] | select(.externalTaskId == $id and ('"$created_line"'))] | length),
       units: ([$bindings[] | select(.id == $id) | .unit | sub(":.*"; "")] | unique | length),
       replayed: ([$full[] | select(.externalTaskId == $id and .event == "responded" and .replayed == true)] | length)})')
 not_created_once=$(jq '[.[] | select(.created != 1 or .units != 1)]' <<<"$tasks")
-orphan=$(jq --argjson bindings "$bindings" '[.[] as $id | select([$bindings[] | select(.id == $id)] | length == 0) | $id]' <<<"$created")
+orphan=$(jq --slurpfile bindings <(printf '%s' "$bindings") '$bindings[0] as $bindings | [.[] as $id | select([$bindings[] | select(.id == $id)] | length == 0) | $id]' <<<"$created")
 duplicate_units=$(jq '[.[]] | group_by(.unit | sub(":.*"; "")) | map(select((map(.id) | unique | length) > 1))
     | map({unit: .[0].unit, tasks: (map(.id) | unique)})' <<<"$bindings")
 if [[ $(jq 'length' <<<"$not_created_once") -eq 0 && $(jq 'length' <<<"$orphan") -eq 0 &&
@@ -195,17 +195,17 @@ jq -r '.[] | select(.event == "responseDropped")
 jq -r '.[] | select(.event == "abandoned")
     | "dispatch \(.externalTaskId) was abandoned: the caller disconnected while it was held, so no task was created"' <<<"$record" |
   while IFS= read -r line; do note "$line"; done
-jq -r --argjson created "$created" '. as $all | [.[] | select(.event == "arrived") | .externalTaskId]
+jq -r --slurpfile created <(printf '%s' "$created") '$created[0] as $created | . as $all | [.[] | select(.event == "arrived") | .externalTaskId]
     | map(select(. as $id | ($created | index($id) | not)
         and ([$all[] | select(.externalTaskId == $id and (.event == "abandoned" or .event == "rejected"))] | length == 0)))
     | .[] | "arrival \(.) names no task: it is the arrival of a re-sent dispatch"' <<<"$record" |
   while IFS= read -r line; do note "$line"; done
 
 # 3. Accepted callback deliveries cover every callback-received Event.
-deliveries=$(jq --argjson created "$created" '[.[] | select(.event == "callback" and (.externalTaskId as $id | $created | index($id)))]' <<<"$record")
+deliveries=$(jq --slurpfile created <(printf '%s' "$created") '$created[0] as $created | [.[] | select(.event == "callback" and (.externalTaskId as $id | $created | index($id)))]' <<<"$record")
 attempted=$(jq 'length' <<<"$deliveries")
 accepted=$(jq '[.[] | select(.status >= 200 and .status < 300)] | length' <<<"$deliveries")
-received=$(jq --argjson runner "$runner_attempt_ids" '[.[] | select(.type == "NODE_CALLBACK_RECEIVED"
+received=$(jq --slurpfile runner <(printf '%s' "$runner_attempt_ids") '$runner[0] as $runner | [.[] | select(.type == "NODE_CALLBACK_RECEIVED"
     or ((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED")
         and ((.payload.completionSource // .payload.failureSource) == "CALLBACK")
         and (.payload.toolAttemptId as $id | $runner | index($id) | not)))] | length' <<<"$events")
@@ -219,11 +219,11 @@ if ((attempted > accepted)); then
 fi
 
 # 4. Finished-task poll answers cover every completion whose source is a Provider poll.
-polled=$(jq --argjson created "$created" '[.[] | select(.event == "polled" and (.externalTaskId as $id | $created | index($id)))]' <<<"$polls")
+polled=$(jq --slurpfile created <(printf '%s' "$created") '$created[0] as $created | [.[] | select(.event == "polled" and (.externalTaskId as $id | $created | index($id)))]' <<<"$polls")
 poll_answers=$(jq 'length' <<<"$polled")
 poll_finished=$(jq '[.[] | select(.status == 200 and (.taskStatus == "SUCCEEDED" or .taskStatus == "FAILED"))] | length' <<<"$polled")
 poll_running=$(jq '[.[] | select(.status == 200 and .taskStatus == "RUNNING")] | length' <<<"$polled")
-poll_completions=$(jq --argjson release "$release_attempt_ids" '[.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
+poll_completions=$(jq --slurpfile release <(printf '%s' "$release_attempt_ids") '$release[0] as $release | [.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
     and .payload.completionSource == "PROVIDER_POLL"
     and (.payload.toolAttemptId as $id | $id == null or ($release | index($id) | not)))] | length' <<<"$events")
 if ((poll_finished >= poll_completions)); then
@@ -240,7 +240,7 @@ jq -r '[.[] | select(.type == "NODE_COMPLETED")] | group_by(.payload.completionS
 # member; its callback lines carry the id in the shared testId member.
 if [[ $(jq 'length' <<<"$runner_calls") -gt 0 ]]; then
   runner_record=$(record_after 0 "$RUNNER_URL" | jq -s '.')
-  runner_rows=$(jq --argjson record "$runner_record" --argjson events "$events" '[.[] | . as $c
+  runner_rows=$(jq --slurpfile record <(printf '%s' "$runner_record") --slurpfile events <(printf '%s' "$events") '$record[0] as $record | $events[0] as $events | [.[] | . as $c
       | (if $c.toolName == "verify_patch" then "verification" else "test" end) as $kind
       | (if $kind == "verification" then "verificationId" else "testId" end) as $idKey | {
       testId, attemptId, kind: $kind,
@@ -265,12 +265,12 @@ fi
 # 6. Each deploy Attempt reached production at most once and deployed at most once.
 if [[ $(jq 'length' <<<"$deploy_calls") -gt 0 ]]; then
   production_record=$(record_after 0 "$PRODUCTION_URL" | jq -s '.')
-  deploy_rows=$(jq --argjson record "$production_record" '[.[] | . as $c | {
+  deploy_rows=$(jq --slurpfile record <(printf '%s' "$production_record") '$record[0] as $record | [.[] | . as $c | {
       operationId, status,
       arrived: ([$record[] | select(.event == "arrived" and .operationId == $c.operationId)] | length),
       deployed: ([$record[] | select(.event == "deployed" and .operationId == $c.operationId and (.replayed | not))] | length),
       abandoned: ([$record[] | select(.event == "abandoned" and .operationId == $c.operationId)] | length)}]' <<<"$deploy_calls")
-  stray=$(jq --argjson calls "$deploy_calls" '($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
+  stray=$(jq --slurpfile calls <(printf '%s' "$deploy_calls") '$calls[0] as $calls | ($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
       | [.[] | select(.event == "deployed" and (.operationId as $op | $known | index($op) | not)
           and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
         | .operationId]' <<<"$production_record")
@@ -293,7 +293,7 @@ fi
 # its deployed line is the answer a successful poll must have observed.
 if [[ $(jq 'length' <<<"$release_calls") -gt 0 ]]; then
   production_record=${production_record:-$(record_after 0 "$PRODUCTION_URL" | jq -s '.')}
-  release_rows=$(jq --argjson record "$production_record" --argjson events "$events" '[.[] | . as $c | {
+  release_rows=$(jq --slurpfile record <(printf '%s' "$production_record") --slurpfile events <(printf '%s' "$events") '$record[0] as $record | $events[0] as $events | [.[] | . as $c | {
       operationId, status, actionId, actionStatus,
       pollCompletions: ([$events[] | select(.type == "AGENT_ACTION_COMPLETED"
           and .payload.completionSource == "PROVIDER_POLL" and .payload.toolAttemptId == $c.attemptId)] | length),
@@ -303,7 +303,7 @@ if [[ $(jq 'length' <<<"$release_calls") -gt 0 ]]; then
       abandoned: ([$record[] | select(.event == "abandoned" and .kind == "release" and .operationId == $c.operationId)] | length)}]' <<<"$release_calls")
   release_actions=$(jq '[group_by(.actionId)[] | {actionId: .[0].actionId, actionStatus: .[0].actionStatus,
       operations: length, deployed: (map(.deployed) | add)}]' <<<"$release_rows")
-  release_stray=$(jq --argjson calls "$release_calls" '($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
+  release_stray=$(jq --slurpfile calls <(printf '%s' "$release_calls") '$calls[0] as $calls | ($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
       | [.[] | select(.event == "deployed" and .kind == "release" and (.operationId as $op | $known | index($op) | not)
           and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
         | .operationId]' <<<"$production_record")
@@ -345,7 +345,7 @@ fi
 if [[ $(jq 'length' <<<"$release_views") -gt 0 ]]; then
   production_record=${production_record:-$(record_after 0 "$PRODUCTION_URL" | jq -s '.')}
   release_lines=$(jq '[.[] | select(.kind == "release" and (.operationId | type) == "string")]' <<<"$production_record")
-  view_rows=$(jq --argjson record "$release_lines" '[.[] | . as $v | .operations[] | . as $o | {
+  view_rows=$(jq --slurpfile record <(printf '%s' "$release_lines") '$record[0] as $record | [.[] | . as $v | .operations[] | . as $o | {
       runId: $v.runId, actionId: $v.actionId, operationKey, attemptNo, status, outcome,
       keyMatches: (.operationKey == "op_\($v.actionId)_\(.attemptNo)"),
       occupied: ($v.occupation != null and $v.occupation.operationKey == $o.operationKey),
@@ -360,7 +360,7 @@ if [[ $(jq 'length' <<<"$release_views") -gt 0 ]]; then
       or (.outcome == "REFUSED" and (.deployed > 0 or .voided > 0 or (.arrived > 0 and .refusals < 1)))
       or (.outcome == "UNKNOWN" and (.occupied | not) and .deployed > 0)
       or .deployed > 1)]' <<<"$view_rows")
-  outside=$(jq --argjson views "$release_views" '($views | map(.operations[].operationKey)) as $known
+  outside=$(jq --slurpfile views <(printf '%s' "$release_views") '$views[0] as $views | ($views | map(.operations[].operationKey)) as $known
       | ($views | map(.actionId) | unique) as $actions
       | [.[] | select((.operationId as $op | $known | index($op) | not)
           and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
@@ -371,7 +371,7 @@ if [[ $(jq 'length' <<<"$release_views") -gt 0 ]]; then
     fail "release_operations_match_record    mismatched=$(jq -c '.' <<<"$bad_rows") outside-ledger=$(jq -c '.' <<<"$outside")"
   fi
 
-  occupation_rows=$(jq --argjson rows "$view_rows" --argjson record "$release_lines" '[.[] | select(.occupation != null)
+  occupation_rows=$(jq --slurpfile rows <(printf '%s' "$view_rows") --slurpfile record <(printf '%s' "$release_lines") '$rows[0] as $rows | $record[0] as $record | [.[] | select(.occupation != null)
       | . as $v | .occupation as $occ
       | ([$rows[] | select(.actionId == $v.actionId and .operationKey == $occ.operationKey)] | first) as $op
       | {runId, actionId, actionStatus, operationKey: $occ.operationKey, status: $occ.status,
@@ -414,9 +414,9 @@ duplicate_generations=$(($(jq 'length' <<<"$orphan") + $(jq 'length' <<<"$duplic
 takeovers=$(jq '[.[] | select(.type == "NODE_DISPATCHED" and .payload.replayed == true)] | length' <<<"$events")
 replayed_answers=$(jq '[.[].replayed] | add // 0' <<<"$tasks")
 bound_units=$(jq '[.[].unit | sub(":.*"; "")] | unique' <<<"$bindings")
-callback_completed=$(jq --argjson units "$bound_units" '[.[] | select(.type == "NODE_COMPLETED" and .payload.completionSource == "CALLBACK"
+callback_completed=$(jq --slurpfile units <(printf '%s' "$bound_units") '$units[0] as $units | [.[] | select(.type == "NODE_COMPLETED" and .payload.completionSource == "CALLBACK"
     and (.nodeRunId as $u | $units | index($u)))] | length' <<<"$events")
-poll_completed=$(jq --argjson units "$bound_units" '[.[] | select(.type == "NODE_COMPLETED" and .payload.completionSource == "PROVIDER_POLL"
+poll_completed=$(jq --slurpfile units <(printf '%s' "$bound_units") '$units[0] as $units | [.[] | select(.type == "NODE_COMPLETED" and .payload.completionSource == "PROVIDER_POLL"
     and (.nodeRunId as $u | $units | index($u)))] | length' <<<"$events")
 over_limit_lines=$(jq '[.[] | select(.overLimit == true)] | length' <<<"$record")
 inflight=$(curl -fsS "$MOCK_URL/control/inflight" 2>/dev/null || printf '{}')
