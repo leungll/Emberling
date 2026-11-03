@@ -390,6 +390,24 @@ func TestE2E_VulnFix_Verify_FailsOnceThenPassesWithFactBoundToLatestPatch(t *tes
 		}
 	}
 
+	// The second Turn reads the advisory the task names; the Turn after it carries that
+	// read in its Context Manifest under the real path, so the Agent read the advisory
+	// rather than a literal placeholder path.
+	advisoryRead := false
+	for i, turn := range trace.Turns {
+		for _, item := range turn.Manifest {
+			if strings.Contains(item.Ref, "{{") {
+				t.Errorf("turns[%d] manifest item %+v names an unresolved placeholder", i, item)
+			}
+			if i == 2 && item.Kind == "WORKSPACE_FILE" && item.Ref == "advisories/"+vulnAdvisory+".md" {
+				advisoryRead = true
+			}
+		}
+	}
+	if !advisoryRead {
+		t.Errorf("turns[2] manifest = %+v, want a WORKSPACE_FILE item for advisories/%s.md", trace.Turns[2].Manifest, vulnAdvisory)
+	}
+
 	lines := serviceRecord(t, f.runner.http.URL)
 	if arrived := recordLines(lines, "arrived", "verification"); len(arrived) != 2 {
 		t.Errorf("runner verification arrivals = %v, want 2", arrived)
