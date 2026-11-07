@@ -359,6 +359,12 @@ export interface ToolMetadata {
   /** True when an uncertain asynchronous result of this Tool is reconciled by polling. */
   reconcilable: boolean;
   /**
+   * JSON Pointer into a successful result naming the material object a Tool that reads
+   * text by range returns; the Backend records such a result in the Turn's Context
+   * Manifest as a `MATERIAL_RANGE` item. Absent when the Tool returns no material.
+   */
+  materialPointer?: string;
+  /**
    * True when an unmet fact requirement is returned to the Agent as a REJECTED tool message
    * instead of ending the Agent Run.
    */

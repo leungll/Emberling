@@ -11,6 +11,7 @@ import {
   RotateCw,
   ScrollText,
   Sparkle,
+  TextSelect,
   TriangleAlert,
   Wrench,
   type LucideIcon,
@@ -157,6 +158,7 @@ const MATERIAL_ICON: Record<ManifestItemKind, LucideIcon> = {
   TOOL_RESULT: Wrench,
   WORKSPACE_FILE: FileCode,
   ARTIFACT: Paperclip,
+  MATERIAL_RANGE: TextSelect,
 };
 
 /** Where an omitted artifact can be read: the run's own artifact content route. */
@@ -191,6 +193,11 @@ function Materials({ items, runId }: { items: readonly ManifestItem[]; runId: st
               {item.label}
             </span>
             {version ? <span className="shrink-0 text-fg-muted">{version}</span> : null}
+            {item.range ? (
+              <span className="shrink-0 text-fg-muted tabular-nums">
+                {t.materialRange(item.range.startLine, item.range.lineCount, item.range.totalLines)}
+              </span>
+            ) : null}
             <span className="shrink-0 text-fg-muted tabular-nums">{bytes(item.length)}</span>
             {!item.included ? (
               <span className="shrink-0 text-fg-muted">{t.notIncluded}</span>

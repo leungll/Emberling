@@ -634,7 +634,14 @@ export const runs = {
         STATE: (v: string) => `version ${v}`,
         TOOL_RESULT: (v: string) => `attempt ${v}`,
         WORKSPACE_FILE: (v: string) => `patch ${v}`,
+        MATERIAL_RANGE: (v: string) => `content ${v}`,
       } as Record<string, ((v: string) => string) | undefined>,
+      materialRange: (start: number, count: number, total: number) =>
+        count === 0
+          ? `no lines of ${String(total)}`
+          : count === 1
+            ? `line ${String(start)} of ${String(total)}`
+            : `lines ${String(start)}–${String(start + count - 1)} of ${String(total)}`,
       notIncluded: 'Not included: available by reference',
       open: 'Open',
     },

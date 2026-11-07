@@ -21,6 +21,7 @@ const MANIFEST: ManifestItem[] = [
     length: 48,
     included: true,
     omittedReason: null,
+    range: null,
   },
   {
     kind: 'TASK_INPUT',
@@ -31,6 +32,7 @@ const MANIFEST: ManifestItem[] = [
     length: 30,
     included: true,
     omittedReason: null,
+    range: null,
   },
   {
     kind: 'WORKSPACE_FILE',
@@ -41,6 +43,7 @@ const MANIFEST: ManifestItem[] = [
     length: 2048,
     included: true,
     omittedReason: null,
+    range: null,
   },
   {
     kind: 'TOOL_RESULT',
@@ -51,6 +54,18 @@ const MANIFEST: ManifestItem[] = [
     length: 120,
     included: true,
     omittedReason: null,
+    range: null,
+  },
+  {
+    kind: 'MATERIAL_RANGE',
+    label: ARTIFACT_ID,
+    ref: ARTIFACT_ID,
+    version: '7d3f9a1c2b4e',
+    sha256: 'ff',
+    length: 96,
+    included: true,
+    omittedReason: null,
+    range: { startLine: 2, lineCount: 2, totalLines: 40 },
   },
   {
     kind: 'ARTIFACT',
@@ -61,6 +76,7 @@ const MANIFEST: ManifestItem[] = [
     length: 4096,
     included: false,
     omittedReason: 'REFERENCE_ONLY',
+    range: null,
   },
   {
     kind: 'STATE',
@@ -71,6 +87,7 @@ const MANIFEST: ManifestItem[] = [
     length: 64,
     included: true,
     omittedReason: null,
+    range: null,
   },
 ];
 
@@ -119,7 +136,7 @@ describe('the Turns tab’s materials list', () => {
     const rows = within(list)
       .getAllByRole('listitem')
       .map((li) => li.textContent);
-    expect(rows).toHaveLength(6);
+    expect(rows).toHaveLength(7);
     expect(rows[0]).toContain('Instructions');
     expect(rows[0]).toContain('48 B');
     expect(rows[2]).toContain('go.mod');
@@ -127,8 +144,11 @@ describe('the Turns tab’s materials list', () => {
     expect(rows[2]).toContain('2 KB');
     expect(rows[3]).toContain('lookup result');
     expect(rows[3]).toContain('attempt 1');
-    expect(rows[5]).toContain('Agent state');
-    expect(rows[5]).toContain('version 1');
+    expect(rows[4]).toContain('content 7d3f9a1c2b4e');
+    expect(rows[4]).toContain('lines 2–3 of 40');
+    expect(rows[4]).toContain('96 B');
+    expect(rows[6]).toContain('Agent state');
+    expect(rows[6]).toContain('version 1');
   });
 
   it('marks an omitted artifact with its reason and links to its content', () => {
@@ -150,7 +170,7 @@ describe('the Turns tab’s materials list', () => {
     const included = within(list)
       .getAllByRole('listitem')
       .filter((li) => !li.textContent?.includes('Not included'));
-    expect(included).toHaveLength(5);
+    expect(included).toHaveLength(6);
     for (const li of included) {
       expect(within(li).queryByRole('link')).toBeNull();
     }

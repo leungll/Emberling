@@ -57,6 +57,7 @@ const APPROVAL_DETAIL = {
           length: 120,
           included: true,
           omittedReason: null,
+          range: null,
         },
       },
       {

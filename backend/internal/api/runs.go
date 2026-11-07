@@ -443,6 +443,16 @@ type manifestItemDTO struct {
 	Included bool                    `json:"included"`
 	// OmittedReason is null for an included item.
 	OmittedReason *domain.ManifestOmission `json:"omittedReason"`
+	// Range is the line range a MATERIAL_RANGE item carried; null for every other kind.
+	Range *manifestRangeDTO `json:"range"`
+}
+
+// manifestRangeDTO projects the lines a material range item carried, numbered from one,
+// with the line count of the whole artifact.
+type manifestRangeDTO struct {
+	StartLine  int `json:"startLine"`
+	LineCount  int `json:"lineCount"`
+	TotalLines int `json:"totalLines"`
 }
 
 // agentDecisionDTO says what the model committed to, without saying what it said: the
@@ -608,7 +618,7 @@ func toWorkspacePatchDTO(patch domain.WorkspacePatch) workspacePatchDTO {
 }
 
 func toManifestItemDTO(item domain.ManifestItem) manifestItemDTO {
-	return manifestItemDTO{
+	dto := manifestItemDTO{
 		Kind:          item.Kind,
 		Label:         item.Label,
 		Ref:           item.Ref,
@@ -618,6 +628,10 @@ func toManifestItemDTO(item domain.ManifestItem) manifestItemDTO {
 		Included:      item.Included,
 		OmittedReason: item.OmittedReason,
 	}
+	if item.Range != nil {
+		dto.Range = &manifestRangeDTO{StartLine: item.Range.StartLine, LineCount: item.Range.LineCount, TotalLines: item.Range.TotalLines}
+	}
+	return dto
 }
 
 func toAgentWorkspaceDTO(workspace *service.AgentTraceWorkspace) *agentWorkspaceDTO {
