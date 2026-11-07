@@ -107,14 +107,16 @@ keys, separators `,` and `:`, non-ASCII kept, no trailing newline, integer
 milliseconds. Its SHA-256 is `timelineSha256`:
 
 ```json
-{"durationMs":58940,"ruleVersion":"v1","segments":[{"endMs":85600,"from":"S1","startMs":26660,"text":"joined sentence text","to":"S5"}],"sourceId":"src_...","sourceSha256":"...","targetDurationMs":null,"transcriptSha256":"..."}
+{"cropCenterX":0.5,"durationMs":58940,"ruleVersion":"v1","segments":[{"endMs":85600,"from":"S1","startMs":26660,"text":"joined sentence text","to":"S5"}],"sourceId":"src_...","sourceSha256":"...","targetDurationMs":null,"transcriptSha256":"..."}
 ```
 
 A segment that cannot be resolved keeps `null` times and an empty `text`. The
 result carries `kind` `TIMELINE`, `ruleVersion`, `passed`, `subjectSha256` and
 `timelineSha256` (equal), `durationMs`, `findings`, and `timeline`, the
 canonical text verbatim, so a caller can store it and get the same hash. The
-crop centre is read from the source record at render time.
+timeline records the source's `cropCenterX` as of the check, so a render depends
+on nothing outside the timeline; changing a source's crop centre affects only
+timelines checked afterwards.
 
 **`RENDER`**, input `{"timelineSha256"}`; an unknown hash fails the task with
 `TIMELINE_NOT_FOUND`. Cuts and concatenates the segments,

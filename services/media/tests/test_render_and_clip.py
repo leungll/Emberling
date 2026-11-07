@@ -40,7 +40,8 @@ def test_check_timeline_result_is_canonical_and_passes(service, chain) -> None:
     text = result["timeline"]
     assert hashlib.sha256(text.encode("utf-8")).hexdigest() == result["subjectSha256"] == result["timelineSha256"]
     timeline = json.loads(text)
-    assert list(timeline) == ["durationMs", "ruleVersion", "segments", "sourceId", "sourceSha256", "targetDurationMs", "transcriptSha256"]
+    assert list(timeline) == ["cropCenterX", "durationMs", "ruleVersion", "segments", "sourceId", "sourceSha256", "targetDurationMs", "transcriptSha256"]
+    assert timeline["cropCenterX"] == 0.5
     assert timeline["ruleVersion"] == rules_v1.RULE_VERSION
     assert list(timeline["segments"][0]) == ["endMs", "from", "startMs", "text", "to"]
     first_line_text = transcript["material"].splitlines()[0].split("\t")[3]
@@ -126,6 +127,33 @@ def test_render_same_timeline_twice_gives_same_clip(service, rendered) -> None:
     second = service.run("ext_render_2", "RENDER", {"timelineSha256": timeline_result["timelineSha256"]})["result"]
     assert second["clipSha256"] == first["clipSha256"]
     assert second["sizeBytes"] == first["sizeBytes"]
+
+
+def test_changing_the_source_crop_does_not_change_an_existing_timeline_render(service, rendered) -> None:
+    timeline_result, first = rendered
+    moved = service.upload(crop_center_x=0.2)
+    assert moved["cropCenterX"] == 0.2
+    again = service.run("ext_render_moved", "RENDER", {"timelineSha256": timeline_result["timelineSha256"]})["result"]
+    assert again["clipSha256"] == first["clipSha256"]
+
+
+    source_id = json.loads(timeline_result["timeline"])["sourceId"]
+    new_check = service.run(
+        "ext_ct_moved",
+        "CHECK_TIMELINE",
+        {
+            "sourceId": source_id,
+            "transcriptSha256": json.loads(timeline_result["timeline"])["transcriptSha256"],
+            "targetDurationMs": json.loads(timeline_result["timeline"])["targetDurationMs"],
+            "segments": [{"from": s["from"], "to": s["to"]} for s in json.loads(timeline_result["timeline"])["segments"]],
+        },
+    )["result"]
+    assert json.loads(new_check["timeline"])["cropCenterX"] == 0.2
+    assert new_check["timelineSha256"] != timeline_result["timelineSha256"]
+    # The fixture is a solid colour, so a moved window renders the same pixels; only the
+    # timeline identity and the render's independence from the source record are asserted.
+    moved_render = service.run("ext_render_new", "RENDER", {"timelineSha256": new_check["timelineSha256"]})["result"]
+    assert moved_render["timelineSha256"] == new_check["timelineSha256"]
 
 
 def test_rendered_clip_passes_the_clip_check(service, rendered) -> None:

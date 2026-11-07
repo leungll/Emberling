@@ -17,6 +17,7 @@ from .sources import SourceRecord
 from .storage import DataDir, sha256_text
 from .transcribe import Sentence, Transcript
 
+CROP_CENTER_DECIMALS = 4
 SENTENCE_ID_PATTERN = re.compile(r"^S[1-9][0-9]*$")
 
 
@@ -83,6 +84,9 @@ def build_timeline(
             }
         )
     return {
+        # The crop centre the source carried at check time, so a timeline alone decides
+        # its render; a later change of the source's setting affects only new timelines.
+        "cropCenterX": round(source.cropCenterX, CROP_CENTER_DECIMALS),
         "durationMs": total_ms,
         "ruleVersion": RULE_VERSION,
         "segments": entries,

@@ -1,7 +1,7 @@
 """Rendering a timeline into a 9:16 clip with burned-in subtitles.
 
-The render is a function of the timeline (the segments it names and the transcript's
-word timestamps) and of the source's crop centre. FFmpeg runs with one thread, bit-exact
+The render is a pure function of the timeline: the segments it names, the transcript's
+word timestamps and the crop centre it recorded. FFmpeg runs with one thread, bit-exact
 flags and no timestamp metadata, so the same timeline produces the same bytes in the
 same environment. The subtitle cues are kept beside the clip for the clip check.
 """
@@ -183,7 +183,7 @@ class Renderer:
                     "-i",
                     str(self._sources.content_path(source.sha256)),
                     "-filter_complex",
-                    filter_graph(timeline, source.cropCenterX),
+                    filter_graph(timeline, float(timeline["cropCenterX"])),
                     "-map",
                     "[vout]",
                     "-map",
