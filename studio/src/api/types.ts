@@ -363,6 +363,12 @@ export interface ToolMetadata {
    * instead of ending the Agent Run.
    */
   returnUnmetRequirement: boolean;
+  /**
+   * Fact types whose failed verdicts bound this Tool's calls: once the Agent Run has
+   * collected more failed facts of one of them than its configuration allows, further
+   * calls are refused before any Attempt exists. Empty when the Tool is never bounded.
+   */
+  countedFailedFacts: string[];
 }
 
 export type ToolAuthorizationRisk = 'LOW' | 'PRODUCTION';

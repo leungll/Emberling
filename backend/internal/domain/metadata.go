@@ -374,6 +374,12 @@ type ToolMetadata struct {
 	// returned to the Agent, so it can establish the missing fact and call again, instead
 	// of ending the Agent Run. A Tool that leaves it false keeps the terminal behaviour.
 	ReturnUnmetRequirement bool `json:"returnUnmetRequirement"`
+	// CountedFailedFacts lists the fact types whose failed verdicts bound this Tool's
+	// calls: once an Agent Run has collected more failed facts of one of these types than
+	// its configuration allows, further calls of the Tool are refused before any Attempt
+	// exists. A type the Agent Run's configuration does not bound constrains nothing. Empty
+	// means the Tool's calls are never bounded by failed facts.
+	CountedFailedFacts []string `json:"countedFailedFacts"`
 }
 
 // ToolAuthorizationRisk is the declared risk class of a Tool's calls.
@@ -485,11 +491,31 @@ func (m ToolMetadata) Validate() error {
 	if m.RequiresReviewModel && !m.UsesReviewModel {
 		errs = append(errs, errors.New("requiresReviewModel is only allowed on a tool that uses the review model"))
 	}
+	errs = append(errs, validateCountedFailedFacts(m.CountedFailedFacts)...)
 
 	if len(errs) == 0 {
 		return nil
 	}
 	return fmt.Errorf("invalid tool metadata %q: %w", m.Name, errors.Join(errs...))
+}
+
+// validateCountedFailedFacts checks the fact types a Tool's calls are bounded by: each
+// is named once and none is empty.
+func validateCountedFailedFacts(factTypes []string) []error {
+	var errs []error
+	seen := make(map[string]struct{}, len(factTypes))
+	for _, factType := range factTypes {
+		if factType == "" {
+			errs = append(errs, errors.New("countedFailedFacts: fact type is empty"))
+			continue
+		}
+		if _, duplicate := seen[factType]; duplicate {
+			errs = append(errs, fmt.Errorf("countedFailedFacts: duplicate fact type %q", factType))
+			continue
+		}
+		seen[factType] = struct{}{}
+	}
+	return errs
 }
 
 // validateToolAuthorization checks an optional authorization declaration. Absence is the

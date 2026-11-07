@@ -175,6 +175,7 @@ func TestAPI_ToolsCatalog_AuthorizationAndRecords_Serialised(t *testing.T) {
 			UsesWorkspace:          true,
 			Reconcilable:           true,
 			ReturnUnmetRequirement: true,
+			CountedFailedFacts:     []string{"media_checked", "content_reviewed"},
 		},
 		Executor: reconcilableTestToolExecutor{},
 	}
@@ -193,12 +194,14 @@ func TestAPI_ToolsCatalog_AuthorizationAndRecords_Serialised(t *testing.T) {
 			"usesWorkspace":          `true`,
 			"reconcilable":           `true`,
 			"returnUnmetRequirement": `true`,
+			"countedFailedFacts":     `["media_checked","content_reviewed"]`,
 		},
 		"lookup": {
 			"records":                `[]`,
 			"usesWorkspace":          `false`,
 			"reconcilable":           `false`,
 			"returnUnmetRequirement": `false`,
+			"countedFailedFacts":     `[]`,
 		},
 	}
 	for name, fields := range want {

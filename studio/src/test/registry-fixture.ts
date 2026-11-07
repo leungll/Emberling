@@ -247,6 +247,7 @@ const tool = (
   usesWorkspace: false,
   reconcilable: false,
   returnUnmetRequirement: false,
+  countedFailedFacts: [],
   ...extra,
 });
 
