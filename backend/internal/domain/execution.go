@@ -77,7 +77,10 @@ type NodeAttempt struct {
 	// plaintext token is sent to the Provider and never stored.
 	CallbackTokenHash *string   `json:"-"`
 	StartedAt         time.Time `json:"startedAt"`
-	// DeadlineAt is absolute: entering WAITING_CALLBACK does not restart the clock.
+	// DeadlineAt is absolute: entering WAITING_CALLBACK does not restart the clock. An
+	// Attempt with a timeout gets it at creation. One without gets the maximum wait in its
+	// dispatch transaction, so a STARTED Attempt with none is always the orphan path's. It
+	// never changes after that write.
 	DeadlineAt   *time.Time      `json:"deadlineAt"`
 	DispatchedAt *time.Time      `json:"dispatchedAt"`
 	CompletedAt  *time.Time      `json:"completedAt"`
@@ -92,6 +95,12 @@ type NodeAttempt struct {
 	// uncertain when it failed. It is written once with the failure and is nil on every
 	// other Attempt, and on Attempts that failed before the value was recorded.
 	Uncertain *bool `json:"uncertain"`
+	// RunnerID identifies the process instance that created the Attempt, written once with
+	// the STARTED row and never changed. Recovery compares it with the current process to
+	// find a STARTED Attempt nobody is executing any more. It is an internal fact and never
+	// leaves the Runtime. A nil value records no process, and such an Attempt is never
+	// taken over.
+	RunnerID *string `json:"-"`
 	// Cost is the charge the Provider reported for this Attempt's external call, written
 	// once with the SUCCEEDED result and never changed. It is nil on a FAILED Attempt, on
 	// one whose Provider reported no charge, and on one that never made an external call;

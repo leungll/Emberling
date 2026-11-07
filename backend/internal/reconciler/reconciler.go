@@ -45,6 +45,9 @@ import (
 // HandleOrphanToolAttempt is the use case for a STARTED synchronous Tool Attempt another
 // process created. The Reconciler only hands it the Attempts it discovers; the use case
 // re-checks every condition under the Run lock and owns every write.
+//
+// HandleOrphanNodeAttempt is the use case for a STARTED Node Attempt with no deadline that
+// another process created. It decides the same way, through the ordinary failure use case.
 type Advancer interface {
 	Advance(ctx context.Context, runID string) (service.AdvanceOutcome, error)
 	Execute(ctx context.Context, outcome service.AdvanceOutcome) error
@@ -57,6 +60,7 @@ type Advancer interface {
 	CompleteAgentFinal(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
 	TimeoutAgentRun(ctx context.Context, agentRunID string) error
 	HandleOrphanToolAttempt(ctx context.Context, attemptID string) error
+	HandleOrphanNodeAttempt(ctx context.Context, attemptID string) error
 	ExpireApproval(ctx context.Context, approvalID string) error
 	OpenReleaseHumanWait(ctx context.Context, attemptID string) error
 	ExpireHumanWait(ctx context.Context, humanWaitID string) error
@@ -80,7 +84,7 @@ type Config struct {
 	BatchLimit int
 	Logger     *slog.Logger
 	// RunnerID is this process's identity, the same value its ExecutionService writes
-	// onto the Tool Attempts it creates. Empty skips the orphaned Tool Attempt scan.
+	// onto the Node and Tool Attempts it creates. Empty skips both orphaned Attempt scans.
 	RunnerID string
 }
 
@@ -137,6 +141,11 @@ type Report struct {
 	// returned without error (a handling that writes nothing is a success).
 	OrphanToolAttemptsFound   int
 	OrphanToolAttemptsHandled int
+	// OrphanNodeAttemptsFound is how many STARTED Node Attempts with no deadline of another
+	// process the scan found; OrphanNodeAttemptsHandled counts those whose use case returned
+	// without error.
+	OrphanNodeAttemptsFound   int
+	OrphanNodeAttemptsHandled int
 	// DueConfirmDeadlinesFound is how many release Attempts had passed their confirm
 	// deadline without a definite production answer; HumanWaitsOpened counts the
 	// OpenReleaseHumanWait calls that returned without error.
@@ -190,7 +199,9 @@ type Report struct {
 	Errors                []error
 }
 
-// RunOnce performs one reconciliation pass: it lists persisted READY NodeRuns and
+// RunOnce performs one reconciliation pass: it hands orphaned Node Attempts to their use
+// case first, because an orphan is what keeps a Run's execution slot occupied, so a Run it
+// frees is driven in this same pass; it then lists persisted READY NodeRuns and
 // RUNNING NodeRuns whose retry backoff has elapsed, drives Advance/Execute for each
 // distinct Run until no further claim is made; lists expired (deadline passed) STARTED or
 // DISPATCHED Attempts and calls TimeoutAttempt on each; lists DISPATCHED Attempts whose
@@ -209,6 +220,10 @@ type Report struct {
 func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 	var report Report
 	now := r.cfg.Clock.Now()
+
+	if err := r.scanOrphanNodeAttempts(ctx, &report); err != nil {
+		return report, err
+	}
 
 	var nodeRuns []domain.NodeRun
 	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
@@ -413,6 +428,34 @@ func (r *Reconciler) scanOrphanToolAttempts(ctx context.Context, now time.Time, 
 			continue
 		}
 		report.OrphanToolAttemptsHandled++
+	}
+	return nil
+}
+
+// scanOrphanNodeAttempts hands every STARTED Node Attempt with no deadline created by a
+// process other than this one to the orphaned Node Attempt use case. Like the Tool scan it
+// is skipped when no runner identity is configured, because then no Attempt can be told
+// apart from this process's own in-flight calls. It does not look at the Run: an Attempt of
+// an ended Run still has to end and free its Provider slot.
+func (r *Reconciler) scanOrphanNodeAttempts(ctx context.Context, report *Report) error {
+	if r.cfg.RunnerID == "" {
+		return nil
+	}
+	var orphans []domain.NodeAttempt
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		orphans, err = tx.NodeAttempts().ListOrphanStarted(ctx, r.cfg.RunnerID, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list orphaned node attempts: %w", err)
+	}
+	report.OrphanNodeAttemptsFound = len(orphans)
+	for _, attempt := range orphans {
+		if err := r.cfg.Executor.HandleOrphanNodeAttempt(ctx, attempt.ID); err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: handle orphaned node attempt %s: %w", attempt.ID, err))
+			continue
+		}
+		report.OrphanNodeAttemptsHandled++
 	}
 	return nil
 }

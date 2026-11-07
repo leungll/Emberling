@@ -48,15 +48,15 @@ const (
 	orphanTerminal
 )
 
-// classifyOrphan maps the Tool's current registration to the handling of its orphaned
-// call. registered is false when the Tool Name no longer resolves.
-func classifyOrphan(metadata domain.ToolMetadata, registered bool) orphanDisposition {
+// classifyOrphan maps the current registration of a Tool or Node to the handling of its
+// orphaned call. registered is false when the name no longer resolves.
+func classifyOrphan(side domain.SideEffectPolicy, registered bool) orphanDisposition {
 	switch {
 	case !registered:
 		return orphanTerminal
-	case metadata.SideEffect.Kind == domain.SideEffectNone || metadata.SideEffect.Idempotency == domain.IdempotencySafe:
+	case side.Kind == domain.SideEffectNone || side.Idempotency == domain.IdempotencySafe:
 		return orphanInterrupted
-	case metadata.SideEffect.Kind == domain.SideEffectExternal && metadata.SideEffect.Idempotency == domain.IdempotencyUnknown:
+	case side.Kind == domain.SideEffectExternal && side.Idempotency == domain.IdempotencyUnknown:
 		return orphanUncertain
 	default:
 		return orphanTerminal
@@ -295,7 +295,7 @@ func (s *ExecutionService) HandleOrphanToolAttempt(ctx context.Context, attemptI
 			return nil
 		}
 
-		disposition := classifyOrphan(reg.Metadata, registered)
+		disposition := classifyOrphan(reg.Metadata.SideEffect, registered)
 		execError, uncertain := orphanExecutionError(disposition)
 		if err := tx.ToolAttempts().MarkInterrupted(ctx, attempt.ID, now, execError, uncertain); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {

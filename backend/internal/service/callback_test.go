@@ -132,7 +132,7 @@ func (t *cbTx) AgentWorkspaces() store.AgentWorkspaceRepository           { retu
 func (t *cbTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
 func (t *cbTx) Approvals() store.ApprovalRepository                       { return nil }
 func (t *cbTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
-func (t *cbTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
+func (t *cbTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return noOccupations{} }
 func (t *cbTx) HumanWaits() store.HumanWaitRepository                     { return nil }
 func (t *cbTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
@@ -351,7 +351,7 @@ func (r *cbNodeAttemptRepo) ListByNodeRun(context.Context, string) ([]domain.Nod
 func (r *cbNodeAttemptRepo) Transition(context.Context, string, domain.NodeAttemptStatus, domain.NodeAttemptStatus, time.Time) error {
 	return errCbNotImplemented
 }
-func (r *cbNodeAttemptRepo) MarkDispatched(_ context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error {
+func (r *cbNodeAttemptRepo) MarkDispatched(_ context.Context, attemptID string, now time.Time, firstPollAt *time.Time, _ time.Time) error {
 	attempt := r.tx.state.attempts[attemptID]
 	if attempt.Status != domain.NodeAttemptStarted {
 		return domain.ErrStaleClaim
@@ -392,6 +392,10 @@ func (r *cbNodeAttemptRepo) MarkFailed(_ context.Context, attemptID string, from
 	r.tx.state.attempts[attemptID] = attempt
 	return nil
 }
+func (r *cbNodeAttemptRepo) ListOrphanStarted(context.Context, string, int) ([]domain.NodeAttempt, error) {
+	return nil, nil
+}
+
 func (r *cbNodeAttemptRepo) ListExpired(context.Context, time.Time, int) ([]domain.NodeAttempt, error) {
 	return nil, errCbNotImplemented
 }

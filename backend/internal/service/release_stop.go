@@ -182,10 +182,10 @@ func (s *ExecutionService) endHumanWait(ctx context.Context, humanWaitID string,
 				return &HumanWaitConflictError{HumanWaitID: wait.ID, Status: wait.Status, RunEnded: true}
 			}
 			// Nothing is left to end; the wait still closes so the expiry scan stops
-			// listing it. No Run fact changes and no Event is appended. An ended Run whose
-			// release still holds the target without a query schedule hands that schedule
-			// to the occupation here, writing the occupation row alone, so the target is
-			// never held by work nobody will pick up.
+			// listing it. No Run fact changes and no Event is appended. A Run that ended
+			// before every Run end carried the schedule may still hold the target without
+			// one; it hands that schedule to the occupation here, writing the occupation
+			// row alone, so the target is never held by work nobody will pick up.
 			won, err := tx.HumanWaits().Close(ctx, wait.ID, domain.HumanWaitExpired, now, nil, &releaseOutcome)
 			if err != nil {
 				return err
@@ -261,24 +261,12 @@ func (s *ExecutionService) endReleaseHumanWaitLocked(
 		}
 		return err
 	}
-	// The target stays occupied: nobody knows whether the operation took effect. The
-	// occupation now carries the query schedule, so the reconciliation does not depend on
-	// the ended Run or on any process memory.
-	occupation, err := activeOccupationOfAction(ctx, tx, action.ID)
-	if err != nil {
-		return err
-	}
-	if occupation != nil {
-		if err := tx.ReleaseOccupations().ScheduleQuery(ctx, occupation.ID, now); err != nil {
-			if errors.Is(err, domain.ErrStaleClaim) {
-				return errAgentTurnSuperseded
-			}
-			return err
-		}
-	}
-	// The Agent Run terminates a few lines below, but it resumes first so the paused time
-	// is settled exactly as every other resume settles it (AGENT_RESUMED and the deadline
-	// moved by the pause), and no terminated Agent Run is left looking paused.
+	// The target stays occupied: nobody knows whether the operation took effect. Terminating
+	// the Agent Run below ends the Run, and that write hands the query schedule to the
+	// occupation, so the reconciliation does not depend on the ended Run or on any process
+	// memory. The Agent Run resumes first so the paused time is settled exactly as every
+	// other resume settles it (AGENT_RESUMED and the deadline moved by the pause), and no
+	// terminated Agent Run is left looking paused.
 	if agentRun.PausedAt != nil {
 		if agentRun, err = s.resumeAgentLocked(ctx, tx, lock, nodeRun, agentRun, now); err != nil {
 			return err

@@ -23,6 +23,7 @@ import (
 
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
+	"github.com/leungll/Emberling/backend/internal/store"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"
 )
 
@@ -380,5 +381,50 @@ func TestAgentTimeout_ConcurrentTimeoutAndResult_OnlyOneWins(t *testing.T) {
 		}
 	default:
 		t.Fatalf("tool attempt status = %s, want one of SUCCEEDED or FAILED", attempt.Status)
+	}
+}
+
+// An Agent timeout that lands on a Run a sibling already failed ends the Agent's own
+// NodeRun and Attempt facts, but the Run's error stays the failure that ended it.
+func TestTimeoutAgentRun_EndedRun_KeepsTheErrorThatEndedIt(t *testing.T) {
+	h := newAsyncHarness(t,
+		domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
+		domain.ExecutionPolicy{TimeoutMs: 60_000, MaxAttempts: 1})
+	f := seedRun(h.ctx, t, h.uow)
+
+	const agentRunID = "ar_ended"
+	deadline := h.clock.Now().Add(time.Minute)
+	if err := h.uow.WithinTx(h.ctx, func(ctx context.Context, tx store.Tx) error {
+		nodeRun := newNodeRun("nr_ended", f.runID, "node_ended")
+		nodeRun.Status = domain.NodeRunRunning
+		if err := tx.NodeRuns().Create(ctx, nodeRun); err != nil {
+			return err
+		}
+		agentRun := newAgentRun(agentRunID, nodeRun.ID)
+		agentRun.Deadline = deadline
+		if err := tx.AgentRuns().Create(ctx, agentRun); err != nil {
+			return err
+		}
+		return tx.AgentTurns().Create(ctx, newAgentTurn("turn_ended", agentRunID, 1))
+	}); err != nil {
+		t.Fatalf("seed the Agent: %v", err)
+	}
+	if _, err := h.pool.Exec(h.ctx, `
+		UPDATE runs SET status = 'FAILED', completed_at = $2, error = '{"code":"ORIGINAL","message":"the failure that ended it"}'
+		 WHERE id = $1`, f.runID, h.clock.Now()); err != nil {
+		t.Fatalf("end the Run: %v", err)
+	}
+
+	h.clock.Advance(2 * time.Minute)
+	if err := h.svc.TimeoutAgentRun(h.ctx, agentRunID); err != nil {
+		t.Fatalf("TimeoutAgentRun: %v", err)
+	}
+
+	run := getRun(h.ctx, t, h.uow, f.runID)
+	if run.Error == nil || run.Error.Code != "ORIGINAL" {
+		t.Fatalf("run error = %+v, want the failure that ended the Run", run.Error)
+	}
+	if nodeRun := getNodeRun(h.ctx, t, h.uow, "nr_ended"); nodeRun.Status != domain.NodeRunFailed {
+		t.Fatalf("Agent NodeRun status = %s, want FAILED", nodeRun.Status)
 	}
 }

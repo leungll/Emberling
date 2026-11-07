@@ -125,7 +125,7 @@ func TestClassifyOrphan_FollowsRegisteredPolicy(t *testing.T) {
 		{"no longer registered", domain.ToolMetadata{}, false, orphanTerminal},
 	}
 	for _, tc := range cases {
-		if got := classifyOrphan(tc.metadata, tc.registered); got != tc.want {
+		if got := classifyOrphan(tc.metadata.SideEffect, tc.registered); got != tc.want {
 			t.Errorf("%s: disposition = %d, want %d", tc.name, got, tc.want)
 		}
 	}

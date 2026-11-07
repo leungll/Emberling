@@ -182,6 +182,13 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 			// for a failure before dispatch, a failure after it is terminal.
 			decision.Retry = false
 		}
+		if lock.Status().IsTerminal() {
+			// A parallel branch already ended this Run while the Attempt was running. Nothing
+			// claims work of an ended Run, so a retry would never start, and it would need
+			// the Run moved back to RUNNING, which a terminal Run refuses. The Attempt and
+			// NodeRun end here instead, and the Provider slot goes with them.
+			decision.Retry = false
+		}
 
 		if decision.Retry {
 			// A retry always runs as a new Attempt of a NodeRun that is still RUNNING: only
@@ -230,8 +237,12 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 		}); err != nil {
 			return err
 		}
-		if err := tx.Runs().SetError(ctx, lock, p.execError); err != nil {
-			return err
+		// The Run's error is the failure that ended it, the one RUN_FAILED carries. A later
+		// failure of a sibling is recorded on its own NodeRun and Attempt.
+		if !lock.Status().IsTerminal() {
+			if err := tx.Runs().SetError(ctx, lock, p.execError); err != nil {
+				return err
+			}
 		}
 
 		allNodeRuns, err := tx.NodeRuns().ListByRun(ctx, run.ID)
@@ -264,7 +275,7 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 				return err
 			}
 		}
-		if err := tx.Runs().UpdateAggregate(ctx, lock, newStatus, now); err != nil {
+		if err := s.writeRunStatusLocked(ctx, tx, lock, newStatus, now); err != nil {
 			return err
 		}
 		runID = run.ID

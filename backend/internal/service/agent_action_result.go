@@ -180,6 +180,12 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		if err != nil {
 			return err
 		}
+		// A deployed release is a fact about the target once its Run ended, not a result of
+		// the task: the post-task reconciliation records it, and the ended Run stays as it
+		// was committed.
+		if call.release != nil && lock.Status().IsTerminal() {
+			return errAgentTurnSuperseded
+		}
 		nodeRun, err := tx.NodeRuns().Get(ctx, call.nodeRunID)
 		if err != nil {
 			return err
@@ -547,7 +553,7 @@ func (s *ExecutionService) aggregateRunLocked(ctx context.Context, tx store.Tx, 
 			return err
 		}
 	}
-	return tx.Runs().UpdateAggregate(ctx, lock, newStatus, now)
+	return s.writeRunStatusLocked(ctx, tx, lock, newStatus, now)
 }
 
 // appendToolRoundContext creates the Context Version one successful Tool round produces:

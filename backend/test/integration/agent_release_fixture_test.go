@@ -151,6 +151,11 @@ type releaseFixtureOptions struct {
 	client *http.Client
 	// stateSchema, when set, is the Agent node's State Schema.
 	stateSchema string
+	// failingSibling adds a parallel branch beside the Agent: a Node that fails when a
+	// test lets it run, which ends the Run while the Agent still waits on its release.
+	failingSibling bool
+	// wrapUoW, when set, wraps the Unit of Work the service runs its transactions through.
+	wrapUoW func(store.UnitOfWork) store.UnitOfWork
 }
 
 type releaseFixture struct {
@@ -161,6 +166,7 @@ type releaseFixture struct {
 	production  *productionFixture
 	bounds      releaseBounds
 	stateSchema string
+	sibling     bool
 	run         domain.Run
 	outcome     service.AdvanceOutcome
 }
@@ -193,12 +199,12 @@ func newReleaseFixture(t *testing.T, opts releaseFixtureOptions) *releaseFixture
 		deployrelease.Registration(opts.production.srv.URL, client),
 	)
 	h := newAgentHarness(t, agentHarnessOptions{
-		Tools: tools, Nodes: []registry.NodeRegistration{approvalTaskInputRegistration()},
-		Pool: opts.pool, Clock: opts.clock, RunnerID: opts.runnerID,
+		Tools: tools, Nodes: []registry.NodeRegistration{approvalTaskInputRegistration(), failingSiblingRegistration(), asyncJoinRegistration()},
+		Pool: opts.pool, Clock: opts.clock, RunnerID: opts.runnerID, WrapUoW: opts.wrapUoW,
 		PollHooks: opts.pollHooks, ApprovalHooks: opts.approvalHooks,
 		WorkspaceRepositories: []string{wsRepositoryID},
 	})
-	return &releaseFixture{h: h, repo: repo, stub: stub, artifacts: artifacts, production: opts.production, bounds: opts.bounds, stateSchema: opts.stateSchema}
+	return &releaseFixture{h: h, repo: repo, stub: stub, artifacts: artifacts, production: opts.production, bounds: opts.bounds, stateSchema: opts.stateSchema, sibling: opts.failingSibling}
 }
 
 // restart is a new Backend over the fixture's committed facts and clock, with a new runner
@@ -247,7 +253,7 @@ func (f *releaseFixture) definition(workflowID string) domain.Definition {
 		}
 	}
 	encoded, _ := json.Marshal(config)
-	return domain.Definition{
+	def := domain.Definition{
 		WorkflowID: workflowID, Version: 1, Name: "Release", Description: "task input -> agent -> text_output",
 		Nodes: []domain.Node{
 			{ID: "node_input", Type: approvalTaskInputType, Name: "Task",
@@ -260,6 +266,20 @@ func (f *releaseFixture) definition(workflowID string) domain.Definition {
 			{ID: "e2", Source: "node_agent", SourceHandle: "text", Target: "node_output", TargetHandle: "text"},
 		},
 	}
+	if f.sibling {
+		// A required input port takes one edge, so the branches rejoin before the Output.
+		def.Nodes = append(def.Nodes,
+			domain.Node{ID: "node_sibling", Type: failingSiblingType, Name: "Sibling", Config: json.RawMessage(`{}`)},
+			domain.Node{ID: "node_join", Type: asyncJoinNodeType, Name: "Join", Config: json.RawMessage(`{}`)})
+		def.Edges = []domain.Edge{
+			def.Edges[0],
+			{ID: "e2", Source: "node_input", SourceHandle: "text", Target: "node_sibling", TargetHandle: "text"},
+			{ID: "e3", Source: "node_agent", SourceHandle: "text", Target: "node_join", TargetHandle: "left"},
+			{ID: "e4", Source: "node_sibling", SourceHandle: "text", Target: "node_join", TargetHandle: "right"},
+			{ID: "e5", Source: "node_join", SourceHandle: "text", Target: "node_output", TargetHandle: "text"},
+		}
+	}
+	return def
 }
 
 // start saves the Definition, creates the Run, claims the Agent node and scripts the
