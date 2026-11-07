@@ -79,7 +79,8 @@ export EMBERLING_MODEL_OPENROUTER_REQUIRE_PARAMETERS=true
 export EMBERLING_MODELS='[
   {"id":"opus-5.5","model":"anthropic/claude-opus-5.5","displayName":"Opus 5.5"},
   {"id":"vision-review","model":"anthropic/claude-sonnet-5.5","displayName":"Vision Review",
-   "visionInput":true}
+   "visionInput":true},
+  {"id":"text-review","model":"anthropic/claude-sonnet-5.5","displayName":"Text Review"}
 ]'
 
 # Real image models for generate_image.
@@ -105,9 +106,11 @@ docker compose -f deploy/compose.yaml --profile mock up -d --build
 ```
 
 `GET http://localhost:8080/api/models` should list `opus-5.5`, `vision-review`,
-`seedream-5.0-pro` and `gpt-image-2.5`. The `vision-review` entry above is a verified
-working example, not the only choice: any registered model that accepts image input and
-differs from the image model works, so no model judges its own output.
+`text-review`, `seedream-5.0-pro` and `gpt-image-2.5`. The `vision-review` entry above is
+a verified working example, not the only choice: any registered model that accepts image
+input and differs from the image model works, so no model judges its own output.
+`text-review` is the review model of the reviewed video Definition below; it reads
+transcript excerpts only, so it declares no `visionInput`.
 
 ## Run it
 
@@ -201,3 +204,98 @@ jq -n --arg wf "$workflow_id" --argjson v "$version" --argjson ref "$ref" \
 The image NodeRun's Callback Binding names the provider `task-gateway-v1`, and the output
 image is an `EXTERNAL` reference to `http://localhost:9104/v1/images/...`, which opens in
 the browser until the gateway restarts. Each Run makes one upstream image call.
+
+## Video Edit (Live)
+
+`video_edit_basic_live.json` and `video_edit_reviewed_live.json` cut one recorded talk
+into a short vertical clip: a task (the source video, the requirement and the goal
+`DELIVER_CLIP`) goes through the media transcript node, which transcribes the source at
+the media service and keeps the transcript as a material, into one Agent, whose
+delivery report reaches the output. The Agent reads the transcript with `read_material`,
+writes its plan into the state, selects sentence ranges, checks the timeline with
+`run_checks`, renders the checked timeline with `render_timeline` and checks the clip.
+The reviewed variant also reviews each checked timeline with `review_artifact` before
+rendering: an independent review model reads the selected sentences with their
+neighbours and reports whether the clip satisfies the requirement and whether a selected
+sentence, cut off from its context, distorts what the speaker meant.
+
+The Agent node selects:
+
+| Field | Basic | Reviewed | Why |
+|---|---|---|---|
+| `modelId` | `opus-5.5` | `opus-5.5` | Decision model; must be an `id` in `EMBERLING_MODELS` |
+| `reviewModelId` | none | `text-review` | Review model for `review_artifact`; must be an `id` in `EMBERLING_MODELS` with structured output, other than `modelId`, so no model reviews its own selection. The configuration above maps it to `anthropic/claude-sonnet-5.5`; it needs no `visionInput` |
+| `allowedTools` | `read_material`, `run_checks`, `render_timeline` | the same plus `review_artifact` | The whole editing loop; nothing else is reachable |
+| `maxFailedFacts` | `media_checked: 3` | `media_checked: 3`, `content_reviewed: 1` | Three failed technical checks, or one failed review in the reviewed variant, end the Agent with `REVISION_LIMIT_REACHED` instead of an open-ended revision loop |
+| `maxTurns` | `30` | `30` | Up to three reads of a long transcript, a plan, a few check-and-revise rounds, the review, the render, the clip check and the final answer |
+| `timeoutMs` | `1800000` | `1800000` | 30 minutes of execution time; the transcript node's own deadline is separate |
+| `goalPointer` | `/goal` | `/goal` | The goal is read from the task, so the completion check is the goal-based `DELIVER_CLIP` check |
+
+The transcript node sets an explicit `executionPolicy` (`timeoutMs` 600000, two
+Attempts): the Attempt deadline is what ends a transcription the media service lost, so a
+Definition must state it rather than rely on a default.
+
+The Agent's `stateSchema` requires the plan (`goal`, `opening`, `mainSegments`) once a
+plan is written, and its strict-subset `outputSchema` is the delivery report
+`{outcome, clipSha256, selectionReason, cannotSatisfyReason}` with `outcome` either
+`DELIVERED` or `CANNOT_SATISFY` and the fields that do not apply set to `null`. The
+completion check accepts `CLIP_DELIVERED` only when a clip was rendered, its latest clip
+check passed and, in the reviewed variant, the latest review of its timeline passed.
+
+### The shared prompt and its version
+
+Both Definitions embed the same instructions, kept once in `video_edit_prompt.md`; the
+reviewed one appends the single paragraph of `video_edit_review_rules.md`. The prompt's
+first line is its version, `Prompt version: video-edit/v1.`, so the version a saved
+Definition ran with is read back from the Definition's own instructions, and the
+evaluation batch records it with every Run. After editing either file, run
+
+```sh
+scripts/demo/definitions/embed-video-edit-prompt.sh
+```
+
+which rewrites the instructions of the two live Definitions and of the two deterministic
+fixtures (`backend/test/fixtures/definitions/video_edit_basic.json` and
+`video_edit_reviewed.json`, bound to the mock models), then save the Definitions again: a
+saved version keeps the instructions it was saved with. The contract tests fail when an
+embedded prompt differs from the files, so the four cannot drift apart unnoticed.
+
+### Run it
+
+The media service must be configured: `EMBERLING_MEDIA_SERVICE_URL` registers the
+transcript node and the video Tools, and the compose `media` profile serves it at
+`http://media:9201` (the first start downloads the transcription model):
+
+```sh
+EMBERLING_MEDIA_SERVICE_URL=http://media:9201 \
+  docker compose -f deploy/compose.yaml --profile mock --profile media up -d --build
+
+# Upload the source once; the reference is its content digest.
+source=$(curl -fsS -F 'file=@talk.webm;type=video/webm' http://localhost:9201/v1/sources)
+
+created=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+  --data-binary @scripts/demo/definitions/video_edit_reviewed_live.json \
+  http://localhost:8080/api/definitions)
+workflow_id=$(jq -r '.workflowId' <<<"$created")
+version=$(jq -r '.version' <<<"$created")
+
+jq -n --arg wf "$workflow_id" --argjson v "$version" --argjson source "$source" \
+  '{workflowId: $wf, definitionVersion: $v,
+    input: {task: {sourceId: $source.sourceId, sourceSha256: $source.sha256,
+      durationMs: $source.durationMs, goal: "DELIVER_CLIP",
+      requirement: "Cut a 45-second vertical clip on why she loves her work."}}}' |
+  curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- \
+    http://localhost:8080/api/runs | jq -r '.id'
+```
+
+The output node delivers the report; the clip is served by the media service at
+`/v1/clips/<clipSha256>`. `make video-demo` runs the same graph with the mock models,
+whose decisions are scripted, against the real media service, and `evals/video_editing`
+runs the live Definitions over the evaluation dataset.
+
+### Time and cost
+
+A transcription of a five-minute talk takes a minute or two on the first Run of a source
+and is cached afterwards. Each decision turn is one model call, so a Run makes up to
+thirty decision calls and, in the reviewed variant, one review call per checked
+timeline; the media work costs nothing beyond the machine running it.
