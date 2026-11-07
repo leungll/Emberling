@@ -34,11 +34,17 @@ func registerMediaTools(tools *registry.ToolRegistry, cfg config.MediaService, c
 	return nil
 }
 
+// mediaToolSpecs lists the declarations of the Tools that dispatch to the media service.
+// The declarations themselves live in the externaltool package; the list is empty until
+// the first video Tool is declared.
+func mediaToolSpecs() []externaltool.Spec {
+	return nil
+}
+
 // mediaToolRegistrations builds one ToolRegistration per media Tool declaration over the
-// given task client. The declarations themselves live in the externaltool package; the
-// list is empty until the first video Tool is declared.
+// given task client, under the media service's Provider ID.
 func mediaToolRegistrations(tasks externaltool.TaskClient) ([]registry.ToolRegistration, error) {
-	var specs []externaltool.Spec
+	specs := mediaToolSpecs()
 	registrations := make([]registry.ToolRegistration, 0, len(specs))
 	for _, spec := range specs {
 		spec.ProviderID = mediaProviderID
