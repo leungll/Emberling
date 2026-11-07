@@ -420,12 +420,15 @@ func (r *toolAttemptRepository) MarkOutcomeUnknown(ctx context.Context, attemptI
 	return first, nil
 }
 
-// RecordOutcomeUnknownSince writes the first unknown time of a FAILED uncertain Attempt.
+// RecordOutcomeUnknownSince writes the first unknown time of a release Attempt production
+// has not settled: one still open, or one that failed with an uncertain outcome. An Attempt
+// that succeeded or failed definitely has a known outcome and is left alone.
 func (r *toolAttemptRepository) RecordOutcomeUnknownSince(ctx context.Context, attemptID string, now time.Time) (bool, error) {
 	const update = `
 		UPDATE tool_attempts
 		   SET outcome_unknown_since = $2
-		 WHERE id = $1 AND status = 'FAILED' AND uncertain IS TRUE AND outcome_unknown_since IS NULL`
+		 WHERE id = $1 AND outcome_unknown_since IS NULL
+		   AND (status IN ('STARTED', 'DISPATCHED') OR (status = 'FAILED' AND uncertain IS TRUE))`
 	affected, err := affectedRows(ctx, r.conn, "tool_attempts.RecordOutcomeUnknownSince", update, attemptID, now)
 	if err != nil {
 		return false, err

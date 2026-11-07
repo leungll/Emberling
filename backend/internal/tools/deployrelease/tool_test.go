@@ -190,6 +190,7 @@ func TestPoll_MapsProductionStatuses(t *testing.T) {
 		"voided":    {http.StatusOK, `{"operationId":"op_act_7_2","status":"VOIDED"}`, registry.PollFailed, domain.ReleaseCodeVoided},
 		"not found": {http.StatusNotFound, `{"code":"NOT_FOUND"}`, registry.PollUnknownTask, ""},
 		"refused":   {http.StatusConflict, `{"code":"FROZEN_WINDOW"}`, registry.PollFailed, "FROZEN_WINDOW"},
+		"no code":   {http.StatusConflict, `<html>conflict</html>`, registry.PollStatusUnknown, ""},
 		"5xx":       {http.StatusServiceUnavailable, `{}`, registry.PollStatusUnknown, ""},
 		"other op":  {http.StatusOK, `{"operationId":"op_other","status":"DEPLOYED","version":"v3"}`, registry.PollStatusUnknown, ""},
 	} {
@@ -224,6 +225,41 @@ func TestPoll_TransportFailure_IsAnErrorNotAnAnswer(t *testing.T) {
 	closed.Close()
 	if _, err := New(url, nil).Poll(context.Background(), state()); err == nil {
 		t.Fatal("poll against a closed server: error = nil, want an error")
+	}
+}
+
+// Production turning a void down says nothing about the operation, so only a confirmed void
+// is a definite answer. Anything else leaves the next query to find out.
+func TestVoid_RejectedByProduction_IsNoAnswer(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status int
+		body   string
+		want   registry.PollStatus
+		code   string
+	}{
+		"void refused":      {http.StatusConflict, `{"code":"OPERATION_IN_FLIGHT"}`, registry.PollStatusUnknown, ""},
+		"no code":           {http.StatusConflict, `<html>conflict</html>`, registry.PollStatusUnknown, ""},
+		"already voided":    {http.StatusConflict, `{"code":"VOIDED"}`, registry.PollFailed, domain.ReleaseCodeVoided},
+		"confirmed void":    {http.StatusOK, `{"operationId":"op_act_7_2","status":"VOIDED"}`, registry.PollFailed, domain.ReleaseCodeVoided},
+		"already deploying": {http.StatusOK, `{"operationId":"op_act_7_2","status":"DEPLOYING"}`, registry.PollRunning, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			got, err := New(server.URL, server.Client()).Void(context.Background(), state())
+			if err != nil {
+				t.Fatalf("void: %v", err)
+			}
+			if got.Status != tc.want {
+				t.Fatalf("status = %s, want %s", got.Status, tc.want)
+			}
+			if tc.code != "" && (got.Error == nil || got.Error.Code != tc.code) {
+				t.Fatalf("error = %+v, want code %s", got.Error, tc.code)
+			}
+		})
 	}
 }
 
