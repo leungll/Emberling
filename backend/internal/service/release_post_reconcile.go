@@ -69,14 +69,15 @@ type releaseReconcileClaim struct {
 // production last failed to know it, or since the Attempt was failed with an uncertain
 // outcome -- exactly as a live release voids, and a void never leads to a new release.
 //
-// After COMMIT production is asked once. DEPLOYED is read back against the target, and the
+// After COMMIT production is asked once, plus one query when a void goes unconfirmed.
+// DEPLOYED is read back against the target, and the
 // occupation is released as DEPLOYED with the version the target runs recorded as live but
 // unchecked; VOIDED releases it as VOIDED; production's definite refusal of the operation,
 // which the live path would hand back to the Agent, releases it as REFUSED. An answer the
 // live poll path classifies as an unknown operation writes the Attempt's
 // outcome_unknown_since once, whatever open or uncertain state the Attempt is in, without
-// an Event. An operation production still has in flight, a void production did not confirm,
-// or no answer, only waits for the next query.
+// an Event. An operation production still has in flight, or no answer, only waits for the
+// next query.
 //
 // A permanent fault found before the Run lock -- the release Tool no longer registered,
 // the node's release bounds unreadable, no Attempt under the operation key -- cannot be
@@ -95,8 +96,16 @@ func (s *ExecutionService) ReconcileReleaseOccupation(ctx context.Context, occup
 	}
 
 	var result registry.PollResult
+	voidAnswer := claim.void
 	if claim.void {
 		result, err = claim.executor.Void(ctx, claim.state)
+		if err != nil || result.Status == registry.PollStatusUnknown {
+			// An unconfirmed void says nothing about the operation, and the grace that
+			// chose it never restarts, so without a query here a deployment production
+			// finished later could never be learned. A query only reads.
+			voidAnswer = false
+			result, err = claim.executor.Poll(ctx, claim.state)
+		}
 	} else {
 		result, err = claim.executor.Poll(ctx, claim.state)
 	}
@@ -144,7 +153,7 @@ func (s *ExecutionService) ReconcileReleaseOccupation(ctx context.Context, occup
 		}
 		outcome.Released, outcome.Reason = released, domain.ReleaseReasonVoided
 		return outcome, nil
-	case result.Status == registry.PollFailed && result.Error != nil && !claim.void:
+	case result.Status == registry.PollFailed && result.Error != nil && !voidAnswer:
 		// The same answer the live poll path takes for a refusal: nothing was deployed. An
 		// answer to a void request is never this: turning a void down says nothing about
 		// the operation, which may be in flight.

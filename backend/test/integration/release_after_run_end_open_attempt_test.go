@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -196,6 +197,39 @@ func TestReleaseAfterRunEnd_VoidRejectedByProduction_KeepsTheTarget(t *testing.T
 	}
 	if got := f.occupationOf(t, action.ID); got.ReleaseReason == nil || *got.ReleaseReason != domain.ReleaseReasonVoided {
 		t.Fatalf("occupation = %+v, want released as VOIDED", got)
+	}
+}
+
+// A rejected void must not end the questions: production may have deployed the operation
+// after losing track of it, and only a query can learn that.
+func TestReleaseAfterRunEnd_VoidRejectedThenDeployed_ReleasedFromTheQuery(t *testing.T) {
+	production := newProductionFixture(t, mockproduction.WithCompletionDelay(time.Hour))
+	voids := &productionAnswers{inner: production.srv.Client().Transport, matches: operationVoid}
+	queries := &productionAnswers{inner: voids, matches: operationQuery}
+	f := newReleaseFixture(t, releaseFixtureOptions{
+		production: production, client: &http.Client{Transport: queries}, bounds: unknownOutcomeBounds, failingSibling: true,
+	})
+	action := f.startToRelease(t, "wf_open_void_then_deployed")
+	f.approve(t, action)
+	f.failSibling(t)
+	queries.arm(http.StatusNotFound, `{"code":"NOT_FOUND"}`)
+	if report := f.reconcileWhenDue(t, action.ID); report.OccupationsReleased != 0 {
+		t.Fatalf("first query released %d, want none", report.OccupationsReleased)
+	}
+	f.h.clock.Advance(time.Duration(unknownOutcomeBounds.voidGraceMs) * time.Millisecond)
+
+	voids.arm(http.StatusConflict, `{"code":"VOID_REFUSED"}`)
+	queries.arm(http.StatusOK, fmt.Sprintf(`{"operationId":%q,"status":"DEPLOYED","version":"v2"}`, f.occupationOf(t, action.ID).OperationKey))
+	report := f.reconcileWhenDue(t, action.ID)
+
+	if report.OccupationQueriesClaimed != 1 || report.OccupationsReleased != 1 {
+		t.Fatalf("claimed %d released %d, want one claim that frees the target", report.OccupationQueriesClaimed, report.OccupationsReleased)
+	}
+	if got := f.occupationOf(t, action.ID); got.ReleaseReason == nil || *got.ReleaseReason != domain.ReleaseReasonDeployed {
+		t.Fatalf("occupation = %+v, want released as DEPLOYED", got)
+	}
+	if n := production.counts.count("POST", deploymentsPath); n != 1 {
+		t.Fatalf("release requests = %d, want the original one only", n)
 	}
 }
 
