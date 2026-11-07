@@ -985,11 +985,17 @@ func newToolAttempt(id, actionID string, attemptNo int) domain.ToolAttempt {
 // COMPLETED Turn, its immutable Decision and the single READY Action.
 func seedDecidedTurn(ctx context.Context, t *testing.T, uow store.UnitOfWork, f fixture, agentRunID, turnID, decisionID, actionID string) {
 	t.Helper()
+	createAgentRun(ctx, t, uow, newAgentRun(agentRunID, f.nodeRunID))
+	seedDecidedTurnOnAgentRun(ctx, t, uow, agentRunID, turnID, decisionID, actionID)
+}
+
+// seedDecidedTurnOnAgentRun is seedDecidedTurn for an Agent Run the caller already
+// created, which a test on a partially migrated schema does with raw SQL because the
+// Store maps agent_runs columns later migrations add.
+func seedDecidedTurnOnAgentRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, agentRunID, turnID, decisionID, actionID string) {
+	t.Helper()
 
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		if err := tx.AgentRuns().Create(ctx, newAgentRun(agentRunID, f.nodeRunID)); err != nil {
-			return err
-		}
 		if err := tx.AgentTurns().Create(ctx, newAgentTurn(turnID, agentRunID, 1)); err != nil {
 			return err
 		}

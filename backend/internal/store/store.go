@@ -903,6 +903,14 @@ type ExecutionFactRepository interface {
 	// non-positive limit is an error rather than an unbounded read.
 	ListByRunAndType(ctx context.Context, runID, factType string, limit int) ([]domain.ExecutionFact, error)
 
+	// CountFailedByAgentRun counts, per fact type in factTypes, the facts of one Agent Run
+	// whose verdict is false: every such fact, not only the newest per subject, because a
+	// failed check of a revised timeline is one more revision whatever it was about. A
+	// type with no failed fact is absent from the result. The caller holds the Run lock
+	// so concurrent claims cannot both see one free revision. An empty factTypes counts
+	// nothing.
+	CountFailedByAgentRun(ctx context.Context, agentRunID string, factTypes []string) (map[string]int, error)
+
 	// Get returns one fact by id, or domain.ErrNotFound. A record that names a fact it
 	// rests on is checked against the stored row through it.
 	Get(ctx context.Context, factID string) (domain.ExecutionFact, error)

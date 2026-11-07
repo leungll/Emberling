@@ -370,6 +370,92 @@ func TestAgentRunStore_MaxGenerationCalls_RoundTripsNullAndValue(t *testing.T) {
 	}
 }
 
+// The frozen revision limits round-trip as an object from fact type to limit and read
+// back as nil when the Agent Run bounds nothing; the column refuses a non-object.
+func TestAgentRunStore_MaxFailedFacts_RoundTripsNullAndObject(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	createNodeRun(ctx, t, uow, newNodeRun("nr_bounded", f.runID, "node_bounded"))
+
+	createAgentRun(ctx, t, uow, newAgentRun("ar_unbounded", f.nodeRunID))
+	bounded := newAgentRun("ar_bounded", "nr_bounded")
+	bounded.MaxFailedFacts = map[string]int{"media_checked": 3, "content_reviewed": 1}
+	createAgentRun(ctx, t, uow, bounded)
+
+	if got := getAgentRun(ctx, t, uow, "ar_unbounded").MaxFailedFacts; got != nil {
+		t.Fatalf("unconfigured revision limits: want nil, got %v", got)
+	}
+	got := getAgentRun(ctx, t, uow, "ar_bounded").MaxFailedFacts
+	if len(got) != 2 || got["media_checked"] != 3 || got["content_reviewed"] != 1 {
+		t.Fatalf("frozen revision limits: want media_checked 3 and content_reviewed 1, got %v", got)
+	}
+
+	if _, err := pool.Exec(ctx, `UPDATE agent_runs SET max_failed_facts = '3'::jsonb WHERE id = 'ar_bounded'`); err == nil {
+		t.Fatal("non-object revision limits: want CHECK violation, got accepted")
+	}
+}
+
+// Failed facts are counted per type within one Agent Run: every false verdict counts, a
+// true or absent verdict does not, another Agent Run's facts do not, and a type without
+// failures is absent from the result.
+func TestExecutionFactStore_CountFailedByAgentRun_CountsEveryFalseVerdictPerType(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	seedToolAttempts(ctx, t, uow, f, "ar_1", []string{"run_checks", "run_checks", "run_checks", "review", "render"})
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		return tx.NodeRuns().Create(ctx, newNodeRun("nr_second_agent", f.runID, "node_second_agent"))
+	}); err != nil {
+		t.Fatalf("seed a second Agent NodeRun: %v", err)
+	}
+	seedToolAttemptsOn(ctx, t, uow, "nr_second_agent", "ar_2", []string{"run_checks"})
+
+	failed, passed := false, true
+	same := newExecutionFact("fact_check_1", f.runID, "ar_1", "tool_attempt_ar_1_1", "media_checked", "timeline_a")
+	same.Verdict = &failed
+	again := newExecutionFact("fact_check_2", f.runID, "ar_1", "tool_attempt_ar_1_2", "media_checked", "timeline_a")
+	again.Verdict = &failed
+	ok := newExecutionFact("fact_check_3", f.runID, "ar_1", "tool_attempt_ar_1_3", "media_checked", "timeline_b")
+	ok.Verdict = &passed
+	review := newExecutionFact("fact_review", f.runID, "ar_1", "tool_attempt_ar_1_4", "content_reviewed", "timeline_b")
+	review.Verdict = &failed
+	rendered := newExecutionFact("fact_render", f.runID, "ar_1", "tool_attempt_ar_1_5", "clip_rendered", "clip_a")
+	other := newExecutionFact("fact_other", f.runID, "ar_2", "tool_attempt_ar_2_1", "media_checked", "timeline_a")
+	other.Verdict = &failed
+	for _, fact := range []domain.ExecutionFact{same, again, ok, review, rendered, other} {
+		insertExecutionFact(ctx, t, uow, fact)
+	}
+
+	counts := countFailedFacts(ctx, t, uow, "ar_1", []string{"media_checked", "content_reviewed", "clip_rendered"})
+	if len(counts) != 2 || counts["media_checked"] != 2 || counts["content_reviewed"] != 1 {
+		t.Fatalf("failed facts of ar_1 = %v, want media_checked 2 and content_reviewed 1 only", counts)
+	}
+	if counts := countFailedFacts(ctx, t, uow, "ar_1", nil); len(counts) != 0 {
+		t.Fatalf("failed facts with no types = %v, want nothing counted", counts)
+	}
+	if counts := countFailedFacts(ctx, t, uow, "ar_2", []string{"media_checked"}); counts["media_checked"] != 1 {
+		t.Fatalf("failed facts of ar_2 = %v, want its own one", counts)
+	}
+}
+
+func countFailedFacts(ctx context.Context, t *testing.T, uow store.UnitOfWork, agentRunID string, factTypes []string) map[string]int {
+	t.Helper()
+	var counts map[string]int
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		counts, err = tx.ExecutionFacts().CountFailedByAgentRun(ctx, agentRunID, factTypes)
+		return err
+	}); err != nil {
+		t.Fatalf("CountFailedByAgentRun %s: %v", agentRunID, err)
+	}
+	return counts
+}
+
 // The calls already made are derived from persisted Tool Attempts of the counted Tools,
 // in every Attempt status, within one Agent Run only. An Action that never got an
 // Attempt does not count.

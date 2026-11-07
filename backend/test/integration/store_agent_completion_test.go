@@ -14,6 +14,56 @@ import (
 	"github.com/leungll/Emberling/backend/test/testdb"
 )
 
+// The widened CHECK constraints accept the clip delivery goal and its two outcomes and
+// still refuse a value outside the closed sets.
+func TestAgentCompletionStore_ClipDelivery_GoalAndOutcomesAccepted(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	createNodeRun(ctx, t, uow, newNodeRun("nr_clip_2", f.runID, "node_clip_2"))
+	goal := domain.AgentGoalDeliverClip
+	delivered := newAgentRun("ar_clip_delivered", f.nodeRunID)
+	delivered.Goal = &goal
+	createAgentRun(ctx, t, uow, delivered)
+	if frozen := getAgentRun(ctx, t, uow, delivered.ID).Goal; frozen == nil || *frozen != domain.AgentGoalDeliverClip {
+		t.Fatalf("frozen goal = %v, want DELIVER_CLIP", frozen)
+	}
+	cannot := newAgentRun("ar_clip_cannot", "nr_clip_2")
+	createAgentRun(ctx, t, uow, cannot)
+
+	for _, completion := range []domain.AgentCompletion{
+		{AgentRunID: delivered.ID, Goal: domain.AgentGoalDeliverClip, Outcome: domain.CompletionClipDelivered,
+			Checks: []domain.CompletionCheck{}, Missing: []domain.CompletionMissing{}, EvaluatedAt: fixtureTime},
+		{AgentRunID: cannot.ID, Goal: domain.AgentGoalDeliverClip, Outcome: domain.CompletionCannotSatisfy,
+			Checks: []domain.CompletionCheck{}, Missing: []domain.CompletionMissing{}, EvaluatedAt: fixtureTime},
+	} {
+		if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			return tx.AgentCompletions().Create(ctx, completion)
+		}); err != nil {
+			t.Fatalf("create %s completion: %v", completion.Outcome, err)
+		}
+		var got domain.AgentCompletion
+		if err := uow.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			var err error
+			got, err = tx.AgentCompletions().Get(ctx, completion.AgentRunID)
+			return err
+		}); err != nil {
+			t.Fatalf("get %s completion: %v", completion.Outcome, err)
+		}
+		if got.Goal != domain.AgentGoalDeliverClip || got.Outcome != completion.Outcome {
+			t.Errorf("completion = %s %s, want DELIVER_CLIP %s", got.Goal, got.Outcome, completion.Outcome)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE agent_completions SET outcome = 'CLIP_MAYBE' WHERE agent_run_id = $1`, delivered.ID); err == nil {
+		t.Error("an outcome outside the closed set was accepted")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE agent_completions SET goal = 'DELIVER_SONG' WHERE agent_run_id = $1`, delivered.ID); err == nil {
+		t.Error("a goal outside the closed set was accepted")
+	}
+}
+
 // TestAgentCompletionStore_CreateTwice_SecondLosesToPrimaryKey covers the write-once rule
 // of a verdict: the first insert reads back whole, with its checks and missing items in
 // order, and a second insert for the same Agent Run is refused by the primary key as a

@@ -15,11 +15,32 @@ const (
 	// FactTypeReleaseConfirmed is recorded when a release of a workspace patch, named by
 	// its digest, was confirmed deployed; the verdict is the target's health check.
 	FactTypeReleaseConfirmed = "release_confirmed"
+	// FactTypeMediaChecked is recorded when the technical checks ran on a timeline or a
+	// clip, named by its digest; the binding's kind says which, and the verdict is whether
+	// the checks passed.
+	FactTypeMediaChecked = "media_checked"
+	// FactTypeClipRendered is recorded when a clip, named by its digest, was rendered; the
+	// binding names the timeline it was rendered from.
+	FactTypeClipRendered = "clip_rendered"
+	// FactTypeContentReviewed is recorded when a review model reviewed the content of a
+	// timeline, named by its digest; the verdict is whether the review passed.
+	FactTypeContentReviewed = "content_reviewed"
+)
+
+// Binding names and values the clip delivery check reads from the facts above.
+const (
+	// MediaCheckedBindingKind is the media_checked binding that says what was checked.
+	MediaCheckedBindingKind = "kind"
+	// MediaCheckedKindClip is the kind of a media_checked fact about a rendered clip.
+	MediaCheckedKindClip = "CLIP"
+	// ClipRenderedBindingTimeline is the clip_rendered binding naming the timeline digest
+	// the clip was rendered from.
+	ClipRenderedBindingTimeline = "timelineSha256"
 )
 
 // CompletionOutcome is the task result the completion check decides for an Agent Run with a
-// frozen goal. Three outcomes are a successful Agent NodeRun; INCOMPLETE and RELEASE_UNKNOWN
-// fail it, so a completed Run never hides a task that is not done.
+// frozen goal. Every outcome but INCOMPLETE and RELEASE_UNKNOWN is a successful Agent
+// NodeRun; those two fail it, so a completed Run never hides a task that is not done.
 type CompletionOutcome string
 
 const (
@@ -37,12 +58,18 @@ const (
 	CompletionReleaseUnknown CompletionOutcome = "RELEASE_UNKNOWN"
 	// CompletionIncomplete: at least one required fact is missing; Missing lists them.
 	CompletionIncomplete CompletionOutcome = "INCOMPLETE"
+	// CompletionClipDelivered: a DELIVER_CLIP task declared a clip that the facts show was
+	// rendered, passed its checks and, when the Agent could review, passed its review.
+	CompletionClipDelivered CompletionOutcome = "CLIP_DELIVERED"
+	// CompletionCannotSatisfy: a DELIVER_CLIP task declared, with a reason, that the
+	// request cannot be satisfied; no clip is delivered and the NodeRun still succeeds.
+	CompletionCannotSatisfy CompletionOutcome = "CANNOT_SATISFY"
 )
 
 func (o CompletionOutcome) IsValid() bool {
 	switch o {
 	case CompletionReadyForApproval, CompletionDeployed, CompletionDeployedCheckFailed,
-		CompletionReleaseUnknown, CompletionIncomplete:
+		CompletionReleaseUnknown, CompletionIncomplete, CompletionClipDelivered, CompletionCannotSatisfy:
 		return true
 	default:
 		return false
@@ -51,7 +78,13 @@ func (o CompletionOutcome) IsValid() bool {
 
 // IsSuccess reports whether the outcome succeeds the Agent NodeRun.
 func (o CompletionOutcome) IsSuccess() bool {
-	return o == CompletionReadyForApproval || o == CompletionDeployed || o == CompletionDeployedCheckFailed
+	switch o {
+	case CompletionReadyForApproval, CompletionDeployed, CompletionDeployedCheckFailed,
+		CompletionClipDelivered, CompletionCannotSatisfy:
+		return true
+	default:
+		return false
+	}
 }
 
 // CompletionCheck is one item the completion check went through. Name is a stable
