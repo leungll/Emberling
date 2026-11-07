@@ -77,10 +77,13 @@ type Transcript struct {
 	SHA256        string `json:"sha256"`
 	LineCount     int    `json:"lineCount"`
 	SentenceCount int    `json:"sentenceCount"`
-	Language      string `json:"language"`
-	DurationMs    int64  `json:"durationMs"`
-	SourceID      string `json:"sourceId"`
-	SourceSHA256  string `json:"sourceSha256"`
+	// SizeBytes is the stored material's length, so the Context Manifest can record the
+	// size of what the Agent did not receive inline.
+	SizeBytes    int64  `json:"sizeBytes"`
+	Language     string `json:"language"`
+	DurationMs   int64  `json:"durationMs"`
+	SourceID     string `json:"sourceId"`
+	SourceSHA256 string `json:"sourceSha256"`
 }
 
 // interpret turns a terminal payload into the node's output, a *registry.ProviderFailure
@@ -146,6 +149,7 @@ func (e *Executor) publish(ctx context.Context, state registry.NodeAsyncState, r
 		SHA256:        ref.SHA256,
 		LineCount:     result.LineCount,
 		SentenceCount: result.SentenceCount,
+		SizeBytes:     int64(len(result.Material)),
 		Language:      result.Language,
 		DurationMs:    result.DurationMs,
 		SourceID:      result.SourceID,

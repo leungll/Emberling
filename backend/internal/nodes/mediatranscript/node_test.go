@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -232,7 +233,7 @@ func TestOnCallback_Succeeded_StoresMaterialAndPublishesReferenceOnly(t *testing
 		t.Fatalf("stored material = %q, want the transcript", artifacts.written)
 	}
 	wantID, _ := domain.ArtifactIDForSHA256(sha(material))
-	wantTranscript := `{"artifactId":"` + wantID + `","sha256":"` + sha(material) + `","lineCount":2,"sentenceCount":2,"language":"en","durationMs":421000,"sourceId":"` + sourceID + `","sourceSha256":"` + sourceSHA + `"}`
+	wantTranscript := `{"artifactId":"` + wantID + `","sha256":"` + sha(material) + `","lineCount":2,"sentenceCount":2,"sizeBytes":` + strconv.Itoa(len(material)) + `,"language":"en","durationMs":421000,"sourceId":"` + sourceID + `","sourceSha256":"` + sourceSHA + `"}`
 	if got := string(output.Ports["transcript"]); got != wantTranscript {
 		t.Fatalf("transcript port = %s\nwant %s", got, wantTranscript)
 	}

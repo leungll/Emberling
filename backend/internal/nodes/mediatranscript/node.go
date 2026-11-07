@@ -16,10 +16,11 @@
 //
 // The node owns no NodeRun state, retry, timeout, callback routing or Event. Its side
 // effect is EXTERNAL and SAFE to repeat: transcribing the same source twice yields the
-// same material, so a task the service lost may be dispatched again under a new Attempt
-// without harm. A lost task is not detected by this node: a status query the service
-// answers with "unknown task" is reported as an answer that resolves nothing, and the
-// Attempt's own deadline ends the wait.
+// same material, so repeating the task would be harmless. A lost task is not detected by
+// this node: a status query the service answers with "unknown task" is reported as an
+// answer that resolves nothing, and the Attempt's own deadline ends the wait. The Runtime
+// does not open a new Attempt for a failure that comes after dispatch, so a lost task ends
+// the NodeRun; re-dispatching it is a known gap, not something this node promises.
 package mediatranscript
 
 import (
@@ -123,8 +124,8 @@ func Registration(ports Ports) (registry.NodeRegistration, error) {
 				{Name: TaskPort, DataType: domain.PortTypeJSON, Required: true},
 			},
 			ConfigSchema: json.RawMessage(configSchema),
-			// Transcription is deterministic for one source, so repeating the task under
-			// a new Attempt is safe and needs no Provider idempotency key.
+			// Transcription is deterministic for one source, so repeating the task would be
+			// safe and needs no Provider idempotency key.
 			SideEffect: domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencySafe},
 			Poll:       &domain.PollPolicy{IntervalMs: pollIntervalMs, MaxPolls: maxPolls},
 			// No DispatchModelPath: the node calls no model and is not governed by
@@ -231,8 +232,8 @@ func (e *Executor) OnCallback(ctx context.Context, state registry.NodeAsyncState
 // task carries the same payload its callback would and is interpreted by the same rules.
 // An answer the client could not classify, a terminal body whose own status contradicts
 // the polled status and a service that no longer knows the task all resolve nothing: the
-// node cannot hand a lost task back to anyone, so the Attempt deadline decides, after
-// which a new Attempt dispatches the task again. A query that got no answer is an error,
+// node cannot hand a lost task back to anyone, so the Attempt deadline decides and the
+// NodeRun fails with it. A query that got no answer is an error,
 // which the Runtime reports and the already scheduled next poll follows.
 func (e *Executor) Poll(ctx context.Context, state registry.NodeAsyncState) (registry.PollResult, error) {
 	taskID := state.ExternalTask.ExternalTaskID

@@ -160,7 +160,8 @@ func TestMediaTranscript_NodeArtifact_ServedThroughRunContentRouteAndProjectedAs
 	taskID, _ := submit["taskId"].(string)
 	token, _ := submit["callbackToken"].(string)
 	if submit["type"] != mediatranscript.TaskType || taskID == "" || token == "" {
-		t.Fatalf("submitted task = %v, want a TRANSCRIBE task with id and callback token", submit)
+		// The submit body is not printed: it carries the one-time callback token.
+		t.Fatalf("submitted task type %v, id set %t, token set %t; want a TRANSCRIBE task with id and callback token", submit["type"], taskID != "", token != "")
 	}
 
 	sum := sha256.Sum256([]byte(transcriptMaterial))

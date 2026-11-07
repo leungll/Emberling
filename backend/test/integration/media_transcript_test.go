@@ -245,7 +245,8 @@ func (env *transcriptEnv) dispatchRun(t *testing.T, run domain.Run) transcriptDi
 	}
 	submit := submits[len(submits)-1]
 	if submit.Type != mediatranscript.TaskType || string(submit.Input) != `{"sourceId":"`+transcriptSourceID+`"}` || submit.CallbackToken == "" {
-		t.Fatalf("submitted task = %+v, want TRANSCRIBE of %s with a callback token", submit, transcriptSourceID)
+		// The submit is not printed: it carries the one-time callback token.
+		t.Fatalf("submitted task type %q with %d input bytes, token set %t; want TRANSCRIBE of %s with a callback token", submit.Type, len(submit.Input), submit.CallbackToken != "", transcriptSourceID)
 	}
 	if got := getAttempt(env.ctx, t, env.uow, outcome.AttemptID).Status; got != domain.NodeAttemptDispatched {
 		t.Fatalf("Attempt status after dispatch = %s, want DISPATCHED", got)
