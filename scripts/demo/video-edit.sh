@@ -205,9 +205,10 @@ review_verdicts=$(verdicts content_reviewed)
 rendered_subjects=$(jq -r '[.facts.items[] | select(.factType == "clip_rendered") | .subject] | join(",")' <<<"$trace")
 clip_sha256=$(jq -r '[.facts.items[] | select(.factType == "clip_rendered") | .subject] | last // ""' <<<"$trace")
 clip_check_subject=$(jq -r '[.facts.items[] | select(.factType == "media_checked" and .bindings.kind == "CLIP") | .subject] | last // ""' <<<"$trace")
-report=$(jq -c '.nodeRuns[] | select(.nodeId == "node_result") | .output.text // null' <<<"$snapshot")
-report_outcome=$(jq -r 'if type == "string" then (fromjson? // {}) else . end | .outcome // "none"' <<<"$report")
-report_clip=$(jq -r 'if type == "string" then (fromjson? // {}) else . end | .clipSha256 // ""' <<<"$report")
+# The result node receives the completion verdict with the Agent's own report inside it.
+report=$(jq -r '.nodeRuns[] | select(.nodeId == "node_result") | .output.text // "{}"' <<<"$snapshot" | jq -c '.agentReport // {}' 2>/dev/null || echo '{}')
+report_outcome=$(jq -r '.outcome // "none"' <<<"$report")
+report_clip=$(jq -r '.clipSha256 // ""' <<<"$report")
 transcript_error=$(jq -r '[.nodeRuns[] | select(.nodeId == "node_transcript") | .error.code // empty] | first // "none"' <<<"$snapshot")
 
 case "$story" in
@@ -240,7 +241,8 @@ check final_report "outcome=$report_outcome clipSha256_matches=$([[ "$report_cli
 
 clip_url="$MEDIA_HOST_URL/v1/clips/$clip_sha256"
 if [[ -n "$clip_sha256" ]]; then
-  check clip_served "$clip_url" curl -fsS -o /dev/null -I "$clip_url"
+  # The clip route serves the file; a one-byte range proves it is there without downloading it.
+  check clip_served "$clip_url" curl -fsS -o /dev/null -r 0-0 "$clip_url"
 fi
 printf '\nrun %s\nclip %s\n' "$run_id" "$clip_url"
 
