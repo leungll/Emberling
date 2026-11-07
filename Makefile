@@ -277,7 +277,7 @@ evals-test:
 	@echo "==> evals: video_editing self-tests"
 	@cd evals/video_editing && uv run --frozen pytest
 
-.PHONY: demo demo-studio demo-down video-demo
+.PHONY: demo demo-studio demo-down video-demo video-evidence
 
 ## demo: fault-injection, photo-set, software-delivery and serving demo on the Compose
 ## stack. Builds and starts postgres, the Mock Provider, the mock production service, the
@@ -420,3 +420,15 @@ video-demo:
 	  all) for story in pass too-long review-fail; do bash scripts/demo/video-edit.sh "$$story" || exit 1; done ;; \
 	  *) bash scripts/demo/video-edit.sh "$${EMBERLING_DEMO_VIDEO_STORY:-pass}" ;; \
 	esac
+
+## video-evidence: the evidence report of finished video-editing Runs, read through the
+## public API alone: RUNS="run_a run_b" names the Runs (or RUNS_FILE=path, one id per line).
+## Writes each Run's Snapshot, Agent Trace, Events, Definition version, completion verdict,
+## facts and per-Turn Context Manifests plus report.md under deploy/.demo/video-evidence
+## (or EMBERLING_DEMO_VIDEO_EVIDENCE_DIR); the clip URLs use EMBERLING_DEMO_MEDIA_HOST_URL.
+## Needs the backend reachable at EMBERLING_DEMO_BACKEND_URL (default http://localhost:8080),
+## curl and jq; deliberately not part of `check`.
+video-evidence:
+	@test -n "$(RUNS)$(RUNS_FILE)" || { echo 'usage: make video-evidence RUNS="run_a run_b" (or RUNS_FILE=path)'; exit 2; }
+	@bash scripts/demo/video-evidence-report.sh --out "$${EMBERLING_DEMO_VIDEO_EVIDENCE_DIR:-deploy/.demo/video-evidence}" \
+	  $(if $(RUNS_FILE),--file "$(RUNS_FILE)",) $(RUNS)
