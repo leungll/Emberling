@@ -268,6 +268,12 @@ Requires Docker, `curl` and `jq`. Run `make demo-down` when finished. It stops t
 
 The media service transcribes, checks and renders real media and needs FFmpeg. See the [media service guide](./services/media/README.md) for `make media-dev` and the Compose profile. The evaluation batch, blind human scoring and judge calibration are described in the [evaluation guide](./evals/video_editing/README.md).
 
+```bash
+make video-demo
+```
+
+`make video-demo` starts PostgreSQL, the Backend and the media service, uploads one source talk, runs the scripted editing story to the end and checks the Run, its facts and the delivered clip through the public API. `EMBERLING_DEMO_VIDEO_STORY=all` runs the three stories: a clean pass, a timeline that is too long and gets revised, and a review that fails before the missing half of a sentence is added. These runs use a scripted mock model, so they show the enforcement path, not a real model's choices.
+
 ### Explore further
 
 | What to explore | Start here |

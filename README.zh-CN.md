@@ -268,6 +268,12 @@ EMBERLING_DEMO_VARIANT=serving-crash-waiting make demo-studio
 
 媒体服务负责转录、检查和渲染真实媒体，需要 FFmpeg。启动方式（`make media-dev` 或 Compose 的 media profile）见[媒体服务说明](./services/media/README.md)；评测批次、人工盲评和 judge 校准见[评测说明](./evals/video_editing/README.md)。
 
+```bash
+make video-demo
+```
+
+`make video-demo` 会启动 PostgreSQL、Backend 和媒体服务，上传一段演讲视频，把剪辑流程完整跑一遍，再通过公开 API 核对 Run、事实记录和交付的短片。`EMBERLING_DEMO_VIDEO_STORY=all` 依次跑三个故事：一次直接通过、时间线超长后修改、语义审查未通过后补上半句。这些运行用的是脚本化的 mock 模型，展示的是强制路径，不是真实模型的选择。
+
 ### 继续探索
 
 | 想看什么 | 从这里开始 |
