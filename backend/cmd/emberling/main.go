@@ -280,6 +280,9 @@ func run(logger *slog.Logger) error {
 			if err := registerMediaTools(toolRegistry, cfg.MediaService, taskClient, artifactStore); err != nil {
 				return err
 			}
+			if err := registerReviewArtifactTool(toolRegistry, cfg.MediaService, modelRegistry, artifactService); err != nil {
+				return err
+			}
 			if err := registerChangeRequestTool(toolRegistry, cfg.VerifyRunner, artifactStore); err != nil {
 				return err
 			}
