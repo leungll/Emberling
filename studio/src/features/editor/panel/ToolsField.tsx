@@ -181,7 +181,7 @@ function missingTool(name: string, description: string): ToolMetadata {
     usesWorkspace: false,
     reconcilable: false,
     returnUnmetRequirement: false,
-  countedFailedFacts: [],
+    countedFailedFacts: [],
   };
 }
 
