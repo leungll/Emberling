@@ -416,3 +416,63 @@ func TestAgentActions_ResumeForRelease_OnlyFromWaitingCallback(t *testing.T) {
 		t.Fatalf("action status = %s, want RUNNING", action.Status)
 	}
 }
+
+// ScheduleQueriesOfRun runs in the transaction that ends a Run: it writes the first query
+// onto the ACTIVE occupations of that Run alone, keeps a schedule that is already moving,
+// and leaves released occupations out of the post-task scan.
+func TestReleaseOccupations_ScheduleQueriesOfRun_OnlyActiveWithoutSchedule(t *testing.T) {
+	ctx := context.Background()
+	uow := postgres.NewUnitOfWork(testdb.Open(t))
+	f := seedRun(ctx, t, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_sched", "turn_sched", "decision_sched", "action_sched")
+
+	unscheduled := newReleaseOccupation("occupation_unscheduled", f.runID, "action_sched", "op_unscheduled_1")
+	scheduled := newReleaseOccupation("occupation_scheduled", f.runID, "action_sched", "op_scheduled_1")
+	scheduled.TargetKey = "payments-api/staging"
+	released := newReleaseOccupation("occupation_released", f.runID, "action_sched", "op_released_1")
+	released.TargetKey = "payments-api/canary"
+	for _, occupation := range []domain.ReleaseOccupation{unscheduled, scheduled, released} {
+		if !acquireOccupation(ctx, t, uow, occupation) {
+			t.Fatalf("acquire %s: not acquired", occupation.ID)
+		}
+	}
+	earlier := fixtureTime.Add(time.Minute)
+	runEnd := fixtureTime.Add(time.Hour)
+	repeat := runEnd.Add(time.Hour)
+	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		if err := tx.ReleaseOccupations().ScheduleQuery(ctx, scheduled.ID, earlier); err != nil {
+			return err
+		}
+		if err := tx.ReleaseOccupations().Release(ctx, released.ID, domain.ReleaseReasonDeployed, earlier); err != nil {
+			return err
+		}
+		if err := tx.ReleaseOccupations().ScheduleQueriesOfRun(ctx, f.runID, runEnd); err != nil {
+			return err
+		}
+		return tx.ReleaseOccupations().ScheduleQueriesOfRun(ctx, f.runID, repeat)
+	}); err != nil {
+		t.Fatalf("schedule queries of run: %v", err)
+	}
+
+	read := func(id string) domain.ReleaseOccupation {
+		t.Helper()
+		var occupation domain.ReleaseOccupation
+		if err := uow.WithinReadTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			var err error
+			occupation, err = tx.ReleaseOccupations().Get(ctx, id)
+			return err
+		}); err != nil {
+			t.Fatalf("get %s: %v", id, err)
+		}
+		return occupation
+	}
+	if got := read(unscheduled.ID).NextQueryAt; got == nil || !got.Equal(runEnd) {
+		t.Errorf("first query of the unscheduled occupation = %v, want %v", got, runEnd)
+	}
+	if got := read(scheduled.ID).NextQueryAt; got == nil || !got.Equal(earlier) {
+		t.Errorf("schedule already moving = %v, want it kept at %v", got, earlier)
+	}
+	if got := read(released.ID).NextQueryAt; got != nil {
+		t.Errorf("released occupation got a query at %v", got)
+	}
+}

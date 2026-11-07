@@ -199,7 +199,7 @@ func (t *execFakeTx) AgentWorkspaces() store.AgentWorkspaceRepository           
 func (t *execFakeTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
 func (t *execFakeTx) Approvals() store.ApprovalRepository                       { return nil }
 func (t *execFakeTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
-func (t *execFakeTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
+func (t *execFakeTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return noOccupations{} }
 func (t *execFakeTx) HumanWaits() store.HumanWaitRepository                     { return nil }
 func (t *execFakeTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 

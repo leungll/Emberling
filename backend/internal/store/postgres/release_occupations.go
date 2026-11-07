@@ -129,6 +129,18 @@ func (r *releaseOccupationRepository) ScheduleQuery(ctx context.Context, id stri
 	return nil
 }
 
+// ScheduleQueriesOfRun writes the first post-task query time onto the Run's ACTIVE
+// occupations that have none. next_query_at IS NULL keeps a schedule already moving, and an
+// affected-row count of zero is an ordinary outcome: most Runs end holding no target.
+func (r *releaseOccupationRepository) ScheduleQueriesOfRun(ctx context.Context, runID string, at time.Time) error {
+	const update = `
+		UPDATE release_occupations
+		   SET next_query_at = $2
+		 WHERE run_id = $1 AND status = 'ACTIVE' AND next_query_at IS NULL`
+	_, err := affectedRows(ctx, r.conn, "release_occupations.ScheduleQueriesOfRun", update, runID, at)
+	return err
+}
+
 // ClaimQuery takes one due post-task query. Under READ COMMITTED a second claimer that
 // waited on the row lock re-evaluates the predicate against the moved next_query_at and
 // affects no row, so exactly one scanner queries production per due time.

@@ -409,7 +409,7 @@ func (s *ExecutionService) failAgentNodeRun(
 			return err
 		}
 	}
-	return tx.Runs().UpdateAggregate(ctx, lock, newStatus, now)
+	return writeRunStatusLocked(ctx, tx, lock, newStatus, now)
 }
 
 // agentRunTokenUsage sums the usage every Turn of one Agent Run persisted. It is read in

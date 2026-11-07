@@ -60,7 +60,9 @@ type PollToolAttemptOutcome struct {
 // A poll that cannot be claimed is skipped without error. A registration that no longer
 // declares polling clears the poll schedule and skips; a Callback Binding that does not
 // route to the Attempt clears the schedule too and skips with the mismatch error. Neither
-// fails the Attempt, which a callback or the deadline still resolves.
+// fails the Attempt, which a callback or the deadline still resolves. A release Attempt whose
+// Run ended clears its schedule and skips too: the occupation's post-task reconciliation
+// owns that operation from then on.
 func (s *ExecutionService) PollToolAttempt(ctx context.Context, req PollToolAttempt) (PollToolAttemptOutcome, error) {
 	if req.AttemptID == "" {
 		return PollToolAttemptOutcome{}, errors.New("execution: a tool poll names no attempt")
@@ -152,9 +154,9 @@ type toolPollClaim struct {
 }
 
 // claimToolPoll is the claim transaction. It commits either nothing, a cleared poll
-// schedule (registry drift, or a Callback Binding that does not route to the Attempt) or
-// one claimed poll; the returned outcome is SKIPPED unless the claim won, in which case it
-// is CLAIMED_NOT_FINAL until the Provider answers.
+// schedule (registry drift, a Callback Binding that does not route to the Attempt, or a
+// release whose Run ended) or one claimed poll; the returned outcome is SKIPPED unless the
+// claim won, in which case it is CLAIMED_NOT_FINAL until the Provider answers.
 func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) (toolPollClaim, error) {
 	claim := toolPollClaim{outcome: PollToolAttemptOutcome{Kind: PollAttemptSkipped, AttemptID: attemptID}}
 	skip := func(reason PollSkipReason) {
@@ -199,6 +201,24 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 		}
 		claim.outcome.RunID = nodeRun.RunID
 		claim.outcome.AgentRunID = agentRun.ID
+
+		// A live Run owns its release; the transaction that ended the Run handed the
+		// schedule to the occupation, so production is asked along that path alone. This
+		// read takes no lock: a Run ending right after it is caught by the conclusion and
+		// settlement transactions, which look at the Run under its lock.
+		if releaseTool {
+			run, err := tx.Runs().Get(ctx, nodeRun.RunID)
+			if err != nil {
+				return err
+			}
+			if run.Status.IsTerminal() {
+				if _, err := tx.ToolAttempts().ClearPoll(ctx, attemptID); err != nil {
+					return err
+				}
+				skip(PollSkipRunEnded)
+				return nil
+			}
+		}
 
 		// A poll carries no callback token, so the Callback Binding is its only route and
 		// must name exactly this Attempt.

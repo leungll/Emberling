@@ -12,15 +12,15 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
-// This file owns the post-task reconciliation of a release target: the Run ended while its
-// release outcome was unknown, so the occupation still holds the target and carries its own
-// query schedule. Each due query is claimed by a conditional update of the occupation's
-// schedule, production is asked once after COMMIT, and only a definite answer -- DEPLOYED
-// or VOIDED -- frees the target, in a transaction that writes the occupation row alone. An
-// answer that production does not know the operation records when that was first learned
-// on the release Attempt, which is what the void grace counts from. The ended Run gets no
-// Event and no state change: its outcome was committed when it ended, and a late answer is
-// a fact about the target and the operation, not about the task.
+// This file owns the post-task reconciliation of a release target: the Run ended, by any
+// path, while its release outcome was unknown, so the occupation still holds the target and
+// carries its own query schedule. Each due query is claimed by a conditional update of the
+// occupation's schedule, production is asked once after COMMIT, and only a definite answer
+// -- DEPLOYED, VOIDED or a refusal -- frees the target, in a transaction that writes the
+// occupation row alone. An answer that production does not know the operation records when
+// that was first learned on the release Attempt, which is what the void grace counts from.
+// The ended Run gets no Event and no state change: its outcome was committed when it ended,
+// and a late answer is a fact about the target and the operation, not about the task.
 
 // Post-task query backoff: the first retry waits the release Tool's poll interval (or the
 // fallback when the registration declares none), each later one doubles, up to the cap.
@@ -67,9 +67,10 @@ type releaseReconcileClaim struct {
 //
 // After COMMIT production is asked once. DEPLOYED is read back against the target, and the
 // occupation is released as DEPLOYED with the version the target runs recorded as live but
-// unchecked; VOIDED releases it as VOIDED. An answer the live poll path classifies as an
-// unknown operation writes the Attempt's outcome_unknown_since once, without an Event. An
-// operation production still has in flight, or no answer, only waits for the next query.
+// unchecked; VOIDED releases it as VOIDED; a refusal, which the live path would hand back to
+// the Agent, releases it as REFUSED. An answer the live poll path classifies as an unknown
+// operation writes the Attempt's outcome_unknown_since once, without an Event. An operation
+// production still has in flight, or no answer, only waits for the next query.
 //
 // A permanent fault found before the Run lock -- the release Tool no longer registered,
 // the node's release bounds unreadable, no Attempt under the operation key -- cannot be
@@ -136,6 +137,14 @@ func (s *ExecutionService) ReconcileReleaseOccupation(ctx context.Context, occup
 			return outcome, err
 		}
 		outcome.Released, outcome.Reason = released, domain.ReleaseReasonVoided
+		return outcome, nil
+	case result.Status == registry.PollFailed:
+		// The same answer the live poll path takes for a refusal: nothing was deployed.
+		released, err := s.releaseOccupationAfterRun(ctx, claim, domain.ReleaseReasonRefused, nil)
+		if err != nil {
+			return outcome, err
+		}
+		outcome.Released, outcome.Reason = released, domain.ReleaseReasonRefused
 		return outcome, nil
 	default:
 		// In flight, or no usable answer: the claim already scheduled the next query. An

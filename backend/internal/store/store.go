@@ -656,11 +656,17 @@ type ReleaseOccupationRepository interface {
 	// domain.ErrStaleClaim.
 	Release(ctx context.Context, id string, reason domain.ReleaseReason, now time.Time) error
 
-	// ScheduleQuery hands the query schedule of an ACTIVE occupation to the occupation
-	// itself, in the transaction that ends its Run while the release outcome is unknown:
-	// next_query_at is written and the post-task reconciliation takes over. A row no
-	// longer ACTIVE returns domain.ErrStaleClaim.
+	// ScheduleQuery hands the query schedule of one ACTIVE occupation to the occupation
+	// itself: next_query_at is written and the post-task reconciliation takes over. A row
+	// no longer ACTIVE returns domain.ErrStaleClaim.
 	ScheduleQuery(ctx context.Context, id string, at time.Time) error
+
+	// ScheduleQueriesOfRun writes the first post-task query time onto every ACTIVE
+	// occupation of a Run that has none, in the transaction that ends the Run, so the
+	// target is never held by work nobody will pick up. Released occupations and a
+	// schedule already written stay as they are, which makes a repeat a no-op. The caller
+	// holds the Run aggregate lock, keeping the order Run first, then the occupation rows.
+	ScheduleQueriesOfRun(ctx context.Context, runID string, at time.Time) error
 
 	// ClaimQuery conditionally claims one post-task query of an ACTIVE occupation whose
 	// next_query_at is due at now: it moves next_query_at to next and increments

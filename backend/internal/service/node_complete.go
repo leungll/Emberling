@@ -287,5 +287,5 @@ func (s *ExecutionService) advanceAfterNodeSuccess(
 			return err
 		}
 	}
-	return tx.Runs().UpdateAggregate(ctx, lock, newStatus, now)
+	return writeRunStatusLocked(ctx, tx, lock, newStatus, now)
 }

@@ -257,7 +257,7 @@ func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutc
 				return err
 			}
 		}
-		if err := tx.Runs().UpdateAggregate(ctx, lock, newStatus, now); err != nil {
+		if err := writeRunStatusLocked(ctx, tx, lock, newStatus, now); err != nil {
 			return err
 		}
 		runID = run.ID
