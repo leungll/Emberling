@@ -137,7 +137,9 @@ var errDispatchBindingConflict = errors.New("execution: callback binding conflic
 // the Attempt becomes DISPATCHED, the NodeRun WAITING_CALLBACK, the Callback Binding that
 // routes future callbacks is created and NODE_DISPATCHED is appended -- all in one
 // transaction, so a callback can never find a route to a NodeRun that is not waiting yet.
-// The Provider call itself already happened, outside any transaction and any Run lock.
+// An Attempt with no deadline of its own gets the maximum wait as its deadline in the same
+// write, because a task the Provider accepted may never answer and nothing else ends such
+// a wait. The Provider call itself already happened, outside any transaction and any Run lock.
 func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutcome, task *registry.ExternalTask) error {
 	if task == nil || task.ExternalTaskID == "" || task.ProviderID == "" {
 		// The Provider may have accepted the task even though nothing identifies it, so
@@ -201,7 +203,7 @@ func (s *ExecutionService) dispatchNode(ctx context.Context, outcome AdvanceOutc
 			firstPollAt = &first
 		}
 
-		if err := tx.NodeAttempts().MarkDispatched(ctx, attempt.ID, now, firstPollAt); err != nil {
+		if err := tx.NodeAttempts().MarkDispatched(ctx, attempt.ID, now, firstPollAt, now.Add(s.deps.NodeMaxWait)); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				// The Attempt is no longer STARTED: a timeout already expired it while the
 				// Provider call was in flight. Nothing is written; the external task is

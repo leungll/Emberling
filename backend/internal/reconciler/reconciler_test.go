@@ -42,11 +42,19 @@ func (r *fakeNodeRunRepo) ListReadyOrRetryable(context.Context, time.Time, int) 
 type fakeNodeAttemptRepo struct {
 	store.NodeAttemptRepository
 	expired  []domain.NodeAttempt
+	orphans  []domain.NodeAttempt
 	duePolls []store.DuePoll
+	// runnerSeen records the runner every orphan scan asked about.
+	runnerSeen []string
 	// duePollLimits records the limit of every ListDuePolls call; pollWrites records any
 	// attempt to claim or clear a poll schedule, which only the service may do.
 	duePollLimits []int
 	pollWrites    []string
+}
+
+func (r *fakeNodeAttemptRepo) ListOrphanStarted(_ context.Context, currentRunnerID string, _ int) ([]domain.NodeAttempt, error) {
+	r.runnerSeen = append(r.runnerSeen, currentRunnerID)
+	return r.orphans, nil
 }
 
 func (r *fakeNodeAttemptRepo) ListExpired(context.Context, time.Time, int) ([]domain.NodeAttempt, error) {
@@ -230,6 +238,9 @@ type fakeExecutor struct {
 	agentFinalCalls   []agentCall
 	agentTimeoutCalls []string
 	orphanCalls       []string
+	nodeOrphanCalls   []string
+	nodeOrphanFailing string
+	nodeOrphanErr     error
 	expireCalls       []string
 	humanWaitCalls    []string
 	waitExpireCalls   []string
@@ -274,6 +285,14 @@ func (e *fakeExecutor) TimeoutAgentRun(_ context.Context, agentRunID string) err
 
 func (e *fakeExecutor) HandleOrphanToolAttempt(_ context.Context, attemptID string) error {
 	e.orphanCalls = append(e.orphanCalls, attemptID)
+	return nil
+}
+
+func (e *fakeExecutor) HandleOrphanNodeAttempt(_ context.Context, attemptID string) error {
+	e.nodeOrphanCalls = append(e.nodeOrphanCalls, attemptID)
+	if e.nodeOrphanErr != nil && attemptID == e.nodeOrphanFailing {
+		return e.nodeOrphanErr
+	}
 	return nil
 }
 
@@ -834,5 +853,46 @@ func TestReconciler_DueToolPolls_OnlyCallsPollToolAttempt(t *testing.T) {
 	}
 	if len(report.Errors) != 1 || !errors.Is(report.Errors[0], providerDown) || !strings.Contains(report.Errors[0].Error(), "ta_broken") {
 		t.Fatalf("report.Errors: want only the ta_broken error, got %v", report.Errors)
+	}
+}
+
+func TestRunOnce_OrphanNodeAttempts_EachHandedToTheUseCaseDespiteAFailure(t *testing.T) {
+	tx := emptyFakeTx()
+	tx.attempts.orphans = []domain.NodeAttempt{{ID: "attempt-a"}, {ID: "attempt-b"}}
+	exec := &fakeExecutor{nodeOrphanFailing: "attempt-a", nodeOrphanErr: errors.New("rolled back")}
+	var logBuf bytes.Buffer
+	rec := newTestReconciler(t, exec, tx, &logBuf)
+	rec.cfg.RunnerID = "runner-current"
+
+	report, err := rec.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if got := tx.attempts.runnerSeen; len(got) != 1 || got[0] != "runner-current" {
+		t.Fatalf("scanned as %v, want this process alone", got)
+	}
+	if len(exec.nodeOrphanCalls) != 2 {
+		t.Fatalf("handed over %v, want both Attempts", exec.nodeOrphanCalls)
+	}
+	if report.OrphanNodeAttemptsFound != 2 || report.OrphanNodeAttemptsHandled != 1 || len(report.Errors) != 1 {
+		t.Fatalf("report = %+v, want two found, one handled and the failure collected", report)
+	}
+}
+
+func TestRunOnce_NoRunnerIdentity_SkipsOrphanNodeAttemptScan(t *testing.T) {
+	tx := emptyFakeTx()
+	tx.attempts.orphans = []domain.NodeAttempt{{ID: "attempt-a"}}
+	exec := &fakeExecutor{}
+	var logBuf bytes.Buffer
+	rec := newTestReconciler(t, exec, tx, &logBuf)
+	rec.cfg.RunnerID = ""
+
+	if _, err := rec.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if len(tx.attempts.runnerSeen) != 0 || len(exec.nodeOrphanCalls) != 0 {
+		t.Fatalf("scanned %v and handed over %v, want neither", tx.attempts.runnerSeen, exec.nodeOrphanCalls)
 	}
 }

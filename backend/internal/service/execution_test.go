@@ -330,7 +330,7 @@ func (r *execFakeNodeAttemptRepo) ListByNodeRun(context.Context, string) ([]doma
 func (r *execFakeNodeAttemptRepo) Transition(context.Context, string, domain.NodeAttemptStatus, domain.NodeAttemptStatus, time.Time) error {
 	return errExecFakeNotImplemented
 }
-func (r *execFakeNodeAttemptRepo) MarkDispatched(context.Context, string, time.Time, *time.Time) error {
+func (r *execFakeNodeAttemptRepo) MarkDispatched(context.Context, string, time.Time, *time.Time, time.Time) error {
 	return errExecFakeNotImplemented
 }
 func (r *execFakeNodeAttemptRepo) ClaimPoll(context.Context, string, time.Time, time.Duration, int) (bool, error) {
@@ -348,6 +348,10 @@ func (r *execFakeNodeAttemptRepo) MarkSucceeded(context.Context, string, domain.
 func (r *execFakeNodeAttemptRepo) MarkFailed(context.Context, string, domain.NodeAttemptStatus, time.Time, domain.ExecutionError, bool) error {
 	return errExecFakeNotImplemented
 }
+func (r *execFakeNodeAttemptRepo) ListOrphanStarted(context.Context, string, int) ([]domain.NodeAttempt, error) {
+	return nil, nil
+}
+
 func (r *execFakeNodeAttemptRepo) ListExpired(context.Context, time.Time, int) ([]domain.NodeAttempt, error) {
 	return nil, errExecFakeNotImplemented
 }

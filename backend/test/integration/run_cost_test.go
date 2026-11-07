@@ -95,14 +95,14 @@ func seedCostedRun(ctx context.Context, t *testing.T, uow store.UnitOfWork, runI
 				return err
 			}
 		}
-		if err := attempts.MarkDispatched(ctx, runID+"_na1", fixtureTime, nil); err != nil {
+		if err := attempts.MarkDispatched(ctx, runID+"_na1", fixtureTime, nil, fixtureTime.Add(24*time.Hour)); err != nil {
 			return err
 		}
 		if err := attempts.MarkFailed(ctx, runID+"_na1", domain.NodeAttemptDispatched, fixtureTime,
 			domain.ExecutionError{Code: "PROVIDER_LOST", Message: "no result"}, true); err != nil {
 			return err
 		}
-		if err := attempts.MarkDispatched(ctx, runID+"_na2", fixtureTime, nil); err != nil {
+		if err := attempts.MarkDispatched(ctx, runID+"_na2", fixtureTime, nil, fixtureTime.Add(24*time.Hour)); err != nil {
 			return err
 		}
 		if err := attempts.MarkSucceeded(ctx, runID+"_na2", domain.NodeAttemptDispatched, fixtureTime,

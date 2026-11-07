@@ -400,7 +400,7 @@ func seedPollAttempt(
 	t.Helper()
 	nodeRunID, attemptID = seedAttempt(ctx, t, uow, f, suffix, domain.NodeRunWaitingCallback, false)
 	if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-		return tx.NodeAttempts().MarkDispatched(ctx, attemptID, fixtureTime, firstPollAt)
+		return tx.NodeAttempts().MarkDispatched(ctx, attemptID, fixtureTime, firstPollAt, fixtureTime.Add(24*time.Hour))
 	}); err != nil {
 		t.Fatalf("dispatch attempt %s: %v", suffix, err)
 	}

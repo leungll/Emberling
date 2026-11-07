@@ -270,6 +270,11 @@ type NodeRunOutcome struct {
 // NodeAttemptRepository preserves every real execution. A retry creates a new Attempt;
 // old Attempts are never overwritten.
 type NodeAttemptRepository interface {
+	// ListOrphanStarted lists the STARTED Attempts with no deadline that a process other
+	// than currentRunnerID created, oldest first, up to limit. It does not filter on the
+	// Run: an Attempt of an ended Run must still end and free its Provider slot, and a
+	// handled row leaves the list by leaving STARTED.
+	ListOrphanStarted(ctx context.Context, currentRunnerID string, limit int) ([]domain.NodeAttempt, error)
 	Create(ctx context.Context, attempt domain.NodeAttempt) error
 	Get(ctx context.Context, attemptID string) (domain.NodeAttempt, error)
 	ListByNodeRun(ctx context.Context, nodeRunID string) ([]domain.NodeAttempt, error)
@@ -281,8 +286,9 @@ type NodeAttemptRepository interface {
 	// MarkDispatched conditionally moves an Attempt from STARTED to DISPATCHED and
 	// stamps dispatched_at. In the same UPDATE it writes firstPollAt as the first
 	// next_poll_at; firstPollAt is nil when the registration declares no poll policy.
+	// maxWaitAt becomes the deadline of an Attempt that has none and is ignored otherwise.
 	// It returns domain.ErrStaleClaim when the row is not STARTED.
-	MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error
+	MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time, maxWaitAt time.Time) error
 
 	// ClaimPoll conditionally claims one Provider poll of a DISPATCHED Attempt whose
 	// next_poll_at is due and whose poll_count is below maxPolls. It increments

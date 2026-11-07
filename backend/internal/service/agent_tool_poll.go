@@ -321,7 +321,7 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 		}
 		// The same rule the orphan handling applies decides whether a call the Provider
 		// lost may simply be made again: no side effect, or a SAFE one.
-		claim.repeatable = classifyOrphan(reg.Metadata, true) == orphanInterrupted
+		claim.repeatable = classifyOrphan(reg.Metadata.SideEffect, true) == orphanInterrupted
 		return nil
 	})
 	if err != nil {

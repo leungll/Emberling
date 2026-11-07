@@ -389,6 +389,7 @@ func (s *ExecutionService) startAttempt(ctx context.Context, tx store.Tx, lock *
 		return err
 	}
 
+	runnerID := s.deps.RunnerID
 	if err := tx.NodeAttempts().Create(ctx, domain.NodeAttempt{
 		ID:                attemptID,
 		NodeRunID:         nr.ID,
@@ -398,6 +399,7 @@ func (s *ExecutionService) startAttempt(ctx context.Context, tx store.Tx, lock *
 		CallbackTokenHash: tokenHash,
 		StartedAt:         now,
 		DeadlineAt:        deadlinePtr,
+		RunnerID:          &runnerID,
 	}); err != nil {
 		return err
 	}

@@ -131,6 +131,55 @@ func TestConfig_ArtifactMaxBytes_IsOptionalWithDefault(t *testing.T) {
 	}
 }
 
+func TestConfig_NodeAttemptMaxWait_IsOptionalWithDefault(t *testing.T) {
+	cfg, err := config.Load(lookup(completeEnv()))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.NodeAttemptMaxWait != 24*time.Hour {
+		t.Fatalf("default = %v, want 24h", cfg.NodeAttemptMaxWait)
+	}
+
+	env := completeEnv()
+	env[config.KeyNodeAttemptMaxWait] = "90m"
+	cfg, err = config.Load(lookup(env))
+	if err != nil {
+		t.Fatalf("Load with a value: %v", err)
+	}
+	if cfg.NodeAttemptMaxWait != 90*time.Minute {
+		t.Fatalf("configured = %v, want 90m", cfg.NodeAttemptMaxWait)
+	}
+}
+
+func TestConfig_NodeAttemptMaxWait_InvalidValueFailsStartup(t *testing.T) {
+	for _, value := range []string{"0s", "-1h", "soon"} {
+		t.Run(value, func(t *testing.T) {
+			env := completeEnv()
+			env[config.KeyNodeAttemptMaxWait] = value
+
+			_, err := config.Load(lookup(env))
+
+			var invalid *config.InvalidConfigError
+			if !errors.As(err, &invalid) || invalid.Key != config.KeyNodeAttemptMaxWait {
+				t.Fatalf("Load with %q: want *config.InvalidConfigError naming the key, got %v", value, err)
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_RejectsAMissingNodeAttemptMaxWait(t *testing.T) {
+	cfg, err := config.Load(lookup(completeEnv()))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	cfg.NodeAttemptMaxWait = 0
+
+	var invalid *config.InvalidConfigError
+	if err := cfg.Validate(); !errors.As(err, &invalid) || invalid.Key != config.KeyNodeAttemptMaxWait {
+		t.Fatalf("Validate: want *config.InvalidConfigError naming the key, got %v", err)
+	}
+}
+
 func TestConfig_NonPositiveBound_ReturnsInvalidConfigError(t *testing.T) {
 	for _, tc := range []struct {
 		name string

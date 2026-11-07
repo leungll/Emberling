@@ -57,6 +57,7 @@ const (
 	KeyReconcileBatchSize = EnvPrefix + "RECONCILE_BATCH_SIZE"
 
 	KeyPendingCallbackTTL             = EnvPrefix + "PENDING_CALLBACK_TTL"
+	KeyNodeAttemptMaxWait             = EnvPrefix + "NODE_ATTEMPT_MAX_WAIT"
 	KeyPendingCallbackMaxPayloadBytes = EnvPrefix + "PENDING_CALLBACK_MAX_PAYLOAD_BYTES"
 
 	KeyTraceMaxFieldBytes    = EnvPrefix + "TRACE_MAX_FIELD_BYTES"
@@ -82,6 +83,9 @@ const MinOperatorTokenBytes = 32
 // deployment silently inherits an unbounded or unintended operational limit.
 const DefaultHTTPAddr = ":8080"
 
+// DefaultNodeAttemptMaxWait applies when KeyNodeAttemptMaxWait is unset.
+const DefaultNodeAttemptMaxWait = 24 * time.Hour
+
 // Config is the fully resolved deployment configuration. It is passed by value: no part
 // of the process may mutate it after startup.
 type Config struct {
@@ -105,6 +109,10 @@ type Config struct {
 	// ProviderCapacity is the in-flight task limit per asynchronous Provider id; a
 	// Provider absent from it is not limited.
 	ProviderCapacity map[string]int
+	// NodeAttemptMaxWait bounds how long a dispatched Node Attempt with no deadline of its
+	// own may wait for its Provider. Dispatch writes it onto the Attempt, so changing it
+	// affects only later dispatches.
+	NodeAttemptMaxWait time.Duration
 	// WorkspaceRepositories maps each registered repository identifier to its absolute
 	// path. Empty means no Agent workspace can be configured.
 	WorkspaceRepositories map[string]string
@@ -314,6 +322,7 @@ func Load(env func(string) string) (Config, error) {
 			Name:  l.optional(KeyOperatorName, DefaultOperatorName),
 		},
 		ProviderCapacity:      l.providerCapacity(),
+		NodeAttemptMaxWait:    l.durationOr(KeyNodeAttemptMaxWait, DefaultNodeAttemptMaxWait),
 		WorkspaceRepositories: l.workspaceRepositories(),
 	}
 
@@ -393,6 +402,7 @@ func (c Config) Validate() error {
 	}{
 		{KeyReconcileInterval, c.Reconciliation.Interval},
 		{KeyPendingCallbackTTL, c.PendingCallback.TTL},
+		{KeyNodeAttemptMaxWait, c.NodeAttemptMaxWait},
 	} {
 		if item.value <= 0 {
 			return &InvalidConfigError{Key: item.key, Reason: "must be a positive duration"}
@@ -565,6 +575,15 @@ func (l *loader) optionalDuration(key string) time.Duration {
 		return 0
 	}
 	return parsed
+}
+
+// durationOr reads an optional duration whose absence means fallback. An invalid value is
+// recorded by optionalDuration and fails the load, so its fallback is never used.
+func (l *loader) durationOr(key string, fallback time.Duration) time.Duration {
+	if strings.TrimSpace(l.env(key)) == "" {
+		return fallback
+	}
+	return l.optionalDuration(key)
 }
 
 func (l *loader) requiredInt(key string) int {

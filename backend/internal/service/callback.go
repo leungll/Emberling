@@ -678,10 +678,10 @@ func issueCallbackToken(secret []byte, attemptID string, expiresAt time.Time) (s
 	}
 	// A zero expiresAt means "no expiry" and is encoded as 0: it is the Attempt of a Node
 	// whose ExecutionPolicy sets no timeout, so there is no deadline to derive a lifetime
-	// from and inventing one would kill a legitimate long-running Provider task. The
-	// Attempt's DISPATCHED status is the lifetime instead -- verification still binds the
-	// token to one attempt id, and the resume path rejects anything the Binding no longer
-	// routes.
+	// from yet: the maximum wait is only written at dispatch, after this token exists. The
+	// Attempt's DISPATCHED status is the lifetime instead, and the maximum wait bounds that
+	// status -- verification still binds the token to one attempt id, and the resume path
+	// rejects anything the Binding no longer routes.
 	var expiryMillis int64
 	if !expiresAt.IsZero() {
 		expiryMillis = expiresAt.UTC().UnixMilli()
