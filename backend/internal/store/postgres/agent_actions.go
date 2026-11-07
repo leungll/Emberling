@@ -75,15 +75,23 @@ func (r *agentActionRepository) ClaimReady(ctx context.Context, actionID string,
 
 // ListReady returns persisted READY Actions for Reconciler rediscovery. The
 // Reconciler advances the original Action; it never re-requests the model or creates a
-// second Decision.
+// second Decision. A READY Action of a terminal Run is excluded: both of its use cases
+// refuse it, and the Agent deadline ends it.
 func (r *agentActionRepository) ListReady(ctx context.Context, limit int) ([]domain.AgentAction, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("store/postgres agent_actions.ListReady: limit must be positive, got %d", limit)
 	}
 
 	const query = `SELECT ` + agentActionSelectColumns + `
-		  FROM agent_actions
+		  FROM agent_actions a
 		 WHERE status = 'READY'
+		   AND EXISTS (
+		       SELECT 1
+		         FROM agent_turns t
+		         JOIN agent_runs ar ON ar.id = t.agent_run_id
+		         JOIN node_runs nr ON nr.id = ar.node_run_id
+		        WHERE t.id = a.turn_id
+		          AND ` + advancingRunPredicate + `)
 		 ORDER BY id ASC
 		 LIMIT $1`
 

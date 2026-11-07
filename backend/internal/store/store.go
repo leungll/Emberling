@@ -209,8 +209,8 @@ type NodeRunRepository interface {
 	Transition(ctx context.Context, nodeRunID string, from, to domain.NodeRunStatus, now time.Time) error
 
 	// ListReadyOrRetryable returns persisted work the Reconciler can rediscover after a
-	// crash: READY NodeRuns, and RUNNING NodeRuns whose retry backoff has elapsed.
-	// The limit bounds the scan batch.
+	// crash: READY NodeRuns, and RUNNING NodeRuns whose retry backoff has elapsed, of Runs
+	// that are not terminal. The limit bounds the scan batch.
 	ListReadyOrRetryable(ctx context.Context, before time.Time, limit int) ([]domain.NodeRun, error)
 
 	// ClaimRetry conditionally clears next_attempt_at on a RUNNING NodeRun whose backoff
@@ -498,9 +498,10 @@ type AgentTurnRepository interface {
 	// result is not an error.
 	ClaimReady(ctx context.Context, turnID string, now time.Time) (bool, error)
 
-	// ListReady returns persisted READY Turns the Reconciler can rediscover after a
-	// crash. A RUNNING Turn is deliberately excluded: the MVP never re-issues
-	// a model request that may already be in flight. The limit bounds the scan batch.
+	// ListReady returns persisted READY Turns of non-terminal Runs the Reconciler can
+	// rediscover after a crash. A RUNNING Turn is deliberately excluded: the MVP never
+	// re-issues a model request that may already be in flight. The limit bounds the scan
+	// batch.
 	ListReady(ctx context.Context, limit int) ([]domain.AgentTurn, error)
 
 	// MarkCompleted conditionally moves a RUNNING Turn to COMPLETED and writes the model
@@ -546,8 +547,9 @@ type AgentActionRepository interface {
 	// closes the Action out inside the same transaction. A false result is not an error.
 	ClaimReady(ctx context.Context, actionID string, now time.Time) (bool, error)
 
-	// ListReady returns persisted READY Actions the Reconciler can rediscover after a
-	// crash. It advances the original Action; it never asks the model again.
+	// ListReady returns persisted READY Actions of non-terminal Runs the Reconciler can
+	// rediscover after a crash. It advances the original Action; it never asks the model
+	// again.
 	// The limit bounds the scan batch.
 	ListReady(ctx context.Context, limit int) ([]domain.AgentAction, error)
 
@@ -791,9 +793,9 @@ type ToolAttemptRepository interface {
 	MarkTimedOut(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) (bool, error)
 
 	// ListOrphanStarted returns STARTED synchronous Tool Attempts written by a runner other
-	// than currentRunnerID, of Agent Runs that have not terminated and whose deadline has
-	// not passed, oldest first and at most limit of them. An Attempt with no recorded
-	// runner is never returned. Read-only; the caller decides nothing from it except which
+	// than currentRunnerID, of non-terminal Runs whose Agent Run has not terminated and whose
+	// deadline has not passed, oldest first and at most limit of them. An Attempt with no
+	// recorded runner is never returned. Read-only; the caller decides nothing from it except which
 	// use case to call.
 	ListOrphanStarted(ctx context.Context, currentRunnerID string, now time.Time, limit int) ([]domain.ToolAttempt, error)
 
@@ -827,10 +829,10 @@ type ToolAttemptRepository interface {
 	// in `from` returns domain.ErrStaleClaim.
 	MarkFailedDefinite(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, execErr domain.ExecutionError) error
 
-	// ListDueConfirmDeadlines returns release Attempts that are still STARTED or
-	// DISPATCHED, whose confirm deadline is at or before now and whose Action is RUNNING
-	// or WAITING_CALLBACK, oldest deadline first, bounded by limit. It discovers persisted
-	// work only; opening the human wait is the use case's conditional update.
+	// ListDueConfirmDeadlines returns release Attempts of non-terminal Runs that are still
+	// STARTED or DISPATCHED, whose confirm deadline is at or before now and whose Action is
+	// RUNNING or WAITING_CALLBACK, oldest deadline first, bounded by limit. It discovers
+	// persisted work only; opening the human wait is the use case's conditional update.
 	ListDueConfirmDeadlines(ctx context.Context, now time.Time, limit int) ([]DueConfirmDeadline, error)
 
 	// CountByAgentRunForTools counts the Tool Attempts of one Agent Run whose Tool is

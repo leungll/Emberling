@@ -368,7 +368,9 @@ func (r *toolAttemptRepository) ListDuePolls(ctx context.Context, now time.Time,
 // those are left to the deadline. Only Agent Runs that have not terminated and whose
 // deadline has not passed are scanned; an expired one belongs to the Agent timeout. A
 // paused Agent Run's deadline is not running, so its STARTED Attempts are listed whatever
-// the clock says: a release that resumes the Agent must find them.
+// the clock says: a release that resumes the Agent must find them. An Attempt of a terminal
+// Run is not listed: the orphan use case refuses it, and a paused Agent's deadline would
+// never take the row out of the set.
 func (r *toolAttemptRepository) ListOrphanStarted(ctx context.Context, currentRunnerID string, now time.Time, limit int) ([]domain.ToolAttempt, error) {
 	const query = `
 		SELECT ` + qualifiedToolAttemptColumns + `
@@ -376,12 +378,14 @@ func (r *toolAttemptRepository) ListOrphanStarted(ctx context.Context, currentRu
 		  JOIN agent_actions aa ON aa.id = ta.action_id
 		  JOIN agent_turns   t  ON t.id  = aa.turn_id
 		  JOIN agent_runs    ar ON ar.id = t.agent_run_id
+		  JOIN node_runs     nr ON nr.id = ar.node_run_id
 		 WHERE ta.status = 'STARTED'
 		   AND ta.runner_id IS NOT NULL
 		   AND ta.runner_id <> $1
 		   AND ta.callback_token_hash IS NULL
 		   AND ar.termination IS NULL
 		   AND (ar.deadline > $2 OR ar.paused_at IS NOT NULL)
+		   AND ` + advancingRunPredicate + `
 		 ORDER BY ta.started_at, ta.id
 		 LIMIT $3`
 
@@ -488,8 +492,10 @@ func (r *toolAttemptRepository) MarkFailedDefinite(ctx context.Context, attemptI
 	return nil
 }
 
-// ListDueConfirmDeadlines discovers release Attempts whose confirm deadline passed while
-// the Action still waits for production, using the partial confirm-deadline index. It
+// ListDueConfirmDeadlines discovers release Attempts of a Run that can still advance whose
+// confirm deadline passed while the Action still waits for production, using the partial
+// confirm-deadline index. No human wait opens for a terminal Run, and a paused Agent's
+// deadline would never take the row out of the set, so its rows are not listed. It
 // returns identities only; opening the human wait is the use case's conditional update.
 func (r *toolAttemptRepository) ListDueConfirmDeadlines(ctx context.Context, now time.Time, limit int) ([]store.DueConfirmDeadline, error) {
 	if limit <= 0 {
@@ -500,9 +506,13 @@ func (r *toolAttemptRepository) ListDueConfirmDeadlines(ctx context.Context, now
 		SELECT ta.id, ta.action_id
 		  FROM tool_attempts ta
 		  JOIN agent_actions aa ON aa.id = ta.action_id
+		  JOIN agent_turns   t  ON t.id  = aa.turn_id
+		  JOIN agent_runs    ar ON ar.id = t.agent_run_id
+		  JOIN node_runs     nr ON nr.id = ar.node_run_id
 		 WHERE ta.status IN ('STARTED', 'DISPATCHED')
 		   AND ta.confirm_deadline IS NOT NULL AND ta.confirm_deadline <= $1
 		   AND aa.status IN ('RUNNING', 'WAITING_CALLBACK')
+		   AND ` + advancingRunPredicate + `
 		 ORDER BY ta.confirm_deadline ASC, ta.id ASC
 		 LIMIT $2`
 
