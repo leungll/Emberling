@@ -51,9 +51,10 @@ func timelineFor(transcriptSha string, ranges ...[2]string) string {
 // fakeReader serves text artifacts keyed by Run, the way the Run-scoped artifact read
 // does: an artifact another Run produced is not found.
 type fakeReader struct {
-	texts map[string]string // runID + "/" + artifactID -> content
-	media map[string]string // artifactID -> media type override
-	fail  map[string]error  // artifactID -> error the open fails with
+	texts  map[string]string // runID + "/" + artifactID -> content
+	media  map[string]string // artifactID -> media type override
+	digest map[string]string // artifactID -> committed digest override
+	fail   map[string]error  // artifactID -> error the open fails with
 }
 
 func (f fakeReader) OpenText(_ context.Context, runID, artifactID string) (domain.Artifact, io.ReadCloser, error) {
@@ -68,7 +69,11 @@ func (f fakeReader) OpenText(_ context.Context, runID, artifactID string) (domai
 	if override, ok := f.media[artifactID]; ok {
 		mediaType = override
 	}
-	return domain.Artifact{ArtifactID: artifactID, MediaType: mediaType, SizeBytes: int64(len(content)), SHA256: digestOf(content)},
+	digest := digestOf(content)
+	if override, ok := f.digest[artifactID]; ok {
+		digest = override
+	}
+	return domain.Artifact{ArtifactID: artifactID, MediaType: mediaType, SizeBytes: int64(len(content)), SHA256: digest},
 		io.NopCloser(strings.NewReader(content)), nil
 }
 
@@ -439,6 +444,24 @@ func TestExecute_ArtifactNotReadable_FailsWithStableCode(t *testing.T) {
 				t.Errorf("model asked %d times, want 0", len(f.model.requests))
 			}
 		})
+	}
+}
+
+// Content that does not match the digest committed with the artifact is corrupt storage,
+// a Backend failure: it is never reported as a mismatch the Agent could correct, and the
+// model is not asked.
+func TestExecute_StoredContentDiffersFromCommittedDigest_IsABackendFailure(t *testing.T) {
+	f := newFixture(textReviewer(passedOpinion))
+	f.reader.digest = map[string]string{transcriptID: strings.Repeat("b", 64)}
+	_, err := f.execute(t)
+	if err == nil || !strings.Contains(err.Error(), "committed digest") {
+		t.Fatalf("err = %v, want a backend failure naming the committed digest", err)
+	}
+	if strings.Contains(err.Error(), FailureTranscriptMismatch) || strings.Contains(err.Error(), FailureArtifactNotFound) {
+		t.Errorf("err = %v, must not be a tool failure code", err)
+	}
+	if len(f.model.requests) != 0 {
+		t.Errorf("model asked %d times, want 0", len(f.model.requests))
 	}
 }
 

@@ -259,7 +259,9 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 // and the content's digest, computed from the bytes read so the result names what was
 // actually reviewed. An artifact the Run cannot read as text is ARTIFACT_NOT_FOUND;
 // content past the bound is REVIEW_INPUT_TOO_LARGE; any other read failure is the
-// Backend's and is passed on without the material.
+// Backend's and is passed on without the material. So is content whose digest differs
+// from the one committed with the artifact: corrupt storage is never reported as a
+// mismatch the Agent could correct.
 func (e *Executor) readMaterial(ctx context.Context, runID, artifactID string, limit int) ([]byte, string, error) {
 	artifact, content, err := e.ports.Materials.OpenText(ctx, runID, artifactID)
 	if errors.Is(err, domain.ErrNotFound) {
@@ -280,7 +282,11 @@ func (e *Executor) readMaterial(ctx context.Context, runID, artifactID string, l
 		return nil, "", fmt.Errorf("%s: artifact %s could not be read: %w", ToolName, artifactID, err)
 	}
 	sum := sha256.Sum256(data)
-	return data, hex.EncodeToString(sum[:]), nil
+	digest := hex.EncodeToString(sum[:])
+	if digest != artifact.SHA256 {
+		return nil, "", fmt.Errorf("%s: artifact %s: stored content does not match its committed digest", ToolName, artifactID)
+	}
+	return data, digest, nil
 }
 
 // reviewCost is the Cost the Runtime records for the review: the amount and currency the
