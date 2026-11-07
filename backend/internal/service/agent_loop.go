@@ -381,8 +381,12 @@ func (s *ExecutionService) failAgentNodeRun(
 	}); err != nil {
 		return err
 	}
-	if err := tx.Runs().SetError(ctx, lock, execError); err != nil {
-		return err
+	// The Run's error is the failure that ended it, the one RUN_FAILED carries. An Agent
+	// that fails after a sibling ended the Run keeps its error on its own NodeRun.
+	if !lock.Status().IsTerminal() {
+		if err := tx.Runs().SetError(ctx, lock, execError); err != nil {
+			return err
+		}
 	}
 
 	allNodeRuns, err := tx.NodeRuns().ListByRun(ctx, run.ID)
