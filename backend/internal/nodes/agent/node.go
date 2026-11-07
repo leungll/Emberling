@@ -16,7 +16,8 @@ const nodeType = "agent"
 
 // configSchema is the fixed `agent` Node config shape:
 // modelId, maxTurns and timeoutMs are mandatory; instructions, modelConfig, allowedTools,
-// the three frozen Schemas, the generation limit maxGenerationCalls, the image model
+// the three frozen Schemas, the generation limit maxGenerationCalls, the revision limits
+// maxFailedFacts, the image model
 // imageModelId, the review model reviewModelId, the workspace binding, the goal pointer
 // and the human and release wait bounds are optional. It matches runtime.AgentNodeConfig
 // field for field so the ConfigSchema stage and the Semantics stage
@@ -36,6 +37,7 @@ const configSchema = `{
     "maxTurns": {"type": "integer", "minimum": 1},
     "timeoutMs": {"type": "integer", "minimum": 1},
     "maxGenerationCalls": {"type": "integer", "minimum": 1},
+    "maxFailedFacts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
     "imageModelId": {"type": "string", "minLength": 1, "title": "Image model"},
     "reviewModelId": {"type": "string", "minLength": 1, "title": "Review model"},
     "workspace": {

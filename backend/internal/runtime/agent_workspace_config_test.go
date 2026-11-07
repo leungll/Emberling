@@ -192,7 +192,14 @@ func TestResolveAgentGoal_ValueNotAGoal_ConfigError(t *testing.T) {
 	cfg := AgentNodeConfig{GoalPointer: "/goal"}
 	for _, input := range []string{`{"goal":"DEPLOY"}`, `{"goal":"prepare_only"}`, `{"goal":1}`, `{"goal":null}`, `{"goal":["FIX_AND_DEPLOY"]}`} {
 		_, err := ResolveAgentGoal(cfg, json.RawMessage(input))
-		assertAgentConfigError(t, err, "goalPointer", "is not one of PREPARE_ONLY or FIX_AND_DEPLOY")
+		assertAgentConfigError(t, err, "goalPointer", "is not one of PREPARE_ONLY, FIX_AND_DEPLOY or DELIVER_CLIP")
+	}
+}
+
+func TestResolveAgentGoal_DeliverClip_Resolves(t *testing.T) {
+	goal, err := ResolveAgentGoal(AgentNodeConfig{GoalPointer: "/goal"}, json.RawMessage(`{"goal":"DELIVER_CLIP"}`))
+	if err != nil || goal != AgentGoalDeliverClip {
+		t.Fatalf("ResolveAgentGoal() = %q, %v, want DELIVER_CLIP", goal, err)
 	}
 }
 

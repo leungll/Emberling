@@ -153,6 +153,8 @@ export interface AgentRunTrace {
   pausedAt: string | null;
   pauseReason: AgentPauseReason | null;
   goal: AgentGoal | null;
+  /** The frozen revision limit per fact type; `null` when the node bounds none. */
+  maxFailedFacts: Record<string, number> | null;
   terminatedAt: string | null;
   error: ExecutionError | null;
   /**
