@@ -209,8 +209,9 @@ type NodeRunRepository interface {
 	Transition(ctx context.Context, nodeRunID string, from, to domain.NodeRunStatus, now time.Time) error
 
 	// ListReadyOrRetryable returns persisted work the Reconciler can rediscover after a
-	// crash: READY NodeRuns, and RUNNING NodeRuns whose retry backoff has elapsed, of Runs
-	// that are not terminal. The limit bounds the scan batch.
+	// crash: READY NodeRuns of Runs that are not terminal, and RUNNING NodeRuns whose retry
+	// backoff has elapsed, whatever their Run, because Advance settles those on a terminal
+	// Run. The limit bounds the scan batch.
 	ListReadyOrRetryable(ctx context.Context, before time.Time, limit int) ([]domain.NodeRun, error)
 
 	// ClaimRetry conditionally clears next_attempt_at on a RUNNING NodeRun whose backoff

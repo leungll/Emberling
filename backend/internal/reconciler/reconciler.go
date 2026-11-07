@@ -212,11 +212,11 @@ type Report struct {
 // state directly -- every mutation happens inside the service use cases it calls.
 //
 // Each scan is bounded by BatchLimit, so a row that keeps coming back without changing can
-// starve the rows behind it. The READY, retry, orphan and confirm deadline scans therefore
-// leave out terminal Runs, whose rows their use cases refuse. The timeout, poll, callback,
-// approval, human wait and occupation scans keep listing them: those use cases still end an
-// Attempt, free a Provider slot, close a wait or ask production, and the row leaves the
-// set by being processed or rescheduled.
+// starve the rows behind it. The READY, orphan and confirm deadline scans therefore leave
+// out terminal Runs, whose rows their use cases refuse. The retry, timeout, poll, callback,
+// approval, human wait and occupation scans keep listing them: those use cases still settle
+// a pending retry, end an Attempt, free a Provider slot, close a wait or ask production,
+// and the row leaves the set by being processed or rescheduled.
 func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 	var report Report
 	now := r.cfg.Clock.Now()

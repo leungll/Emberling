@@ -137,8 +137,10 @@ const advancingRunPredicate = `EXISTS (SELECT 1 FROM runs r WHERE r.id = nr.run_
 // ListReadyOrRetryable returns persisted work the Reconciler can rediscover after a
 // crash: READY NodeRuns that nobody claimed, and RUNNING NodeRuns whose retry backoff
 // has elapsed. WAITING_CALLBACK NodeRuns are recovered through their Callback Binding,
-// so they are deliberately excluded here. A NodeRun a terminal Run left behind is excluded
-// too: Advance never claims for a terminal Run, and the row stays as a historic fact.
+// so they are deliberately excluded here. A READY NodeRun a terminal Run left behind is
+// excluded too: Advance never claims for a terminal Run, and the row stays as a historic
+// fact. A due retry of a terminal Run stays listed, because Advance settles it there and
+// the row leaves by being processed.
 func (r *nodeRunRepository) ListReadyOrRetryable(ctx context.Context, before time.Time, limit int) ([]domain.NodeRun, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("store/postgres node_runs.ListReadyOrRetryable: limit must be positive, got %d", limit)
@@ -146,9 +148,8 @@ func (r *nodeRunRepository) ListReadyOrRetryable(ctx context.Context, before tim
 
 	const query = `SELECT ` + nodeRunColumns + `
 		  FROM node_runs nr
-		 WHERE (status = 'READY'
-		        OR (status = 'RUNNING' AND next_attempt_at IS NOT NULL AND next_attempt_at <= $1))
-		   AND ` + advancingRunPredicate + `
+		 WHERE (status = 'READY' AND ` + advancingRunPredicate + `)
+		    OR (status = 'RUNNING' AND next_attempt_at IS NOT NULL AND next_attempt_at <= $1)
 		 ORDER BY ready_at ASC, id ASC
 		 LIMIT $2`
 

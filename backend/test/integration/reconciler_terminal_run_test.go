@@ -4,9 +4,11 @@
 // can never advance cannot occupy the batch. A Run that ended can leave READY or waiting
 // siblings behind, so two kinds of scan exist: those whose use case does nothing for a
 // terminal Run must not list its rows, or a backlog of them hides new work forever; and
-// those whose use case does real work for a terminal Run, ending an Attempt, freeing a
-// Provider slot, closing a wait or asking production about a release, must keep listing
-// them. Both halves are proven here against PostgreSQL.
+// those whose use case does real work for a terminal Run, ending an Attempt, settling a
+// pending retry, freeing a Provider slot, closing a wait or asking production about a
+// release, must keep listing them. Both halves are proven here against PostgreSQL. One
+// scan is both: the READY branch of the NodeRun scan is of the first kind, its retry branch
+// of the second.
 package integration
 
 import (
@@ -227,11 +229,10 @@ func TestNodeRuns_ListReadyOrRetryable_TerminalBacklogBeyondBatch_FindsActiveWor
 	now := fixtureTime.Add(time.Hour)
 	elapsed := now.Add(-time.Minute)
 
-	// The dead rows are the oldest in the table, in both branches of the scan and in both
-	// terminal statuses, so without a filter they fill every batch.
+	// The dead rows are the oldest in the table and in both terminal statuses, so without a
+	// filter they fill every batch.
 	for i := range terminalScanBacklog {
 		seedScanNodeRun(ctx, t, uow, failed.runID, fmt.Sprintf("failed_ready_%d", i), -time.Hour, nil)
-		seedScanNodeRun(ctx, t, uow, failed.runID, fmt.Sprintf("failed_retry_%d", i), -time.Hour, &elapsed)
 		seedScanNodeRun(ctx, t, uow, completed.runID, fmt.Sprintf("completed_ready_%d", i), -time.Hour, nil)
 	}
 	liveReady := seedScanNodeRun(ctx, t, uow, f.runID, "live_ready", time.Minute, nil)
@@ -523,6 +524,9 @@ func TestTimeoutAgentRun_RunAlreadyFailed_EndsAgentAndClearsItsReadyTurn(t *test
 		domain.ExecutionPolicy{TimeoutMs: 60_000, MaxAttempts: 1})
 	f := seedRun(h.ctx, t, h.uow)
 	failed := addScanRun(h.ctx, t, h.uow, f, "run_failed", domain.RunFailed)
+	if _, err := h.pool.Exec(h.ctx, `UPDATE runs SET error = '{"code":"ORIGINAL","message":"the failure that ended it"}' WHERE id = $1`, failed.runID); err != nil {
+		t.Fatalf("record the Run's error: %v", err)
+	}
 	deadline := h.clock.Now().Add(time.Minute)
 	agentRunID, turnID := seedScanTurn(h.ctx, t, h.uow, failed.runID, "dead", deadline)
 
@@ -544,9 +548,86 @@ func TestTimeoutAgentRun_RunAlreadyFailed_EndsAgentAndClearsItsReadyTurn(t *test
 	if got := listExpiredAgentRuns(h.ctx, t, h.uow, h.clock.Now(), 10); len(got) != 0 {
 		t.Fatalf("Agent ListExpired after the timeout = %+v, want the handled row gone", got)
 	}
-	if got := getRun(h.ctx, t, h.uow, failed.runID).Status; got != domain.RunFailed {
+	if got := getRun(h.ctx, t, h.uow, failed.runID); got.Status != domain.RunFailed || got.Error == nil || got.Error.Code != "ORIGINAL" {
+		t.Fatalf("run = %s error %+v, want FAILED with the failure that ended it", got.Status, got.Error)
+	}
+}
+
+// TestReconciler_PendingRetriesOfEndedRunsFillTheBatch_LeaveAndLiveWorkFollows is why the
+// retry branch may stay listed for a terminal Run: its use case settles the row, so the
+// row leaves the set, and a batch full of them only delays live work by the passes it
+// takes to process them. Each row is a real one, left by a Run that ended before the Run's
+// end settled pending retries, holding a slot the queued live Run is waiting for.
+func TestReconciler_PendingRetriesOfEndedRunsFillTheBatch_LeaveAndLiveWorkFollows(t *testing.T) {
+	h := newOrphanHarness(t, terminalScanBacklog)
+	tasks := make([]domain.NodeRun, 0, terminalScanBacklog)
+	for range terminalScanBacklog {
+		run, _, task, _ := h.retryScheduled()
+		if _, err := h.pool.Exec(h.ctx, `UPDATE runs SET status = 'FAILED', completed_at = $2 WHERE id = $1`, run.ID, h.clock.Now()); err != nil {
+			t.Fatalf("end the Run without settling: %v", err)
+		}
+		tasks = append(tasks, task)
+	}
+	live, liveTask := h.queueRun(h.linearDefinition(capModelID, nil))
+	h.assertQueued(liveTask, 1)
+	h.restart()
+	rec := h.reconcilerAs(orphanRunnerAfter, terminalScanBatch)
+	h.clock.Advance(orphanLongAfter)
+
+	settled := func() int {
+		n := 0
+		for _, task := range tasks {
+			if h.nodeRun(task.RunID, "z_task").Status == domain.NodeRunFailed {
+				n++
+			}
+		}
+		return n
+	}
+	for pass := 1; settled() < len(tasks); pass++ {
+		if pass > terminalScanBacklog {
+			t.Fatalf("after %d passes %d of %d retries settled, want each pass to clear a batch", pass-1, settled(), len(tasks))
+		}
+		before := settled()
+		h.pass(rec)
+		if want := min(before+terminalScanBatch, len(tasks)); settled() != want {
+			t.Fatalf("pass %d left %d settled, want %d: each row must leave once processed", pass, settled(), want)
+		}
+	}
+	for _, task := range tasks {
+		h.assertNotHeld(task)
+		h.assertNotRecoverable(task)
+	}
+
+	h.pass(rec)
+	if got := h.nodeRun(live.ID, "task"); got.Status != domain.NodeRunWaitingCallback {
+		t.Fatalf("live task = %s, want it admitted once the backlog cleared", got.Status)
+	}
+}
+
+// TestReconciler_RestartNodeOrphanEndsRunBeforeToolOrphanScan_ReleaseVoided is the ordering
+// a restart can produce: the Node orphan scan runs first and ends the Run, so the Tool
+// orphan scan no longer lists the release Attempt the crash left STARTED, and that Attempt
+// stays open. Post-task reconciliation is what frees the target, from production's first
+// unknown answer.
+func TestReconciler_RestartNodeOrphanEndsRunBeforeToolOrphanScan_ReleaseVoided(t *testing.T) {
+	f := newReleaseFixture(t, releaseFixtureOptions{bounds: unknownOutcomeBounds, failingSibling: true})
+	action := f.startToRelease(t, "wf_restart_orphans")
+	sibling := f.claimSibling(t)
+	f.crashBeforeDispatch(t, action)
+	if _, err := f.h.pool.Exec(f.h.ctx, `UPDATE node_attempts SET deadline_at = NULL WHERE node_run_id = $1`, sibling.NodeRunID); err != nil {
+		t.Fatalf("leave the sibling to the orphan path: %v", err)
+	}
+
+	restarted := f.restart(t, service.PollHooks{})
+	report := agentRunOnce(restarted.h, restarted.reconciler())
+
+	if report.OrphanNodeAttemptsHandled != 1 || report.OrphanToolAttemptsFound != 0 {
+		t.Fatalf("report = %+v, want the Node orphan handled and no Tool orphan listed", report)
+	}
+	if got := agentRunRow(restarted.h.ctx, t, restarted.h.uow, restarted.run.ID).Status; got != domain.RunFailed {
 		t.Fatalf("run = %s, want FAILED", got)
 	}
+	restarted.assertVoidedAfterGrace(t, action, domain.ToolAttemptStarted)
 }
 
 // TestReconcilerScans_TerminalRunRowsWithRealWork_StayListed pins the scans a blanket
@@ -592,12 +673,30 @@ func TestReconcilerScans_TerminalRunRowsWithRealWork_StayListed(t *testing.T) {
 			},
 		},
 		{
+			name: "node runs with a due retry",
+			seed: func(ctx context.Context, t *testing.T, uow store.UnitOfWork, run fixture) string {
+				t.Helper()
+				return seedScanNodeRun(ctx, t, uow, run.runID, "retry", -time.Hour, &past)
+			},
+			list: func(ctx context.Context, tx store.Tx) ([]string, error) {
+				rows, err := tx.NodeRuns().ListReadyOrRetryable(ctx, now, 10)
+				ids := make([]string, 0, len(rows))
+				for _, row := range rows {
+					// The fixture's own Run contributes a READY row, which this case is not about.
+					if row.Status == domain.NodeRunRunning {
+						ids = append(ids, row.ID)
+					}
+				}
+				return ids, err
+			},
+		},
+		{
 			name: "node attempts with a due poll",
 			seed: func(ctx context.Context, t *testing.T, uow store.UnitOfWork, run fixture) string {
 				t.Helper()
 				_, attemptID := seedAttempt(ctx, t, uow, run, "poll", domain.NodeRunWaitingCallback, false)
 				if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
-					return tx.NodeAttempts().MarkDispatched(ctx, attemptID, fixtureTime, &past)
+					return tx.NodeAttempts().MarkDispatched(ctx, attemptID, fixtureTime, &past, future)
 				}); err != nil {
 					t.Fatalf("dispatch attempt: %v", err)
 				}
