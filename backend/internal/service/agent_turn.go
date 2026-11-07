@@ -550,7 +550,7 @@ func (s *ExecutionService) terminateAgentRunLocked(
 	// human stop is RELEASE_UNKNOWN, every other termination here is INCOMPLETE with the
 	// facts it still lacks. The NodeRun keeps the termination's own error; the verdict is
 	// recorded beside it, not in place of it.
-	if _, err := s.evaluateAgentCompletionLocked(ctx, tx, lock, nodeRun, agentRun, termination, now); err != nil {
+	if _, err := s.evaluateAgentCompletionLocked(ctx, tx, lock, nodeRun, agentRun, termination, nil, now); err != nil {
 		return err
 	}
 
