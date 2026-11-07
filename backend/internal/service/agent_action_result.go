@@ -553,7 +553,7 @@ func (s *ExecutionService) aggregateRunLocked(ctx context.Context, tx store.Tx, 
 			return err
 		}
 	}
-	return writeRunStatusLocked(ctx, tx, lock, newStatus, now)
+	return s.writeRunStatusLocked(ctx, tx, lock, newStatus, now)
 }
 
 // appendToolRoundContext creates the Context Version one successful Tool round produces:

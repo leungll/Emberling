@@ -409,7 +409,7 @@ func (s *ExecutionService) failAgentNodeRun(
 			return err
 		}
 	}
-	return writeRunStatusLocked(ctx, tx, lock, newStatus, now)
+	return s.writeRunStatusLocked(ctx, tx, lock, newStatus, now)
 }
 
 // agentRunTokenUsage sums the usage every Turn of one Agent Run persisted. It is read in

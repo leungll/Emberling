@@ -291,14 +291,15 @@ func (r *nodeRunRepository) MarkFailed(ctx context.Context, nodeRunID string, fr
 
 	const update = `
 		UPDATE node_runs
-		   SET status       = 'FAILED',
-		       error        = $4,
-		       token_usage  = $5,
-		       latency_ms   = CASE WHEN started_at IS NOT NULL
-		                           THEN ROUND(EXTRACT(EPOCH FROM ($3 - started_at)) * 1000)::BIGINT
-		                           ELSE latency_ms END,
-		       completed_at = $3,
-		       updated_at   = $3
+		   SET status          = 'FAILED',
+		       next_attempt_at = NULL,
+		       error           = $4,
+		       token_usage     = $5,
+		       latency_ms      = CASE WHEN started_at IS NOT NULL
+		                              THEN ROUND(EXTRACT(EPOCH FROM ($3 - started_at)) * 1000)::BIGINT
+		                              ELSE latency_ms END,
+		       completed_at    = $3,
+		       updated_at      = $3
 		 WHERE id = $1 AND status = $2`
 	affected, err := affectedRows(ctx, r.conn, "node_runs.MarkFailed", update,
 		nodeRunID, string(from), now, errPayload, tokenUsage)

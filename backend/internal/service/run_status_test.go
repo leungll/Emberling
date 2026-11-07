@@ -31,8 +31,19 @@ type statusWriteRecorder struct {
 
 func (r *statusWriteRecorder) Runs() store.RunRepository { return recordedRuns{recorder: r} }
 
+func (r *statusWriteRecorder) NodeRuns() store.NodeRunRepository { return noPendingRetries{} }
+
 func (r *statusWriteRecorder) ReleaseOccupations() store.ReleaseOccupationRepository {
 	return recordedOccupations{recorder: r}
+}
+
+// noPendingRetries is a Run with no NodeRun waiting for a scheduled retry.
+type noPendingRetries struct {
+	store.NodeRunRepository
+}
+
+func (noPendingRetries) ListByRun(context.Context, string) ([]domain.NodeRun, error) {
+	return nil, nil
 }
 
 type recordedRuns struct {
@@ -69,7 +80,7 @@ func TestWriteRunStatusLocked_TerminalStatus_SchedulesOccupationsInTheSameWrite(
 		t.Run(string(tc.status), func(t *testing.T) {
 			tx := &statusWriteRecorder{}
 			lock := store.NewRunLock("run_1", domain.RunRunning, 1)
-			if err := writeRunStatusLocked(context.Background(), tx, lock, tc.status, now); err != nil {
+			if err := (&ExecutionService{}).writeRunStatusLocked(context.Background(), tx, lock, tc.status, now); err != nil {
 				t.Fatalf("write run status: %v", err)
 			}
 			if strings.Join(tx.writes, ", ") != strings.Join(tc.want, ", ") {

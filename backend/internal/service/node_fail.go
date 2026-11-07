@@ -275,7 +275,7 @@ func (s *ExecutionService) failNode(ctx context.Context, p failNodeParams) (node
 				return err
 			}
 		}
-		if err := writeRunStatusLocked(ctx, tx, lock, newStatus, now); err != nil {
+		if err := s.writeRunStatusLocked(ctx, tx, lock, newStatus, now); err != nil {
 			return err
 		}
 		runID = run.ID
