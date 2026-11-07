@@ -397,6 +397,35 @@ func GenerationLimitReached(limit *int, attemptsSoFar int) bool {
 	return limit != nil && attemptsSoFar >= *limit
 }
 
+// RevisionLimit is one reached revision limit: the fact type a Tool's calls are bounded
+// by, the frozen limit and the failed facts of that type the Agent Run has collected.
+type RevisionLimit struct {
+	FactType string
+	Limit    int
+	Failed   int
+}
+
+// RevisionLimitReached decides whether a Tool whose calls are bounded by the failed facts
+// of the types in counted may still be called. limits are the Agent Run's frozen limits
+// per fact type and failed the facts of each type recorded with a false verdict: every
+// such fact counts, not only the newest per subject, because each failed check of a
+// revised timeline or clip is one more revision. A type absent from limits bounds
+// nothing, and a limit of N allows N failures: the call after the N+1th failure is the
+// first one refused. The first reached limit, in the order the Tool declares its counted
+// types, is returned so the refusal can name it.
+func RevisionLimitReached(counted []string, limits map[string]int, failed map[string]int) (RevisionLimit, bool) {
+	for _, factType := range counted {
+		limit, bounded := limits[factType]
+		if !bounded {
+			continue
+		}
+		if failed[factType] > limit {
+			return RevisionLimit{FactType: factType, Limit: limit, Failed: failed[factType]}, true
+		}
+	}
+	return RevisionLimit{}, false
+}
+
 // sortedFactBindingNames orders binding names so extraction reports the same error for
 // the same declaration on every call.
 func sortedFactBindingNames(bindings map[string]domain.FactPointer) []string {

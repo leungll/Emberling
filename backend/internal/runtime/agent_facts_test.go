@@ -435,6 +435,41 @@ func TestRequirementFailure_ExecutionErrorCarriesNoArgumentValues(t *testing.T) 
 	}
 }
 
+func TestRevisionLimitReached(t *testing.T) {
+	tests := []struct {
+		name    string
+		counted []string
+		limits  map[string]int
+		failed  map[string]int
+		want    RevisionLimit
+		wantHit bool
+	}{
+		{name: "no limits configured", counted: []string{"media_checked"}, limits: nil, failed: map[string]int{"media_checked": 9}},
+		{name: "tool counts nothing", counted: nil, limits: map[string]int{"media_checked": 0}, failed: map[string]int{"media_checked": 9}},
+		{name: "type not bounded", counted: []string{"media_checked"}, limits: map[string]int{"content_reviewed": 1}, failed: map[string]int{"media_checked": 9}},
+		{name: "no failures yet", counted: []string{"media_checked"}, limits: map[string]int{"media_checked": 3}, failed: nil},
+		{name: "failures equal the limit still allowed", counted: []string{"media_checked"}, limits: map[string]int{"media_checked": 3}, failed: map[string]int{"media_checked": 3}},
+		{name: "failures over the limit refused", counted: []string{"media_checked"}, limits: map[string]int{"media_checked": 3}, failed: map[string]int{"media_checked": 4},
+			want: RevisionLimit{FactType: "media_checked", Limit: 3, Failed: 4}, wantHit: true},
+		{name: "limit zero refuses after the first failure", counted: []string{"content_reviewed"}, limits: map[string]int{"content_reviewed": 0}, failed: map[string]int{"content_reviewed": 1},
+			want: RevisionLimit{FactType: "content_reviewed", Limit: 0, Failed: 1}, wantHit: true},
+		{name: "types count separately", counted: []string{"media_checked", "content_reviewed"}, limits: map[string]int{"media_checked": 1, "content_reviewed": 1},
+			failed: map[string]int{"media_checked": 1, "content_reviewed": 2},
+			want:   RevisionLimit{FactType: "content_reviewed", Limit: 1, Failed: 2}, wantHit: true},
+		{name: "first reached type in declared order is named", counted: []string{"content_reviewed", "media_checked"}, limits: map[string]int{"media_checked": 0, "content_reviewed": 0},
+			failed: map[string]int{"media_checked": 1, "content_reviewed": 1},
+			want:   RevisionLimit{FactType: "content_reviewed", Limit: 0, Failed: 1}, wantHit: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, hit := RevisionLimitReached(tt.counted, tt.limits, tt.failed)
+			if hit != tt.wantHit || got != tt.want {
+				t.Fatalf("RevisionLimitReached() = %+v, %v, want %+v, %v", got, hit, tt.want, tt.wantHit)
+			}
+		})
+	}
+}
+
 func TestGenerationLimitReached(t *testing.T) {
 	limit := func(n int) *int { return &n }
 	tests := []struct {

@@ -776,6 +776,21 @@ func (s *ExecutionService) checkToolActionLocked(ctx context.Context, tx store.T
 		return failVerdict(domain.TerminationInvalidAction, unmet.ExecutionError()), nil
 	}
 
+	// A Tool whose calls are bounded by failed facts is refused once the Agent Run has
+	// collected more failed facts of a bounded type than its frozen limit allows. The
+	// refusal is decided here, after the requirements and before any Attempt exists, so
+	// no external call follows; it goes back to the Agent naming the fact type and the
+	// limit, and the Agent decides in a new Turn whether to finish with what it has or
+	// declare that the request cannot be satisfied. The Run lock serializes concurrent
+	// claims, so the limit is never overrun.
+	revisionLimit, err := s.revisionLimitReachedLocked(ctx, tx, c.agentRun, reg.Metadata)
+	if err != nil {
+		return toolActionVerdict{}, err
+	}
+	if revisionLimit != nil {
+		return returnVerdict(domain.ReturnRevisionLimitReached, revisionLimitMessage(c.toolName, *revisionLimit)), nil
+	}
+
 	// A counted Tool call past the Agent Run's frozen generation limit is rejected the
 	// same way, still before any Attempt exists; the Run lock serializes concurrent
 	// claims, so the limit can never be overrun.

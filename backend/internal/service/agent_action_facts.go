@@ -14,7 +14,8 @@ import (
 
 // This file owns the execution facts of Agent Tool calls: the fact a successful Tool result
 // establishes under its Tool's registered production declaration, and the claim-time
-// checks of a Tool's declared fact requirements and of the Agent Run's generation limit.
+// checks of a Tool's declared fact requirements, of the Agent Run's revision limits and of
+// its generation limit.
 
 // recordProducedFactLocked writes the execution fact of one successful Tool result inside
 // the Tool result transaction, under the Run aggregate lock the caller holds, so the fact
@@ -177,6 +178,37 @@ func (s *ExecutionService) unmetFactRequirementLocked(
 		satisfied = append(satisfied, match.Fact)
 	}
 	return satisfied, nil, nil
+}
+
+// revisionLimitReachedLocked decides whether a Tool whose calls are bounded by failed facts
+// may still be called. It runs inside the claim transaction, under the Run aggregate lock
+// the caller holds, after the fact requirements held and before any Tool Attempt exists,
+// so concurrent claims of the same Agent Run are serialized by that lock and the failures
+// they count already include every fact a previous result committed.
+//
+// Nothing is read when the Agent Run froze no revision limit or the Tool's current
+// registration counts no fact type. Otherwise the failed facts of the counted types are
+// counted from the committed facts of this Agent Run; there is no counter column to drift
+// from them. A reached limit is returned for the caller to hand back to the Agent as a
+// REVISION_LIMIT_REACHED refusal.
+func (s *ExecutionService) revisionLimitReachedLocked(
+	ctx context.Context,
+	tx store.Tx,
+	agentRun domain.AgentRun,
+	tool domain.ToolMetadata,
+) (*runtime.RevisionLimit, error) {
+	if len(agentRun.MaxFailedFacts) == 0 || len(tool.CountedFailedFacts) == 0 {
+		return nil, nil
+	}
+	failed, err := tx.ExecutionFacts().CountFailedByAgentRun(ctx, agentRun.ID, tool.CountedFailedFacts)
+	if err != nil {
+		return nil, fmt.Errorf("execution: count failed facts of agent run %s: %w", agentRun.ID, err)
+	}
+	reached, hit := runtime.RevisionLimitReached(tool.CountedFailedFacts, agentRun.MaxFailedFacts, failed)
+	if !hit {
+		return nil, nil
+	}
+	return &reached, nil
 }
 
 // generationLimitReachedLocked decides whether one more call of a counted Tool would pass

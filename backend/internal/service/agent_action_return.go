@@ -193,6 +193,14 @@ func boundedReturnMessage(message string) string {
 	return message[:cut]
 }
 
+// revisionLimitMessage tells the Agent which fact type's revision limit its call ran
+// into, with the limit and the failures counted; it names no subject or argument.
+func revisionLimitMessage(toolName string, limit runtime.RevisionLimit) string {
+	return fmt.Sprintf("The call of %q is refused: the agent run has recorded %d failed %q facts, more than its revision limit of %d for that fact type. "+
+		"No further call bounded by %q is allowed; finish with what is recorded or declare that the request cannot be satisfied.",
+		toolName, limit.Failed, limit.FactType, limit.Limit, limit.FactType)
+}
+
 // verificationMissingMessage tells the Agent which fact type an unmet requirement needs.
 // It names the fact type and the reason only, never the subject or any other argument.
 func verificationMissingMessage(unmet runtime.RequirementFailure) string {
