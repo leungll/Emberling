@@ -195,14 +195,18 @@ type ExternalTask struct {
 
 // NodeAsyncState is what the Runtime restores from committed facts before asking an
 // Executor to interpret a callback or poll an external task. It carries identity, the
-// frozen node config and the external task; it never carries the plaintext callback
-// token.
+// frozen node config, the input ports the Attempt was dispatched with and the external
+// task; it never carries the plaintext callback token.
 type NodeAsyncState struct {
 	RunID        string
 	NodeRunID    string
 	AttemptNo    int
 	ExternalTask ExternalTask
 	Config       map[string]any
+	// Ports are the input port values the Attempt was dispatched with, restored from the
+	// Attempt's immutable input, so an Executor can check a Provider's result against
+	// what it asked for without reading anything itself.
+	Ports map[string]json.RawMessage
 }
 
 // PollStatus is the normalised result of one optional Provider status query.

@@ -247,6 +247,10 @@ func (s *ExecutionService) claimPoll(ctx context.Context, attemptID string) (pol
 		if err != nil {
 			return err
 		}
+		ports, err := decodeAttemptPorts(attempt)
+		if err != nil {
+			return err
+		}
 
 		claimed, err := tx.NodeAttempts().ClaimPoll(ctx, attemptID, s.deps.Clock.Now(),
 			time.Duration(policy.IntervalMs)*time.Millisecond, policy.MaxPolls)
@@ -271,6 +275,7 @@ func (s *ExecutionService) claimPoll(ctx context.Context, attemptID string) (pol
 				ExternalTaskID: binding.ExternalTaskID,
 			},
 			Config: config,
+			Ports:  ports,
 		}
 		return nil
 	})
