@@ -38,13 +38,19 @@ If the design does not answer a question that affects persisted facts, state tra
 
 ## Delivery boundary
 
+The asynchronous and long-running execution foundation is complete. Current development deepens two directions with three workloads: AI content creation (the image-generation demo and the video-editing Agent), and an Agent that repairs a dependency vulnerability, verifies the patch, obtains approval and confirms deployment. Completion of the foundation does not imply that any workload's full target is implemented or accepted.
+
+When internal documents are available, product direction comes from `docs/00-vision.md`; current workload requirements come from `docs/requirements/req-2026-11-01-aigc-demo.md`, `docs/requirements/req-2026-11-02-vuln-fix-release-agent.md` and `docs/requirements/req-2026-11-07-video-editing-agent.md`. `docs/02-scope.md` consolidates their delivery boundaries. Read the relevant current contracts before coding. A requirement defines a target; it does not fill missing technical contracts.
+
 Use this rule for every proposed change:
 
 > A change must strengthen or validate the execution layer, or supply the minimum user path an accepted workload needs.
 
+The video-editing workload brings these targets into the current scope, as a maintainer-decided technical proposal with task contracts, not as implemented behavior: an external media service for transcription, rendering and technical checks; a shared task protocol and registration for external Tools; external material references read by range and recorded in the Context Manifest; a render step that only accepts a checked timeline; per-fact-type revision limits returned to the Agent as a definite refusal; a clip-delivery completion check; and evaluation records, error analysis and judge calibration that run outside the Runtime through the public API. Implement them only through their task contracts and failure tests; do not infer a state name, fact type, endpoint or record format from this paragraph.
+
 The vulnerability-repair workload brings these capabilities into the current scope: per-Action authorization decisions and human approval; human facts (approve, reject, stop) that only an authenticated operator entry point can create; Agent waits on a person with their own deadlines; workspace and patch facts; the per-Turn Context Manifest; goal-based completion checks; definite refusals returned to the Agent instead of ending it as a Tool error; and release reconciliation with target occupation, including post-task reconciliation kept as persisted work that continues after a restart. Change them only through their existing schemas, state transitions and APIs, or through a new accepted task contract.
 
-Do not add other Phase 2 or roadmap concepts to current schemas, enums, APIs, UI, migrations, configuration, or package structure. In particular, do not introduce cancellation, evaluation, learning, dynamic plugins, distributed workers, multi-tenancy, RBAC, SDKs, independent worker services, sub-Agent delegation, or an evaluation service unless the accepted scope changes first. A human stop ends a wait; it is not Run cancellation, and it never decides whether an external operation took effect.
+Do not add other Phase 2 or roadmap concepts to current schemas, enums, APIs, UI, migrations, configuration, or package structure. In particular, do not introduce cancellation, learning, dynamic plugins, distributed workers, multi-tenancy, RBAC, SDKs, independent worker services, sub-Agent delegation, real video generation, an evaluation service inside the Runtime, an evaluation workbench, or automatic release gates unless the accepted scope changes first. Evaluation records, error analysis and judge calibration are in scope only as scripts outside the Runtime that call the public API; they do not add Runtime tables, endpoints or navigation. A human stop ends a wait; it is not Run cancellation, and it never decides whether an external operation took effect.
 
 A fixed in-flight slot limit per Provider is inside the current scope: it strengthens the execution layer by proving that slot accounting neither leaks nor over-admits across crashes, retries, and uncertain results. Priority, fairness, budgets, and scheduling across Providers remain excluded.
 
@@ -61,6 +67,7 @@ Preserve the repository's established package layout and the dependency directio
 - `nodes`, `tools`, and `adapters` perform one registered operation. They do not own retry, timeout, callback routing, state transitions, or Event writes.
 - `api` builds read-only Trace response projections. Projection filtering must never mutate or truncate authoritative Execution State.
 - `domain` contains shared domain types and errors only. Transport DTOs, SQL rows, Provider SDK types, and UI projections do not belong there.
+- `services/media/` is an external media service: a fixture-like integration boundary reached only through registered Nodes, Tools and Adapters, not a second Runtime or Worker; `evals/` holds out-of-Runtime scripts that call only the public API and import no Backend package.
 
 Prefer explicit dependencies and constructors. Do not add a dependency injection framework, ORM, internal message bus, or Redis to solve an MVP problem already covered by the selected architecture.
 
