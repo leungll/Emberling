@@ -452,7 +452,20 @@ export interface WithheldToolField {
 
 /** What kind of material one Context Manifest item records. */
 export type ManifestItemKind =
-  'INSTRUCTIONS' | 'TASK_INPUT' | 'STATE' | 'TOOL_RESULT' | 'WORKSPACE_FILE' | 'ARTIFACT';
+  | 'INSTRUCTIONS'
+  | 'TASK_INPUT'
+  | 'STATE'
+  | 'TOOL_RESULT'
+  | 'WORKSPACE_FILE'
+  | 'ARTIFACT'
+  | 'MATERIAL_RANGE';
+
+/** The lines a `MATERIAL_RANGE` item carried, numbered from 1, with the artifact's line count. */
+export interface ManifestRange {
+  startLine: number;
+  lineCount: number;
+  totalLines: number;
+}
 
 /** Why an item's content was left out of the model request. */
 export type ManifestOmission = 'REFERENCE_ONLY';
@@ -461,7 +474,9 @@ export type ManifestOmission = 'REFERENCE_ONLY';
  * One material of a Turn's model request: an identifier, a version, a digest and a
  * length, never the material itself. For an included item `sha256` and `length` are those
  * of the request bytes; for an omitted `ARTIFACT` they describe the referenced content and
- * `ref` is the Artifact ID the artifact content route takes.
+ * `ref` is the Artifact ID the artifact content route takes. For a `MATERIAL_RANGE` they
+ * describe the material text the tool message carried, `ref` is the Artifact ID,
+ * `version` is a prefix of its content digest and `range` says which lines.
  */
 export interface ManifestItem {
   kind: ManifestItemKind;
@@ -474,6 +489,8 @@ export interface ManifestItem {
   included: boolean;
   /** `null` for an included item. */
   omittedReason: ManifestOmission | null;
+  /** `null` for every kind but `MATERIAL_RANGE`. */
+  range: ManifestRange | null;
 }
 
 /** One Turn with its Decision, Action and Tool Attempts, as persisted. */

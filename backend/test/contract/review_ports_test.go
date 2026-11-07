@@ -4,7 +4,9 @@ package contract
 
 import (
 	"context"
+	"io"
 
+	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/service"
 	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 )
@@ -47,4 +49,14 @@ func reviewImageMaxBytes(override int64) int64 {
 		return override
 	}
 	return reviewasset.DefaultMaxImageBytes
+}
+
+// materialArtifacts reads a material Tool's text through the Run-scoped artifact read,
+// as cmd/emberling bridges it: one bridge for every Tool that declares the port.
+type materialArtifacts struct {
+	env *lateArtifacts
+}
+
+func (r materialArtifacts) OpenText(ctx context.Context, runID, artifactID string) (domain.Artifact, io.ReadCloser, error) {
+	return r.env.svc.OpenRunContent(ctx, runID, artifactID)
 }

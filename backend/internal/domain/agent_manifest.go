@@ -20,15 +20,29 @@ const (
 	// ManifestArtifact is an Execution Artifact a tool message referred to. Its content
 	// never enters a request; the item records how to open it.
 	ManifestArtifact ManifestItemKind = "ARTIFACT"
+	// ManifestMaterialRange is a range of lines of a text Execution Artifact that a tool
+	// message carried into the request: the material a Tool read by range. The item
+	// records which artifact version, which lines, and the digest of the text itself.
+	ManifestMaterialRange ManifestItemKind = "MATERIAL_RANGE"
 )
 
 func (k ManifestItemKind) IsValid() bool {
 	switch k {
 	case ManifestInstructions, ManifestTaskInput, ManifestState,
-		ManifestToolResult, ManifestWorkspaceFile, ManifestArtifact:
+		ManifestToolResult, ManifestWorkspaceFile, ManifestArtifact, ManifestMaterialRange:
 		return true
 	}
 	return false
+}
+
+// ManifestRange is the line range a MATERIAL_RANGE item carried: lines are numbered from
+// one, LineCount is the number of lines that actually entered the request, and TotalLines
+// is the line count of the whole artifact, so a reviewer can tell how much of the
+// material the model saw.
+type ManifestRange struct {
+	StartLine  int `json:"startLine"`
+	LineCount  int `json:"lineCount"`
+	TotalLines int `json:"totalLines"`
 }
 
 // ManifestOmission says why an item's content was left out of the model request.
@@ -49,6 +63,8 @@ const ManifestLabelMaxRunes = 120
 // For an included item SHA256 and Length describe exactly the bytes that entered the
 // request. For an omitted ARTIFACT they describe the referenced content itself, which is
 // content-addressed, so a reviewer can tell which artifact version the reference named.
+// For a MATERIAL_RANGE they describe the material text the tool message carried, not the
+// whole message, which the TOOL_RESULT item beside it describes.
 type ManifestItem struct {
 	Kind  ManifestItemKind `json:"kind"`
 	Label string           `json:"label"`
@@ -64,6 +80,8 @@ type ManifestItem struct {
 	Included bool   `json:"included"`
 	// OmittedReason is set only when Included is false.
 	OmittedReason *ManifestOmission `json:"omittedReason,omitempty"`
+	// Range is set only on a MATERIAL_RANGE item.
+	Range *ManifestRange `json:"range,omitempty"`
 }
 
 // AgentTurnManifest is the Context Manifest of one Turn. It is written once, in the

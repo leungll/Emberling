@@ -54,6 +54,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/tools/generateimage"
 	"github.com/leungll/Emberling/backend/internal/tools/generatevideo"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"
+	"github.com/leungll/Emberling/backend/internal/tools/readmaterial"
 	"github.com/leungll/Emberling/backend/internal/tools/remotelookup"
 	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 	"github.com/leungll/Emberling/backend/internal/work"
@@ -404,6 +405,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 			MaxImageBytes: reviewImageMaxBytes(opts.ReviewMaxImageBytes),
 		}),
 		generatevideo.Registration(mockTaskBaseURL, opts.TaskClient),
+		readmaterial.Registration(readmaterial.Ports{Materials: materialArtifacts{env: artifactsRef}}),
 	} {
 		if err := toolRegistry.Register(reg); err != nil {
 			t.Fatalf("register tool %s: %v", reg.Metadata.Name, err)

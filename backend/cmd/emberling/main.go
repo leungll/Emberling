@@ -42,6 +42,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/store/postgres"
 	"github.com/leungll/Emberling/backend/internal/tools/generatevideo"
 	"github.com/leungll/Emberling/backend/internal/tools/lookup"
+	"github.com/leungll/Emberling/backend/internal/tools/readmaterial"
 	"github.com/leungll/Emberling/backend/internal/tools/remotelookup"
 	"github.com/leungll/Emberling/backend/internal/tools/reviewasset"
 	"github.com/leungll/Emberling/backend/internal/work"
@@ -233,6 +234,12 @@ func run(logger *slog.Logger) error {
 				return err
 			}
 			if err := toolRegistry.Register(lookup.Registration()); err != nil {
+				return fmt.Errorf("register tool: %w", err)
+			}
+			// read_material needs no external service: it reads the Run's own artifacts.
+			if err := toolRegistry.Register(readmaterial.Registration(readmaterial.Ports{
+				Materials: materialReader{artifacts: artifactService},
+			})); err != nil {
 				return fmt.Errorf("register tool: %w", err)
 			}
 			if err := toolRegistry.Register(remotelookup.Registration(cfg.ModelProvider.BaseURL, taskClient)); err != nil {
