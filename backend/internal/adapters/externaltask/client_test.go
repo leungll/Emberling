@@ -26,6 +26,8 @@ const (
 type service struct {
 	mu           sync.Mutex
 	submitStatus int
+	// submitTaskID is the task id the acceptance body names; empty means the one sent.
+	submitTaskID string
 	submits      []map[string]any
 	getStatus    int
 	getBody      string
@@ -43,7 +45,11 @@ func (s *service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.submits = append(s.submits, body)
 		s.mu.Unlock()
 		w.WriteHeader(s.submitStatus)
-		_, _ = io.WriteString(w, `{"taskId":"`+taskID+`","callbackToken":"`+token+`"}`)
+		named := s.submitTaskID
+		if named == "" {
+			named = taskID
+		}
+		_, _ = io.WriteString(w, `{"taskId":"`+named+`","callbackToken":"`+token+`"}`)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/tasks/"):
 		s.mu.Lock()
 		s.getPaths = append(s.getPaths, r.URL.Path)
@@ -80,6 +86,25 @@ func TestSubmit_AcceptedOrAlreadyHeld_IsSuccessWithProtocolBody(t *testing.T) {
 			}
 			if in, _ := got["input"].(map[string]any); in["text"] != "hello" {
 				t.Errorf("submit input = %v, want the task input verbatim", got["input"])
+			}
+		})
+	}
+}
+
+func TestSubmit_AcceptanceNamesAnotherTask_IsNotADispatch(t *testing.T) {
+	for name, status := range map[string]int{"created": http.StatusAccepted, "already held": http.StatusOK} {
+		t.Run(name, func(t *testing.T) {
+			s := &service{submitStatus: status, submitTaskID: "ext_someone_else"}
+			client := newClient(t, s)
+			err := client.Submit(context.Background(), taskID, "ECHO", nil, registry.CallbackContext{URL: callback, Token: token})
+			var reqErr *externaltask.RequestError
+			if !errors.As(err, &reqErr) || reqErr.StatusCode != status || reqErr.TaskID != taskID {
+				t.Fatalf("error = %v, want a RequestError for the submitted task with status %d", err, status)
+			}
+			for _, leak := range []string{token, callback, "ext_someone_else"} {
+				if strings.Contains(err.Error(), leak) {
+					t.Errorf("error %q leaks %q", err, leak)
+				}
 			}
 		})
 	}

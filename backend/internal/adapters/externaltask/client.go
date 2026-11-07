@@ -121,6 +121,21 @@ func (c *Client) Submit(ctx context.Context, taskID, taskType string, input json
 		// the callback token, inside its own error body.
 		return &RequestError{TaskID: taskID, Op: "service rejected the task", StatusCode: response.StatusCode, reason: "status is not 202 Accepted or 200 OK"}
 	}
+	// A 200 means the service already held a task under this id, a 202 that it created
+	// one; either way the answer must name the task that was sent. A 2xx about another
+	// task, or with no task at all, is not evidence that this task exists: it is how a
+	// wrong endpoint answers, and treating it as a dispatch would leave an Attempt waiting
+	// for a callback nobody will send.
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || len(raw) > maxResponseBytes {
+		return &RequestError{TaskID: taskID, Op: "read acceptance", StatusCode: response.StatusCode, reason: "acceptance body could not be read"}
+	}
+	var acceptance struct {
+		TaskID string `json:"taskId"`
+	}
+	if json.Unmarshal(raw, &acceptance) != nil || acceptance.TaskID != taskID {
+		return &RequestError{TaskID: taskID, Op: "read acceptance", StatusCode: response.StatusCode, reason: "acceptance does not name the submitted task"}
+	}
 	return nil
 }
 

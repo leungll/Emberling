@@ -254,7 +254,9 @@ func TestExternalTool_RoundTrip_DispatchCallbackCommitsResultOnce(t *testing.T) 
 	}
 	task := f.service.task(t, taskID)
 	if task.taskType != echoTaskType || string(task.input) != echoArguments || task.callbackURL == "" || task.callbackToken == "" {
-		t.Fatalf("dispatched task = %+v, want type %s with the arguments as input and a callback", task, echoTaskType)
+		// The task is not printed: it holds the one-time callback token.
+		t.Fatalf("dispatched task: type %q, %d input bytes, callback URL set %t, token set %t; want type %s with the arguments as input and a callback",
+			task.taskType, len(task.input), task.callbackURL != "", task.callbackToken != "", echoTaskType)
 	}
 	attempt := agentOnlyToolAttempt(t, f.h, action.ID)
 	if attempt.Status != domain.ToolAttemptDispatched {
