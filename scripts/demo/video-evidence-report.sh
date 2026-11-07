@@ -128,7 +128,7 @@ def agent_label($def):
 # cost_totals sums the costs the Turns and Tool Attempts report, per currency.
 def cost_totals($trace):
   ([$trace.turns[]? | .cost, (.toolAttempts[]? | .cost)] | map(select(. != null)))
-  | group_by(.currency) | map("\(map(.amount | tonumber) | add) \(.[0].currency)") | joined;
+  | group_by(.currency) | map("\(map(.amount | tonumber) | add | . * 1000000 | round / 1000000) \(.[0].currency)") | joined;
 
 def completion_of($trace): $trace.agentRun.completion;
 
