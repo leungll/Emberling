@@ -7,7 +7,7 @@
 # Backend's public API; no live credential is involved.
 #
 # Usage: scripts/demo/video-edit.sh [definition] STORY
-#   STORY is pass, too-long or review-fail.
+#   STORY is pass, too-long, review-fail or restart.
 #
 # "definition" prints the Definition the story would save, as JSON, and touches nothing:
 # it needs jq only.
@@ -29,6 +29,20 @@
 #                and checks the clip. Expects CLIP_DELIVERED with two passed TIMELINE
 #                checks, exactly one failed content_reviewed fact before the passed one,
 #                and eight committed Decisions.
+#   restart      fault injection on the pass trajectory: once the render_timeline Attempt
+#                is DISPATCHED and the media service holds its RENDER task, the backend is
+#                SIGKILLed and started again (the container keeps its environment, so the
+#                callback token issued before the kill still verifies). Expects everything
+#                pass expects, and in addition: the Attempt bound before the kill is the one
+#                that SUCCEEDED, there is exactly one render_timeline Attempt and one
+#                clip_rendered fact under it, the media service's task for that Attempt is
+#                the one recorded before the kill and SUCCEEDED, the Turns and committed
+#                Decisions from before the kill are a prefix of the final ones (nothing was
+#                decided twice), exactly one AGENT_ACTION_COMPLETED names that Attempt and
+#                says whether the callback or the Provider poll completed it, and the Event
+#                seq numbers are strictly increasing without a gap. Ends with the evidence
+#                report of the Run (video-evidence-report.sh). Needs the kill and the restart
+#                to land inside the render, which takes tens of seconds for a 45-second clip.
 #
 # The stack: postgres and the backend from deploy/compose.yaml, with the media service
 # from the media profile unless EMBERLING_DEMO_MEDIA_URL names the media service the
@@ -52,7 +66,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_tools jq
 
-STORIES="pass too-long review-fail"
+STORIES="pass too-long review-fail restart"
 usage="usage: video-edit.sh [definition] ${STORIES// /|}"
 
 mode=run
@@ -73,6 +87,10 @@ too-long)
 review-fail)
   script=video-edit-review-fail
   fixture_name=video_edit_reviewed.json
+  ;;
+restart)
+  script=video-edit-pass
+  fixture_name=video_edit_basic.json
   ;;
 *) die "$usage" ;;
 esac
@@ -123,6 +141,12 @@ video_compose() {
 transcript_timeout_ms=$(jq '.nodes[] | select(.id == "node_transcript") | .executionPolicy.timeoutMs' "$FIXTURE")
 agent_timeout_ms=$(jq '.nodes[] | select(.id == "node_agent") | .config.timeoutMs' "$FIXTURE")
 TERMINAL_DEADLINE_S=${EMBERLING_DEMO_VIDEO_TERMINAL_DEADLINE_S:-$(((transcript_timeout_ms + agent_timeout_ms) / 1000 + 60))}
+# The restart story waits for the render dispatch through the transcript (cached after the
+# first story of a source) and the Agent's first two Tool calls, then for the restarted
+# backend.
+DISPATCH_DEADLINE_S=${EMBERLING_DEMO_VIDEO_DISPATCH_DEADLINE_S:-$((transcript_timeout_ms / 1000 + 120))}
+RESTART_DEADLINE_S=120
+EVIDENCE_DIR=${EMBERLING_DEMO_VIDEO_EVIDENCE_DIR:-$DEMO_ROOT/deploy/.demo/video-evidence}
 
 failures=0
 pass() { printf 'PASS %s\n' "$*"; }
@@ -136,6 +160,15 @@ check() {
 media_ready() {
   curl -fsS -o /dev/null "$MEDIA_HOST_URL/healthz" 2>/dev/null
 }
+
+# A backend left killed by an interrupted restart story is started again on exit.
+backend_down=false
+cleanup() {
+  if [[ "$backend_down" == true ]]; then
+    video_compose start backend >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
 
 log "building the backend image (cached when sources are unchanged)"
 video_compose build --quiet backend $media_service
@@ -176,9 +209,67 @@ run_id=$(curl -fsS -X POST -H 'Content-Type: application/json' \
 log "run $run_id created"
 studio_run_link "$run_id"
 
+agent_node_run() {
+  curl -fsS "$BACKEND_URL/api/runs/$run_id" | jq -r '.nodeRuns[] | select(.nodeId == "node_agent") | .id // empty'
+}
+agent_trace() {
+  local node
+  node=$(agent_node_run) || return 1
+  [[ -n "$node" ]] || return 1
+  curl -fsS "$BACKEND_URL/api/runs/$run_id/nodes/$node/agent"
+}
+# render_attempts prints the render_timeline Tool Attempts of a Trace with their Action's
+# status, oldest first.
+render_attempts() {
+  jq -c '[.turns[] | .action as $a | .toolAttempts[] | select(.toolName == "render_timeline")
+    | {id, attemptNo, status, task: .callbackBinding.externalTaskId, action: $a.status}]' <<<"$1"
+}
+# turn_ids prints the Turn ids of a Trace in order; decision_turns the turnId of every
+# committed Decision in Event order.
+turn_ids() { jq -c '[.turns[].id]' <<<"$1"; }
+decision_turns() { jq -c '[.[] | select(.type == "AGENT_DECISION_COMMITTED") | .payload.turnId]' <<<"$1"; }
+
+if [[ "$story" == restart ]]; then
+  # The moment the story is about: the render dispatch has been committed (the Attempt is
+  # DISPATCHED and bound to the media service's task), so the task belongs to the media
+  # service and the Attempt to PostgreSQL. The condition, not the clock, decides the kill.
+  render_dispatched() {
+    local trace
+    trace=$(agent_trace 2>/dev/null) || return 1
+    jq -e '[.turns[].toolAttempts[] | select(.toolName == "render_timeline" and .status == "DISPATCHED" and .callbackBinding.externalTaskId != null)] | length == 1' <<<"$trace" >/dev/null
+  }
+  log "waiting up to ${DISPATCH_DEADLINE_S}s for the render_timeline Attempt to be DISPATCHED (the first story of a source transcribes it first)"
+  await_running "$run_id" "the render_timeline Attempt to be DISPATCHED and bound to a media task" "$DISPATCH_DEADLINE_S" render_dispatched
+  trace_before=$(agent_trace)
+  events_before=$(run_events "$run_id")
+  render_before=$(render_attempts "$trace_before" | jq -c 'first')
+  render_attempt=$(jq -r '.id' <<<"$render_before")
+  render_task=$(jq -r '.task' <<<"$render_before")
+  turns_before=$(turn_ids "$trace_before")
+  decisions_before=$(decision_turns "$events_before")
+  # The media service's own view of the task, read just before the kill.
+  task_before=$(curl -fsS "$MEDIA_HOST_URL/v1/tasks/$render_task" | jq -c '{taskId, status}')
+  log "before the kill: render_timeline $render_before; media task $task_before; $(jq 'length' <<<"$turns_before") Turn(s), $(jq 'length' <<<"$decisions_before") committed Decision(s)"
+  demo_pause "run $run_id: render_timeline Attempt $render_attempt is DISPATCHED to media task $render_task, which is rendering; next: SIGKILL the backend. Continue before the render ends (tens of seconds)"
+
+  log "SIGKILL backend"
+  killed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  backend_down=true
+  video_compose kill -s SIGKILL backend >/dev/null
+  demo_pause "backend killed while the media service renders; the Attempt is DISPATCHED in PostgreSQL and the task is the media service's to finish. Next: start the backend; its poll and the service's retried callback both enter the same resume path"
+
+  log "starting backend again"
+  video_compose start backend >/dev/null
+  backend_down=false
+  wait_until "restarted Backend /ready" "$RESTART_DEADLINE_S" backend_ready
+  restarted_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  render_after_restart=$(render_attempts "$(agent_trace)" | jq -c 'first')
+  log "after the restart: render_timeline $render_after_restart (read from the restarted backend, which found it in PostgreSQL)"
+fi
+
 run_terminal() {
   local status
-  status=$(curl -fsS "$BACKEND_URL/api/runs/$run_id" | jq -r '.run.status')
+  status=$(curl -fsS "$BACKEND_URL/api/runs/$run_id" 2>/dev/null | jq -r '.run.status') || return 1
   [[ "$status" == COMPLETED || "$status" == FAILED ]]
 }
 started=$SECONDS
@@ -227,9 +318,18 @@ review-fail)
   want_review=FT
   want_decisions=8
   ;;
+restart)
+  want_timeline=T
+  want_review=""
+  want_decisions=5
+  ;;
 esac
 
-printf '\nvideo edit %s story: deterministic decisions (scripted mock model)\n' "$story"
+if [[ "$story" == restart ]]; then
+  printf '\nvideo edit restart story: fault injection (SIGKILL during rendering), deterministic decisions (scripted mock model)\n'
+else
+  printf '\nvideo edit %s story: deterministic decisions (scripted mock model)\n' "$story"
+fi
 check run_completed "status=$run_status transcript_error=$transcript_error" test "$run_status" == COMPLETED
 check clip_delivered "outcome=$outcome" test "$outcome" == CLIP_DELIVERED
 check timeline_checks "media_checked TIMELINE verdicts=$timeline_verdicts want=$want_timeline" test "$timeline_verdicts" == "$want_timeline"
@@ -244,9 +344,77 @@ if [[ -n "$clip_sha256" ]]; then
   # The clip route serves the file; a one-byte range proves it is there without downloading it.
   check clip_served "$clip_url" curl -fsS -o /dev/null -r 0-0 "$clip_url"
 fi
+
+if [[ "$story" == restart ]]; then
+  render_attempts_final=$(render_attempts "$trace")
+  turns_final=$(turn_ids "$trace")
+  decisions_final=$(decision_turns "$events")
+  task_final=$(curl -fsS "$MEDIA_HOST_URL/v1/tasks/$render_task" | jq -c '{taskId, status}')
+  rendered_by_attempt=$(jq --arg id "$render_attempt" '[.facts.items[] | select(.factType == "clip_rendered" and .toolAttemptId == $id)] | length' <<<"$trace")
+  # The Event that completed the in-flight Attempt names the path that did it: the media
+  # service's callback, or the Backend's own poll of the task.
+  completions=$(jq -c --arg id "$render_attempt" '[.[] | select((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED") and .payload.toolAttemptId == $id) | {type, source: (.payload.completionSource // .payload.failureSource)}]' <<<"$events")
+  completion_path=$(jq -r 'if length == 1 and .[0].type == "AGENT_ACTION_COMPLETED" then .[0].source else "none" end' <<<"$completions")
+  seqs=$(jq -c '[.[].seq]' <<<"$events")
+  event_at() {
+    jq -r --arg type "$1" --arg id "${2:-}" '[.[] | select(.type == $type and ($id == "" or .payload.toolAttemptId == $id)) | .timestamp] | first // "-"' <<<"$events"
+  }
+
+  printf '\ntimeline of the render Action (media task %s):\n' "$render_task"
+  printf '  %-36s %s\n' \
+    "AGENT_ACTION_WAITING (ledger)" "$(event_at AGENT_ACTION_WAITING)" \
+    "Backend SIGKILL (script)" "$killed_at" \
+    "Backend restart (script)" "$restarted_at" \
+    "AGENT_ACTION_COMPLETED (ledger)" "$(event_at AGENT_ACTION_COMPLETED "$render_attempt")" \
+    "RUN_COMPLETED (ledger)" "$(event_at RUN_COMPLETED)"
+  printf 'evidence: before the kill     %s, media task %s\n' "$render_before" "$task_before"
+  printf 'evidence: after the restart   %s\n' "$render_after_restart"
+  printf 'evidence: at the end          attempts=%s, media task %s\n' "$render_attempts_final" "$task_final"
+  printf 'evidence: completed by        %s\n' "$completion_path"
+  printf 'evidence: turns               before=%s final=%s\n' "$turns_before" "$turns_final"
+  printf 'evidence: decisions           before=%s final=%s\n\n' "$decisions_before" "$decisions_final"
+
+  task_in_flight_at_kill() {
+    jq -e --arg id "$render_task" '.taskId == $id and (.status == "QUEUED" or .status == "RUNNING")' <<<"$task_before" >/dev/null
+  }
+  check task_in_flight_at_kill "media task at the kill: $task_before" task_in_flight_at_kill
+  attempt_survived_restart() {
+    jq -e --arg id "$render_attempt" '.id == $id and (.status == "DISPATCHED" or .status == "SUCCEEDED")' <<<"$render_after_restart" >/dev/null
+  }
+  check attempt_survived_restart "right after the restart: $render_after_restart" attempt_survived_restart
+  original_attempt_completed() {
+    jq -e --arg id "$render_attempt" 'length == 1 and .[0].id == $id and .[0].attemptNo == 1 and .[0].status == "SUCCEEDED" and .[0].action == "SUCCEEDED"' <<<"$render_attempts_final" >/dev/null
+  }
+  check original_attempt_completed "before=$render_attempt final=$render_attempts_final" original_attempt_completed
+  check clip_rendered_by_that_attempt "clip_rendered facts under $render_attempt: $rendered_by_attempt" test "$rendered_by_attempt" -eq 1
+  task_not_resubmitted() {
+    # One Attempt means one task id at the media service; the task recorded before the
+    # kill is the one that finished.
+    jq -e --arg id "$render_task" '.taskId == $id and .status == "SUCCEEDED"' <<<"$task_final" >/dev/null
+  }
+  check render_task_not_resubmitted "media task $render_task: $(jq -r '.status' <<<"$task_final"), render attempts=$(jq 'length' <<<"$render_attempts_final")" task_not_resubmitted
+  check completed_once_by "completions=$completions" test "$completion_path" == CALLBACK -o "$completion_path" == PROVIDER_POLL
+  turns_prefix() {
+    jq -e --argjson before "$turns_before" '.[0:($before | length)] == $before and (length == (unique | length))' <<<"$turns_final" >/dev/null
+  }
+  check turns_not_repeated "before=$(jq 'length' <<<"$turns_before") final=$(jq 'length' <<<"$turns_final") want=$want_decisions" turns_prefix
+  decisions_prefix() {
+    jq -e --argjson before "$decisions_before" --argjson want "$want_decisions" \
+      '.[0:($before | length)] == $before and length == $want and (unique | length) == $want' <<<"$decisions_final" >/dev/null
+  }
+  check decisions_not_repeated "before=$(jq 'length' <<<"$decisions_before") final=$(jq 'length' <<<"$decisions_final") distinct_turns=$(jq 'unique | length' <<<"$decisions_final")" decisions_prefix
+  seqs_in_order() {
+    jq -e '. == sort and length == (unique | length)' <<<"$seqs" >/dev/null
+  }
+  check events_replay_in_order "events=$(jq 'length' <<<"$seqs") seq $(jq 'min' <<<"$seqs")..$(jq 'max' <<<"$seqs")" seqs_in_order
+fi
+
 printf '\nrun %s\nclip %s\n' "$run_id" "$clip_url"
 
 summary="run=$run_id outcome=$outcome timeline=$timeline_verdicts clip=$clip_verdicts review=${review_verdicts:-none} decisions=$decisions"
+if [[ "$story" == restart ]]; then
+  summary="$summary attempt=$render_attempt task=$render_task completed_by=$completion_path"
+fi
 if [[ -n "${DEMO_STATE:-}" ]]; then
   printf 'RUN_ID=%s\nWORKFLOW_ID=%s\nRUN_STATUS=%s\nSUMMARY=%s\n' "$run_id" "$workflow_id" "$run_status" "$summary" >"$DEMO_STATE"
 fi
@@ -254,6 +422,14 @@ fi
 printf '\n'
 if ((failures > 0)); then
   printf 'video edit %s story: %d check(s) FAILED\n' "$story" "$failures"
-  exit 1
+else
+  printf 'video edit %s story: all checks passed\n' "$story"
 fi
-printf 'video edit %s story: all checks passed\n' "$story"
+
+report_status=0
+if [[ "$story" == restart ]]; then
+  # The fault story ends with the evidence report of its Run, read back through the API.
+  log "evidence report for run $run_id under $EVIDENCE_DIR"
+  "$DEMO_ROOT/scripts/demo/video-evidence-report.sh" --out "$EVIDENCE_DIR" "$run_id" || report_status=$?
+fi
+((failures == 0 && report_status == 0))
