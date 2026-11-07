@@ -407,6 +407,12 @@ demo-down:
 ## Run, its facts, its committed Decisions and the delivered clip through the public API,
 ## then prints the clip URL. EMBERLING_DEMO_VIDEO_STORY selects pass (default), too-long or
 ## review-fail; EMBERLING_DEMO_VIDEO_STORY=all runs the three in turn.
+## EMBERLING_DEMO_VIDEO_STORY=restart is the fault-injection story: the pass trajectory,
+## SIGKILL of the backend once the render is dispatched and running at the media service,
+## then a restart; it checks that the same Tool Attempt and media task finish, that no
+## Decision is made twice and that the Events replay in order, and ends with the evidence
+## report of its Run under deploy/.demo/video-evidence (or
+## EMBERLING_DEMO_VIDEO_EVIDENCE_DIR).
 ## Starts postgres, the backend and the media service (compose profile media; the first
 ## start downloads the transcription model) and keeps them running. EMBERLING_DEMO_MEDIA_URL
 ## points the backend at a media service elsewhere instead, for example
