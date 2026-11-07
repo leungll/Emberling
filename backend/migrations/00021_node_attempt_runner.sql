@@ -28,6 +28,18 @@ UPDATE node_attempts
    SET deadline_at = now() + interval '24 hours'
  WHERE status = 'DISPATCHED' AND deadline_at IS NULL;
 
+-- A release occupation hands over to post-task reconciliation through next_query_at, which
+-- the Run's end now writes. An occupation that was still ACTIVE on a Run ended before that
+-- has no schedule, and nothing else ever reaches it, so it would hold its target for good.
+-- It gets the schedule once, due now. No Event goes with it: the schedule is a fact of the
+-- occupation, not a state transition of the Run. Runs still going keep NULL, since their
+-- Agent owns the occupation until they end.
+UPDATE release_occupations
+   SET next_query_at = now()
+ WHERE status = 'ACTIVE'
+   AND next_query_at IS NULL
+   AND run_id IN (SELECT id FROM runs WHERE status IN ('COMPLETED', 'FAILED'));
+
 -- The orphan scan reads only STARTED rows with a recorded process and no deadline; the
 -- partial index keeps it independent of the number of completed Attempts.
 CREATE INDEX node_attempts_orphan_started_idx
@@ -38,7 +50,8 @@ CREATE INDEX node_attempts_orphan_started_idx
 -- +goose Down
 -- +goose StatementBegin
 -- A deadline the backfill wrote stays: it cannot be told from one dispatch wrote, and an
--- older build reads any deadline through the same timeout scan.
+-- older build reads any deadline through the same timeout scan. The same holds for an
+-- occupation's schedule, which an older build reads as any other due query.
 DROP INDEX IF EXISTS node_attempts_orphan_started_idx;
 ALTER TABLE node_attempts DROP COLUMN IF EXISTS runner_id;
 -- +goose StatementEnd

@@ -212,6 +212,15 @@ func (s *ExecutionService) claimToolPoll(ctx context.Context, attemptID string) 
 				return err
 			}
 			if run.Status.IsTerminal() {
+				// Clearing the poll must not take away the last route to the target: a Run
+				// that ended before the Run end wrote the schedule has none on its
+				// occupation. The fixed order takes the Run lock before occupation rows.
+				if _, err := tx.Runs().LockForUpdate(ctx, nodeRun.RunID); err != nil {
+					return err
+				}
+				if err := tx.ReleaseOccupations().ScheduleQueriesOfRun(ctx, nodeRun.RunID, s.deps.Clock.Now()); err != nil {
+					return err
+				}
 				if _, err := tx.ToolAttempts().ClearPoll(ctx, attemptID); err != nil {
 					return err
 				}

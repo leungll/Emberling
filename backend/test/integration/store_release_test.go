@@ -301,6 +301,61 @@ func TestToolAttempts_MarkOutcomeUnknown_Repeated_SetsUnknownOnceAndKeepsTime(t 
 	}
 }
 
+// The post-task reconciliation may learn production does not know an operation whatever
+// state the ended Run left the Attempt in, as long as production has not settled it.
+func TestToolAttempts_RecordOutcomeUnknownSince_OnlyUnsettledAttempts(t *testing.T) {
+	first := fixtureTime.Add(time.Hour)
+	failure := domain.ExecutionError{Code: "X", Message: "m"}
+	for name, tc := range map[string]struct {
+		settle func(ctx context.Context, repo store.ToolAttemptRepository) error
+		want   bool
+	}{
+		"started": {func(context.Context, store.ToolAttemptRepository) error { return nil }, true},
+		"dispatched": {func(ctx context.Context, repo store.ToolAttemptRepository) error {
+			return repo.MarkDispatched(ctx, "tool_attempt_rel_1", fixtureTime, nil)
+		}, true},
+		"failed uncertain": {func(ctx context.Context, repo store.ToolAttemptRepository) error {
+			if err := repo.MarkDispatched(ctx, "tool_attempt_rel_1", fixtureTime, nil); err != nil {
+				return err
+			}
+			return repo.MarkLost(ctx, "tool_attempt_rel_1", fixtureTime, failure, true)
+		}, true},
+		"failed definitely": {func(ctx context.Context, repo store.ToolAttemptRepository) error {
+			return repo.MarkFailedDefinite(ctx, "tool_attempt_rel_1", domain.ToolAttemptStarted, fixtureTime, failure)
+		}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			uow := postgres.NewUnitOfWork(testdb.Open(t))
+			f := seedRun(ctx, t, uow)
+			seedDecidedTurn(ctx, t, uow, f, "ar_rel", "turn_rel", "decision_rel", "action_rel")
+			if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+				if err := tx.ToolAttempts().Create(ctx, newReleaseAttempt("tool_attempt_rel_1", "action_rel", 1, fixtureTime.Add(time.Hour))); err != nil {
+					return err
+				}
+				return tc.settle(ctx, tx.ToolAttempts())
+			}); err != nil {
+				t.Fatalf("seed attempt: %v", err)
+			}
+
+			var recorded, again bool
+			if err := uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+				var err error
+				if recorded, err = tx.ToolAttempts().RecordOutcomeUnknownSince(ctx, "tool_attempt_rel_1", first); err != nil {
+					return err
+				}
+				again, err = tx.ToolAttempts().RecordOutcomeUnknownSince(ctx, "tool_attempt_rel_1", first.Add(time.Hour))
+				return err
+			}); err != nil {
+				t.Fatalf("record: %v", err)
+			}
+			if recorded != tc.want || again {
+				t.Fatalf("recorded = %v then %v, want %v then false", recorded, again, tc.want)
+			}
+		})
+	}
+}
+
 func TestToolAttempts_MarkVoidRequested_Repeated_KeepsFirstTime(t *testing.T) {
 	ctx := context.Background()
 	uow := postgres.NewUnitOfWork(testdb.Open(t))

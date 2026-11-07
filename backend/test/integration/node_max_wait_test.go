@@ -542,3 +542,84 @@ func TestMigrations_NodeAttemptRunner_BoundsWaitingAttemptsWithNoDeadline(t *tes
 		t.Fatalf("orphans = %d, want the STARTED row alone, still found by the orphan scan", len(orphans))
 	}
 }
+
+// The one-time backfill: an occupation left without a schedule on an ended Run has nothing
+// else that would ever reach post-task reconciliation. Only such rows are touched.
+func TestMigrations_NodeAttemptRunner_SchedulesOccupationsOfEndedRuns(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.OpenUnmigrated(t)
+
+	goose.SetBaseFS(migrations.FS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		t.Fatalf("goose dialect: %v", err)
+	}
+	db := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = db.Close() }()
+	if err := goose.UpToContext(ctx, db, ".", 20); err != nil {
+		t.Fatalf("apply the schema before the backfill: %v", err)
+	}
+
+	uow := postgres.NewUnitOfWork(pool)
+	f := seedLegacyRun(ctx, t, pool, uow)
+	seedDecidedTurn(ctx, t, uow, f, "ar_occ", "turn_occ", "dec_occ", "act_occ")
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO runs (id, workflow_id, definition_version, status, input, last_seq, started_at, updated_at)
+		VALUES ('run_completed', $1, 1, 'COMPLETED', '{}', 0, $2, $2),
+		       ('run_failed',    $1, 1, 'FAILED',    '{}', 0, $2, $2)`, f.workflowID, fixtureTime); err != nil {
+		t.Fatalf("insert ended runs: %v", err)
+	}
+	insert := func(id, runID, status string, next *time.Time) {
+		t.Helper()
+		var releasedAt, reason any
+		if status == "RELEASED" {
+			releasedAt, reason = fixtureTime, "VOIDED"
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO release_occupations (id, target_key, run_id, action_id, operation_key, status,
+				acquired_at, released_at, release_reason, next_query_at)
+			VALUES ($1, $1, $2, 'act_occ', 'op_' || $1, $3, $4, $5, $6, $7)`,
+			id, runID, status, fixtureTime, releasedAt, reason, next); err != nil {
+			t.Fatalf("insert occupation %s: %v", id, err)
+		}
+	}
+	scheduled := fixtureTime.Add(time.Hour)
+	insert("occ_completed", "run_completed", "ACTIVE", nil)
+	insert("occ_failed", "run_failed", "ACTIVE", nil)
+	insert("occ_running", f.runID, "ACTIVE", nil)
+	insert("occ_scheduled", "run_failed", "ACTIVE", &scheduled)
+	insert("occ_released", "run_failed", "RELEASED", nil)
+
+	var before, after time.Time
+	if err := pool.QueryRow(ctx, `SELECT now()`).Scan(&before); err != nil {
+		t.Fatalf("read the clock: %v", err)
+	}
+	if err := postgres.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT now()`).Scan(&after); err != nil {
+		t.Fatalf("read the clock: %v", err)
+	}
+
+	nextQueryOf := func(id string) *time.Time {
+		t.Helper()
+		var next *time.Time
+		if err := pool.QueryRow(ctx, `SELECT next_query_at FROM release_occupations WHERE id = $1`, id).Scan(&next); err != nil {
+			t.Fatalf("read next query of %s: %v", id, err)
+		}
+		return next
+	}
+	for _, id := range []string{"occ_completed", "occ_failed"} {
+		if got := nextQueryOf(id); got == nil || got.Before(before) || got.After(after) {
+			t.Fatalf("%s next query = %v, want the migration's time, between %v and %v", id, got, before, after)
+		}
+	}
+	if got := nextQueryOf("occ_running"); got != nil {
+		t.Fatalf("occupation of a live Run next query = %v, want none: its Agent still owns it", got)
+	}
+	if got := nextQueryOf("occ_scheduled"); got == nil || !got.Equal(scheduled) {
+		t.Fatalf("scheduled occupation next query = %v, want its own %v", got, scheduled)
+	}
+	if got := nextQueryOf("occ_released"); got != nil {
+		t.Fatalf("released occupation next query = %v, want none", got)
+	}
+}
