@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
@@ -429,16 +428,13 @@ func (h *orphanHarness) waitForBlocked(n int) {
 		 WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0`
 	ctx, cancel := context.WithTimeout(h.ctx, blockedWaitTimeout)
 	defer cancel()
-	observer, err := pgx.ConnectConfig(ctx, h.pool.Config().ConnConfig)
-	if err != nil {
-		h.t.Fatalf("connect the lock observer: %v", err)
-	}
-	defer func() { _ = observer.Close(h.ctx) }()
+	observer := stdlib.OpenDB(*h.pool.Config().ConnConfig)
+	defer func() { _ = observer.Close() }()
 
 	deadline := time.Now().Add(blockedWaitTimeout)
 	for {
 		var blocked int
-		if err := observer.QueryRow(ctx, query).Scan(&blocked); err != nil {
+		if err := observer.QueryRowContext(ctx, query).Scan(&blocked); err != nil {
 			h.t.Fatalf("query blocked backends: %v", err)
 		}
 		if blocked >= n {
