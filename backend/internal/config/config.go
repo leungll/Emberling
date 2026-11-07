@@ -100,7 +100,10 @@ type Config struct {
 	SandboxRunner SandboxRunner
 	// VerifyRunner locates the sandbox runner the verify_patch Tool dispatches to; its
 	// zero value leaves the Tool unregistered.
-	VerifyRunner    VerifyRunner
+	VerifyRunner VerifyRunner
+	// MediaService locates the media task service the video Tools and the transcription
+	// node dispatch to; its zero value leaves them unregistered.
+	MediaService    MediaService
 	Reconciliation  Reconciliation
 	PendingCallback PendingCallback
 	Projection      Projection
@@ -302,6 +305,7 @@ func Load(env func(string) string) (Config, error) {
 		},
 		SandboxRunner: l.sandboxRunner(),
 		VerifyRunner:  l.verifyRunner(),
+		MediaService:  l.mediaService(),
 		Reconciliation: Reconciliation{
 			Interval:  l.requiredDuration(KeyReconcileInterval),
 			BatchSize: l.requiredInt(KeyReconcileBatchSize),
