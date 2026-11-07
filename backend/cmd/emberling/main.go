@@ -267,6 +267,9 @@ func run(logger *slog.Logger) error {
 			if err := registerVerifyTool(toolRegistry, cfg.VerifyRunner, taskClient, artifactStore); err != nil {
 				return err
 			}
+			if err := registerMediaTools(toolRegistry, cfg.MediaService, taskClient); err != nil {
+				return err
+			}
 			if err := registerChangeRequestTool(toolRegistry, cfg.VerifyRunner, artifactStore); err != nil {
 				return err
 			}
