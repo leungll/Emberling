@@ -22,6 +22,8 @@ type execScriptedExecutor struct {
 
 	// turnCalls records every AdvanceAgentTurn call; it must be buffered by the test.
 	turnCalls chan agentTurnCall
+	// actionCalls records every ContinueAgentAction call; it must be buffered by the test.
+	actionCalls chan string
 }
 
 type agentTurnCall struct {
@@ -31,6 +33,13 @@ type agentTurnCall struct {
 
 func (e *execScriptedExecutor) AdvanceAgentTurn(_ context.Context, turnID string, claimSource domain.ClaimSource) error {
 	e.turnCalls <- agentTurnCall{turnID: turnID, claimSource: claimSource}
+	return nil
+}
+
+func (e *execScriptedExecutor) ContinueAgentAction(_ context.Context, actionID string) error {
+	if e.actionCalls != nil {
+		e.actionCalls <- actionID
+	}
 	return nil
 }
 
@@ -242,5 +251,47 @@ func TestPool_AgentTurnItem_DispatchesToAdvanceAgentTurn(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&exec.advanceCalls); got != 0 {
 		t.Errorf("Advance calls = %d, want 0", got)
+	}
+}
+
+// TestPool_AgentActionItem_DispatchesToContinueAgentAction proves an approved Action item
+// enters the approved-Action use case on the worker, bracketed by the hooks, and never the
+// Run advance.
+func TestPool_AgentActionItem_DispatchesToContinueAgentAction(t *testing.T) {
+	done := make(chan struct{})
+	exec := &execScriptedExecutor{
+		advance: func(int) (service.AdvanceOutcome, error) {
+			t.Error("Advance called for an AGENT_ACTION item")
+			return service.AdvanceOutcome{}, nil
+		},
+		execute:     func(context.Context, int) error { return nil },
+		actionCalls: make(chan string, 1),
+	}
+	hooks := Hooks{AfterExecute: func(string) { close(done) }}
+
+	queue := NewQueue(4)
+	pool := NewPool(queue, exec, 1, hooks, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pool.Start(ctx)
+	defer pool.Stop()
+
+	if !queue.EnqueueAgentAction("run_a", "act_1") {
+		t.Fatal("enqueue agent action: want accepted, got refused")
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("AfterExecute hook: want fired within 5s, got timeout")
+	}
+	pool.Stop()
+
+	select {
+	case actionID := <-exec.actionCalls:
+		if actionID != "act_1" {
+			t.Errorf("ContinueAgentAction(%q), want act_1", actionID)
+		}
+	default:
+		t.Fatal("ContinueAgentAction was never called")
 	}
 }

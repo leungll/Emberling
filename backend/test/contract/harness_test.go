@@ -42,6 +42,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaresult"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
+	"github.com/leungll/Emberling/backend/internal/nodes/taskinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textoutput"
@@ -163,6 +164,10 @@ type testEnvOptions struct {
 	// CallbackBaseURL overrides the origin minted into registry.CallbackContext.URL.
 	CallbackBaseURL string
 
+	// OperatorToken, when set, serves the approval routes behind this operator credential;
+	// left empty, the routes are not registered, as in a deployment without the setting.
+	OperatorToken string
+
 	// AssetMaxUploadBytes overrides api.Deps.AssetMaxUploadBytes and the storage layer's
 	// own streaming cap when > 0; the default (defaultTestAssetMaxUploadBytes) keeps a
 	// 413 PAYLOAD_TOO_LARGE reachable without building a 16 MiB request body.
@@ -173,6 +178,11 @@ type testEnvOptions struct {
 	// a real process restart finds both the same PostgreSQL facts and the same mounted
 	// volume, so an Asset uploaded before it stays readable after it.
 	AssetStorageRoot string
+
+	// WorkspaceRepositories are the repository identifiers the Compiler accepts in an agent
+	// node's workspace.repositoryId, standing in for the registered repository list the
+	// binary reads from its configuration. Empty means no workspace compiles.
+	WorkspaceRepositories []string
 
 	// SkipLookupTool, when true, leaves the "lookup" Tool unregistered in this Backend's
 	// Tool Registry. Combined with Pool (a second Backend reopened over the same
@@ -341,6 +351,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 	for _, reg := range append([]registry.NodeRegistration{
 		textinput.Registration(),
 		imageinput.Registration(),
+		taskinput.Registration(),
 		mediabrief.Registration(),
 		prompttemplate.Registration(),
 		textoutput.Registration(),
@@ -407,7 +418,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		t.Fatalf("validate fact declarations: %v", err)
 	}
 
-	compiler := runtime.NewCompiler(nodeRegistry, clock)
+	compiler := runtime.NewCompiler(nodeRegistry, clock, runtime.WithWorkspaceRepositories(opts.WorkspaceRepositories))
 	queue := work.NewQueue(0)
 	notifier := api.NewHub()
 
@@ -509,6 +520,7 @@ func newTestEnvWithOptions(t *testing.T, opts testEnvOptions) *testEnv {
 		CallbackMaxPayloadBytes: callbackMaxPayloadBytes,
 		AssetMaxUploadBytes:     assetMaxUploadBytes,
 		TraceMaxFieldBytes:      opts.TraceMaxFieldBytes,
+		Operator:                api.OperatorConfig{Token: opts.OperatorToken, Name: testOperatorName},
 	})
 
 	server := httptest.NewServer(router)

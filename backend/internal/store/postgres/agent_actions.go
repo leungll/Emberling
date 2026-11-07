@@ -18,6 +18,10 @@ type agentActionRepository struct {
 const agentActionColumns = `id, turn_id, decision_id, type, status, created_at, started_at,
 	waiting_at, completed_at, error`
 
+// agentActionSelectColumns adds the authorization columns, which are written only by the
+// claim and never part of the INSERT list: a new Action has no decision yet.
+const agentActionSelectColumns = agentActionColumns + `, authorization_decision, authorization_reason`
+
 // Create inserts the READY Action in the same transaction as its Decision. UNIQUE
 // (turn_id) and UNIQUE (decision_id) allow at most one Action per Turn and per Decision,
 // so a second advancement path cannot create a competing work item.
@@ -40,12 +44,12 @@ func (r *agentActionRepository) Create(ctx context.Context, action domain.AgentA
 }
 
 func (r *agentActionRepository) Get(ctx context.Context, actionID string) (domain.AgentAction, error) {
-	const query = `SELECT ` + agentActionColumns + ` FROM agent_actions WHERE id = $1`
+	const query = `SELECT ` + agentActionSelectColumns + ` FROM agent_actions WHERE id = $1`
 	return r.queryOne(ctx, "agent_actions.Get", query, actionID)
 }
 
 func (r *agentActionRepository) GetByTurnID(ctx context.Context, turnID string) (domain.AgentAction, error) {
-	const query = `SELECT ` + agentActionColumns + ` FROM agent_actions WHERE turn_id = $1`
+	const query = `SELECT ` + agentActionSelectColumns + ` FROM agent_actions WHERE turn_id = $1`
 	return r.queryOne(ctx, "agent_actions.GetByTurnID", query, turnID)
 }
 
@@ -77,7 +81,7 @@ func (r *agentActionRepository) ListReady(ctx context.Context, limit int) ([]dom
 		return nil, fmt.Errorf("store/postgres agent_actions.ListReady: limit must be positive, got %d", limit)
 	}
 
-	const query = `SELECT ` + agentActionColumns + `
+	const query = `SELECT ` + agentActionSelectColumns + `
 		  FROM agent_actions
 		 WHERE status = 'READY'
 		 ORDER BY id ASC
@@ -179,6 +183,120 @@ func (r *agentActionRepository) MarkFailed(ctx context.Context, actionID string,
 	return nil
 }
 
+// SetAuthorization records the claim's decision on the RUNNING Action it holds.
+func (r *agentActionRepository) SetAuthorization(ctx context.Context, actionID string, decision domain.AuthorizationDecision, reason *string) error {
+	if !decision.IsValid() {
+		return fmt.Errorf("store/postgres agent_actions.SetAuthorization: action=%s: unknown decision %q", actionID, decision)
+	}
+	const update = `
+		UPDATE agent_actions
+		   SET authorization_decision = $2, authorization_reason = $3
+		 WHERE id = $1 AND status = 'RUNNING'`
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.SetAuthorization", update, actionID, string(decision), nullableString(reason))
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_actions.SetAuthorization: action=%s is not RUNNING: %w", actionID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_actions.SetAuthorization", actionID, affected)
+	}
+	return nil
+}
+
+// MarkWaitingApproval suspends the RUNNING Action the claim holds until a person decides.
+// The ASK decision is written by the same UPDATE, so a WAITING_APPROVAL row always says
+// why it waits.
+func (r *agentActionRepository) MarkWaitingApproval(ctx context.Context, actionID string, now time.Time) error {
+	const update = `
+		UPDATE agent_actions
+		   SET status = 'WAITING_APPROVAL', waiting_at = $2, authorization_decision = 'ASK', authorization_reason = NULL
+		 WHERE id = $1 AND status = 'RUNNING'`
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.MarkWaitingApproval", update, actionID, now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_actions.MarkWaitingApproval: action=%s RUNNING -> WAITING_APPROVAL: %w",
+			actionID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_actions.MarkWaitingApproval", actionID, affected)
+	}
+	return nil
+}
+
+// ResumeApproved hands the execution right back to the transaction that recorded the
+// approval. Requiring WAITING_APPROVAL ties it to the approval's single winner.
+func (r *agentActionRepository) ResumeApproved(ctx context.Context, actionID string, now time.Time) error {
+	const update = `
+		UPDATE agent_actions
+		   SET status = 'RUNNING', started_at = $2
+		 WHERE id = $1 AND status = 'WAITING_APPROVAL'`
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.ResumeApproved", update, actionID, now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_actions.ResumeApproved: action=%s WAITING_APPROVAL -> RUNNING: %w",
+			actionID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_actions.ResumeApproved", actionID, affected)
+	}
+	return nil
+}
+
+// MarkWaitingHuman hands an Action whose release got no definite answer before its confirm
+// deadline to a person. Requiring the expected status makes the deadline scan lose to a
+// production answer that committed first.
+func (r *agentActionRepository) MarkWaitingHuman(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time) error {
+	if (from != domain.AgentActionRunning && from != domain.AgentActionWaitingCallback) || !from.CanTransitionTo(domain.AgentActionWaitingHuman) {
+		return &domain.InvalidStateTransitionError{
+			Entity: "AgentAction", ID: actionID, From: string(from), To: string(domain.AgentActionWaitingHuman),
+		}
+	}
+	const update = `
+		UPDATE agent_actions
+		   SET status = 'WAITING_HUMAN', waiting_at = $3
+		 WHERE id = $1 AND status = $2`
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.MarkWaitingHuman", update, actionID, string(from), now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_actions.MarkWaitingHuman: action=%s %s -> WAITING_HUMAN: %w",
+			actionID, from, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_actions.MarkWaitingHuman", actionID, affected)
+	}
+	return nil
+}
+
+// ResumeForRelease takes a waiting release Action back to RUNNING so the same committed
+// Decision is released again under a new operation. Requiring WAITING_CALLBACK ties it to
+// the void answer's single winner.
+func (r *agentActionRepository) ResumeForRelease(ctx context.Context, actionID string, now time.Time) error {
+	const update = `
+		UPDATE agent_actions
+		   SET status = 'RUNNING', started_at = $2
+		 WHERE id = $1 AND status = 'WAITING_CALLBACK'`
+	affected, err := affectedRows(ctx, r.conn, "agent_actions.ResumeForRelease", update, actionID, now)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_actions.ResumeForRelease: action=%s WAITING_CALLBACK -> RUNNING: %w",
+			actionID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_actions.ResumeForRelease", actionID, affected)
+	}
+	return nil
+}
+
 // MarkTimedOut conditionally fails an Action that is still READY, RUNNING or
 // WAITING_CALLBACK. Only the Agent timeout transaction may use it: the expired deadline
 // ends the current Action in whichever non-terminal state it sits, including the READY one
@@ -225,16 +343,22 @@ func scanAgentActions(rows pgx.Rows) ([]domain.AgentAction, error) {
 	out := []domain.AgentAction{}
 	for rows.Next() {
 		var (
-			action     domain.AgentAction
-			actionType string
-			status     string
-			errPayload []byte
+			action        domain.AgentAction
+			actionType    string
+			status        string
+			errPayload    []byte
+			authorization *string
 		)
 		if err := rows.Scan(
 			&action.ID, &action.TurnID, &action.DecisionID, &actionType, &status,
 			&action.CreatedAt, &action.StartedAt, &action.WaitingAt, &action.CompletedAt, &errPayload,
+			&authorization, &action.AuthorizationReason,
 		); err != nil {
 			return nil, err
+		}
+		if authorization != nil {
+			value := domain.AuthorizationDecision(*authorization)
+			action.Authorization = &value
 		}
 
 		action.Type = domain.AgentActionType(actionType)

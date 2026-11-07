@@ -67,19 +67,24 @@ afterEach(() => {
 });
 
 describe('Agent review model', () => {
-  it('offers only vision models, defaults to the mock policy and can be cleared', async () => {
+  it('offers every registered model, defaults to the mock policy and can be cleared', async () => {
     const user = userEvent.setup();
     renderAgent({ allowedTools: ['review_asset'] });
 
     const trigger = await screen.findByRole('button', { name: 'Review model: Mock review policy' });
     expect(
       screen.getByText(
-        'Reviews images when the agent calls review_asset. Without one, reviews use the mock policy.',
+        'Used when the agent calls review_asset. Saving checks that it supports what each tool needs. Without one, reviews use the mock policy.',
       ),
     ).toBeInTheDocument();
     await user.click(trigger);
     const names = screen.getAllByRole('option').map((o) => o.textContent);
-    expect(names).toEqual(['Mock review policy', 'Vision Review Model']);
+    expect(names).toEqual([
+      'Mock review policy',
+      'Mock Image Model v1',
+      'Vision Review Model',
+      'Mock Text Model v1',
+    ]);
 
     await user.click(screen.getByRole('option', { name: 'Vision Review Model' }));
     expect(
@@ -90,6 +95,28 @@ describe('Agent review model', () => {
     await user.click(screen.getByRole('button', { name: 'Review model: Vision Review Model' }));
     await user.click(screen.getByRole('option', { name: 'Mock review policy' }));
     expect(useEditorStore.getState().doc.nodes[0]?.config.reviewModelId).toBeUndefined();
+  });
+
+  it('says a patch review needs its own model instead of falling back to the mock policy', async () => {
+    const reviewAsset = TOOLS.find((x) => x.name === 'review_asset')!;
+    api.listTools.mockResolvedValue([
+      ...TOOLS,
+      {
+        ...reviewAsset,
+        name: 'review_patch',
+        description: 'Review the current workspace patch',
+        reviewModelCapability: 'structured_decision',
+        requiresReviewModel: true,
+      },
+    ]);
+    renderAgent({ allowedTools: ['review_patch'] });
+
+    expect(
+      await screen.findByText(
+        "Used when the agent calls review_patch. Required, and it must differ from the agent's model. Saving checks that it supports what each tool needs.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/mock policy\.$/)).toBeNull();
   });
 
   it('is not offered to an agent without a review tool', async () => {

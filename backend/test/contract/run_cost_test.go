@@ -106,7 +106,7 @@ func assertNoRawProviderUsage(t *testing.T, what string, body []byte) {
 	if strings.Contains(text, `"usage":{"cost"`) {
 		t.Errorf("%s carries the Provider's raw usage object: %s", what, text)
 	}
-	lower := strings.ToLower(withoutTokenUsageFieldNames(text))
+	lower := strings.ToLower(withoutProjectedFieldNames(text))
 	for _, secret := range []string{"authorization", "bearer", testCallbackSigningSecret, "token"} {
 		if strings.Contains(lower, strings.ToLower(secret)) {
 			t.Errorf("%s mentions %q: %s", what, secret, text)

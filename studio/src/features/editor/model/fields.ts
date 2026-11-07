@@ -155,6 +155,15 @@ export const FIELD_SPEC: Record<string, FieldSpec> = {
     keys: ['minLength', 'maxLength'],
   },
   'text_input.inputKey': { label: f.key, widget: 'key', section: 'api' },
+  'task_input.label': { label: f.fieldLabel, widget: 'label', section: 'runField' },
+  'task_input.required': { label: f.required, widget: 'required', section: 'runField' },
+  'task_input.schema': {
+    label: f.schema.taskSchema[0],
+    widget: 'schema',
+    section: 'runField',
+    help: f.schema.taskSchema[1],
+  },
+  'task_input.inputKey': { label: f.key, widget: 'key', section: 'api' },
   'image_input.label': { label: f.fieldLabel, widget: 'label', section: 'runField' },
   'image_input.required': { label: f.required, widget: 'required', section: 'runField' },
   'image_input.acceptedMediaTypes': {

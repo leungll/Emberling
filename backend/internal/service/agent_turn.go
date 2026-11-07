@@ -205,7 +205,7 @@ func (s *ExecutionService) claimAgentTurn(ctx context.Context, turnID string, cl
 		// on, and re-reading them afterwards would open a window in which they no longer
 		// match the Turn that was claimed. Only the Provider call itself is deferred past
 		// COMMIT.
-		request, buildErr := s.buildModelRequest(ctx, tx, agentRun)
+		request, sources, buildErr := s.buildModelRequest(ctx, tx, agentRun)
 		if buildErr != nil {
 			var missing *agentRegistryDriftError
 			if errors.As(buildErr, &missing) {
@@ -224,6 +224,13 @@ func (s *ExecutionService) claimAgentTurn(ctx context.Context, turnID string, cl
 			return s.terminateAgentLocked(ctx, tx, lock, nodeRun, agentRun, turn.ID,
 				domain.TerminationModelError,
 				domain.ExecutionError{Code: "MODEL_ERROR", Message: fmt.Sprintf("model %q is not registered", agentRun.ModelID)}, now)
+		}
+
+		// The Context Manifest of this request commits with the claim: what the model is
+		// about to be given is a fact of the Turn, recorded before the call and never
+		// re-derived from the response.
+		if err := s.writeTurnManifest(ctx, tx, agentRun, nodeRun.ID, turn.ID, request, sources, now); err != nil {
+			return err
 		}
 
 		call = &agentModelCall{
@@ -266,22 +273,24 @@ func (e *agentRegistryDriftError) Error() string { return e.message }
 // buildModelRequest assembles the Turn's model request from the Agent Run's frozen
 // configuration and the Context and State Versions its pointers name. Every value comes
 // from committed facts: an Adapter may not re-read a newer Definition, and this function
-// may not substitute a "closest" Tool for a missing one.
-func (s *ExecutionService) buildModelRequest(ctx context.Context, tx store.Tx, agentRun domain.AgentRun) (registry.ModelRequest, error) {
+// may not substitute a "closest" Tool for a missing one. It also returns the persisted
+// sources the request was mapped from, for the Context Manifest of the same claim.
+func (s *ExecutionService) buildModelRequest(ctx context.Context, tx store.Tx, agentRun domain.AgentRun) (registry.ModelRequest, agentRequestSources, error) {
 	contextVersion, err := tx.AgentContextVersions().GetByRunAndVersion(ctx, agentRun.ID, agentRun.CurrentContextVersion)
 	if err != nil {
-		return registry.ModelRequest{}, err
+		return registry.ModelRequest{}, agentRequestSources{}, err
 	}
 	stateVersion, err := tx.AgentStateVersions().GetByRunAndVersion(ctx, agentRun.ID, agentRun.CurrentStateVersion)
 	if err != nil {
-		return registry.ModelRequest{}, err
+		return registry.ModelRequest{}, agentRequestSources{}, err
 	}
 
 	stored, err := runtime.DecodeAgentContext(contextVersion.Messages)
 	if err != nil {
-		return registry.ModelRequest{}, fmt.Errorf("execution: agent run %s context version %d: %w",
+		return registry.ModelRequest{}, agentRequestSources{}, fmt.Errorf("execution: agent run %s context version %d: %w",
 			agentRun.ID, contextVersion.Version, err)
 	}
+	sources := agentRequestSources{messages: stored, stateVersion: stateVersion}
 	messages := make([]registry.ModelMessage, 0, len(stored))
 	for _, message := range stored {
 		messages = append(messages, registry.ModelMessage{
@@ -297,7 +306,7 @@ func (s *ExecutionService) buildModelRequest(ctx context.Context, tx store.Tx, a
 	for _, name := range agentRun.AllowedTools {
 		reg, ok := s.deps.Tools.Get(name)
 		if !ok {
-			return registry.ModelRequest{}, &agentRegistryDriftError{
+			return registry.ModelRequest{}, agentRequestSources{}, &agentRegistryDriftError{
 				message: fmt.Sprintf("tool %q of the Agent Run's frozen allowlist is no longer registered", name),
 			}
 		}
@@ -318,7 +327,7 @@ func (s *ExecutionService) buildModelRequest(ctx context.Context, tx store.Tx, a
 		ModelConfig:       frozenValue(agentRun.ModelConfig),
 		FinalOutputSchema: frozenValue(agentRun.OutputSchema),
 		DecisionSchema:    registry.DecisionSchema(),
-	}, nil
+	}, sources, nil
 }
 
 // modelProvider resolves the Provider that serves one frozen Model ID.
@@ -534,6 +543,14 @@ func (s *ExecutionService) terminateAgentRunLocked(
 		Termination: termination,
 		Error:       execError,
 	}); err != nil {
+		return err
+	}
+
+	// An Agent Run with a goal gets its completion verdict in this same transaction: a
+	// human stop is RELEASE_UNKNOWN, every other termination here is INCOMPLETE with the
+	// facts it still lacks. The NodeRun keeps the termination's own error; the verdict is
+	// recorded beside it, not in place of it.
+	if _, err := s.evaluateAgentCompletionLocked(ctx, tx, lock, nodeRun, agentRun, termination, now); err != nil {
 		return err
 	}
 

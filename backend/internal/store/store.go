@@ -43,6 +43,7 @@ type Tx interface {
 	Events() EventRepository
 	AgentRuns() AgentRunRepository
 	AgentTurns() AgentTurnRepository
+	AgentTurnManifests() AgentTurnManifestRepository
 	AgentDecisions() AgentDecisionRepository
 	AgentActions() AgentActionRepository
 	ToolAttempts() ToolAttemptRepository
@@ -50,6 +51,13 @@ type Tx interface {
 	AgentStateVersions() AgentStateVersionRepository
 	ExecutionFacts() ExecutionFactRepository
 	ProviderSlots() ProviderSlotRepository
+	AgentWorkspaces() AgentWorkspaceRepository
+	WorkspacePatches() WorkspacePatchRepository
+	Approvals() ApprovalRepository
+	ChangeRequests() ChangeRequestRepository
+	ReleaseOccupations() ReleaseOccupationRepository
+	HumanWaits() HumanWaitRepository
+	AgentCompletions() AgentCompletionRepository
 }
 
 // DefinitionRepository persists immutable Workflow versions. It has no update method:
@@ -325,6 +333,14 @@ type DuePoll struct {
 	PollCount int
 }
 
+// DueToolPoll identifies one persisted Tool Attempt whose Provider poll is due. ActionID is
+// what the discovering scan found and is used for logging only; the use case re-reads
+// every routing fact itself.
+type DueToolPoll struct {
+	AttemptID string
+	ActionID  string
+}
+
 // CallbackBindingRepository persists the only authoritative route from an external task
 // identity back to the Attempt that dispatched it. A binding is immutable:
 // there is no update method, because re-pointing an external identity at another Attempt
@@ -421,12 +437,31 @@ type AgentRunRepository interface {
 	// UPDATE affected one row recorded why it stopped.
 	Terminate(ctx context.Context, agentRunID string, termination domain.AgentTermination, now time.Time, execErr *domain.ExecutionError) (bool, error)
 
-	// ListExpired returns Agent Runs that have not terminated and whose frozen deadline
-	// is at or before `before`, so the Reconciler can rediscover the Agent timeout work
-	// an in-process timer never performed (an Agent deadline that has passed enters the
-	// timeout use case). Terminated Agent Runs are excluded: their outcome is already
-	// committed. The limit bounds the scan batch.
+	// ListExpired returns Agent Runs that have not terminated, are not paused and whose
+	// deadline is at or before `before`, so the Reconciler can rediscover the Agent
+	// timeout work an in-process timer never performed (an Agent deadline that has passed
+	// enters the timeout use case). Terminated Agent Runs are excluded: their outcome is
+	// already committed. Paused ones are excluded because their deadline is not running.
+	// The limit bounds the scan batch.
 	ListExpired(ctx context.Context, before time.Time, limit int) ([]domain.AgentRun, error)
+
+	// Pause conditionally stops the Agent Run's clock: it writes paused_at and the reason
+	// on a row that is not paused. A row already paused affects nothing and returns
+	// domain.ErrStaleClaim, because two overlapping pauses are a programming error of the
+	// caller, never a race the database should settle.
+	Pause(ctx context.Context, agentRunID string, reason domain.AgentPauseReason, now time.Time) error
+
+	// Resume conditionally restarts the clock of a paused Agent Run: the deadline moves
+	// later by the time spent paused (now - paused_at), both pause columns are cleared,
+	// and the moved deadline is returned. A paused duration that is not positive leaves
+	// the deadline unchanged but still clears the pause. A row that is not paused returns
+	// domain.ErrStaleClaim.
+	Resume(ctx context.Context, agentRunID string, now time.Time) (time.Time, error)
+
+	// SetPauseReason conditionally changes why a paused Agent Run is paused without
+	// touching paused_at, so the paused duration keeps accumulating from the original
+	// pause. A row that is not paused returns domain.ErrStaleClaim.
+	SetPauseReason(ctx context.Context, agentRunID string, reason domain.AgentPauseReason) error
 }
 
 // AgentRunPointers is one Agent Run's recovery position: the Turn number created so far
@@ -537,14 +572,169 @@ type AgentActionRepository interface {
 	// WAITING_CALLBACK. Only the Agent timeout transaction uses it: the
 	// deadline ends the current Action in whichever of those states it is, including the
 	// READY one no executor ever claimed. It reports false when the row had already
-	// reached a terminal status, which is not an error.
+	// reached a terminal status, which is not an error. An Action waiting on a person is
+	// not touched: its Agent Run is paused and its clock is not running.
 	MarkTimedOut(ctx context.Context, actionID string, now time.Time, execErr domain.ExecutionError) (bool, error)
+
+	// SetAuthorization records the authorization decision the claim made for a RUNNING
+	// Action, with the reason of a DENY. It returns domain.ErrStaleClaim when the row is
+	// not RUNNING.
+	SetAuthorization(ctx context.Context, actionID string, decision domain.AuthorizationDecision, reason *string) error
+
+	// MarkWaitingApproval conditionally moves a RUNNING Action to WAITING_APPROVAL,
+	// stamps waiting_at and records the ASK decision, in the claim transaction that
+	// requested the approval. It returns domain.ErrStaleClaim when the row is not RUNNING.
+	MarkWaitingApproval(ctx context.Context, actionID string, now time.Time) error
+
+	// ResumeApproved conditionally moves a WAITING_APPROVAL Action back to RUNNING, in
+	// the transaction that recorded its approval. It returns domain.ErrStaleClaim when
+	// the row is not WAITING_APPROVAL.
+	ResumeApproved(ctx context.Context, actionID string, now time.Time) error
+
+	// MarkWaitingHuman conditionally moves an Action from `from` (RUNNING or
+	// WAITING_CALLBACK) to WAITING_HUMAN when its release passed the confirm deadline
+	// without a definite production answer. It returns domain.ErrStaleClaim when the row
+	// is no longer in `from`, which is how a poll answer that committed first wins.
+	MarkWaitingHuman(ctx context.Context, actionID string, from domain.AgentActionStatus, now time.Time) error
+
+	// ResumeForRelease conditionally moves a WAITING_CALLBACK Action back to RUNNING for
+	// the one path that re-releases the same committed Decision after production confirmed
+	// the previous operation void. It returns domain.ErrStaleClaim when the row is not
+	// WAITING_CALLBACK.
+	ResumeForRelease(ctx context.Context, actionID string, now time.Time) error
+}
+
+// ApprovalRepository persists human approval requests and implements the single
+// conditional decision that settles each one.
+type ApprovalRepository interface {
+	// Create inserts the PENDING approval in the transaction that suspended its Action.
+	// UNIQUE (action_id) makes a second request for the same Action lose in the database.
+	Create(ctx context.Context, approval domain.Approval) error
+	Get(ctx context.Context, approvalID string) (domain.Approval, error)
+	GetByActionID(ctx context.Context, actionID string) (domain.Approval, error)
+
+	// ListByStatus returns approvals in the given status, oldest request first, bounded by
+	// limit.
+	ListByStatus(ctx context.Context, status domain.ApprovalStatus, limit int) ([]domain.Approval, error)
+
+	// ListExpiredPending returns PENDING approvals whose deadline is at or before now, so
+	// the Reconciler can rediscover the expiry work. It claims nothing.
+	ListExpiredPending(ctx context.Context, now time.Time, limit int) ([]domain.Approval, error)
+
+	// ListByAgentRun returns up to limit approvals requested by one Agent Run, oldest
+	// request first (requested_at then id). The completion check reads them to see whether
+	// a release was approved. A non-positive limit is an error rather than an unbounded
+	// read.
+	ListByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.Approval, error)
+
+	// Decide conditionally settles a PENDING approval with a terminal status, decided_at,
+	// the deciding identity (nil for an expiry) and the reason. The `status = 'PENDING'`
+	// predicate decides the single winner between approve, reject and expiry; a false
+	// result means another decision already committed and nothing was written.
+	Decide(ctx context.Context, approvalID string, status domain.ApprovalStatus, now time.Time, decidedBy, reason *string) (bool, error)
+}
+
+// ReleaseOccupationRepository persists which approved release Action holds a deploy
+// target. The partial unique index on ACTIVE target keys is the only arbiter of occupation
+// uniqueness; no process-local check stands in for it.
+type ReleaseOccupationRepository interface {
+	// Acquire inserts an ACTIVE occupation with INSERT ... ON CONFLICT DO NOTHING and
+	// reports whether the row was written. false means the target is held by another
+	// ACTIVE occupation; the caller returns the call to the Agent as TARGET_OCCUPIED.
+	Acquire(ctx context.Context, occupation domain.ReleaseOccupation) (bool, error)
+	Get(ctx context.Context, id string) (domain.ReleaseOccupation, error)
+	// GetActiveByTarget returns the ACTIVE occupation of a target, or domain.ErrNotFound
+	// when the target is free. It is the read-only check the ask path uses before any
+	// approval exists.
+	GetActiveByTarget(ctx context.Context, targetKey string) (domain.ReleaseOccupation, error)
+	ListByActionID(ctx context.Context, actionID string) ([]domain.ReleaseOccupation, error)
+	// SetOperationKey names the operation that now holds the target after a re-release.
+	// A row no longer ACTIVE returns domain.ErrStaleClaim.
+	SetOperationKey(ctx context.Context, id, operationKey string) error
+	// Release conditionally moves ACTIVE to RELEASED with released_at and the reason, and
+	// clears any scheduled post-task query. A row no longer ACTIVE returns
+	// domain.ErrStaleClaim.
+	Release(ctx context.Context, id string, reason domain.ReleaseReason, now time.Time) error
+
+	// ScheduleQuery hands the query schedule of an ACTIVE occupation to the occupation
+	// itself, in the transaction that ends its Run while the release outcome is unknown:
+	// next_query_at is written and the post-task reconciliation takes over. A row no
+	// longer ACTIVE returns domain.ErrStaleClaim.
+	ScheduleQuery(ctx context.Context, id string, at time.Time) error
+
+	// ClaimQuery conditionally claims one post-task query of an ACTIVE occupation whose
+	// next_query_at is due at now: it moves next_query_at to next and increments
+	// query_count. The due predicate is the single arbiter between two scanners of the
+	// same occupation; false means the query is not due, another claimer won, or the
+	// occupation is no longer ACTIVE, and nothing was written.
+	ClaimQuery(ctx context.Context, id string, now, next time.Time) (bool, error)
+
+	// ReleaseAfterRun conditionally moves an ACTIVE occupation whose Run already ended to
+	// RELEASED with the reason production's definite answer gives, clearing its query
+	// schedule. deployedUncheckedVersion records the version production runs when the
+	// answer is DEPLOYED: it went live without the health check the ended task would have
+	// made. It reports false when the occupation is no longer ACTIVE.
+	ReleaseAfterRun(ctx context.Context, id string, reason domain.ReleaseReason, now time.Time, deployedUncheckedVersion *string) (bool, error)
+
+	// ListDueQueries returns ACTIVE occupations whose Run has ended and whose next_query_at
+	// is at or before now, oldest due first, bounded by limit. Read-only discovery of the
+	// post-task reconciliation work.
+	ListDueQueries(ctx context.Context, now time.Time, limit int) ([]domain.ReleaseOccupation, error)
+}
+
+// HumanWaitRepository persists the human wait a release Action enters when production
+// gives no confirmation before the confirm deadline.
+type HumanWaitRepository interface {
+	// Create inserts the OPEN wait in the transaction that moved its Action to
+	// WAITING_HUMAN. UNIQUE (action_id) makes a second wait for the same Action lose.
+	Create(ctx context.Context, wait domain.HumanWait) error
+	Get(ctx context.Context, id string) (domain.HumanWait, error)
+	GetByActionID(ctx context.Context, actionID string) (domain.HumanWait, error)
+	// Close conditionally settles an OPEN wait with a terminal status, closed_at, the
+	// closing identity (nil unless a person closed it) and the outcome. A false result
+	// means another closing already committed and nothing was written.
+	Close(ctx context.Context, id string, status domain.HumanWaitStatus, now time.Time, closedBy, outcome *string) (bool, error)
+
+	// ListOpen returns the OPEN waits, earliest deadline first, bounded by limit.
+	ListOpen(ctx context.Context, limit int) ([]domain.HumanWait, error)
+
+	// ListExpiredOpen returns OPEN waits whose deadline is at or before now, earliest
+	// deadline first, bounded by limit: the persisted human-wait expiry work.
+	ListExpiredOpen(ctx context.Context, now time.Time, limit int) ([]domain.HumanWait, error)
+}
+
+// DueConfirmDeadline identifies one release Attempt whose confirm deadline has passed while
+// its Action still waits for production. ActionID is for logging only; the use case
+// re-reads every fact itself.
+type DueConfirmDeadline struct {
+	AttemptID string
+	ActionID  string
+}
+
+// AgentTurnManifestRepository persists one Context Manifest per Turn. It has no update
+// method: a Manifest records what one model request carried, and that request is never
+// re-issued.
+type AgentTurnManifestRepository interface {
+	// Create inserts a Turn's Manifest in the transaction that claimed the Turn. The
+	// PRIMARY KEY on turn_id yields domain.ErrConflict for a second Manifest of the same
+	// Turn, so only the claim winner's transaction can ever hold one.
+	Create(ctx context.Context, manifest domain.AgentTurnManifest) error
+
+	// GetByTurnID returns one Turn's Manifest, or domain.ErrNotFound while the Turn has
+	// not been claimed.
+	GetByTurnID(ctx context.Context, turnID string) (domain.AgentTurnManifest, error)
+
+	// ListByAgentRunID returns every Manifest of one Agent Run, oldest Turn first. It
+	// backs the read-only Agent Trace projection.
+	ListByAgentRunID(ctx context.Context, agentRunID string) ([]domain.AgentTurnManifest, error)
 }
 
 // ToolAttemptRepository preserves every real Tool call of a TOOL_CALL Action.
 type ToolAttemptRepository interface {
 	// Create inserts the STARTED Attempt in the transaction that claims the Action.
-	// UNIQUE (action_id, attempt_no) rejects a duplicated dispatch.
+	// UNIQUE (action_id, attempt_no) rejects a duplicated dispatch. A release Attempt's
+	// OperationKey and ConfirmDeadline are written by the same INSERT; UNIQUE
+	// (operation_key) rejects a second Attempt under the same operation.
 	Create(ctx context.Context, attempt domain.ToolAttempt) error
 	Get(ctx context.Context, attemptID string) (domain.ToolAttempt, error)
 	ListByActionID(ctx context.Context, actionID string) ([]domain.ToolAttempt, error)
@@ -561,9 +751,37 @@ type ToolAttemptRepository interface {
 	MarkFailed(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, execErr domain.ExecutionError) error
 
 	// MarkDispatched conditionally moves a STARTED Attempt of an ASYNC Tool to DISPATCHED
-	// and stamps dispatched_at. It returns domain.ErrStaleClaim when the row is no longer
-	// STARTED, e.g. because the Agent timeout closed it while the Tool was dispatching.
-	MarkDispatched(ctx context.Context, attemptID string, now time.Time) error
+	// and stamps dispatched_at. In the same UPDATE it writes firstPollAt as the first
+	// next_poll_at; firstPollAt is nil when the registration declares no poll policy. It
+	// returns domain.ErrStaleClaim when the row is no longer STARTED, e.g. because the
+	// Agent timeout closed it while the Tool was dispatching.
+	MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error
+
+	// ClaimPoll conditionally claims one Provider poll of a DISPATCHED Attempt whose
+	// next_poll_at is due and whose poll_count is below maxPolls. It increments
+	// poll_count and schedules next_poll_at at now+interval, or clears it when this
+	// claim reaches maxPolls. The bounds come from the caller, which reads them from
+	// the current registration. A false result is not an error: the poll is not due,
+	// the bound was reached, the Attempt left DISPATCHED, or another claimer won.
+	// Claiming a poll is a scheduling fact; the caller writes no Event for it.
+	ClaimPoll(ctx context.Context, attemptID string, now time.Time, interval time.Duration, maxPolls int) (bool, error)
+
+	// ClearPoll unschedules polling of a DISPATCHED Attempt by setting next_poll_at to
+	// NULL, for a registration that no longer declares a usable poll policy or a Callback
+	// Binding that does not route a poll to the Attempt. A false result means the Attempt
+	// is no longer DISPATCHED and nothing changed.
+	ClearPoll(ctx context.Context, attemptID string) (bool, error)
+
+	// ListDuePolls returns DISPATCHED Tool Attempts whose next_poll_at is at or before
+	// now, oldest first, bounded by limit. It only discovers persisted work; claiming each
+	// poll is the caller's conditional update.
+	ListDuePolls(ctx context.Context, now time.Time, limit int) ([]DueToolPoll, error)
+
+	// MarkLost conditionally moves a DISPATCHED Attempt whose Provider no longer knows the
+	// dispatched task to FAILED, writing its error, completed_at and the uncertain
+	// determination once. A row no longer DISPATCHED returns domain.ErrStaleClaim, so a
+	// callback, a timeout or another poll that committed first keeps its outcome.
+	MarkLost(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError, uncertain bool) error
 
 	// MarkTimedOut conditionally fails an Attempt that is still STARTED or DISPATCHED.
 	// The Agent deadline covers the synchronous call and the wait for a callback alike,
@@ -583,6 +801,37 @@ type ToolAttemptRepository interface {
 	// completed_at and the uncertain determination once. A row no longer STARTED returns
 	// domain.ErrStaleClaim.
 	MarkInterrupted(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError, uncertain bool) error
+
+	// MarkOutcomeUnknown records that the Runtime stopped knowing whether a release
+	// Attempt's operation took effect: a STARTED Attempt becomes DISPATCHED, the first
+	// unknown time is written once and never moved, and the next poll is scheduled at
+	// nextPollAt so the query path takes over. It reports whether this call set the
+	// unknown time, which is when the caller writes the RELEASE_OUTCOME_UNKNOWN Event. A
+	// row that is neither STARTED nor DISPATCHED returns domain.ErrStaleClaim.
+	MarkOutcomeUnknown(ctx context.Context, attemptID string, now, nextPollAt time.Time) (first bool, err error)
+
+	// RecordOutcomeUnknownSince writes outcome_unknown_since on a release Attempt that has
+	// already completed with an uncertain outcome, only when it is still empty, and changes
+	// nothing else. It serves the post-task reconciliation, which learns after the Run ended
+	// that production does not know the operation. It reports whether this call wrote it.
+	RecordOutcomeUnknownSince(ctx context.Context, attemptID string, now time.Time) (bool, error)
+
+	// MarkVoidRequested writes void_requested_at once on a DISPATCHED Attempt; a later
+	// resend of a lost void request leaves the first time in place. A row no longer
+	// DISPATCHED returns domain.ErrStaleClaim.
+	MarkVoidRequested(ctx context.Context, attemptID string, now time.Time) error
+
+	// MarkFailedDefinite conditionally moves an Attempt from `from` to FAILED with
+	// uncertain = false: production gave a definite answer that nothing took effect, so the
+	// Attempt is closed as a known non-effect, not as an interrupted call. A row no longer
+	// in `from` returns domain.ErrStaleClaim.
+	MarkFailedDefinite(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, execErr domain.ExecutionError) error
+
+	// ListDueConfirmDeadlines returns release Attempts that are still STARTED or
+	// DISPATCHED, whose confirm deadline is at or before now and whose Action is RUNNING
+	// or WAITING_CALLBACK, oldest deadline first, bounded by limit. It discovers persisted
+	// work only; opening the human wait is the use case's conditional update.
+	ListDueConfirmDeadlines(ctx context.Context, now time.Time, limit int) ([]DueConfirmDeadline, error)
 
 	// CountByAgentRunForTools counts the Tool Attempts of one Agent Run whose Tool is
 	// one of toolNames, in every Attempt status. This is the number of generation calls
@@ -622,6 +871,10 @@ type ExecutionFactRepository interface {
 	// (created_at then id, ascending), for the facts a Node Type declares it reads. A
 	// non-positive limit is an error rather than an unbounded read.
 	ListByRunAndType(ctx context.Context, runID, factType string, limit int) ([]domain.ExecutionFact, error)
+
+	// Get returns one fact by id, or domain.ErrNotFound. A record that names a fact it
+	// rests on is checked against the stored row through it.
+	Get(ctx context.Context, factID string) (domain.ExecutionFact, error)
 }
 
 // AgentContextVersionRepository persists the immutable message chain a restarted process
@@ -686,6 +939,75 @@ type ProviderSlotRepository interface {
 	// NextDeferredRun returns the Run of the earliest READY, already-refused NodeRun of
 	// providerID whose Run is still RUNNING or PAUSED.
 	NextDeferredRun(ctx context.Context, providerID string) (runID string, found bool, err error)
+}
+
+// AgentWorkspaceRepository persists the repository binding frozen onto an Agent Run.
+type AgentWorkspaceRepository interface {
+	// Create inserts the workspace in the transaction that creates its Agent Run. The
+	// primary key on agent_run_id makes a second binding of the same Agent Run lose in
+	// the database.
+	Create(ctx context.Context, workspace domain.AgentWorkspace) error
+
+	// GetByAgentRunID returns the frozen workspace, or domain.ErrNotFound for an Agent Run
+	// started without one.
+	GetByAgentRunID(ctx context.Context, agentRunID string) (domain.AgentWorkspace, error)
+}
+
+// WorkspacePatchRepository persists the cumulative patches of an Agent Run's workspace.
+type WorkspacePatchRepository interface {
+	// Append inserts one patch in the Tool result transaction that accepted it. The caller
+	// allocates Seq under the Run aggregate lock as the latest Seq plus one; UNIQUE
+	// (agent_run_id, seq) and UNIQUE (tool_attempt_id) make a duplicated transaction lose
+	// with domain.ErrConflict, as does a patch over the stored length bound.
+	Append(ctx context.Context, patch domain.WorkspacePatch) error
+
+	// Latest returns the newest patch of the Agent Run, text included, or nil when the
+	// workspace has not been written yet.
+	Latest(ctx context.Context, agentRunID string) (*domain.WorkspacePatch, error)
+
+	// GetByDigest returns the newest patch of the Agent Run with the given digest, text
+	// included, or nil when the Agent Run recorded no patch with that digest. It backs the
+	// approval detail, which shows the full text of the patch a change request is about.
+	GetByDigest(ctx context.Context, agentRunID, patchDigest string) (*domain.WorkspacePatch, error)
+
+	// ListSummariesByAgentRun returns up to limit patches of the Agent Run in Seq order
+	// without their text, for Trace projection. A caller that needs to know whether more
+	// exist asks for one more than it shows. A non-positive limit is an error rather than
+	// an unbounded read.
+	ListSummariesByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.WorkspacePatch, error)
+}
+
+// ChangeRequestRepository persists the change requests of an Agent Run.
+type ChangeRequestRepository interface {
+	// CreateOrGet inserts one change request in the Tool result transaction that accepted
+	// it, or, when the Agent Run already holds a request with the same content digest,
+	// returns that existing row with created false and writes nothing. UNIQUE
+	// (agent_run_id, content_digest) is what decides between the two; every other
+	// constraint violation surfaces as domain.ErrConflict.
+	CreateOrGet(ctx context.Context, request domain.ChangeRequest) (stored domain.ChangeRequest, created bool, err error)
+
+	// Get returns one change request by id, or domain.ErrNotFound.
+	Get(ctx context.Context, id string) (domain.ChangeRequest, error)
+
+	// ListByAgentRun returns up to limit change requests of the Agent Run, oldest first
+	// (created_at then id), for Trace projection. A caller that needs to know whether more
+	// exist asks for one more than it shows. A non-positive limit is an error rather than
+	// an unbounded read.
+	ListByAgentRun(ctx context.Context, agentRunID string, limit int) ([]domain.ChangeRequest, error)
+}
+
+// AgentCompletionRepository persists the completion verdict of an Agent Run with a goal.
+// It has no update method: the verdict commits with the Agent Run's termination and is
+// never revised.
+type AgentCompletionRepository interface {
+	// Create inserts the verdict in the transaction that terminated its Agent Run. The
+	// primary key on agent_run_id makes a second verdict for the same Agent Run lose with
+	// domain.ErrConflict; a caller treats that as a programming error, never as a retry.
+	Create(ctx context.Context, completion domain.AgentCompletion) error
+
+	// Get returns the verdict of one Agent Run, or domain.ErrNotFound when none was
+	// evaluated: the Agent Run has no goal, or has not terminated.
+	Get(ctx context.Context, agentRunID string) (domain.AgentCompletion, error)
 }
 
 // QueueKey orders queued NodeRuns of one Provider: ready_at first, NodeRun id as the

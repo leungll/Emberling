@@ -284,6 +284,55 @@ check-fast:
 ##                         told the outcome is unknown and reports instead of redeploying.
 ##   delivery-runner-redelivery
 ##                         the restarted runner redelivers a finished test; no new Event.
+##   vuln-verify           the scripted repair Agent, bound to a workspace of the example
+##                         repository, upgrades the vulnerable dependency without adapting
+##                         the code, fails that verification, adapts it, passes the second.
+##   vuln-scope-denied     a write outside the allowed paths is refused before any
+##                         Attempt; the Agent continues inside them.
+##   vuln-stale-evidence   a verification of a digest the workspace moved past is
+##                         refused; the latest digest is verified instead.
+##   vuln-restart-during-verify
+##                         SIGKILL while the verification callback is held; after the
+##                         restart no Decision is asked again, no verification runs twice.
+##   vuln-incomplete-final the Agent declares completion before verifying its latest patch
+##                         or recording a change request; judged INCOMPLETE, both listed.
+##   vuln-main             the verified patch is described in a change request, a person
+##                         approves its release and production deploys it once.
+##   vuln-restart-during-approval
+##                         SIGKILL while the release waits for approval; still waiting
+##                         after, the Agent clock still paused, no Decision asked again.
+##   vuln-duplicate-approval
+##                         the same approval submitted twice at once takes effect once.
+##   vuln-reject-resubmit  the person rejects with a reason; the Agent changes the code,
+##                         verifies, records a new change request and asks again.
+##   vuln-release-crash-deployed
+##                         production drops its answer and the Backend is killed; the
+##                         restarted Backend queries and confirms instead of resending.
+##   vuln-release-crash-voided
+##                         SIGKILL while production holds the release; the unknown
+##                         operation is voided and released again under the next key.
+##   vuln-void-exhausted   both operations voided; the target is freed, nothing deployed.
+##   vuln-target-occupied  a second task's release to an occupied target is refused
+##                         before any approval.
+##   vuln-release-refused  production refuses; the target is freed, the reason goes back
+##                         to the Agent.
+##   vuln-unhealthy        deployed but unhealthy, reported as a failed check.
+##   vuln-prepare-only     a PREPARE_ONLY task's release request is refused by its goal.
+##   vuln-release-unreachable-stop
+##                         production unreachable past the confirm deadline; a person stops
+##                         waiting, the task ends RELEASE_UNKNOWN with the target held and a
+##                         second task is refused; once production is back the operation is
+##                         voided, the target freed and a third task releases to it.
+##   vuln-stop-then-deployed
+##                         production deploys after a person stopped waiting; the target is
+##                         freed with the version recorded as live but unchecked.
+##   After the vuln variants, deploy/.demo/evidence/vuln-evidence.md (or
+##   EMBERLING_DEMO_EVIDENCE_DIR) summarises their evidence in five aspects with the source
+##   Runs, and lists the versions confirmed live only after a stop; see
+##   scripts/demo/vuln-evidence-report.sh to render it by hand.
+##   Every release variant but vuln-prepare-only decides an approval and runs only with
+##   EMBERLING_OPERATOR_TOKEN (at least 32 bytes) set; EMBERLING_DEMO_APPROVAL=manual
+##   makes vuln-main wait for a person on the Studio approval page.
 ##   serving-burst         twenty users submit the serving template at once.
 ##   serving-crash-held    SIGKILL while dispatches are held before acceptance.
 ##   serving-crash-waiting SIGKILL while every task waits for its callback; callbacks
@@ -300,7 +349,14 @@ check-fast:
 ##   serving-capacity      the Backend restarted with two slots on the image Provider;
 ##                         at most two image tasks in flight, the rest queue as READY.
 ## EMBERLING_DEMO_STUDIO=1 turns on the Studio demo mode described under demo-studio.
-## Needs Docker, curl and jq; deliberately not part of `check`.
+## EMBERLING_DEMO_MODEL=<model id> runs vuln-verify or vuln-main against a real model. The
+## Backend registers it from EMBERLING_MODELS, EMBERLING_MODEL_BASE_URL and
+## EMBERLING_MODEL_API_KEY (optionally EMBERLING_MODEL_TIMEOUT) in the shell environment;
+## set nothing else (an image key without image models stops the Backend). The Agent gets
+## the EMBERLING_DEMO_MODEL_TIMEOUT_MS budget, thirty minutes by default.
+## EMBERLING_DEMO_RUNNER=docker starts the docker sandbox runner (profile sandbox-docker,
+## needs SANDBOXRUNNER_VERIFY_IMAGE) instead of the mock runner.
+## Needs Docker, git, curl and jq; deliberately not part of `check`.
 demo:
 	@bash scripts/demo/demo.sh run
 

@@ -199,6 +199,7 @@ export const editor = {
   /** One-line purpose per step type. The registry carries no description yet. */
   purpose: {
     text_input: 'Asks for text when a run starts.',
+    task_input: 'Asks for a task object when a run starts.',
     image_input: 'Asks for an image when a run starts.',
     media_brief: 'Asks for a photo set and combines it with the incoming brief.',
     prompt_template: 'Inserts incoming text into a fixed prompt.',
@@ -259,6 +260,7 @@ export const editor = {
     asksFor: 'Asks for',
     optional: '(optional)',
     photoSet: 'Asks for a photo set',
+    taskObject: 'A JSON object',
     lastRunLabel: 'Last run',
     lastRunTip: (status: string, took: string | null, tokens: number | null) =>
       `Last run: ${status}${took ? ` in ${took}` : ''}${tokens ? `, ${tokens.toLocaleString('en-US')} tokens` : ''}.`,
@@ -425,8 +427,10 @@ export const editor = {
     imageModel: 'Image model',
     imageModelHint: (tools: string) => `Used when the agent calls ${tools}.`,
     reviewModel: 'Review model',
-    reviewModelHint: (tools: string) =>
-      `Reviews images when the agent calls ${tools}. Without one, reviews use the mock policy.`,
+    reviewModelHint: (tools: string, required: boolean) =>
+      required
+        ? `Used when the agent calls ${tools}. Required, and it must differ from the agent's model. Saving checks that it supports what each tool needs.`
+        : `Used when the agent calls ${tools}. Saving checks that it supports what each tool needs. Without one, reviews use the mock policy.`,
     reviewModelNone: 'Mock review policy',
     chooseModel: 'Choose a model',
     searchModels: 'Search models',
@@ -541,6 +545,10 @@ export const editor = {
         'The shape of the notes the agent keeps from one turn to the next.',
       ],
       outputSchema: ['Final answer format', 'The shape of the agent’s final answer.'],
+      taskSchema: [
+        'Task shape',
+        'A JSON Schema the task object must match. Leave it empty to accept any object.',
+      ],
     },
     schemaAny: 'Any shape',
     schemaFields: (n: number, keys: string) => `${plural(n, 'field')}: ${keys}`,
@@ -591,7 +599,10 @@ export const editor = {
     nothingNeeded: 'Nothing. Runs start without input.',
     noOutput: 'No output step yet.',
     noSteps: 'No steps yet.',
-    kind: { text: 'Text', image: 'Image', photos: 'Photo set' } as Record<string, string>,
+    kind: { text: 'Text', image: 'Image', photos: 'Photo set', task: 'JSON object' } as Record<
+      string,
+      string
+    >,
     required: 'required',
     optional: 'optional',
     meta: (kind: string, required: boolean) => `${kind}, ${required ? 'required' : 'optional'}`,

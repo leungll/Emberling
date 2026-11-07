@@ -1,10 +1,15 @@
 import {
   ArrowRightFromLine,
+  Braces,
   ChevronRight,
   CircleMinus,
   FileCheck,
+  FileCode,
+  FileInput,
   Hourglass,
+  Paperclip,
   RotateCw,
+  ScrollText,
   Sparkle,
   TriangleAlert,
   Wrench,
@@ -19,11 +24,13 @@ import { turnResult } from './card-info';
 import { notRetried } from './run-diagnosis';
 import { factImage, imageLabel, mediaItems, savedImageOf } from './run-media';
 import { attemptWord, toolSequence, type RunModel, type TraceElement } from './run-model';
-import type { ExecutionFactTrace } from '@/api/types';
+import { API_BASE } from '@/api/client';
+import type { ExecutionFactTrace, ManifestItem, ManifestItemKind } from '@/api/types';
 import { Money } from '@/components/cost/Cost';
 import { ThumbSet } from '@/components/media/Thumbs';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { copy as words, useCopy } from '@/lib/copy';
+import { bytes } from '@/lib/time';
 import { cn } from '@/lib/utils';
 
 /**
@@ -143,6 +150,68 @@ function Saved({
   );
 }
 
+const MATERIAL_ICON: Record<ManifestItemKind, LucideIcon> = {
+  INSTRUCTIONS: ScrollText,
+  TASK_INPUT: FileInput,
+  STATE: Braces,
+  TOOL_RESULT: Wrench,
+  WORKSPACE_FILE: FileCode,
+  ARTIFACT: Paperclip,
+};
+
+/** Where an omitted artifact can be read: the run's own artifact content route. */
+function artifactHref(runId: string, artifactId: string): string {
+  return `${API_BASE}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
+}
+
+/**
+ * What one turn's model call was given, from the recorded Context Manifest: each material
+ * by its readable name, version and size, with omitted ones marked and linked to where
+ * the content can be read. The manifest never carries the content itself, and neither
+ * does this list.
+ */
+function Materials({ items, runId }: { items: readonly ManifestItem[]; runId: string }) {
+  const copy = useCopy();
+  const t = copy.runs.details.turnsTab;
+  if (!items.length) return null;
+  return (
+    <ul aria-label={t.materials} className="m-0 flex list-none flex-col p-0">
+      {items.map((item, i) => {
+        const Icon = MATERIAL_ICON[item.kind];
+        const version = item.version ? t.materialVersion[item.kind]?.(item.version) : undefined;
+        const href =
+          item.kind === 'ARTIFACT' && !item.included ? artifactHref(runId, item.ref) : null;
+        return (
+          <li
+            key={`${item.kind}-${item.ref}-${String(i)}`}
+            className="flex min-h-control-sm items-center gap-2 px-2 text-sm text-fg-secondary"
+          >
+            <Icon aria-hidden="true" className="size-icon-sm shrink-0 text-fg-muted" />
+            <span className="min-w-0 truncate text-fg" title={item.label}>
+              {item.label}
+            </span>
+            {version ? <span className="shrink-0 text-fg-muted">{version}</span> : null}
+            <span className="shrink-0 text-fg-muted tabular-nums">{bytes(item.length)}</span>
+            {!item.included ? (
+              <span className="shrink-0 text-fg-muted">{t.notIncluded}</span>
+            ) : null}
+            {href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 text-accent-fg underline-offset-3 hover:underline"
+              >
+                {t.open}
+              </a>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function Head({
   id,
   ctx,
@@ -241,6 +310,11 @@ function TurnBlock({
           >
             {final ? t.chooseFinish : <Words text={t.choose(tool)} tools={[tool]} />}
           </Item>
+        ) : null}
+        {turn.manifest ? (
+          <div className="pl-6">
+            <Materials items={turn.manifest} runId={ctx.model.snapshot.run.id} />
+          </div>
         ) : null}
         {act && action ? (
           <Item

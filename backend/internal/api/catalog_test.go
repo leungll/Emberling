@@ -54,7 +54,8 @@ func TestToolMetadataResponse_UndeclaredFacts_RequiresIsArrayAndProducesOmitted(
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{`"requires":[]`, `"countsTowardGenerationLimit":false`} {
+	for _, field := range []string{`"requires":[]`, `"countsTowardGenerationLimit":false`, `"records":[]`,
+		`"usesWorkspace":false`, `"reconcilable":false`, `"returnUnmetRequirement":false`, `"requiresReviewModel":false`} {
 		if !strings.Contains(string(encoded), field) {
 			t.Errorf("response %s does not contain %s", encoded, field)
 		}
@@ -62,8 +63,32 @@ func TestToolMetadataResponse_UndeclaredFacts_RequiresIsArrayAndProducesOmitted(
 	if strings.Contains(string(encoded), `"produces"`) {
 		t.Errorf("response %s contains produces, want it omitted when undeclared", encoded)
 	}
-	if metadata.Requires != nil {
+	if strings.Contains(string(encoded), `"authorization"`) {
+		t.Errorf("response %s contains authorization, want it omitted when undeclared (LOW risk)", encoded)
+	}
+	if strings.Contains(string(encoded), `"reviewModelCapability"`) {
+		t.Errorf("response %s contains reviewModelCapability, want it omitted when the tool uses no review model", encoded)
+	}
+	if metadata.Requires != nil || metadata.Records != nil {
 		t.Fatal("response projection mutated registered metadata")
+	}
+}
+
+func TestToolMetadataResponse_DeclaredAuthorizationAndRecords_Serialised(t *testing.T) {
+	metadata := domain.ToolMetadata{
+		Name:          "write_file",
+		Authorization: &domain.ToolAuthorization{Risk: domain.ToolRiskLow, Reversible: true},
+		Records:       []domain.ToolRecordKind{domain.ToolRecordWorkspacePatch},
+		UsesWorkspace: true,
+	}
+	encoded, err := json.Marshal(toolMetadataForResponse(metadata))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"authorization":{"risk":"LOW","reversible":true}`, `"records":["WORKSPACE_PATCH"]`, `"usesWorkspace":true`} {
+		if !strings.Contains(string(encoded), field) {
+			t.Errorf("response %s does not contain %s", encoded, field)
+		}
 	}
 }
 

@@ -41,8 +41,113 @@
 #                   delivery-runner-redelivery
 #                                       delivery.sh redelivery: the restarted runner
 #                                       delivers a finished test again and the ledger gains
-#                                       no Event.
-#                 Each photo and delivery variant is followed by the invariant report as well.
+#                                       no Event;
+#                   vuln-verify         vuln-fix.sh verify: an Agent bound to a workspace of
+#                                       the example repository upgrades the vulnerable
+#                                       dependency without adapting the code, fails that
+#                                       verification, adapts the code, passes the second,
+#                                       records the change request and is judged
+#                                       READY_FOR_APPROVAL;
+#                   vuln-scope-denied   vuln-fix.sh scope-denied: a write outside the
+#                                       allowed paths is refused before any Attempt and the
+#                                       Agent continues inside them;
+#                   vuln-stale-evidence vuln-fix.sh stale-evidence: a verification of a
+#                                       digest the workspace moved past is refused and the
+#                                       latest digest is verified instead;
+#                   vuln-restart-during-verify
+#                                       vuln-fix.sh restart: SIGKILL while the verification
+#                                       callback is held; after the restart no Decision is
+#                                       asked again and no verification runs twice;
+#                   vuln-incomplete-final
+#                                       vuln-fix.sh incomplete-final: the Agent declares
+#                                       completion before verifying its latest patch or
+#                                       recording a change request; the task is judged
+#                                       INCOMPLETE and both missing facts are listed;
+#                   vuln-main           vuln-fix.sh main: the verified patch is described in
+#                                       a change request, a person approves its release, the
+#                                       approval occupies the deploy target and the mock
+#                                       production service deploys it once;
+#                   vuln-restart-during-approval
+#                                       vuln-fix.sh restart-during-approval: SIGKILL while
+#                                       the release request waits for its approval; it is
+#                                       still waiting afterwards, the Agent clock still
+#                                       paused, and no Decision is asked again;
+#                   vuln-duplicate-approval
+#                                       vuln-fix.sh duplicate-approval: the same approval
+#                                       submitted twice at once and once more later takes
+#                                       effect once and production deploys once;
+#                   vuln-reject-resubmit
+#                                       vuln-fix.sh reject-resubmit: the person rejects the
+#                                       first request with a reason; the Agent changes the
+#                                       code, verifies again, records a new change request
+#                                       and asks again, and that request is released;
+#                   vuln-release-crash-deployed
+#                                       vuln-fix.sh release-crash-deployed: production drops
+#                                       its answer and the Backend is killed; the restarted
+#                                       Backend queries and confirms the deployment instead
+#                                       of resending;
+#                   vuln-release-crash-voided
+#                                       vuln-fix.sh release-crash-voided: SIGKILL while the
+#                                       release request is held at production; the unknown
+#                                       operation is voided after the grace and released
+#                                       again under the next key, which deploys once;
+#                   vuln-void-exhausted vuln-fix.sh void-exhausted: every release outcome is
+#                                       unknown and both operations are voided; the target is
+#                                       freed and the Agent learns nothing was deployed;
+#                   vuln-target-occupied
+#                                       vuln-fix.sh target-occupied: a second task's release
+#                                       to a target a first task holds is refused before any
+#                                       approval;
+#                   vuln-release-refused
+#                                       vuln-fix.sh release-refused: production refuses the
+#                                       release; the target is freed and the reason goes
+#                                       back to the Agent;
+#                   vuln-unhealthy      vuln-fix.sh unhealthy: the release deploys but the
+#                                       target is unhealthy, reported as a failed check;
+#                   vuln-prepare-only   vuln-fix.sh prepare-only: a PREPARE_ONLY task's
+#                                       release request is refused by its goal before any
+#                                       approval;
+#                   vuln-release-unreachable-stop
+#                                       vuln-fix.sh release-unreachable-stop: production is
+#                                       unreachable past the confirm deadline and a person
+#                                       stops waiting; the task ends RELEASE_UNKNOWN with the
+#                                       target held, a second task is refused as
+#                                       TARGET_OCCUPIED, and once production is back the
+#                                       never-received operation is voided, the target freed
+#                                       and a third task releases to it;
+#                   vuln-stop-then-deployed
+#                                       vuln-fix.sh stop-then-deployed: a person stops waiting
+#                                       for an unconfirmed release that production deploys
+#                                       afterwards; the target is freed as DEPLOYED with the
+#                                       version recorded as live but unchecked.
+#                 Every release variant but vuln-prepare-only decides an approval (the stop
+#                 variants also stop a human wait), so it runs only when
+#                 EMBERLING_OPERATOR_TOKEN (at least 32 bytes) is set in the shell; the
+#                 Backend reads the same value, and "all" leaves them out without it.
+#                 EMBERLING_DEMO_APPROVAL=manual makes vuln-main print the Studio approval
+#                 page and wait (EMBERLING_DEMO_APPROVAL_WAIT_S, default 1800) for a person.
+#                 Each photo, delivery and vuln variant is followed by the invariant report as well.
+#                 After every vuln variant the demo collects its Runs, check verdicts and
+#                 the runner and production records into EMBERLING_DEMO_EVIDENCE_DIR
+#                 (default deploy/.demo/evidence, not tracked), and after the last variant
+#                 vuln-evidence-report.sh renders vuln-evidence.md there: the authorization,
+#                 evidence consistency, completion, release reconciliation and execution
+#                 recovery conclusions with their source Runs, and the versions confirmed
+#                 live only after a stop. The demo fails when the report does.
+#                 The vuln variants bind the Agent to the example repository, which this
+#                 script generates under deploy/.demo/repositories before the stack starts.
+#                 EMBERLING_DEMO_MODEL=<model id> runs vuln-verify or vuln-main against a real decision
+#                 model: the Backend registers it from EMBERLING_MODELS,
+#                 EMBERLING_MODEL_BASE_URL and EMBERLING_MODEL_API_KEY (optionally
+#                 EMBERLING_MODEL_TIMEOUT for one model call) in the shell environment;
+#                 nothing else is needed, and an image key without image models makes
+#                 the Backend refuse to start. vuln-fix.sh gives the Agent the
+#                 EMBERLING_DEMO_MODEL_TIMEOUT_MS budget (default thirty minutes).
+#                 EMBERLING_DEMO_RUNNER=docker starts the sandbox runner with its docker
+#                 backend (compose profile sandbox-docker, which needs
+#                 SANDBOXRUNNER_VERIFY_IMAGE) instead of the mock runner, so the vuln
+#                 stories verify patches with a real `go test`; the delivery variants'
+#                 mock test modes are not available then.
 #                 EMBERLING_DEMO_VARIANT=<one of the names above> runs only that variant.
 #                 The serving variants run only when named, or all nine with
 #                 EMBERLING_DEMO_VARIANT=serving. Each is serving.sh STORY, many users of
@@ -87,12 +192,36 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_tools docker curl jq
 
+# The example repository the vuln variants bind their Agent workspace to. It is generated
+# from the checked-in source tree into a gitignored directory the compose file mounts into
+# the backend (and the docker sandbox runner) read-only; the same tree always yields the
+# same baseline commit the fixture Definition names.
+REPOSITORIES_DIR="$DEMO_ROOT/deploy/.demo/repositories"
+
 case "${1:-}" in
 run)
-  log "building the backend, mockprovider, mockproduction and sandboxrunner images (cached when sources are unchanged)"
-  compose build --quiet mockprovider mockproduction sandboxrunner backend
-  log "starting postgres, mockprovider, mockproduction, sandboxrunner and backend"
-  compose up -d --wait postgres mockprovider mockproduction sandboxrunner backend
+  require_tools git
+  # The sandbox runner the stack starts: the mock runner answers tests and verifications
+  # from its mock backends; the docker runner runs them in containers and takes the same
+  # service address, so the backend needs no other setting.
+  runner_service=sandboxrunner
+  runner_profile=()
+  case "${EMBERLING_DEMO_RUNNER:-mock}" in
+  mock) ;;
+  docker)
+    [[ -n "${SANDBOXRUNNER_VERIFY_IMAGE:-}" ]] ||
+      die "EMBERLING_DEMO_RUNNER=docker needs SANDBOXRUNNER_VERIFY_IMAGE, the digest-pinned verification image built by deploy/sandboxrunner-verify/build.sh"
+    runner_service=sandboxrunner-docker
+    runner_profile=(--profile sandbox-docker)
+    ;;
+  *) die "EMBERLING_DEMO_RUNNER must be mock or docker" ;;
+  esac
+  log "generating the example repository under $REPOSITORIES_DIR"
+  sh "$DEMO_ROOT/backend/internal/fixture/vulnrepo/generate.sh" "$REPOSITORIES_DIR/vuln-demo"
+  log "building the backend, mockprovider, mockproduction and $runner_service images (cached when sources are unchanged)"
+  compose "${runner_profile[@]+"${runner_profile[@]}"}" build --quiet mockprovider mockproduction "$runner_service" backend
+  log "starting postgres, mockprovider, mockproduction, $runner_service and backend"
+  compose "${runner_profile[@]+"${runner_profile[@]}"}" up -d --wait postgres mockprovider mockproduction "$runner_service" backend
   if studio_mode; then
     log "building and starting studio (EMBERLING_DEMO_STUDIO=1)"
     compose build --quiet studio
@@ -101,13 +230,28 @@ run)
     printf 'Studio: %s\n' "$STUDIO_URL"
   fi
 
+  # The release variants that decide an approval, which need the operator credential.
+  approval_variants=(vuln-main vuln-restart-during-approval vuln-duplicate-approval vuln-reject-resubmit
+    vuln-release-crash-deployed vuln-release-crash-voided vuln-void-exhausted vuln-target-occupied
+    vuln-release-refused vuln-unhealthy vuln-release-unreachable-stop vuln-stop-then-deployed)
   case "${EMBERLING_DEMO_VARIANT:-all}" in
   all)
     variants=(held-before-accept after-accept photo-set photo-gate photo-limit photo-sync-crash
-      photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery)
+      photo-video-restart delivery delivery-restart-during-test delivery-deploy-lost delivery-runner-redelivery
+      vuln-verify vuln-scope-denied vuln-stale-evidence vuln-restart-during-verify vuln-incomplete-final vuln-prepare-only)
+    operator_token=${EMBERLING_OPERATOR_TOKEN:-}
+    if [[ ${#operator_token} -ge 32 ]]; then
+      variants+=("${approval_variants[@]}")
+    else
+      log "EMBERLING_OPERATOR_TOKEN is not set: the release variants that decide an approval are left out"
+    fi
     ;;
   held-before-accept | after-accept | photo-set | photo-gate | photo-limit | photo-sync-crash | photo-video-restart | \
-    delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery)
+    delivery | delivery-restart-during-test | delivery-deploy-lost | delivery-runner-redelivery | \
+    vuln-verify | vuln-scope-denied | vuln-stale-evidence | vuln-restart-during-verify | vuln-incomplete-final | \
+    vuln-prepare-only | vuln-main | vuln-restart-during-approval | vuln-duplicate-approval | vuln-reject-resubmit | \
+    vuln-release-crash-deployed | vuln-release-crash-voided | vuln-void-exhausted | vuln-target-occupied | \
+    vuln-release-refused | vuln-unhealthy | vuln-release-unreachable-stop | vuln-stop-then-deployed)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
   serving)
@@ -118,11 +262,28 @@ run)
     serving-version-switch | serving-client-retry | serving-response-lost | serving-rollout | serving-capacity)
     variants=("$EMBERLING_DEMO_VARIANT")
     ;;
-  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, serving or one serving-* variant" ;;
+  *) die "EMBERLING_DEMO_VARIANT must be held-before-accept, after-accept, photo-set, photo-gate, photo-limit, photo-sync-crash, photo-video-restart, delivery, delivery-restart-during-test, delivery-deploy-lost, delivery-runner-redelivery, vuln-verify, vuln-scope-denied, vuln-stale-evidence, vuln-restart-during-verify, vuln-incomplete-final, vuln-main, vuln-restart-during-approval, vuln-duplicate-approval, vuln-reject-resubmit, vuln-release-crash-deployed, vuln-release-crash-voided, vuln-void-exhausted, vuln-target-occupied, vuln-release-refused, vuln-unhealthy, vuln-prepare-only, vuln-release-unreachable-stop, vuln-stop-then-deployed, serving or one serving-* variant" ;;
   esac
 
   state=$(mktemp "${TMPDIR:-/tmp}/emberling-demo.XXXXXX")
   trap 'rm -f "$state"' EXIT
+  # The evidence of this demo only: data collected by an earlier demo is removed first.
+  evidence_dir=${EMBERLING_DEMO_EVIDENCE_DIR:-$DEMO_ROOT/deploy/.demo/evidence}
+  evidence_data="$evidence_dir/data"
+  rm -rf "$evidence_data"
+  evidence_collected=0
+  evidence_status=0
+  # logged LOG COMMAND... runs COMMAND and, for a vuln variant, keeps a copy of its output
+  # under the variant's log directory, where the evidence report reads its check names.
+  logged() {
+    local log=$1
+    shift
+    if [[ -n "$log_dir" ]]; then
+      "$@" | tee "$log_dir/$log"
+    else
+      "$@"
+    fi
+  }
 
   verdict() { if [[ "$1" -eq 0 ]]; then echo PASS; else echo "FAIL (exit $1)"; fi; }
   summary=""
@@ -143,12 +304,26 @@ run)
     delivery-restart-during-test) script=delivery.sh story=restart ;;
     delivery-deploy-lost) script=delivery.sh story=deploy-lost ;;
     delivery-runner-redelivery) script=delivery.sh story=redelivery ;;
+    vuln-verify) script=vuln-fix.sh story=verify ;;
+    vuln-scope-denied) script=vuln-fix.sh story=scope-denied ;;
+    vuln-stale-evidence) script=vuln-fix.sh story=stale-evidence ;;
+    vuln-restart-during-verify) script=vuln-fix.sh story=restart ;;
+    vuln-incomplete-final) script=vuln-fix.sh story=incomplete-final ;;
+    vuln-main) script=vuln-fix.sh story=main ;;
+    vuln-restart-during-approval | vuln-duplicate-approval | vuln-reject-resubmit | vuln-release-crash-deployed | \
+      vuln-release-crash-voided | vuln-void-exhausted | vuln-target-occupied | vuln-release-refused | vuln-unhealthy | \
+      vuln-prepare-only | vuln-release-unreachable-stop | vuln-stop-then-deployed) script=vuln-fix.sh story=${variant#vuln-} ;;
     serving-*) script=serving.sh story=${variant#serving-} ;;
     esac
     printf '\n==== variant %s (%s%s) ====\n' "$variant" "$script" "${story:+ $story}"
     : >"$state"
+    log_dir=""
+    if [[ "$variant" == vuln-* ]]; then
+      log_dir="$evidence_data/logs/$variant"
+      mkdir -p "$log_dir"
+    fi
     script_status=0
-    DEMO_STATE=$state "$DEMO_ROOT/scripts/demo/$script" ${story:+"$story"} || script_status=$?
+    DEMO_STATE=$state logged story.log "$DEMO_ROOT/scripts/demo/$script" ${story:+"$story"} || script_status=$?
     [[ -s "$state" ]] || die "$script did not reach a terminal Run (exit $script_status)"
     run_id=$(sed -n 's/^RUN_ID=//p' "$state")
     record_after=$(sed -n 's/^RECORD_AFTER=//p' "$state")
@@ -163,19 +338,28 @@ run)
     require_completed=0
     [[ "$variant" == serving-* ]] && require_completed=1
 
-    # The fault scripts end with the invariant report; a photo or delivery story ends with its own
-    # checks, so the invariant report runs here.
+    # The fault scripts end with the invariant report; a photo, delivery or vuln story ends with
+    # its own checks, so the invariant report runs here.
     invariant_status=$script_status
     story_status=""
     if [[ -n "$story" ]]; then
       story_status=$script_status
       invariant_status=0
-      EMBERLING_PROVIDER_CAPACITY=$provider_capacity "$DEMO_ROOT/scripts/demo/invariants.sh" "$run_id" || invariant_status=$?
+      EMBERLING_PROVIDER_CAPACITY=$provider_capacity logged invariants.log "$DEMO_ROOT/scripts/demo/invariants.sh" "$run_id" || invariant_status=$?
     fi
 
     ledger_status=0
     LEDGER_SUBMISSIONS=$submissions LEDGER_REQUIRE_COMPLETED=$require_completed \
-      "$DEMO_ROOT/scripts/demo/ledger-vs-record.sh" "$run_id" "$record_after" || ledger_status=$?
+      logged ledger.log "$DEMO_ROOT/scripts/demo/ledger-vs-record.sh" "$run_id" "$record_after" || ledger_status=$?
+    if [[ -n "$log_dir" ]]; then
+      if "$DEMO_ROOT/scripts/demo/vuln-evidence-report.sh" collect "$evidence_data" "$variant" "$run_id" \
+        "${story_status:-$script_status}" "$invariant_status" "$ledger_status" "$log_dir"; then
+        evidence_collected=1
+      else
+        log "could not collect the evidence of $variant"
+        evidence_status=1
+      fi
+    fi
 
     summary+=$(printf '\nvariant             %s\nrun                 %s\nrun status          %s\n' \
       "$variant" "$run_id" "$run_status")
@@ -193,6 +377,16 @@ run)
     fi
   done
 
+  if ((evidence_collected)); then
+    printf '\n==== evidence report ====\n'
+    "$DEMO_ROOT/scripts/demo/vuln-evidence-report.sh" render "$evidence_data" "$evidence_dir/vuln-evidence.md" ||
+      evidence_status=1
+    summary+=$(printf '\nevidence report     %s\nreport file         %s\n' "$(verdict "$evidence_status")" "$evidence_dir/vuln-evidence.md")
+    summary+=$'\n'
+  fi
+  if ((evidence_status != 0)); then
+    overall=1
+  fi
   printf '\n==== demo summary ====\n%s' "$summary"
   if studio_mode; then
     printf '\nThe stack and Studio (%s) keep running; stop them with: make demo-down\n' "$STUDIO_URL"
@@ -200,7 +394,9 @@ run)
   [[ "$overall" -eq 0 ]]
   ;;
 down)
-  compose down --remove-orphans
+  # The sandbox-docker profile is named so a docker runner started by EMBERLING_DEMO_RUNNER
+  # stops too.
+  compose --profile sandbox-docker down --remove-orphans
   volumes=$(compose config --format json | jq -r '.volumes')
   for key in emberling-mockprovider-record emberling-mockproduction-record emberling-sandboxrunner-record; do
     record_volume=$(jq -r --arg key "$key" '.[$key].name // empty' <<<"$volumes")

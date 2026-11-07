@@ -16,7 +16,11 @@ export interface StepGroup {
 }
 
 export const GROUPS: readonly StepGroup[] = [
-  { id: 'inputs', types: ['text_input', 'image_input', 'media_brief'], categories: ['Input'] },
+  {
+    id: 'inputs',
+    types: ['text_input', 'task_input', 'image_input', 'media_brief'],
+    categories: ['Input'],
+  },
   { id: 'ai', types: ['agent', 'text_generation', 'image_generation'], categories: ['Agent'] },
   { id: 'transform', types: ['prompt_template', 'media_result'], categories: ['Prompt & Model'] },
   { id: 'outputs', types: ['text_output', 'media_output'], categories: ['Output'] },
@@ -161,6 +165,10 @@ export function defaultConfig(meta: NodeMetadata, nodes: readonly Node[]): JsonO
       break;
     case 'text_input':
       set('inputKey', uniqueKey('input', nodes));
+      set('required', true);
+      break;
+    case 'task_input':
+      set('inputKey', uniqueKey('task', nodes));
       set('required', true);
       break;
     case 'image_input':

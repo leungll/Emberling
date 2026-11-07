@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/leungll/Emberling/backend/internal/domain"
+	"github.com/leungll/Emberling/backend/internal/runtime"
 	"github.com/leungll/Emberling/backend/internal/store"
 )
 
@@ -105,20 +106,7 @@ type orphanGenerationCount struct {
 // kind of message misstates whether the call used up part of the budget.
 func buildOrphanToolMessage(toolName string, disposition orphanDisposition, count orphanGenerationCount) (json.RawMessage, error) {
 	name := boundedToolName(toolName)
-
-	var countSentence string
-	var calls *orphanGenerationCalls
-	switch {
-	case !count.counted:
-		countSentence = "It does not count toward the generation limit."
-	case count.limit != nil:
-		countSentence = fmt.Sprintf("It counts toward the generation limit: %d of %d calls used.", count.used, *count.limit)
-		limit := *count.limit
-		calls = &orphanGenerationCalls{Used: count.used, Limit: &limit}
-	default:
-		countSentence = fmt.Sprintf("It counts as a generation call: %d calls used, no limit is set.", count.used)
-		calls = &orphanGenerationCalls{Used: count.used}
-	}
+	countSentence, calls := orphanGenerationSentence(count)
 
 	msg := orphanToolMessage{GenerationCalls: calls}
 	if disposition == orphanInterrupted {
@@ -132,6 +120,44 @@ func buildOrphanToolMessage(toolName string, disposition orphanDisposition, coun
 			"The call was not retried automatically. %s Decide whether to call the tool again.", name, countSentence)
 	}
 
+	return encodeOrphanToolMessage(name, msg)
+}
+
+// buildLostTaskToolMessage renders the bounded tool message for an asynchronous call whose
+// Provider no longer knows the task it was given, when the registered policy says the call
+// is safe to repeat. It has the shape of the interrupted orphan message: the status, a
+// message naming only the Tool, and the generation count.
+func buildLostTaskToolMessage(toolName string, count orphanGenerationCount) (json.RawMessage, error) {
+	name := boundedToolName(toolName)
+	countSentence, calls := orphanGenerationSentence(count)
+	msg := orphanToolMessage{
+		Status: codeExecutionInterrupted,
+		Message: fmt.Sprintf("The %s call was interrupted because the external service no longer knows the task it was given, "+
+			"for example after it restarted. No result will arrive. Calling the tool again is safe. %s", name, countSentence),
+		GenerationCalls: calls,
+	}
+	return encodeOrphanToolMessage(name, msg)
+}
+
+// orphanGenerationSentence renders what the tool message says about the generation limit,
+// following the Tool's registration so the message never misstates whether the call used
+// up part of the budget.
+func orphanGenerationSentence(count orphanGenerationCount) (string, *orphanGenerationCalls) {
+	switch {
+	case !count.counted:
+		return "It does not count toward the generation limit.", nil
+	case count.limit != nil:
+		limit := *count.limit
+		return fmt.Sprintf("It counts toward the generation limit: %d of %d calls used.", count.used, limit),
+			&orphanGenerationCalls{Used: count.used, Limit: &limit}
+	default:
+		return fmt.Sprintf("It counts as a generation call: %d calls used, no limit is set.", count.used),
+			&orphanGenerationCalls{Used: count.used}
+	}
+}
+
+// encodeOrphanToolMessage encodes one interrupted-call tool message and enforces its bound.
+func encodeOrphanToolMessage(name string, msg orphanToolMessage) (json.RawMessage, error) {
 	content, err := json.Marshal(msg)
 	if err != nil {
 		return nil, fmt.Errorf("encode orphan tool message for tool %q: %w", name, err)
@@ -199,6 +225,17 @@ func (s *ExecutionService) HandleOrphanToolAttempt(ctx context.Context, attemptI
 		if err != nil {
 			return err
 		}
+		// A release Attempt whose process died before the call is not failed: production
+		// may hold its operation, so the Runtime starts asking, which re-aggregates the
+		// Run and therefore needs the compiled plan, resolved before the lock.
+		reg, registered := s.deps.Tools.Get(attempt.ToolName)
+		var run domain.Run
+		var plan *runtime.CompiledDefinition
+		if registered && reg.Metadata.Reconcilable {
+			if run, plan, err = s.runPlan(ctx, tx, nodeRun.RunID); err != nil {
+				return err
+			}
+		}
 
 		lock, err := tx.Runs().LockForUpdate(ctx, nodeRun.RunID)
 		if err != nil {
@@ -224,13 +261,34 @@ func (s *ExecutionService) HandleOrphanToolAttempt(ctx context.Context, attemptI
 		if !s.orphanedByAnotherRunner(attempt) {
 			return nil
 		}
-		if agentRun.Termination != nil || !now.Before(agentRun.Deadline) {
+		// An expired deadline belongs to the Agent timeout, unless the Agent Run is paused:
+		// then its deadline is not running and the orphaned call is still this path's.
+		if agentRun.Termination != nil || (agentRun.PausedAt == nil && !now.Before(agentRun.Deadline)) {
 			return nil
 		}
-		if nodeRun.Status != domain.NodeRunRunning || turn.TurnNo != agentRun.CurrentTurnNo {
+		if turn.TurnNo != agentRun.CurrentTurnNo {
 			return nil
 		}
-		reg, registered := s.deps.Tools.Get(attempt.ToolName)
+		if registered && reg.Metadata.Reconcilable {
+			// A confirm deadline that passed before the dispatch settled has already moved
+			// the Agent NodeRun to waiting, together with the Action it handed to a person.
+			if nodeRun.Status != domain.NodeRunRunning && nodeRun.Status != domain.NodeRunWaitingCallback {
+				return nil
+			}
+			if action, err = tx.AgentActions().Get(ctx, action.ID); err != nil {
+				return err
+			}
+			if err := s.settleReleaseDispatchLocked(ctx, tx, releaseSettle{
+				lock: lock, run: run, plan: plan, nodeRun: nodeRun, agentRun: agentRun, turnID: turn.ID, action: action, attempt: attempt,
+			}, true, now); err != nil {
+				return err
+			}
+			commit = agentCommit{runID: nodeRun.RunID, lastSeq: lock.LastSeq()}
+			return nil
+		}
+		if nodeRun.Status != domain.NodeRunRunning {
+			return nil
+		}
 		if registered && reg.Metadata.ExecutionKind != domain.ToolExecutionSync {
 			// An asynchronous Tool's call may have been accepted with its callback still
 			// to come; it stays bounded by the deadline instead.

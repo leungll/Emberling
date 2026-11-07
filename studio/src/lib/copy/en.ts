@@ -25,6 +25,8 @@ export const en = {
   pageTitles: {
     runs: 'Runs',
     workflows: 'Workflows',
+    approvals: 'Approvals',
+    approval: (code: string) => `Approval ${code}`,
     notFound: 'Not found',
     error: 'Error',
     editor: (name: string) => `${name} – Editor`,
@@ -35,6 +37,8 @@ export const en = {
   nav: {
     runs: 'Runs',
     workflows: 'Workflows',
+    approvals: 'Approvals',
+    backToApprovals: 'Back to Approvals',
     main: 'Main',
     home: 'Emberling home: go to Runs',
     backToRuns: 'Back to Runs',
@@ -272,8 +276,45 @@ export const en = {
       READY: 'Decided, not started',
       RUNNING: 'Running',
       WAITING_CALLBACK: 'Waiting for reply',
+      WAITING_APPROVAL: 'Waiting for approval',
+      WAITING_HUMAN: 'Waiting for confirmation',
       SUCCEEDED: 'Succeeded',
       FAILED: 'Failed',
+    },
+    authorization: {
+      ALLOW: 'Allowed',
+      ASK: 'Needs approval',
+      DENY: 'Denied',
+    },
+    approval: {
+      PENDING: 'Pending',
+      APPROVED: 'Approved',
+      REJECTED: 'Rejected',
+      EXPIRED: 'Expired',
+    },
+    pause: {
+      APPROVAL: 'Clock stopped while a person decides',
+      RELEASE: 'Clock stopped while the release is confirmed',
+      HUMAN: 'Clock stopped while a person confirms',
+    },
+    releaseOutcome: {
+      PENDING: 'Awaiting production',
+      UNKNOWN: 'Outcome unknown, being queried',
+      DEPLOYED: 'Deployed',
+      VOIDED: 'Voided',
+      REFUSED: 'Refused',
+    },
+    releaseReason: {
+      DEPLOYED: 'deployed',
+      VOIDED: 'voided',
+      REFUSED: 'refused by production',
+      NOT_DEPLOYED: 'not deployed',
+    },
+    humanWait: {
+      OPEN: 'Open',
+      STOPPED: 'Stopped',
+      EXPIRED: 'Expired',
+      RESOLVED: 'Resolved',
     },
     attempt: {
       STARTED: 'Running',
@@ -297,6 +338,41 @@ export const en = {
       MODEL_ERROR: 'Model call failed',
       TOOL_ERROR: 'Tool call failed',
       INVALID_ACTION: 'Decision was rejected',
+      HUMAN_STOPPED: 'Stopped by a person',
+    },
+    /** The task result of an agent with a goal, one card per outcome. */
+    completion: {
+      title: 'Task result',
+      evaluated: 'Checked',
+      checks: 'Checks',
+      checksPassed: (passed: number, total: number) => `${passed} of ${total} passed`,
+      stillMissing: 'Still missing',
+      outcome: {
+        READY_FOR_APPROVAL: {
+          label: 'Ready for approval',
+          description:
+            'The patch is verified and the change request is written. A person approves and schedules the release from here.',
+        },
+        DEPLOYED: {
+          label: 'Deployed',
+          description:
+            'The release was approved and confirmed deployed, and the target is healthy on the patched version.',
+        },
+        DEPLOYED_CHECK_FAILED: {
+          label: 'Deployed, health check failed',
+          description:
+            'The patched version is live but its health check did not pass. The rollback plan applies.',
+        },
+        RELEASE_UNKNOWN: {
+          label: 'Release outcome unknown',
+          description:
+            'A person stopped the wait before the release result was known. The target stays occupied until reconciliation settles it.',
+        },
+        INCOMPLETE: {
+          label: 'Not complete',
+          description: 'The agent stopped before every required fact was recorded.',
+        },
+      },
     },
     completionSource: {
       SYNC_EXECUTION: null,
@@ -335,6 +411,14 @@ export const en = {
       AGENT_STATE_UPDATED: 'Agent state updated',
       AGENT_COMPLETED: 'Agent finished',
       AGENT_FAILED: 'Agent failed',
+      AGENT_ACTION_WAITING_APPROVAL: 'Waiting for approval',
+      APPROVAL_DECIDED: 'Approval decided',
+      AGENT_PAUSED: 'Agent clock stopped',
+      AGENT_RESUMED: 'Agent clock resumed',
+      RELEASE_OUTCOME_UNKNOWN: 'Release outcome unknown',
+      RELEASE_VOIDED: 'Release voided',
+      AGENT_ACTION_WAITING_HUMAN: 'Waiting for confirmation',
+      AGENT_COMPLETION_EVALUATED: 'Completion checked',
     },
     groups: {
       all: 'All',
@@ -350,6 +434,7 @@ export const en = {
     patch_tested: 'Patch tested',
     image_generated: 'Image generated',
     asset_reviewed: 'Asset reviewed',
+    patch_reviewed: 'Patch reviewed',
   } as Record<string, string>,
 
   errors: {
@@ -418,6 +503,114 @@ export const en = {
       `${c.step ?? 'A step'} reported an error while calling its service.`,
   },
   unknownError: (step: string) => `${step} failed.`,
+
+  approvals: {
+    title: 'Approvals',
+    intro: 'Agent calls that change production wait here until a person approves or rejects them.',
+    tokenLabel: 'Operator token',
+    tokenHelp:
+      'Sent with every approval request and kept only in this tab’s memory. Reloading forgets it.',
+    tokenPlaceholder: 'Paste the operator token',
+    useToken: 'Use token',
+    forgetToken: 'Forget token',
+    tokenInUse: 'Operator token in use for this tab.',
+    tokenRequired: 'Enter the operator token to see approvals.',
+    tokenEmpty: 'Paste the token first.',
+    unauthorized: 'The operator token was not accepted.',
+    notConfigured: 'This server has no operator token configured, so approvals cannot be decided.',
+    tabsLabel: 'Approval status',
+    status: {
+      PENDING: 'Pending',
+      APPROVED: 'Approved',
+      REJECTED: 'Rejected',
+      EXPIRED: 'Expired',
+    },
+    empty: (status: string) => `No ${status.toLowerCase()} approvals.`,
+    columns: {
+      tool: 'Tool',
+      run: 'Run',
+      requested: 'Requested',
+      deadline: 'Deadline',
+      status: 'Status',
+    },
+    expiresAt: 'Expires',
+    expiredAt: 'Expired',
+    decidedAt: 'Decided',
+    decidedBy: 'Decided by',
+    reason: 'Reason',
+    requestedAt: 'Requested',
+    tool: 'Tool',
+    arguments: 'Call arguments',
+    noArguments: 'This call has no arguments.',
+    run: 'Run',
+    workflow: 'Workflow',
+    agentRun: 'Agent run',
+    action: 'Action',
+    openRun: 'Open run',
+    approve: 'Approve',
+    reject: 'Reject',
+    reasonLabel: 'Reason',
+    reasonHelp: 'Required to reject; optional to approve. At most 400 bytes.',
+    reasonPlaceholder: 'Why this decision was made',
+    reasonRequired: 'Give a reason to reject.',
+    reasonTooLong: 'The reason must be at most 400 bytes.',
+    deciding: 'Saving decision…',
+    approved: 'Approved. The call runs now and the agent’s clock continues.',
+    rejected: 'Rejected. The agent is told why and its clock continues.',
+    repeated: 'This decision had already been recorded.',
+    conflict: 'This approval was already decided differently. Showing the recorded decision.',
+    notActionable:
+      'The run this approval belongs to has already ended. The approval stays undecided and expires at its deadline.',
+    settled: 'This approval is no longer pending.',
+    pauseNote: 'While it waits, the agent’s own time limit is paused.',
+    notFound: 'This approval does not exist.',
+    changeRequest: 'Change request',
+    noChangeRequest: 'This call names no change request.',
+    changeRequestId: 'Change request',
+    contentDigest: 'Content digest',
+    verificationFact: 'Verification fact',
+    decisionBasis: 'Decision basis',
+    basisTurn: (n: number) => `Turn ${n}`,
+    basisItem: (kind: string, label: string) =>
+      `${kind.replace(/_/g, ' ').toLowerCase()}: ${label}`,
+    basisUnresolved: 'The cited manifest item can no longer be resolved.',
+    openRunTurns: 'Open the run’s turns',
+    patch: 'Patch',
+    noPatch: 'The workspace holds no patch with the digest this change request names.',
+    patchDigest: 'Patch digest',
+    patchSeq: (n: number) => `Workspace patch ${n}`,
+    touchedPaths: 'Touched paths',
+  },
+
+  /** Releases production has not answered, handed to a person after their confirm deadline. */
+  humanWaits: {
+    title: 'Releases waiting for a person',
+    intro:
+      'Production has not confirmed these releases. The agent is paused; you can keep waiting or stop the task.',
+    empty: 'No releases are waiting for a person.',
+    loadFailed: 'Couldn’t load the releases waiting for a person.',
+    target: 'Target',
+    operation: 'Operation',
+    confirmDeadline: 'Confirm deadline',
+    waitDeadline: 'Wait ends',
+    reasonLabel: 'Why',
+    reason: {
+      OUTCOME_UNKNOWN: 'Production has no record of this operation.',
+      NOT_CONFIRMED: 'Production knows the operation but has not confirmed it.',
+    },
+    run: 'Run',
+    stop: 'Stop waiting',
+    stopping: 'Stopping…',
+    confirmTitle: 'Stop waiting for this release?',
+    confirmBody: (target: string) =>
+      `The task ends as stopped by a person. ${target} stays held until production says whether the release deployed, so no other release can start on it before then.`,
+    confirmStop: 'Stop the task',
+    stopped: 'Stopped. The task has ended; the target stays held until production answers.',
+    repeated: 'This wait had already been stopped.',
+    resolved: 'Production answered first, so the release concluded on its own.',
+    closed: 'The task already ended. This wait closes on its own at its deadline.',
+    stopFailed: 'Couldn’t stop the wait. Try again.',
+  },
 
   glossary: {
     workflow: [

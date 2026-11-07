@@ -36,6 +36,11 @@ BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 \echo '  one_external_task_per_attempt      no Attempt is bound to two external tasks, no external task id is bound twice'
 \echo '  at_most_one_succeeded_attempt      no NodeRun or Agent Action has two SUCCEEDED Attempts'
 \echo '  provider_slot_live_noderun         every Provider slot this Run holds belongs to a RUNNING or WAITING_CALLBACK NodeRun'
+\echo '  patch_verified_subject_recorded    every patch_verified fact is about a patch the same Agent workspace recorded (or the empty baseline patch)'
+\echo '  release_target_single_active       no deploy target this Run released to has more than one ACTIVE occupation, across every Run'
+\echo '  active_occupation_action_open      every ACTIVE occupation of this Run belongs to an Action that is still open, unless the Run has ended'
+\echo '  ready_for_approval_has_request     every Agent Run judged READY_FOR_APPROVAL has a change request about its latest workspace patch'
+\echo '  ended_run_occupation_queried       every ACTIVE occupation of an ended Run carries a post-task query schedule, across every Run'
 SELECT CASE WHEN :'provider_capacity' = ''
     THEN 'checks not run: provider_slots_within_capacity (pass -v provider_capacity=<id>=<n>,... to check every Provider''s held slots against its limit)'
     ELSE '  provider_slots_within_capacity     no Provider holds more slots than its configured limit (' || :'provider_capacity' || ')' END;
@@ -271,6 +276,92 @@ v_slot_live AS (
     WHERE nr.status NOT IN ('RUNNING', 'WAITING_CALLBACK')
 ),
 
+-- A patch_verified fact binds its verdict to the patch digest the verification named. The
+-- verify Tool refuses a digest other than the workspace's current one before any Attempt
+-- exists, and a patch record commits in the same Tool result transaction as the write that
+-- produced it, so every subject is a patch the same Agent's workspace recorded. The one
+-- digest with no record is the empty patch: a workspace verified before any write.
+v_fact_patch_recorded AS (
+    SELECT 'patch_verified fact ' || f.id || ' is about ' || f.subject_ref || ', which the workspace never recorded' AS detail
+    FROM execution_facts f
+    WHERE f.run_id = :'run_id' AND f.fact_type = 'patch_verified'
+      AND f.subject_ref <> encode(sha256(''::bytea), 'hex')
+      AND NOT EXISTS (SELECT 1 FROM workspace_patches p
+                      WHERE p.agent_run_id = f.agent_run_id AND p.patch_digest = f.subject_ref)
+),
+
+-- The approval transaction acquires a deploy target with an INSERT the partial unique
+-- index on ACTIVE occupations arbitrates, so two Runs can never hold one target at once.
+-- The report inspects every target this Run released to, across every Run.
+v_release_target_single_active AS (
+    SELECT 'target ' || o.target_key || ' has ' || count(*) || ' ACTIVE occupations' AS detail
+    FROM release_occupations o
+    WHERE o.status = 'ACTIVE'
+      AND o.target_key IN (SELECT ro.target_key FROM release_occupations ro WHERE ro.run_id = :'run_id')
+    GROUP BY o.target_key
+    HAVING count(*) > 1
+),
+
+-- An occupation is released in the transaction that settles its release Action, so while
+-- the Run is alive an ACTIVE occupation belongs to an Action that has not ended. A Run
+-- that ended with an ACTIVE occupation leaves it to the post-task reconciliation.
+v_active_occupation_action_open AS (
+    SELECT 'occupation ' || o.id || ' of target ' || o.target_key || ' is ACTIVE while its action ' || o.action_id || ' is ' || ac.status AS detail
+    FROM release_occupations o
+    JOIN agent_actions ac ON ac.id = o.action_id
+    JOIN target t ON t.id = o.run_id
+    WHERE o.run_id = :'run_id' AND o.status = 'ACTIVE'
+      AND ac.status IN ('SUCCEEDED', 'FAILED')
+      AND t.status NOT IN ('COMPLETED', 'FAILED')
+),
+
+-- The completion check judges a PREPARE_ONLY task READY_FOR_APPROVAL only when a change
+-- request names the workspace's latest patch, and it reads those rows in the transaction
+-- that terminates the Agent Run, after which neither the patches nor the requests change.
+-- A READY_FOR_APPROVAL verdict without such a request would be a verdict that rests on
+-- facts the ledger does not hold.
+v_ready_has_request AS (
+    SELECT 'agent run ' || ac.agent_run_id || ' is READY_FOR_APPROVAL without a change request about its latest patch' AS detail
+    FROM agent_completions ac
+    JOIN agent_runs ar ON ar.id = ac.agent_run_id
+    JOIN run_node_runs nr ON nr.id = ar.node_run_id
+    WHERE ac.outcome = 'READY_FOR_APPROVAL'
+      AND NOT EXISTS (
+          SELECT 1 FROM change_requests cr
+          WHERE cr.agent_run_id = ac.agent_run_id
+            AND cr.patch_digest = (SELECT p.patch_digest FROM workspace_patches p
+                                   WHERE p.agent_run_id = ac.agent_run_id
+                                   ORDER BY p.seq DESC LIMIT 1))
+),
+
+-- A Run that ends while its release outcome is unknown hands the query schedule to the
+-- occupation in the same transaction, so the post-task reconciliation is persisted work
+-- and never depends on process memory: no ACTIVE occupation of an ended Run may lack its
+-- next_query_at. The report inspects every Run, because the occupation that blocks this
+-- Run's target may belong to another.
+v_ended_run_occupation_queried AS (
+    SELECT 'occupation ' || o.id || ' of target ' || o.target_key || ' is ACTIVE without a query schedule while its run ' || o.run_id || ' is ' || r.status AS detail
+    FROM release_occupations o
+    JOIN runs r ON r.id = o.run_id
+    WHERE o.status = 'ACTIVE'
+      AND r.status IN ('COMPLETED', 'FAILED')
+      AND o.next_query_at IS NULL
+),
+
+-- A release request enters WAITING_APPROVAL in the transaction that inserts its PENDING
+-- approval, and a decision or an expiry moves the approval and the Action out of the wait
+-- together. A waiting Action without a PENDING approval would be a request no person can
+-- decide and no expiry scan would ever end.
+v_waiting_approval_pending AS (
+    SELECT 'action ' || ac.id || ' is WAITING_APPROVAL without a PENDING approval' AS detail
+    FROM agent_actions ac
+    JOIN agent_turns tu ON tu.id = ac.turn_id
+    JOIN agent_runs ar ON ar.id = tu.agent_run_id
+    JOIN node_runs nr ON nr.id = ar.node_run_id
+    WHERE nr.run_id = :'run_id' AND ac.status = 'WAITING_APPROVAL'
+      AND NOT EXISTS (SELECT 1 FROM approvals ap WHERE ap.action_id = ac.id AND ap.status = 'PENDING')
+),
+
 -- Admission counts the held slots under the Provider's row lock before inserting its
 -- own, so the committed count never exceeds the configured limit. The limit is not a
 -- database fact: it is passed in, and the check runs only when it was. It is a snapshot
@@ -296,18 +387,27 @@ results AS (
     UNION ALL SELECT 6, 'one_external_task_per_attempt', detail FROM v_external_task
     UNION ALL SELECT 7, 'at_most_one_succeeded_attempt', detail FROM v_succeeded
     UNION ALL SELECT 8, 'provider_slot_live_noderun', detail FROM v_slot_live
-    UNION ALL SELECT 9, 'provider_slots_within_capacity', detail FROM v_within_capacity
+    UNION ALL SELECT 9, 'patch_verified_subject_recorded', detail FROM v_fact_patch_recorded
+    UNION ALL SELECT 10, 'release_target_single_active', detail FROM v_release_target_single_active
+    UNION ALL SELECT 11, 'active_occupation_action_open', detail FROM v_active_occupation_action_open
+    UNION ALL SELECT 12, 'ready_for_approval_has_request', detail FROM v_ready_has_request
+    UNION ALL SELECT 13, 'ended_run_occupation_queried', detail FROM v_ended_run_occupation_queried
+    UNION ALL SELECT 14, 'provider_slots_within_capacity', detail FROM v_within_capacity
+    UNION ALL SELECT 15, 'waiting_approval_has_pending', detail FROM v_waiting_approval_pending
 ),
 checks(ord, check_name) AS (
     SELECT * FROM (
         VALUES (1, 'run_exists'), (2, 'event_seq_contiguous'), (3, 'transition_has_event'),
                (4, 'no_inflight_work_in_terminal_run'), (5, 'run_status_matches_noderuns'),
                (6, 'one_external_task_per_attempt'), (7, 'at_most_one_succeeded_attempt'),
-               (8, 'provider_slot_live_noderun')
+               (8, 'provider_slot_live_noderun'), (9, 'patch_verified_subject_recorded'),
+               (10, 'release_target_single_active'), (11, 'active_occupation_action_open'),
+               (12, 'ready_for_approval_has_request'),
+               (13, 'ended_run_occupation_queried'), (15, 'waiting_approval_has_pending')
     ) AS always(ord, check_name)
     UNION ALL
     -- Listed, and so reported, only when the limits were passed in.
-    SELECT 9, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
+    SELECT 14, 'provider_slots_within_capacity' WHERE :'provider_capacity' <> ''
 )
 SELECT line FROM (
     SELECT c.ord, 0 AS sub,

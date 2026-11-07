@@ -1,0 +1,31 @@
+[
+  {
+    "path": "github.com/golang-jwt/jwt",
+    "vulns": [
+      {
+        "id": "GO-2025-3553",
+        "modified": "2025-04-08T21:04:08Z"
+      }
+    ]
+  },
+  {
+    "path": "github.com/golang-jwt/jwt/v4",
+    "vulns": [
+      {
+        "id": "GO-2025-3553",
+        "modified": "2025-04-08T21:04:08Z",
+        "fixed": "4.5.2"
+      }
+    ]
+  },
+  {
+    "path": "github.com/golang-jwt/jwt/v5",
+    "vulns": [
+      {
+        "id": "GO-2025-3553",
+        "modified": "2025-04-08T21:04:08Z",
+        "fixed": "5.2.2"
+      }
+    ]
+  }
+]

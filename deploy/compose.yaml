@@ -143,9 +143,18 @@ services:
       SANDBOXRUNNER_BACKEND: docker
       SANDBOXRUNNER_TEST_CONTROLS: "true"
       SANDBOXRUNNER_RECORD_PATH: /var/lib/emberling/sandboxrunner/test-record.jsonl
+      # Patch verification is off until both are set: the verification image built and
+      # pushed by deploy/sandboxrunner-verify/build.sh, pinned by digest, and the
+      # repositories as "<id>=<absolute path inside this container>". The repository
+      # must be mounted into this container at that path, read-only.
+      SANDBOXRUNNER_VERIFY_IMAGE: ${SANDBOXRUNNER_VERIFY_IMAGE:-}
+      SANDBOXRUNNER_REPOSITORIES: ${SANDBOXRUNNER_REPOSITORIES-vuln-demo=/var/lib/emberling/repositories/vuln-demo}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - emberling-sandboxrunner-record:/var/lib/emberling/sandboxrunner
+      # The example repository the demo generates (scripts/demo/demo.sh), read-only, at the
+      # path SANDBOXRUNNER_REPOSITORIES names.
+      - ${EMBERLING_DEMO_REPOSITORIES:-./.demo/repositories}:/var/lib/emberling/repositories:ro
 
   # DEMO ONLY, OFF BY DEFAULT. The task gateway serves real image models behind one
   # Images API endpoint as asynchronous tasks, over the same task protocol as the Mock
@@ -184,6 +193,9 @@ services:
     build:
       context: ../backend
       dockerfile: ../deploy/Dockerfile.backend
+      # The workspace Tools read a bound repository through `git archive`, so the backend
+      # runs from the stage that carries git; every other service keeps the distroless image.
+      target: emberling-workspace
       args:
         CMD: emberling
         # Optional build labels, e.g. EMBERLING_BUILD_COMMIT=$(git rev-parse --short HEAD).
@@ -192,12 +204,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      # The deploy and sandbox_test Tools call these two services. They exist only under
-      # the mock profile, so they are optional: without it the backend starts alone.
+      # The deploy Tool calls the mock production service, which exists only under the
+      # mock profile, so it is optional: without it the backend starts alone. The sandbox
+      # runner is deliberately not listed: the Tools reach it only at call time, and either
+      # runner service may be the one serving its address, so naming the mock runner here
+      # would start it beside a docker runner and fail on the shared port.
       mockproduction:
-        condition: service_started
-        required: false
-      sandboxrunner:
         condition: service_started
         required: false
     ports:
@@ -251,9 +263,31 @@ services:
       # Registers the deploy Tool against the mockproduction service (container DNS, like
       # the Model Provider above). Without this key the Backend does not register the Tool.
       EMBERLING_PRODUCTION_BASE_URL: ${EMBERLING_PRODUCTION_BASE_URL:-http://mockproduction:9102}
+      # Registers the deploy_change Tool against the same service's release surface.
+      EMBERLING_RELEASE_BASE_URL: ${EMBERLING_RELEASE_BASE_URL:-http://mockproduction:9102}
+      # The approval routes exist only with an operator credential (at least 32 bytes),
+      # resolved from the developer's own environment and never committed; the release
+      # demo stories need it. EMBERLING_OPERATOR_NAME is the identity a decision records.
+      EMBERLING_OPERATOR_TOKEN: ${EMBERLING_OPERATOR_TOKEN:-}
+      EMBERLING_OPERATOR_NAME: ${EMBERLING_OPERATOR_NAME:-demo-operator}
       # The sandbox_test Tool is registered only when this is set. Set it to an empty value
       # to run without a sandbox runner.
       EMBERLING_SANDBOX_RUNNER_BASE_URL: ${EMBERLING_SANDBOX_RUNNER_BASE_URL-http://sandboxrunner:9103}
+      # The verify_patch Tool is registered only when this is set. The mock runner answers
+      # verifications from its mock verification backend; the docker runner needs the
+      # verification image and the registered repositories below.
+      EMBERLING_VERIFY_RUNNER_BASE_URL: ${EMBERLING_VERIFY_RUNNER_BASE_URL-http://sandboxrunner:9103}
+      # The repositories an Agent workspace may bind to, as "<id>=<absolute path inside
+      # this container>", each mounted read-only below. The workspace Tools are registered
+      # only when the list is non-empty; the demo generates the example repository before
+      # the stack starts. Set it to an empty value to run without workspaces.
+      EMBERLING_WORKSPACE_REPOSITORIES: ${EMBERLING_WORKSPACE_REPOSITORIES-vuln-demo=/var/lib/emberling/repositories/vuln-demo}
+      # A bind-mounted repository is owned by a host user, not by the container's; git
+      # refuses such a repository unless it is marked safe, and the Tools read git
+      # configuration from the environment only.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
       # Optional in-flight task limit per asynchronous Provider, as
       # "<provider id>=<n>,...", for example "mock-task-provider-v1=2". Empty by default:
       # no Provider is limited. Read once at startup; the serving-capacity demo variant
@@ -268,6 +302,9 @@ services:
       EMBERLING_HTTP_ADDR: ":8080"
     volumes:
       - emberling-asset-data:/var/lib/emberling/assets
+      # The example repository the demo generates (scripts/demo/demo.sh), read-only, at the
+      # path EMBERLING_WORKSPACE_REPOSITORIES names.
+      - ${EMBERLING_DEMO_REPOSITORIES:-./.demo/repositories}:/var/lib/emberling/repositories:ro
 
   # Thin client (CLAUDE.md: Studio owns no Runtime behaviour). It serves the production
   # build and proxies /api to the backend service exactly as the dev server does

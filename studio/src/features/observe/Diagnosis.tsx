@@ -122,6 +122,8 @@ export function WaitCard({
   const attemptEl = wait.attempt ? (model.byId.get(wait.attempt.id) ?? null) : null;
   const actionId = wait.turn?.action?.id ?? null;
   const attemptTarget = attemptEl?.id ?? actionId;
+  const approval = wait.kind === 'approval' ? wait.approval : null;
+  const human = wait.kind === 'human' ? wait.humanWait : null;
   return (
     <div
       role="group"
@@ -130,10 +132,25 @@ export function WaitCard({
     >
       <Hourglass aria-hidden="true" className="mt-0.5 size-icon-md shrink-0 text-st-waiting-fg" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <p className="m-0 font-semibold">{d.waitingTitle(wait.step.node.name, who)}</p>
+        <p className="m-0 font-semibold">
+          {approval
+            ? d.approvalTitle(wait.step.node.name)
+            : human
+              ? d.humanTitle(wait.step.node.name)
+              : d.waitingTitle(wait.step.node.name, who)}
+        </p>
         <p className="m-0">
           {wait.turn && tool ? (
-            <Words text={d.turnCalled(wait.turn.turnNo, tool)} tools={[tool]} />
+            <Words
+              text={
+                approval
+                  ? d.turnAsked(wait.turn.turnNo, tool)
+                  : human
+                    ? d.turnReleased(wait.turn.turnNo, tool)
+                    : d.turnCalled(wait.turn.turnNo, tool)
+              }
+              tools={[tool]}
+            />
           ) : (
             d.continues
           )}
@@ -143,21 +160,36 @@ export function WaitCard({
           facts={[
             {
               label: f.waitingFor,
-              value: tool ? (
-                <span className="flex flex-col">
-                  <span>
-                    <Words
-                      text={d.toReport(copy.runs.providerCap(wait.provider), tool)}
-                      tools={[tool]}
-                    />
+              value:
+                approval && tool ? (
+                  <span className="flex flex-col">
+                    <span>
+                      <Words text={d.aPersonToApprove(tool)} tools={[tool]} />
+                    </span>
+                    <Link
+                      to={`/approvals/${encodeURIComponent(approval.id)}`}
+                      className="text-accent-fg underline-offset-3 hover:underline"
+                    >
+                      {d.openApproval}
+                    </Link>
                   </span>
-                  {meta?.description ? (
-                    <span className="text-fg-muted">{meta.description}</span>
-                  ) : null}
-                </span>
-              ) : (
-                copy.runs.providerCap(wait.provider)
-              ),
+                ) : human && tool ? (
+                  <Words text={d.aPersonToConfirm(tool)} tools={[tool]} />
+                ) : tool ? (
+                  <span className="flex flex-col">
+                    <span>
+                      <Words
+                        text={d.toReport(copy.runs.providerCap(wait.provider), tool)}
+                        tools={[tool]}
+                      />
+                    </span>
+                    {meta?.description ? (
+                      <span className="text-fg-muted">{meta.description}</span>
+                    ) : null}
+                  </span>
+                ) : (
+                  copy.runs.providerCap(wait.provider)
+                ),
             },
             wait.since
               ? {
@@ -211,6 +243,9 @@ export function WaitCard({
                   ),
                 }
               : null,
+            wait.pauseReason
+              ? { label: f.agentClock, value: copy.status.pause[wait.pauseReason] }
+              : null,
             { label: f.progress, value: d.saved },
             last
               ? {
@@ -228,7 +263,16 @@ export function WaitCard({
           ]}
         />
         {wait.deadline ? (
-          <p className="m-0 text-fg-secondary">{d.timesOut(wait.step.node.name)}</p>
+          <p className="m-0 text-fg-secondary">
+            {approval
+              ? d.approvalExpires(wait.step.node.name)
+              : human
+                ? d.humanExpires(wait.step.node.name)
+                : d.timesOut(wait.step.node.name)}
+          </p>
+        ) : null}
+        {(approval || human) && wait.pauseReason ? (
+          <p className="m-0 text-fg-secondary">{d.clockPaused}</p>
         ) : null}
       </div>
     </div>

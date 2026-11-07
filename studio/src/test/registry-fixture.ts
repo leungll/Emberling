@@ -57,7 +57,7 @@ export const NODE_TYPES: NodeMetadata[] = [
     'agent',
     'Agent',
     'Agent',
-    [['input', 'text']],
+    [['input', 'any']],
     [['text', 'text']],
     {
       instructions: str,
@@ -72,12 +72,19 @@ export const NODE_TYPES: NodeMetadata[] = [
       maxGenerationCalls: int(1),
       imageModelId: str,
       reviewModelId: str,
+      workspace: { type: 'object' },
+      goalPointer: str,
+      approvalTimeoutMs: int(1),
+      releaseConfirmTimeoutMs: int(1),
+      voidGraceMs: int(1),
+      maxReleaseRetries: int(1),
+      humanWaitTimeoutMs: int(1),
     },
     ['modelId', 'maxTurns', 'timeoutMs'],
     [
       { path: 'modelId', widget: 'MODEL_SELECTOR', capability: 'structured_decision' },
       { path: 'imageModelId', widget: 'MODEL_SELECTOR', capability: 'reference_image_generation' },
-      { path: 'reviewModelId', widget: 'MODEL_SELECTOR', capability: 'vision_input' },
+      { path: 'reviewModelId', widget: 'MODEL_SELECTOR' },
     ],
   ),
   meta(
@@ -92,6 +99,15 @@ export const NODE_TYPES: NodeMetadata[] = [
     { modelId: str, width: int(256) },
     ['modelId', 'width'],
     [{ path: 'modelId', widget: 'MODEL_SELECTOR', capability: 'image_generation' }],
+  ),
+  meta(
+    'task_input',
+    'Task Input',
+    'Input',
+    [],
+    [['task', 'json']],
+    { inputKey: str, label: str, required: { type: 'boolean' }, schema: { type: 'object' } },
+    ['inputKey', 'required'],
   ),
   meta(
     'image_input',
@@ -226,6 +242,11 @@ const tool = (
   countsTowardGenerationLimit: false,
   usesImageModel: false,
   usesReviewModel: false,
+  requiresReviewModel: false,
+  records: [],
+  usesWorkspace: false,
+  reconcilable: false,
+  returnUnmetRequirement: false,
   ...extra,
 });
 
@@ -235,7 +256,10 @@ export const TOOLS: ToolMetadata[] = [
     countsTowardGenerationLimit: true,
     usesImageModel: true,
   }),
-  tool('review_asset', 'Review a generated image asset', { usesReviewModel: true }),
+  tool('review_asset', 'Review a generated image asset', {
+    usesReviewModel: true,
+    reviewModelCapability: 'vision_input',
+  }),
 ];
 
 export function step(

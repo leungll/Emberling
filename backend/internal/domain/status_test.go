@@ -118,9 +118,10 @@ func TestAgentActionStatus_Transition_WaitingResolvesWithoutRerunningModel(t *te
 	if !AgentActionWaitingCallback.CanTransitionTo(AgentActionSucceeded) {
 		t.Fatal("AgentAction WAITING_CALLBACK -> SUCCEEDED: want allowed, got rejected")
 	}
-	// A waiting Action resumes; it never goes back to RUNNING to re-decide.
-	if AgentActionWaitingCallback.CanTransitionTo(AgentActionRunning) {
-		t.Fatal("AgentAction WAITING_CALLBACK -> RUNNING: want rejected, got allowed")
+	// A waiting Action goes back to RUNNING only to re-release the same committed Decision
+	// after production confirmed a void; the approval and human waits never do.
+	if !AgentActionWaitingCallback.CanTransitionTo(AgentActionRunning) {
+		t.Fatal("AgentAction WAITING_CALLBACK -> RUNNING: want allowed for a re-release, got rejected")
 	}
 	if AgentActionSucceeded.CanTransitionTo(AgentActionFailed) {
 		t.Fatal("AgentAction SUCCEEDED -> FAILED: want rejected, got allowed")
@@ -165,9 +166,12 @@ func TestEventType_IsValid_ExcludesPhase2Types(t *testing.T) {
 		EventAgentActionCompleted, EventAgentActionFailed, EventAgentStateUpdated,
 		EventAgentCompleted, EventAgentFailed,
 		EventNodeWaitingCapacity,
+		EventAgentActionWaitingApproval, EventApprovalDecided, EventAgentPaused, EventAgentResumed,
+		EventReleaseOutcomeUnknown, EventReleaseVoided, EventAgentActionWaitingHuman,
+		EventAgentCompletionEvaluated,
 	}
-	if len(mvp) != 24 {
-		t.Fatalf("MVP event type count: want 24, got %d", len(mvp))
+	if len(mvp) != 32 {
+		t.Fatalf("event type count: want 32, got %d", len(mvp))
 	}
 	for _, typ := range mvp {
 		if !typ.IsValid() {
@@ -189,7 +193,7 @@ func TestEventType_IsValid_ExcludesPhase2Types(t *testing.T) {
 func TestAgentTermination_IsValid_OnlyFinalResponseIsSuccess(t *testing.T) {
 	all := []AgentTermination{
 		TerminationFinalResponse, TerminationMaxTurns, TerminationTimeout,
-		TerminationModelError, TerminationToolError, TerminationInvalidAction,
+		TerminationModelError, TerminationToolError, TerminationInvalidAction, TerminationHumanStopped,
 	}
 	for _, term := range all {
 		if !term.IsValid() {
@@ -198,5 +202,68 @@ func TestAgentTermination_IsValid_OnlyFinalResponseIsSuccess(t *testing.T) {
 	}
 	if AgentTermination("CANCELLED").IsValid() {
 		t.Fatal("AgentTermination CANCELLED: want invalid, got valid")
+	}
+}
+
+func TestAgentActionStatus_Transition_HumanWaitsCoverEveryNewEdge(t *testing.T) {
+	allowed := []struct{ from, to AgentActionStatus }{
+		{AgentActionRunning, AgentActionWaitingApproval},
+		{AgentActionWaitingApproval, AgentActionRunning},
+		{AgentActionWaitingApproval, AgentActionFailed},
+		{AgentActionRunning, AgentActionWaitingHuman},
+		{AgentActionWaitingCallback, AgentActionWaitingHuman},
+		{AgentActionWaitingCallback, AgentActionRunning},
+		{AgentActionWaitingHuman, AgentActionSucceeded},
+		{AgentActionWaitingHuman, AgentActionFailed},
+	}
+	for _, tc := range allowed {
+		if !tc.from.CanTransitionTo(tc.to) {
+			t.Fatalf("AgentAction %s -> %s: want allowed, got rejected", tc.from, tc.to)
+		}
+	}
+	// An approval never succeeds an Action by itself, never skips to a callback wait, and a
+	// human wait never returns to RUNNING; the waiting states stay non-terminal.
+	rejected := []struct{ from, to AgentActionStatus }{
+		{AgentActionWaitingApproval, AgentActionSucceeded},
+		{AgentActionWaitingApproval, AgentActionWaitingCallback},
+		{AgentActionWaitingApproval, AgentActionWaitingHuman},
+		{AgentActionWaitingHuman, AgentActionRunning},
+		{AgentActionWaitingHuman, AgentActionWaitingApproval},
+		{AgentActionReady, AgentActionWaitingApproval},
+		{AgentActionFailed, AgentActionWaitingApproval},
+	}
+	for _, tc := range rejected {
+		if tc.from.CanTransitionTo(tc.to) {
+			t.Fatalf("AgentAction %s -> %s: want rejected, got allowed", tc.from, tc.to)
+		}
+	}
+	for _, waiting := range []AgentActionStatus{AgentActionWaitingApproval, AgentActionWaitingHuman} {
+		if !waiting.IsValid() || waiting.IsTerminal() {
+			t.Fatalf("AgentActionStatus %s: want valid and non-terminal", waiting)
+		}
+	}
+}
+
+func TestApprovalStatus_IsDecided_OnlyPendingIsOpen(t *testing.T) {
+	for _, s := range []ApprovalStatus{ApprovalPending, ApprovalApproved, ApprovalRejected, ApprovalExpired} {
+		if !s.IsValid() {
+			t.Fatalf("ApprovalStatus %q: want valid", s)
+		}
+		if s.IsDecided() == (s == ApprovalPending) {
+			t.Fatalf("ApprovalStatus %q: IsDecided = %v", s, s.IsDecided())
+		}
+	}
+	if ApprovalStatus("CANCELLED").IsValid() {
+		t.Fatal("ApprovalStatus CANCELLED: want invalid")
+	}
+	for _, d := range []AuthorizationDecision{AuthorizationAllow, AuthorizationAsk, AuthorizationDeny} {
+		if !d.IsValid() {
+			t.Fatalf("AuthorizationDecision %q: want valid", d)
+		}
+	}
+	for _, r := range []AgentPauseReason{PauseApproval, PauseRelease, PauseHuman} {
+		if !r.IsValid() {
+			t.Fatalf("AgentPauseReason %q: want valid", r)
+		}
 	}
 }

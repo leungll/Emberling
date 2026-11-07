@@ -36,13 +36,15 @@ During implementation, keep the change as small as the contract allows. Do not p
 
 If the design does not answer a question that affects persisted facts, state transitions, transaction boundaries, recovery guarantees, extension compatibility, or a public API, stop and report the gap. Do not silently choose a new architecture.
 
-## MVP boundary
+## Delivery boundary
 
 Use this rule for every proposed change:
 
-> If it does not strengthen or validate the execution layer, it does not belong in the MVP.
+> A change must strengthen or validate the execution layer, or supply the minimum user path an accepted workload needs.
 
-Do not add Phase 2 or roadmap concepts to current schemas, enums, APIs, UI, migrations, configuration, or package structure. In particular, do not introduce cancellation, evaluation, learning, dynamic plugins, distributed workers, multi-tenancy, RBAC, SDKs, independent worker services, or an evaluation service unless the accepted scope changes first.
+The vulnerability-repair workload brings these capabilities into the current scope: per-Action authorization decisions and human approval; human facts (approve, reject, stop) that only an authenticated operator entry point can create; Agent waits on a person with their own deadlines; workspace and patch facts; the per-Turn Context Manifest; goal-based completion checks; definite refusals returned to the Agent instead of ending it as a Tool error; and release reconciliation with target occupation, including post-task reconciliation kept as persisted work that continues after a restart. Change them only through their existing schemas, state transitions and APIs, or through a new accepted task contract.
+
+Do not add other Phase 2 or roadmap concepts to current schemas, enums, APIs, UI, migrations, configuration, or package structure. In particular, do not introduce cancellation, evaluation, learning, dynamic plugins, distributed workers, multi-tenancy, RBAC, SDKs, independent worker services, sub-Agent delegation, or an evaluation service unless the accepted scope changes first. A human stop ends a wait; it is not Run cancellation, and it never decides whether an external operation took effect.
 
 A fixed in-flight slot limit per Provider is inside the current scope: it strengthens the execution layer by proving that slot accounting neither leaks nor over-admits across crashes, retries, and uncertain results. Priority, fairness, budgets, and scheduling across Providers remain excluded.
 
@@ -92,6 +94,10 @@ Use `pgx` and explicit SQL. Transaction ownership belongs in `service` through t
 
 Every schema change includes its migration, Store mapping, relevant projection updates, and PostgreSQL integration tests. Do not rewrite a migration that has already been shared; add a forward migration. `make check` verifies every migration against `backend/migrations/checksums.sha256`; register a new migration with `make migrations-checksum`, which only appends. Both checks compare protected history with `EMBERLING_CHECK_BASE` as well as checking current checksums; local runs default to `HEAD`, so use the agreed base commit to check changes already committed on a branch.
 
+## Agent waits and deadlines
+
+Waiting on a person does not consume an Agent's execution time. While an Agent Run is paused for an approval, a release the Runtime reconciles, or a human wait, its deadline is not compared with the clock and timeout scans skip it. Resuming moves the deadline later by the paused duration, in the same transaction that clears the pause and appends its Event. A deadline only ever moves later, never earlier: derive elapsed time from the recorded start and pause facts, never by working backwards from the deadline. Each wait is bounded by its own persisted deadline, not by the Agent deadline.
+
 ## Extensions and external calls
 
 Resolve Node, Model, and Tool implementations through their stable Registry contracts. Runtime behavior must come from registered metadata, not Go type assertions or inspection of execution results.
@@ -115,7 +121,7 @@ Tests are part of the Runtime contract, not post-implementation cleanup.
 - Unit tests cover pure compilation, validation, aggregation, and policy decisions.
 - PostgreSQL integration tests cover transactions, locks, constraints, retries, recovery, callbacks, and Event ordering.
 - Contract tests cover REST, callback authentication, Snapshot, Trace, and SSE behavior.
-- End-to-end tests cover only the accepted MVP scenarios.
+- End-to-end tests cover the accepted delivery scenarios, including the vulnerability-repair workload.
 
 Concurrency and failure tests use explicit barriers or injected hooks. Do not use arbitrary sleeps to manufacture races. Inject clocks and ID generators where outcomes depend on time or identity.
 
@@ -158,7 +164,7 @@ Do not change product scope or architecture as a side effect of implementation. 
 
 Before handing off a change, confirm that:
 
-- The implementation matches the accepted contract and remains inside MVP scope.
+- The implementation matches the accepted contract and remains inside the accepted delivery scope.
 - Package dependencies follow the documented direction.
 - State, Event, and transaction behavior remain atomic.
 - All external work occurs after COMMIT.

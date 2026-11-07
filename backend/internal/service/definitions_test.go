@@ -136,16 +136,24 @@ func (t *defsFakeTx) PendingCallbacks() store.PendingCallbackRepository { return
 
 // Definition use cases never touch Agent facts; those repositories are exercised against a
 // real database in test/integration.
-func (t *defsFakeTx) AgentRuns() store.AgentRunRepository           { return nil }
-func (t *defsFakeTx) AgentTurns() store.AgentTurnRepository         { return nil }
-func (t *defsFakeTx) AgentDecisions() store.AgentDecisionRepository { return nil }
-func (t *defsFakeTx) AgentActions() store.AgentActionRepository     { return nil }
-func (t *defsFakeTx) ToolAttempts() store.ToolAttemptRepository     { return nil }
+func (t *defsFakeTx) AgentRuns() store.AgentRunRepository                   { return nil }
+func (t *defsFakeTx) AgentTurns() store.AgentTurnRepository                 { return nil }
+func (t *defsFakeTx) AgentTurnManifests() store.AgentTurnManifestRepository { return nil }
+func (t *defsFakeTx) AgentDecisions() store.AgentDecisionRepository         { return nil }
+func (t *defsFakeTx) AgentActions() store.AgentActionRepository             { return nil }
+func (t *defsFakeTx) ToolAttempts() store.ToolAttemptRepository             { return nil }
 
 func (t *defsFakeTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *defsFakeTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *defsFakeTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
 func (t *defsFakeTx) ProviderSlots() store.ProviderSlotRepository               { return noSlotsRepo{} }
+func (t *defsFakeTx) AgentWorkspaces() store.AgentWorkspaceRepository           { return nil }
+func (t *defsFakeTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
+func (t *defsFakeTx) Approvals() store.ApprovalRepository                       { return nil }
+func (t *defsFakeTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
+func (t *defsFakeTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
+func (t *defsFakeTx) HumanWaits() store.HumanWaitRepository                     { return nil }
+func (t *defsFakeTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 // defsFakeCallbackBindingRepo is a minimal store.CallbackBindingRepository double: only
 // ListByTargets is exercised (by QueryService.NodeRunDetail), always against an empty set,

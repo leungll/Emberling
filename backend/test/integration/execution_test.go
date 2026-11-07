@@ -92,6 +92,9 @@ type execForcedIDs struct {
 
 	mu            sync.Mutex
 	forcedEventID string
+	// skipEvents is how many Event IDs are still handed out normally before the forced
+	// one is returned.
+	skipEvents int
 }
 
 func newExecForcedIDs() *execForcedIDs {
@@ -101,8 +104,16 @@ func newExecForcedIDs() *execForcedIDs {
 // ForceNextEventID makes the next NewID(domain.IDPrefixEvent) call return id instead of a
 // fresh UUID. It is one-shot: the override is cleared as soon as it is consumed.
 func (g *execForcedIDs) ForceNextEventID(id string) {
+	g.ForceEventIDAfter(0, id)
+}
+
+// ForceEventIDAfter lets the next skip NewID(domain.IDPrefixEvent) calls return fresh
+// UUIDs and makes the one after them return id, so a collision can be placed on the
+// second or later Event of one transaction. It is one-shot like ForceNextEventID.
+func (g *execForcedIDs) ForceEventIDAfter(skip int, id string) {
 	g.mu.Lock()
 	g.forcedEventID = id
+	g.skipEvents = skip
 	g.mu.Unlock()
 }
 
@@ -110,6 +121,11 @@ func (g *execForcedIDs) NewID(prefix string) string {
 	if prefix == domain.IDPrefixEvent {
 		g.mu.Lock()
 		if g.forcedEventID != "" {
+			if g.skipEvents > 0 {
+				g.skipEvents--
+				g.mu.Unlock()
+				return g.real.NewID(prefix)
+			}
 			id := g.forcedEventID
 			g.forcedEventID = ""
 			g.mu.Unlock()
@@ -1037,6 +1053,10 @@ func (e *execRecordingEnqueuer) EnqueueAdvance(runID string) bool {
 // EnqueueAgentTurn delegates without recording: these Node-only tests create no Agent Turn.
 func (e *execRecordingEnqueuer) EnqueueAgentTurn(runID, turnID string) bool {
 	return e.inner.EnqueueAgentTurn(runID, turnID)
+}
+
+func (e *execRecordingEnqueuer) EnqueueAgentAction(runID, actionID string) bool {
+	return e.inner.EnqueueAgentAction(runID, actionID)
 }
 
 func (e *execRecordingEnqueuer) snapshot() (accepted, refused []string) {

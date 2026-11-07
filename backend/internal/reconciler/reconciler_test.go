@@ -93,22 +93,57 @@ type fakeTx struct {
 	agentActions *fakeAgentActionRepo
 	agentRuns    *fakeAgentRunRepo
 	toolAttempts *fakeToolAttemptRepo
+	approvals    *fakeApprovalRepo
+	humanWaits   *fakeHumanWaitRepo
+	occupations  *fakeOccupationRepo
 }
 
-func (t *fakeTx) ToolAttempts() store.ToolAttemptRepository {
-	if t.toolAttempts == nil {
-		// A nil repository makes any orphan scan call panic, proving it never happened.
-		return nil
-	}
-	return t.toolAttempts
+func (t *fakeTx) HumanWaits() store.HumanWaitRepository                 { return t.humanWaits }
+func (t *fakeTx) ReleaseOccupations() store.ReleaseOccupationRepository { return t.occupations }
+
+// fakeHumanWaitRepo serves the human wait expiry scan's lister; any other call panics, so a
+// scan that closed a wait itself would be caught.
+type fakeHumanWaitRepo struct {
+	store.HumanWaitRepository
+	expired []domain.HumanWait
 }
 
-func (t *fakeTx) NodeRuns() store.NodeRunRepository                 { return t.nodeRuns }
-func (t *fakeTx) NodeAttempts() store.NodeAttemptRepository         { return t.attempts }
-func (t *fakeTx) PendingCallbacks() store.PendingCallbackRepository { return t.pending }
-func (t *fakeTx) AgentTurns() store.AgentTurnRepository             { return t.agentTurns }
-func (t *fakeTx) AgentActions() store.AgentActionRepository         { return t.agentActions }
-func (t *fakeTx) AgentRuns() store.AgentRunRepository               { return t.agentRuns }
+func (r *fakeHumanWaitRepo) ListExpiredOpen(context.Context, time.Time, int) ([]domain.HumanWait, error) {
+	return r.expired, nil
+}
+
+// fakeOccupationRepo serves the post-task query scan's lister; claiming or releasing an
+// occupation through it panics, because only the service may.
+type fakeOccupationRepo struct {
+	store.ReleaseOccupationRepository
+	due []domain.ReleaseOccupation
+}
+
+func (r *fakeOccupationRepo) ListDueQueries(context.Context, time.Time, int) ([]domain.ReleaseOccupation, error) {
+	return r.due, nil
+}
+
+func (t *fakeTx) ToolAttempts() store.ToolAttemptRepository { return t.toolAttempts }
+
+func (t *fakeTx) NodeRuns() store.NodeRunRepository                     { return t.nodeRuns }
+func (t *fakeTx) NodeAttempts() store.NodeAttemptRepository             { return t.attempts }
+func (t *fakeTx) PendingCallbacks() store.PendingCallbackRepository     { return t.pending }
+func (t *fakeTx) AgentTurns() store.AgentTurnRepository                 { return t.agentTurns }
+func (t *fakeTx) AgentTurnManifests() store.AgentTurnManifestRepository { return nil }
+func (t *fakeTx) AgentActions() store.AgentActionRepository             { return t.agentActions }
+func (t *fakeTx) AgentRuns() store.AgentRunRepository                   { return t.agentRuns }
+func (t *fakeTx) Approvals() store.ApprovalRepository                   { return t.approvals }
+
+// fakeApprovalRepo serves the approval expiry scan's lister. Any other call panics on the
+// embedded nil interface, so a scan that decided an approval itself would be caught.
+type fakeApprovalRepo struct {
+	store.ApprovalRepository
+	expired []domain.Approval
+}
+
+func (r *fakeApprovalRepo) ListExpiredPending(context.Context, time.Time, int) ([]domain.Approval, error) {
+	return r.expired, nil
+}
 
 // The three Agent scans of RunOnce need a lister each. Only the list methods are
 // implemented: the Reconciler is not allowed to change Agent state itself, so any other
@@ -140,17 +175,31 @@ func (r *fakeAgentRunRepo) ListExpired(context.Context, time.Time, int) ([]domai
 	return r.expired, nil
 }
 
-// fakeToolAttemptRepo serves the orphan scan's lister and records the runner it was asked
-// about. Like the other fakes, any other call panics on the embedded nil interface.
+// fakeToolAttemptRepo serves the orphan scan's lister, recording the runner it was asked
+// about, and the due Tool poll lister. Like the other fakes, any other call panics on the
+// embedded nil interface, so a scan that claimed or cleared a poll itself would be caught.
 type fakeToolAttemptRepo struct {
 	store.ToolAttemptRepository
 	orphans    []domain.ToolAttempt
 	runnerSeen []string
+	duePolls   []store.DueToolPoll
+	// duePollLimits records the limit of every ListDuePolls call.
+	duePollLimits []int
+	dueConfirm    []store.DueConfirmDeadline
+}
+
+func (r *fakeToolAttemptRepo) ListDueConfirmDeadlines(_ context.Context, _ time.Time, _ int) ([]store.DueConfirmDeadline, error) {
+	return r.dueConfirm, nil
 }
 
 func (r *fakeToolAttemptRepo) ListOrphanStarted(_ context.Context, currentRunnerID string, _ time.Time, _ int) ([]domain.ToolAttempt, error) {
 	r.runnerSeen = append(r.runnerSeen, currentRunnerID)
 	return r.orphans, nil
+}
+
+func (r *fakeToolAttemptRepo) ListDuePolls(_ context.Context, _ time.Time, limit int) ([]store.DueToolPoll, error) {
+	r.duePollLimits = append(r.duePollLimits, limit)
+	return r.duePolls, nil
 }
 
 type fakeUoW struct{ tx *fakeTx }
@@ -173,11 +222,19 @@ type fakeExecutor struct {
 	pollCalls []service.PollAttempt
 	pollFunc  func(service.PollAttempt) (service.PollAttemptOutcome, error)
 
+	toolPollCalls []service.PollToolAttempt
+	toolPollFunc  func(service.PollToolAttempt) (service.PollToolAttemptOutcome, error)
+
 	agentTurnCalls    []agentCall
 	agentToolCalls    []agentCall
 	agentFinalCalls   []agentCall
 	agentTimeoutCalls []string
 	orphanCalls       []string
+	expireCalls       []string
+	humanWaitCalls    []string
+	waitExpireCalls   []string
+	occupationCalls   []string
+	occupationFunc    func(string) (service.ReleaseReconcileOutcome, error)
 }
 
 // agentCall records which Agent work item the Reconciler handed to which use case, and
@@ -220,6 +277,29 @@ func (e *fakeExecutor) HandleOrphanToolAttempt(_ context.Context, attemptID stri
 	return nil
 }
 
+func (e *fakeExecutor) ExpireApproval(_ context.Context, approvalID string) error {
+	e.expireCalls = append(e.expireCalls, approvalID)
+	return nil
+}
+
+func (e *fakeExecutor) OpenReleaseHumanWait(_ context.Context, attemptID string) error {
+	e.humanWaitCalls = append(e.humanWaitCalls, attemptID)
+	return nil
+}
+
+func (e *fakeExecutor) ExpireHumanWait(_ context.Context, humanWaitID string) error {
+	e.waitExpireCalls = append(e.waitExpireCalls, humanWaitID)
+	return nil
+}
+
+func (e *fakeExecutor) ReconcileReleaseOccupation(_ context.Context, occupationID string) (service.ReleaseReconcileOutcome, error) {
+	e.occupationCalls = append(e.occupationCalls, occupationID)
+	if e.occupationFunc != nil {
+		return e.occupationFunc(occupationID)
+	}
+	return service.ReleaseReconcileOutcome{}, nil
+}
+
 func (e *fakeExecutor) ResumeNode(_ context.Context, req service.ResumeNode) (service.ResumeOutcome, error) {
 	e.resumeCalls = append(e.resumeCalls, req)
 	if e.resumeFunc != nil {
@@ -234,6 +314,14 @@ func (e *fakeExecutor) PollAttempt(_ context.Context, req service.PollAttempt) (
 		return e.pollFunc(req)
 	}
 	return service.PollAttemptOutcome{Kind: service.PollAttemptSkipped, SkipReason: service.PollSkipNotClaimed}, nil
+}
+
+func (e *fakeExecutor) PollToolAttempt(_ context.Context, req service.PollToolAttempt) (service.PollToolAttemptOutcome, error) {
+	e.toolPollCalls = append(e.toolPollCalls, req)
+	if e.toolPollFunc != nil {
+		return e.toolPollFunc(req)
+	}
+	return service.PollToolAttemptOutcome{Kind: service.PollAttemptSkipped, SkipReason: service.PollSkipNotClaimed}, nil
 }
 
 func newTestReconciler(t *testing.T, exec *fakeExecutor, tx *fakeTx, logBuf *bytes.Buffer) *Reconciler {
@@ -256,6 +344,48 @@ func emptyFakeTx() *fakeTx {
 		agentTurns:   &fakeAgentTurnRepo{},
 		agentActions: &fakeAgentActionRepo{},
 		agentRuns:    &fakeAgentRunRepo{},
+		approvals:    &fakeApprovalRepo{},
+		toolAttempts: &fakeToolAttemptRepo{},
+		humanWaits:   &fakeHumanWaitRepo{},
+		occupations:  &fakeOccupationRepo{},
+	}
+}
+
+// The release rows of the scan only discover work: every expired human wait goes to the
+// expiry use case and every due occupation query to the reconciliation use case, whose
+// outcomes are counted and whose errors are collected without stopping the pass.
+func TestReconciler_RunOnce_ExpiredHumanWaitsAndDueOccupationQueries_HandedToUseCases(t *testing.T) {
+	tx := emptyFakeTx()
+	tx.humanWaits.expired = []domain.HumanWait{{ID: "hwait_1"}, {ID: "hwait_2"}}
+	tx.occupations.due = []domain.ReleaseOccupation{{ID: "occupation_1"}, {ID: "occupation_2"}, {ID: "occupation_3"}}
+	exec := &fakeExecutor{occupationFunc: func(id string) (service.ReleaseReconcileOutcome, error) {
+		switch id {
+		case "occupation_1":
+			return service.ReleaseReconcileOutcome{Claimed: true, Released: true, Reason: domain.ReleaseReasonVoided}, nil
+		case "occupation_2":
+			return service.ReleaseReconcileOutcome{Claimed: true}, errors.New("production gave no answer")
+		default:
+			return service.ReleaseReconcileOutcome{}, nil
+		}
+	}}
+	var logs bytes.Buffer
+	report, err := newTestReconciler(t, exec, tx, &logs).RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if strings.Join(exec.waitExpireCalls, ",") != "hwait_1,hwait_2" || report.ExpiredHumanWaitsFound != 2 || report.HumanWaitsExpired != 2 {
+		t.Errorf("human wait expiry calls %v, report found %d expired %d, want both waits handed over",
+			exec.waitExpireCalls, report.ExpiredHumanWaitsFound, report.HumanWaitsExpired)
+	}
+	if strings.Join(exec.occupationCalls, ",") != "occupation_1,occupation_2,occupation_3" {
+		t.Errorf("occupation calls = %v, want all three", exec.occupationCalls)
+	}
+	if report.DueOccupationQueriesFound != 3 || report.OccupationQueriesClaimed != 2 || report.OccupationsReleased != 1 {
+		t.Errorf("report found %d claimed %d released %d, want 3/2/1",
+			report.DueOccupationQueriesFound, report.OccupationQueriesClaimed, report.OccupationsReleased)
+	}
+	if len(report.Errors) != 1 || !strings.Contains(report.Errors[0].Error(), "occupation_2") {
+		t.Errorf("errors = %v, want the one unanswered query", report.Errors)
 	}
 }
 
@@ -601,16 +731,108 @@ func TestReconciler_OrphanScan_HandsEachOrphanToUseCase(t *testing.T) {
 	}
 }
 
-// TestReconciler_OrphanScan_SkippedWithoutRunnerID proves a Reconciler with no runner
-// identity never scans for orphans: the nil Tool Attempt repository would panic otherwise.
-func TestReconciler_OrphanScan_SkippedWithoutRunnerID(t *testing.T) {
+// TestReconciler_ExpiredApprovalScan_HandsEachApprovalToUseCase proves the approval expiry
+// scan only discovers work: every PENDING approval the lister returns is handed to the
+// expiry use case, before the Agent deadline scan, and the Reconciler decides nothing itself.
+func TestReconciler_ExpiredApprovalScan_HandsEachApprovalToUseCase(t *testing.T) {
 	exec := &fakeExecutor{}
+	tx := emptyFakeTx()
+	tx.approvals.expired = []domain.Approval{{ID: "approval_1"}, {ID: "approval_2"}}
+	tx.agentRuns.expired = []domain.AgentRun{{ID: "ar_expired"}}
+
 	var logBuf bytes.Buffer
-	report, err := newTestReconciler(t, exec, emptyFakeTx(), &logBuf).RunOnce(context.Background())
+	report, err := newTestReconciler(t, exec, tx, &logBuf).RunOnce(context.Background())
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(exec.orphanCalls) != 0 || report.OrphanToolAttemptsFound != 0 {
-		t.Errorf("orphan calls = %v, report = %+v, want no orphan scan", exec.orphanCalls, report)
+	if len(exec.expireCalls) != 2 || exec.expireCalls[0] != "approval_1" || exec.expireCalls[1] != "approval_2" {
+		t.Errorf("expiry use case calls = %v, want [approval_1 approval_2]", exec.expireCalls)
+	}
+	if report.ExpiredApprovalsFound != 2 || report.ApprovalsExpired != 2 {
+		t.Errorf("report = %+v, want 2 found and 2 expired", report)
+	}
+	if len(exec.agentTimeoutCalls) != 1 {
+		t.Errorf("timeout calls %v, want the expired agent run still handled", exec.agentTimeoutCalls)
+	}
+}
+
+// TestReconciler_OrphanScan_SkippedWithoutRunnerID proves a Reconciler with no runner
+// identity never scans for orphans: the orphan lister is never asked about any runner.
+func TestReconciler_OrphanScan_SkippedWithoutRunnerID(t *testing.T) {
+	exec := &fakeExecutor{}
+	tx := emptyFakeTx()
+	tx.toolAttempts.orphans = []domain.ToolAttempt{{ID: "ta_1"}}
+	var logBuf bytes.Buffer
+	report, err := newTestReconciler(t, exec, tx, &logBuf).RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(tx.toolAttempts.runnerSeen) != 0 || len(exec.orphanCalls) != 0 || report.OrphanToolAttemptsFound != 0 {
+		t.Errorf("runners asked = %v, orphan calls = %v, report = %+v, want no orphan scan", tx.toolAttempts.runnerSeen, exec.orphanCalls, report)
+	}
+}
+
+// TestReconciler_DueToolPolls_OnlyCallsPollToolAttempt proves the Tool row of the due-poll
+// scan only discovers work: every row the Tool Attempt lister returns is handed to the Tool
+// poll use case with its persisted identifiers, bounded by the batch limit, each outcome
+// kind lands in its own Report count, the Reconciler never claims or clears a poll itself,
+// and an error from one Attempt is collected without stopping the others.
+func TestReconciler_DueToolPolls_OnlyCallsPollToolAttempt(t *testing.T) {
+	tx := emptyFakeTx()
+	tx.toolAttempts.duePolls = []store.DueToolPoll{
+		{AttemptID: "ta_running", ActionID: "act_1"},
+		{AttemptID: "ta_broken", ActionID: "act_2"},
+		{AttemptID: "ta_resumed", ActionID: "act_3"},
+		{AttemptID: "ta_returned", ActionID: "act_4"},
+		{AttemptID: "ta_duplicate", ActionID: "act_5"},
+		{AttemptID: "ta_skipped", ActionID: "act_6"},
+	}
+	providerDown := errors.New("provider connection refused")
+	exec := &fakeExecutor{
+		toolPollFunc: func(req service.PollToolAttempt) (service.PollToolAttemptOutcome, error) {
+			switch req.AttemptID {
+			case "ta_running":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptClaimedNotFinal}, nil
+			case "ta_broken":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptClaimedNotFinal}, providerDown
+			case "ta_resumed":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptResumed}, nil
+			case "ta_returned":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptReturned}, nil
+			case "ta_duplicate":
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptDuplicate}, nil
+			default:
+				return service.PollToolAttemptOutcome{Kind: service.PollAttemptSkipped, SkipReason: service.PollSkipNotClaimed}, nil
+			}
+		},
+	}
+	var logBuf bytes.Buffer
+	rec := newTestReconciler(t, exec, tx, &logBuf)
+
+	report, err := rec.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(exec.toolPollCalls) != len(tx.toolAttempts.duePolls) {
+		t.Fatalf("PollToolAttempt calls: want %d (one error must not stop the scan), got %d", len(tx.toolAttempts.duePolls), len(exec.toolPollCalls))
+	}
+	for i, row := range tx.toolAttempts.duePolls {
+		want := service.PollToolAttempt{AttemptID: row.AttemptID, ActionID: row.ActionID}
+		if exec.toolPollCalls[i] != want {
+			t.Fatalf("PollToolAttempt call %d: want %+v, got %+v", i, want, exec.toolPollCalls[i])
+		}
+	}
+	if len(tx.toolAttempts.duePollLimits) != 1 || tx.toolAttempts.duePollLimits[0] != 50 {
+		t.Fatalf("ListDuePolls: want one call bounded by the batch limit 50, got %v", tx.toolAttempts.duePollLimits)
+	}
+	if len(exec.resumeCalls) != 0 || len(exec.pollCalls) != 0 {
+		t.Fatalf("ResumeNode calls %d, PollAttempt calls %d: want none, only PollToolAttempt enters the Tool resume path", len(exec.resumeCalls), len(exec.pollCalls))
+	}
+	if report.DueToolPollsFound != 6 || report.ToolPollsClaimed != 3 || report.ToolPollsResumed != 1 || report.ToolPollsReturned != 1 ||
+		report.ToolPollsDuplicate != 1 || report.ToolPollsSkipped != 1 {
+		t.Fatalf("report: want found 6, claimed 3, resumed 1, returned 1, duplicate 1, skipped 1, got %+v", report)
+	}
+	if len(report.Errors) != 1 || !errors.Is(report.Errors[0], providerDown) || !strings.Contains(report.Errors[0].Error(), "ta_broken") {
+		t.Fatalf("report.Errors: want only the ta_broken error, got %v", report.Errors)
 	}
 }

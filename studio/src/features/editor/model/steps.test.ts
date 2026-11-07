@@ -9,6 +9,7 @@ describe('groups', () => {
     const all = GROUPS.flatMap((g) => groupTypes(g, NODE_TYPES).map((m) => m.type));
     expect(all).toEqual([
       'text_input',
+      'task_input',
       'image_input',
       'media_brief',
       'agent',

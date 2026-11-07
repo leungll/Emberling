@@ -37,8 +37,44 @@ type ToolAction struct {
 	// Tool does not declare it or the Agent Run froze no review model. The Tool uses it
 	// verbatim: empty selects its deterministic mock policy, never another model.
 	ReviewModelID string
+	// Workspace is the Agent Run's frozen workspace view, resolved in the claim
+	// transaction, for a Tool whose Metadata declares UsesWorkspace; nil otherwise. The
+	// Tool reads it verbatim and never resolves a repository or commit of its own.
+	Workspace *WorkspaceView
+	// RequiredFacts are the committed facts that satisfied the Tool's declared fact
+	// requirements, one per requirement in declaration order, resolved in the claim
+	// transaction, followed by any fact the call cited by identifier that the claim
+	// verified, such as the review fact a change request attaches. A Tool that declares no
+	// requirement and cites nothing receives none. The Tool reads them verbatim, to cite
+	// the fact its result rests on; it never looks a fact up itself.
+	RequiredFacts []domain.ExecutionFact
 	// Callback is set only for an ASYNC Tool dispatch.
 	Callback *CallbackContext
+}
+
+// WorkspaceView is what a workspace Tool sees of the Agent Run's frozen workspace: the
+// registered repository, the base commit the Run is bound to, the cumulative patch so far
+// with its digest, and the relative path prefixes the Agent may change. It carries no
+// filesystem location: the Tool resolves the repository through its own registered
+// configuration.
+type WorkspaceView struct {
+	RepositoryID string
+	BaseCommit   string
+	// Patch is the current cumulative unified diff on top of BaseCommit, empty when the
+	// Agent has changed nothing yet. PatchDigest identifies that patch; a Tool that
+	// requires the latest patch compares digests, never patch text.
+	Patch       string
+	PatchDigest string
+	// PatchSeq is the sequence number of that patch, 0 while the workspace is unchanged. A
+	// Tool reports it with the file content it read, so the material a model saw can be
+	// named by path and workspace version.
+	PatchSeq int
+	// AllowedPaths are normalised relative path prefixes inside the repository.
+	AllowedPaths []string
+	// DeployTarget is the service and environment the Agent node's workspace releases
+	// to, nil when the node configured none. A Tool that describes a change names it;
+	// no Tool decides where a release goes from it.
+	DeployTarget *domain.WorkspaceDeployTarget
 }
 
 // ToolResult is the complete logical result of one Tool call. The Runtime validates it
@@ -54,6 +90,40 @@ type ToolResult struct {
 	// none. It is recorded on the Tool Attempt in the transaction that commits the result
 	// and never read back into an execution decision.
 	Cost *domain.Cost
+	// WorkspacePatch is the new cumulative workspace patch a result carries, for a Tool
+	// whose Metadata declares the WORKSPACE_PATCH record; nil otherwise. The Runtime
+	// persists it in the result transaction. A result carrying one the registration does
+	// not declare is invalid.
+	WorkspacePatch *WorkspacePatch
+	// ChangeRequest is the change request a result carries, for a Tool whose Metadata
+	// declares the CHANGE_REQUEST record; nil otherwise, under the same rule.
+	ChangeRequest *ChangeRequest
+}
+
+// WorkspacePatch is one new cumulative patch of the Agent Run's workspace: the whole
+// unified diff on top of the frozen base commit, its digest and the repository paths it
+// touches. The Tool computes it; the Runtime decides whether it may be recorded.
+type WorkspacePatch struct {
+	Patch        string
+	PatchDigest  string
+	TouchedPaths []string
+}
+
+// ChangeRequest is the record a change-request Tool assembles from committed facts: the
+// patch it describes by digest, the verification fact it rests on, the Artifact holding its
+// content with that content's digest, the decision basis it cites and, when the call cited
+// one, the review fact of the same patch. Every reference is to something already
+// committed; the Runtime checks them against the Run's facts before recording the request.
+type ChangeRequest struct {
+	PatchDigest        string
+	VerificationFactID string
+	ContentArtifact    domain.ArtifactRef
+	ContentDigest      string
+	DecisionBasis      json.RawMessage
+	// ReviewFactID is the review fact the request attaches, "" when the call cited none. It
+	// is checked, never stored as a column: the request's content carries the reference,
+	// and whether a patch was reviewed is read from the facts themselves.
+	ReviewFactID string
 }
 
 // ToolResultKind distinguishes a finished Tool call from a dispatch.
@@ -84,10 +154,38 @@ type AsyncToolExecutor interface {
 }
 
 // PollableAsyncToolExecutor is optional and only for async Tools whose Provider supports a
-// status query.
+// status query. Registering one requires a Poll policy in the Metadata, and the Runtime
+// polls only Tools that declare one. Poll is called outside every transaction and lock
+// with state restored from committed facts; it queries once and never re-dispatches. A
+// SUCCEEDED result carries ToolResult, a FAILED one carries Error, RUNNING and UNKNOWN
+// change nothing, and UNKNOWN_TASK says the Provider does not know the task.
 type PollableAsyncToolExecutor interface {
 	AsyncToolExecutor
 	Poll(ctx context.Context, state ToolAsyncState) (PollResult, error)
+}
+
+// ReconcilableToolExecutor is for the release Tool, whose external operation the Runtime
+// reconciles after the fact instead of resending it. Void asks production to void the
+// operation named by state and reports the operation's status afterwards in the same
+// vocabulary as Poll: FAILED with the VOIDED code when production confirmed the void,
+// SUCCEEDED or RUNNING when the operation had already started or finished, UNKNOWN when
+// production gave no interpretable answer. CheckTarget reads what the deploy target runs
+// now. Each method sends exactly one request and never retries; the Runtime decides what a
+// lost answer means.
+type ReconcilableToolExecutor interface {
+	PollableAsyncToolExecutor
+	Void(ctx context.Context, state ToolAsyncState) (PollResult, error)
+	CheckTarget(ctx context.Context, state ToolAsyncState) (TargetState, error)
+}
+
+// TargetState is what a deploy target runs, as production reports it. Known is false when
+// production has no deployment for the target at all.
+type TargetState struct {
+	Known           bool
+	Version         string
+	PatchDigest     string
+	Healthy         bool
+	LastOperationID string
 }
 
 // ToolAsyncState is what the Runtime restores from committed facts before asking an async
@@ -99,4 +197,7 @@ type ToolAsyncState struct {
 	ToolName     string
 	AttemptNo    int
 	ExternalTask ExternalTask
+	// ReleaseTarget is the frozen deploy target of a release Attempt, restored from the
+	// Agent Run's workspace for CheckTarget; nil for every other Tool.
+	ReleaseTarget *domain.WorkspaceDeployTarget
 }

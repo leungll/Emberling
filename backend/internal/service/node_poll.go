@@ -20,17 +20,24 @@ type PollAttempt struct {
 	RunID     string
 }
 
-// PollHooks are optional observation points inside PollAttempt. They exist so failure
-// tests can inject a crash or a barrier at an exact point without sleeping.
+// PollHooks are optional observation points inside PollAttempt and PollToolAttempt. They
+// exist so failure tests can inject a crash or a barrier at an exact point without
+// sleeping.
 type PollHooks struct {
 	// AfterClaim runs after the claim transaction committed and before the Provider is
-	// queried. A non-nil error stops PollAttempt there and is returned, which leaves the
-	// world exactly as a process crash at that point would: one poll consumed and the
-	// next poll time already pushed back.
+	// queried, for a Node Attempt poll, a Tool Attempt poll and the post-task reconciliation
+	// of a release target alike. A non-nil error stops the
+	// poll there and is returned, which leaves the world exactly as a process crash at
+	// that point would: one poll consumed and the next poll time already pushed back.
 	AfterClaim func(ctx context.Context, attemptID string) error
+	// AfterAnswer runs in the post-task reconciliation of a release target after production
+	// answered and before the result transaction, with the release Attempt's id. A non-nil
+	// error stops there and is returned, which leaves the world as a crash between the
+	// answer and its recording would: the answer lost, the next query already scheduled.
+	AfterAnswer func(ctx context.Context, attemptID string) error
 }
 
-// PollAttemptKind classifies what one PollAttempt call did.
+// PollAttemptKind classifies what one PollAttempt or PollToolAttempt call did.
 type PollAttemptKind string
 
 const (
@@ -45,6 +52,10 @@ const (
 	// PollAttemptDuplicate means a final poll result entered the resume use case but a
 	// callback, a timeout or another poll had already resolved the Attempt.
 	PollAttemptDuplicate PollAttemptKind = "DUPLICATE"
+	// PollAttemptReturned means the Provider no longer knows the task of a Tool Attempt
+	// whose call is safe to repeat, and the call was handed back to the Agent. Only a
+	// Tool Attempt poll reports it.
+	PollAttemptReturned PollAttemptKind = "RETURNED"
 )
 
 // PollSkipReason says why a PollAttempt call skipped.
@@ -53,6 +64,7 @@ type PollSkipReason string
 const (
 	PollSkipAttemptNotDispatched PollSkipReason = "ATTEMPT_NOT_DISPATCHED"
 	PollSkipNodeRunNotWaiting    PollSkipReason = "NODE_RUN_NOT_WAITING_CALLBACK"
+	PollSkipActionNotWaiting     PollSkipReason = "ACTION_NOT_WAITING_CALLBACK"
 	PollSkipBindingMismatch      PollSkipReason = "BINDING_MISMATCH"
 	PollSkipRegistryDrift        PollSkipReason = "REGISTRY_DRIFT"
 	PollSkipNotClaimed           PollSkipReason = "NOT_CLAIMED"
@@ -185,7 +197,7 @@ func (s *ExecutionService) claimPoll(ctx context.Context, attemptID string) (pol
 		// must name exactly this Attempt.
 		binding, err := s.pollBinding(ctx, tx, attemptID)
 		if err != nil {
-			if !errors.Is(err, ErrPollBindingMismatch) && !errors.Is(err, ErrToolPollNotSupported) {
+			if !errors.Is(err, ErrPollBindingMismatch) {
 				return err
 			}
 			// No poll can ever route to this Attempt, so its schedule is cleared and

@@ -107,9 +107,10 @@ type PolledResult struct {
 // different Attempt than the one the poll was taken for. Nothing is written.
 var ErrPollBindingMismatch = errors.New("execution: callback binding does not route to the polled attempt")
 
-// ErrToolPollNotSupported reports a poll result for an external task bound to an Agent
-// Tool Attempt. Asynchronous Tools resume by callback only; nothing is written.
-var ErrToolPollNotSupported = errors.New("execution: provider poll results are not supported for tool attempts")
+// ErrToolPollNotSupported reports a poll result for an external task bound to the Attempt
+// of an Agent Tool whose registration declares no poll policy, or is gone. Such a Tool
+// resumes by callback only; nothing is written.
+var ErrToolPollNotSupported = errors.New("execution: provider poll results are not supported for this tool attempt")
 
 // ErrInvalidResumeRequest reports a ResumeNode request that mixes the callback and the
 // Provider Poll delivery shapes. Nothing is read or written.
@@ -219,6 +220,11 @@ func (s *ExecutionService) ResumeNode(ctx context.Context, req ResumeNode) (Resu
 		if req.Polled != nil {
 			if err := checkPollRoute(binding, req.Polled.AttemptID); err != nil {
 				return err
+			}
+			if binding.TargetType == domain.CallbackTargetToolAttempt {
+				if err := s.checkToolPollDeclared(ctx, tx, binding); err != nil {
+					return err
+				}
 			}
 		}
 		if binding.TargetType != domain.CallbackTargetNodeAttempt {
@@ -394,16 +400,28 @@ func (s *ExecutionService) interpretNodeCallback(
 }
 
 // checkPollRoute enforces that a poll result reaches only the Attempt it was taken for,
-// through its Callback Binding. Polling an Agent Tool's external task is not supported:
-// asynchronous Tools resume by callback only.
+// through its Callback Binding, whichever kind of Attempt the Binding targets.
 func checkPollRoute(binding domain.CallbackBinding, attemptID string) error {
-	switch binding.TargetType {
-	case domain.CallbackTargetToolAttempt:
-		return fmt.Errorf("%w: external task %s is bound to tool attempt %s", ErrToolPollNotSupported, binding.ExternalTaskID, binding.TargetID)
-	case domain.CallbackTargetNodeAttempt:
-		if binding.TargetID != attemptID {
-			return fmt.Errorf("%w: external task %s is bound to attempt %s, the poll was taken for attempt %s", ErrPollBindingMismatch, binding.ExternalTaskID, binding.TargetID, attemptID)
-		}
+	if binding.TargetID != attemptID {
+		return fmt.Errorf("%w: external task %s is bound to %s %s, the poll was taken for attempt %s",
+			ErrPollBindingMismatch, binding.ExternalTaskID, binding.TargetType, binding.TargetID, attemptID)
+	}
+	return nil
+}
+
+// checkToolPollDeclared refuses a poll result for a Tool Attempt whose Tool is not
+// registered with a poll policy. Whether a Tool may be polled is read from the current
+// registration, never inferred from the result that arrived; a Tool without the
+// declaration resumes by callback only.
+func (s *ExecutionService) checkToolPollDeclared(ctx context.Context, tx store.Tx, binding domain.CallbackBinding) error {
+	attempt, err := tx.ToolAttempts().Get(ctx, binding.TargetID)
+	if err != nil {
+		return err
+	}
+	reg, ok := s.deps.Tools.Get(attempt.ToolName)
+	if !ok || reg.Metadata.Poll == nil {
+		return fmt.Errorf("%w: external task %s is bound to tool attempt %s of tool %q, which declares no poll policy",
+			ErrToolPollNotSupported, binding.ExternalTaskID, binding.TargetID, attempt.ToolName)
 	}
 	return nil
 }

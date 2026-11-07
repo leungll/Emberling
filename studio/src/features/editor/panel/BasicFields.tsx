@@ -421,7 +421,13 @@ function keyExample(node: Node): string {
     typeof node.config.inputKey === 'string' && node.config.inputKey ? node.config.inputKey : 'key';
   const ref = { assetId: 'asset_…', mediaType: 'image/png' };
   const v: JsonValue =
-    node.type === 'image_input' ? ref : node.type === 'media_brief' ? [ref] : '…';
+    node.type === 'image_input'
+      ? ref
+      : node.type === 'media_brief'
+        ? [ref]
+        : node.type === 'task_input'
+          ? { goal: '…' }
+          : '…';
   return JSON.stringify({ [k]: v }, null, 2);
 }
 

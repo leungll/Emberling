@@ -29,6 +29,9 @@ import (
 type WorkEnqueuer interface {
 	EnqueueAdvance(runID string) bool
 	EnqueueAgentTurn(runID, turnID string) bool
+	// EnqueueAgentAction offers an approved Agent Action whose STARTED Attempt has
+	// committed, so a worker makes the Tool call the approval transaction prepared.
+	EnqueueAgentAction(runID, actionID string) bool
 }
 
 // EventNotifier wakes in-process SSE cursors after Events have committed. PostgreSQL
@@ -44,6 +47,8 @@ type NoopEnqueuer struct{}
 func (NoopEnqueuer) EnqueueAdvance(string) bool { return false }
 
 func (NoopEnqueuer) EnqueueAgentTurn(string, string) bool { return false }
+
+func (NoopEnqueuer) EnqueueAgentAction(string, string) bool { return false }
 
 // NoopNotifier drops notifications. SSE still works through cursor polling.
 type NoopNotifier struct{}
@@ -79,6 +84,9 @@ type Deps struct {
 	// CapacityHooks lets a test synchronize admission at exact points inside the claim
 	// transaction. The zero value installs no hook.
 	CapacityHooks CapacityHooks
+	// ApprovalHooks lets a test synchronize the approval decision paths. The zero value
+	// installs no hook.
+	ApprovalHooks ApprovalHooks
 	// RunnerID identifies this process instance. It is generated once per process start
 	// and written onto every Tool Attempt this process creates, so a later process can
 	// tell that nobody is executing a STARTED Attempt any more. The process entry point

@@ -17,7 +17,7 @@ const agentResumeOutputSchema = `{"type":"object","required":["key"],"properties
 // rejects fails it as TOOL_RESULT_INVALID, and any other Executor error is an
 // uninterpretable payload that must not change state.
 func TestAgentCallbackOutcome_ClassifiesProviderFailureInvalidResultAndUninterpretable(t *testing.T) {
-	schema := json.RawMessage(agentResumeOutputSchema)
+	schema := domain.ToolMetadata{Name: "remote_lookup", OutputSchema: json.RawMessage(agentResumeOutputSchema)}
 
 	execErr, interpretErr := agentCallbackOutcome(registry.ToolResult{Output: json.RawMessage(`{"key":"k1"}`)}, nil, schema)
 	if execErr != nil || interpretErr != nil {
@@ -39,6 +39,12 @@ func TestAgentCallbackOutcome_ClassifiesProviderFailureInvalidResultAndUninterpr
 	execErr, interpretErr = agentCallbackOutcome(registry.ToolResult{}, garbled, schema)
 	if execErr != nil || !errors.Is(interpretErr, garbled) {
 		t.Errorf("uninterpretable payload: execErr = %+v interpretErr = %v, want the Executor error and no failure", execErr, interpretErr)
+	}
+
+	undeclared := registry.ToolResult{Output: json.RawMessage(`{"key":"k1"}`), WorkspacePatch: &registry.WorkspacePatch{Patch: "diff", PatchDigest: "d"}}
+	execErr, interpretErr = agentCallbackOutcome(undeclared, nil, schema)
+	if interpretErr != nil || execErr == nil || execErr.Code != "TOOL_RESULT_INVALID" {
+		t.Errorf("undeclared record: execErr = %+v interpretErr = %v, want TOOL_RESULT_INVALID", execErr, interpretErr)
 	}
 }
 
@@ -66,5 +72,19 @@ func TestAsyncToolOutcome_ResolvesDispatchedAttemptOfWaitingAction(t *testing.T)
 	if syncToolOutcome.fromAttempt != domain.ToolAttemptStarted || syncToolOutcome.fromAction != domain.AgentActionRunning ||
 		syncToolOutcome.resumesWaiting || syncToolOutcome.failureSource != domain.FailureSyncExecution {
 		t.Errorf("sync source = %+v, want STARTED / RUNNING / SYNC_EXECUTION without resume", syncToolOutcome)
+	}
+}
+
+// An asynchronous result that declares an inconsistent Execution Artifact fails the Action
+// as TOOL_RESULT_INVALID, the way a synchronous one does, before any artifact row exists.
+func TestAgentCallbackOutcome_InvalidDeclaredArtifact_IsToolResultInvalid(t *testing.T) {
+	schema := domain.ToolMetadata{Name: "verify_patch", OutputSchema: json.RawMessage(agentResumeOutputSchema)}
+	malformed := registry.ToolResult{
+		Output:    json.RawMessage(`{"key":"k1"}`),
+		Artifacts: []domain.ArtifactRef{{ArtifactID: "artifact_x", MediaType: domain.ArtifactMediaTypeTextPlain, SizeBytes: 1, SHA256: "nothex"}},
+	}
+	execErr, interpretErr := agentCallbackOutcome(malformed, nil, schema)
+	if interpretErr != nil || execErr == nil || execErr.Code != "TOOL_RESULT_INVALID" {
+		t.Fatalf("invalid artifact: execErr = %+v interpretErr = %v, want TOOL_RESULT_INVALID", execErr, interpretErr)
 	}
 }

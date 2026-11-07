@@ -117,16 +117,24 @@ func (t *cbTx) Events() store.EventRepository       { return &cbEventRepo{tx: t}
 
 // The callback use case never reads or writes Agent facts, so these accessors stay nil;
 // the Agent repositories are proved against a real database in test/integration.
-func (t *cbTx) AgentRuns() store.AgentRunRepository           { return nil }
-func (t *cbTx) AgentTurns() store.AgentTurnRepository         { return nil }
-func (t *cbTx) AgentDecisions() store.AgentDecisionRepository { return nil }
-func (t *cbTx) AgentActions() store.AgentActionRepository     { return nil }
-func (t *cbTx) ToolAttempts() store.ToolAttemptRepository     { return nil }
+func (t *cbTx) AgentRuns() store.AgentRunRepository                   { return nil }
+func (t *cbTx) AgentTurns() store.AgentTurnRepository                 { return nil }
+func (t *cbTx) AgentTurnManifests() store.AgentTurnManifestRepository { return nil }
+func (t *cbTx) AgentDecisions() store.AgentDecisionRepository         { return nil }
+func (t *cbTx) AgentActions() store.AgentActionRepository             { return nil }
+func (t *cbTx) ToolAttempts() store.ToolAttemptRepository             { return nil }
 
 func (t *cbTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *cbTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *cbTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
 func (t *cbTx) ProviderSlots() store.ProviderSlotRepository               { return noSlotsRepo{} }
+func (t *cbTx) AgentWorkspaces() store.AgentWorkspaceRepository           { return nil }
+func (t *cbTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
+func (t *cbTx) Approvals() store.ApprovalRepository                       { return nil }
+func (t *cbTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
+func (t *cbTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
+func (t *cbTx) HumanWaits() store.HumanWaitRepository                     { return nil }
+func (t *cbTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 type cbDefinitionRepo struct{ tx *cbTx }
 

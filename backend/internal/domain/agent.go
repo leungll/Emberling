@@ -39,6 +39,11 @@ type AgentRun struct {
 	// apply the deterministic mock review policy. Claims resolve this frozen value, never
 	// the Definition's current one.
 	ReviewModelID *string `json:"reviewModelId"`
+	// Goal is the task goal the Agent Run was frozen to when it started, read once from the
+	// node input at the configured goal pointer; nil when the node configures none. The
+	// authorization decision of a production-risk Tool reads it and never re-reads the
+	// input.
+	Goal *AgentGoal `json:"goal"`
 
 	// CurrentTurnNo is the highest Turn number created so far; the initialisation
 	// transaction sets it to 1. CurrentContextVersion and CurrentStateVersion point at
@@ -48,8 +53,16 @@ type AgentRun struct {
 	CurrentStateVersion   int `json:"currentStateVersion"`
 
 	StartedAt time.Time `json:"startedAt"`
-	// Deadline is one hard bound covering every Turn, Tool call and callback wait.
+	// Deadline is the execution deadline while the Agent Run is not paused: one hard bound
+	// covering every Turn, Tool call and callback wait. It only ever moves later: resuming
+	// from a pause shifts it by the paused duration, so time spent waiting on a person is
+	// not execution time. Nothing derives the start time from it; StartedAt holds that.
 	Deadline time.Time `json:"deadline"`
+	// PausedAt and PauseReason are set together while the Agent Run waits on something
+	// outside its own execution and cleared together when it resumes. A paused Agent Run
+	// is never timed out and its Deadline is not compared against the clock.
+	PausedAt    *time.Time        `json:"pausedAt"`
+	PauseReason *AgentPauseReason `json:"pauseReason"`
 
 	TerminatedAt *time.Time        `json:"terminatedAt"`
 	Termination  *AgentTermination `json:"termination"`
@@ -148,13 +161,19 @@ type AgentAction struct {
 	WaitingAt   *time.Time      `json:"waitingAt"`
 	CompletedAt *time.Time      `json:"completedAt"`
 	Error       *ExecutionError `json:"error"`
+	// Authorization is the decision the claim made for this Action before any Attempt
+	// existed, nil until the claim decided. AuthorizationReason explains a DENY.
+	Authorization       *AuthorizationDecision `json:"authorization"`
+	AuthorizationReason *string                `json:"authorizationReason"`
 }
 
 // ToolAttempt records one real Tool call made by a TOOL_CALL Action. Synchronous and
 // asynchronous Tools share the entity; an async call additionally reaches DISPATCHED and
-// resumes through its Callback Binding. The MVP does not retry an Agent Tool, so an
-// Action creates at most one Attempt; AttemptNo exists so Tool calls carry the same audit
-// and callback target model as Node Attempts.
+// resumes through its Callback Binding. An Agent Tool call is not retried on failure: an
+// Action creates one Attempt, and only a reconcilable release Tool creates a new Attempt,
+// after production has confirmed that the previous operation was voided. AttemptNo orders
+// those Attempts and gives Tool calls the same audit and callback target model as Node
+// Attempts.
 type ToolAttempt struct {
 	ID        string            `json:"id"`
 	ActionID  string            `json:"actionId"`
@@ -183,6 +202,25 @@ type ToolAttempt struct {
 	// Cost is the charge the Provider reported for this call, written once with the
 	// SUCCEEDED result and never changed; nil when none was reported or the call failed.
 	Cost *Cost `json:"cost"`
+	// NextPollAt and PollCount are Provider polling scheduling facts of a DISPATCHED
+	// Attempt of an asynchronous Tool that declares a poll policy, not business state.
+	// NextPollAt is nil when no poll is scheduled: the registration declares no policy or
+	// the poll bound has been reached. Claiming a poll increments PollCount and writes no
+	// Event. They are internal recovery facts and never part of a response.
+	NextPollAt *time.Time `json:"-"`
+	PollCount  int        `json:"-"`
+	// OperationKey is the Provider-side identity of an external operation whose outcome
+	// the Runtime may query after the fact; unique across Attempts. OutcomeUnknownSince is
+	// when the Runtime stopped knowing whether that operation took effect. Both are written
+	// only by a release Tool's dispatch path and are nil for every other Attempt.
+	OperationKey        *string    `json:"-"`
+	OutcomeUnknownSince *time.Time `json:"-"`
+	// ConfirmDeadline is when a release Attempt without a definite production answer hands
+	// its Action to a human wait; VoidRequestedAt is when the Runtime first asked
+	// production to void the operation. Both are written only for release Attempts and are
+	// internal reconciliation facts.
+	ConfirmDeadline *time.Time `json:"-"`
+	VoidRequestedAt *time.Time `json:"-"`
 }
 
 // AgentContextVersion is one immutable entry of the message chain the next model call

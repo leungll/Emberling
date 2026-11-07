@@ -63,6 +63,7 @@ export function stepSentence(def: SummaryDefinition, n: Node, reg: SummaryRegist
       return s.agent(model, tools, agentLimits(c));
     }
     case 'text_input':
+    case 'task_input':
     case 'image_input':
       return s.asks(fieldLabel(n));
     case 'media_brief':
@@ -95,7 +96,13 @@ export function summaryInputs(def: SummaryDefinition, reg: SummaryRegistry): Sum
     .filter((n) => reg.nodeTypes.get(n.type)?.category === 'Input')
     .map((n) => {
       const brief = n.type === 'media_brief';
-      const kind = brief ? s.kind.photos : n.type === 'image_input' ? s.kind.image : s.kind.text;
+      const kind = brief
+        ? s.kind.photos
+        : n.type === 'image_input'
+          ? s.kind.image
+          : n.type === 'task_input'
+            ? s.kind.task
+            : s.kind.text;
       return {
         id: n.id,
         name: brief ? n.name : fieldLabel(n),

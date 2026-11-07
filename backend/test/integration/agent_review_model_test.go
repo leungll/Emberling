@@ -58,14 +58,15 @@ func (p *reviewProbe) received() []string {
 func (p *reviewProbe) registration() registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
-			Name:            reviewProbeTool,
-			Description:     "Record the review model a call receives",
-			InputSchema:     json.RawMessage(`{"type":"object"}`),
-			OutputSchema:    json.RawMessage(`{"type":"object"}`),
-			SideEffect:      domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
-			ExecutionKind:   domain.ToolExecutionSync,
-			Requires:        []domain.FactRequirement{},
-			UsesReviewModel: true,
+			Name:                  reviewProbeTool,
+			Description:           "Record the review model a call receives",
+			InputSchema:           json.RawMessage(`{"type":"object"}`),
+			OutputSchema:          json.RawMessage(`{"type":"object"}`),
+			SideEffect:            domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
+			ExecutionKind:         domain.ToolExecutionSync,
+			Requires:              []domain.FactRequirement{},
+			UsesReviewModel:       true,
+			ReviewModelCapability: domain.ModelCapabilityVisionInput,
 		},
 		Executor: p,
 	}

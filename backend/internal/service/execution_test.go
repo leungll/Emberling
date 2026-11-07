@@ -184,16 +184,24 @@ func (t *execFakeTx) PendingCallbacks() store.PendingCallbackRepository { return
 
 // Agent facts are likewise out of scope for these Node-execution fakes; their persistence
 // is proved against a real database in test/integration.
-func (t *execFakeTx) AgentRuns() store.AgentRunRepository           { return nil }
-func (t *execFakeTx) AgentTurns() store.AgentTurnRepository         { return nil }
-func (t *execFakeTx) AgentDecisions() store.AgentDecisionRepository { return nil }
-func (t *execFakeTx) AgentActions() store.AgentActionRepository     { return nil }
-func (t *execFakeTx) ToolAttempts() store.ToolAttemptRepository     { return nil }
+func (t *execFakeTx) AgentRuns() store.AgentRunRepository                   { return nil }
+func (t *execFakeTx) AgentTurns() store.AgentTurnRepository                 { return nil }
+func (t *execFakeTx) AgentTurnManifests() store.AgentTurnManifestRepository { return nil }
+func (t *execFakeTx) AgentDecisions() store.AgentDecisionRepository         { return nil }
+func (t *execFakeTx) AgentActions() store.AgentActionRepository             { return nil }
+func (t *execFakeTx) ToolAttempts() store.ToolAttemptRepository             { return nil }
 
 func (t *execFakeTx) AgentContextVersions() store.AgentContextVersionRepository { return nil }
 func (t *execFakeTx) AgentStateVersions() store.AgentStateVersionRepository     { return nil }
 func (t *execFakeTx) ExecutionFacts() store.ExecutionFactRepository             { return nil }
 func (t *execFakeTx) ProviderSlots() store.ProviderSlotRepository               { return noSlotsRepo{} }
+func (t *execFakeTx) AgentWorkspaces() store.AgentWorkspaceRepository           { return nil }
+func (t *execFakeTx) WorkspacePatches() store.WorkspacePatchRepository          { return nil }
+func (t *execFakeTx) Approvals() store.ApprovalRepository                       { return nil }
+func (t *execFakeTx) ChangeRequests() store.ChangeRequestRepository             { return nil }
+func (t *execFakeTx) ReleaseOccupations() store.ReleaseOccupationRepository     { return nil }
+func (t *execFakeTx) HumanWaits() store.HumanWaitRepository                     { return nil }
+func (t *execFakeTx) AgentCompletions() store.AgentCompletionRepository         { return nil }
 
 type execFakeDefinitionRepo struct{ def domain.Definition }
 

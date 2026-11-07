@@ -191,6 +191,15 @@ type AgentTrace struct {
 	// both read in the same transaction as the Turns.
 	Facts  AgentTraceFacts
 	Budget AgentGenerationBudget
+	// Workspace is the frozen workspace with its recorded patch summaries, nil when the
+	// Agent Run froze none.
+	Workspace *AgentTraceWorkspace
+	// ChangeRequests are the change requests the Agent Run recorded, read in the same
+	// transaction, without their content.
+	ChangeRequests AgentTraceChangeRequests
+	// Completion is the goal-based completion verdict, nil while the Agent Run has not
+	// terminated and for an Agent Run that froze no goal.
+	Completion *domain.AgentCompletion
 }
 
 // AgentTraceTurn is one round: the Turn, the single Decision and Action it committed (both
@@ -208,6 +217,16 @@ type AgentTraceTurn struct {
 	TurnClaimSource *domain.ClaimSource
 	// ActionSources is how the Action was claimed and ended, read from its Events.
 	ActionSources AgentActionSources
+	// Manifest is the Context Manifest written with the Turn's claim, nil while the Turn
+	// has not been claimed.
+	Manifest *domain.AgentTurnManifest
+	// Approval is the human decision requested for the Action, nil when its authorization
+	// never asked for one.
+	Approval *domain.Approval
+	// Occupation is the deploy target this release Action holds or held, and HumanWait the
+	// wait opened when its confirm deadline passed; both nil for every other Action.
+	Occupation *domain.ReleaseOccupation
+	HumanWait  *domain.HumanWait
 }
 
 // AgentTrace reads one Agent NodeRun's Agent Run, Turns, Decisions, Actions, Tool
@@ -266,6 +285,30 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 			}
 			round.Decision = &decision
 
+			approval, err := tx.Approvals().GetByActionID(ctx, action.ID)
+			switch {
+			case err == nil:
+				round.Approval = &approval
+			case !errors.Is(err, domain.ErrNotFound):
+				return err
+			}
+			occupations, err := tx.ReleaseOccupations().ListByActionID(ctx, action.ID)
+			if err != nil {
+				return err
+			}
+			if len(occupations) > 0 {
+				// A release Action acquires one occupation; the newest row is the one that
+				// says where the target stands.
+				round.Occupation = &occupations[len(occupations)-1]
+			}
+			wait, err := tx.HumanWaits().GetByActionID(ctx, action.ID)
+			switch {
+			case err == nil:
+				round.HumanWait = &wait
+			case !errors.Is(err, domain.ErrNotFound):
+				return err
+			}
+
 			attempts, err := tx.ToolAttempts().ListByActionID(ctx, action.ID)
 			if err != nil {
 				return err
@@ -292,9 +335,20 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		if err != nil {
 			return err
 		}
+		manifests, err := tx.AgentTurnManifests().ListByAgentRunID(ctx, agentRun.ID)
+		if err != nil {
+			return err
+		}
+		manifestByTurn := make(map[string]domain.AgentTurnManifest, len(manifests))
+		for _, manifest := range manifests {
+			manifestByTurn[manifest.TurnID] = manifest
+		}
 		for i := range rounds {
 			if claim, ok := turnClaims[rounds[i].Turn.ID]; ok {
 				rounds[i].TurnClaimSource = &claim
+			}
+			if manifest, ok := manifestByTurn[rounds[i].Turn.ID]; ok {
+				rounds[i].Manifest = &manifest
 			}
 			if rounds[i].Action != nil {
 				rounds[i].ActionSources = actionSources[rounds[i].Action.ID]
@@ -308,7 +362,20 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		if err != nil {
 			return err
 		}
-		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget}
+		workspace, err := agentTraceWorkspace(ctx, tx, agentRun.ID)
+		if err != nil {
+			return err
+		}
+		changeRequests, err := agentTraceChangeRequests(ctx, tx, agentRun.ID)
+		if err != nil {
+			return err
+		}
+		completion, err := agentCompletionOf(ctx, tx, agentRun.ID)
+		if err != nil {
+			return err
+		}
+		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget,
+			Workspace: workspace, ChangeRequests: changeRequests, Completion: completion}
 		return nil
 	})
 	if err != nil {

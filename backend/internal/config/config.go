@@ -48,6 +48,7 @@ const (
 	KeyRemovedOpenAITimeout = EnvPrefix + "MODEL_OPENAI_TIMEOUT"
 
 	KeyProductionBaseURL = EnvPrefix + "PRODUCTION_BASE_URL"
+	KeyReleaseBaseURL    = EnvPrefix + "RELEASE_BASE_URL"
 
 	KeyCallbackBaseURL       = EnvPrefix + "CALLBACK_BASE_URL"
 	KeyCallbackSigningSecret = EnvPrefix + "CALLBACK_SIGNING_SECRET"
@@ -62,7 +63,19 @@ const (
 	KeyTraceMaxResponseBytes = EnvPrefix + "TRACE_MAX_RESPONSE_BYTES"
 
 	KeyHTTPAddr = EnvPrefix + "HTTP_ADDR"
+
+	// KeyOperatorToken is the optional shared credential of the approval routes; without
+	// it those routes are not served. KeyOperatorName is the identity recorded as the
+	// deciding person.
+	KeyOperatorToken = EnvPrefix + "OPERATOR_TOKEN"
+	KeyOperatorName  = EnvPrefix + "OPERATOR_NAME"
 )
+
+// DefaultOperatorName is the deciding identity when none is configured.
+const DefaultOperatorName = "demo-operator"
+
+// MinOperatorTokenBytes is the shortest operator credential accepted.
+const MinOperatorTokenBytes = 32
 
 // DefaultHTTPAddr is the only defaulted value: the listen address is not one of
 // the required categories, while every other key must be set explicitly so that no
@@ -72,22 +85,29 @@ const DefaultHTTPAddr = ":8080"
 // Config is the fully resolved deployment configuration. It is passed by value: no part
 // of the process may mutate it after startup.
 type Config struct {
-	Database        Database
-	AssetStorage    AssetStorage
-	ModelProvider   ModelProvider
-	OpenAIModel     OpenAIModel
-	ImageModel      ImageModel
-	TaskGateway     TaskGateway
-	Production      Production
-	Callback        Callback
-	SandboxRunner   SandboxRunner
+	Database      Database
+	AssetStorage  AssetStorage
+	ModelProvider ModelProvider
+	OpenAIModel   OpenAIModel
+	ImageModel    ImageModel
+	TaskGateway   TaskGateway
+	Production    Production
+	Callback      Callback
+	SandboxRunner SandboxRunner
+	// VerifyRunner locates the sandbox runner the verify_patch Tool dispatches to; its
+	// zero value leaves the Tool unregistered.
+	VerifyRunner    VerifyRunner
 	Reconciliation  Reconciliation
 	PendingCallback PendingCallback
 	Projection      Projection
 	HTTP            HTTP
+	Operator        Operator
 	// ProviderCapacity is the in-flight task limit per asynchronous Provider id; a
 	// Provider absent from it is not limited.
 	ProviderCapacity map[string]int
+	// WorkspaceRepositories maps each registered repository identifier to its absolute
+	// path. Empty means no Agent workspace can be configured.
+	WorkspaceRepositories map[string]string
 }
 
 // Database addresses PostgreSQL, the authority for Emberling-owned execution facts.
@@ -154,15 +174,23 @@ func (m OpenAIModel) Enabled() bool {
 	return m.BaseURL != "" || !m.APIKey.IsZero() || len(m.Models) > 0
 }
 
-// Production addresses the optional production deployment service the deploy Tool calls.
-// An empty BaseURL means the Tool is not registered.
+// Production addresses the optional production deployment service. BaseURL is the
+// service the deploy Tool calls; ReleaseBaseURL is the service whose reconcilable release
+// surface the deploy_change Tool calls. Each empty URL leaves its Tool unregistered, so
+// a deployment can run either workload without the other's Tool.
 type Production struct {
-	BaseURL string
+	BaseURL        string
+	ReleaseBaseURL string
 }
 
-// Enabled reports whether the production deployment service is configured.
+// Enabled reports whether the production deployment service of the deploy Tool is configured.
 func (p Production) Enabled() bool {
 	return p.BaseURL != ""
+}
+
+// ReleaseEnabled reports whether the release surface of the deploy_change Tool is configured.
+func (p Production) ReleaseEnabled() bool {
+	return p.ReleaseBaseURL != ""
 }
 
 // Callback carries the externally reachable base URL and the signing Secret used to
@@ -171,6 +199,17 @@ type Callback struct {
 	BaseURL       string
 	SigningSecret Secret
 }
+
+// Operator authenticates the approval routes. Token is a Secret and optional: when it is
+// not configured the Backend serves no approval route. Name is the fixed identity recorded
+// as the deciding person.
+type Operator struct {
+	Token Secret
+	Name  string
+}
+
+// Enabled reports whether the approval routes are configured.
+func (o Operator) Enabled() bool { return !o.Token.IsZero() }
 
 // Reconciliation bounds the recovery scan.
 type Reconciliation struct {
@@ -246,13 +285,15 @@ func Load(env func(string) string) (Config, error) {
 		ImageModel:  l.imageModel(),
 		TaskGateway: l.taskGateway(),
 		Production: Production{
-			BaseURL: l.optionalProviderURL(KeyProductionBaseURL),
+			BaseURL:        l.optionalProviderURL(KeyProductionBaseURL),
+			ReleaseBaseURL: l.optionalProviderURL(KeyReleaseBaseURL),
 		},
 		Callback: Callback{
 			BaseURL:       l.requiredURL(KeyCallbackBaseURL),
 			SigningSecret: Secret{value: l.required(KeyCallbackSigningSecret)},
 		},
 		SandboxRunner: l.sandboxRunner(),
+		VerifyRunner:  l.verifyRunner(),
 		Reconciliation: Reconciliation{
 			Interval:  l.requiredDuration(KeyReconcileInterval),
 			BatchSize: l.requiredInt(KeyReconcileBatchSize),
@@ -268,7 +309,12 @@ func Load(env func(string) string) (Config, error) {
 		HTTP: HTTP{
 			Addr: l.optional(KeyHTTPAddr, DefaultHTTPAddr),
 		},
-		ProviderCapacity: l.providerCapacity(),
+		Operator: Operator{
+			Token: Secret{value: l.optional(KeyOperatorToken, "")},
+			Name:  l.optional(KeyOperatorName, DefaultOperatorName),
+		},
+		ProviderCapacity:      l.providerCapacity(),
+		WorkspaceRepositories: l.workspaceRepositories(),
 	}
 
 	if err := l.err(); err != nil {
@@ -369,7 +415,16 @@ func (c Config) Validate() error {
 	if err := c.ImageModel.validate(c.OpenAIModel); err != nil {
 		return err
 	}
+	if c.Operator.Enabled() && len(c.Operator.Token.Reveal()) < MinOperatorTokenBytes {
+		return &InvalidConfigError{Key: KeyOperatorToken, Reason: fmt.Sprintf("must be at least %d bytes", MinOperatorTokenBytes)}
+	}
+	if c.Operator.Name == "" {
+		return &InvalidConfigError{Key: KeyOperatorName, Reason: "must not be empty"}
+	}
 	if err := validateProviderCapacity(c.ProviderCapacity); err != nil {
+		return err
+	}
+	if err := validateWorkspaceRepositories(c.WorkspaceRepositories); err != nil {
 		return err
 	}
 	return c.TaskGateway.validate(c.OpenAIModel, c.ImageModel)

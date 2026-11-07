@@ -160,9 +160,9 @@ func validateNodeUIFields(nodeType string, configSchema []byte, ui domain.NodeUI
 			if !propertyHasType(property, "string") {
 				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget MODEL_SELECTOR requires a string property", nodeType, field.Path))
 			}
-			if field.Capability == "" {
-				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget MODEL_SELECTOR requires a non-empty capability", nodeType, field.Path))
-			}
+			// An empty Capability is allowed: the selector then lists every registered model
+			// and the Backend checks the capability the selection needs on save, as for a
+			// review model whose required capability depends on the Tools allowed.
 		case domain.UIWidgetToolSelector:
 			if !propertyHasStringItems(property) {
 				errs = append(errs, fmt.Errorf("node type %q: uiSchema field %q: widget TOOL_SELECTOR requires an array of strings", nodeType, field.Path))
@@ -415,6 +415,15 @@ func (r *ToolRegistry) Register(reg ToolRegistration) error {
 			errs = append(errs, fmt.Errorf("tool %q: poll declared but executor does not implement PollableAsyncToolExecutor", reg.Metadata.Name))
 		case reg.Metadata.Poll == nil && pollable:
 			errs = append(errs, fmt.Errorf("tool %q: executor implements PollableAsyncToolExecutor but metadata declares no poll policy", reg.Metadata.Name))
+		}
+		// A reconcilable declaration and the void/target-check implementation must be
+		// declared together, for the same reason.
+		_, reconcilable := reg.Executor.(ReconcilableToolExecutor)
+		switch {
+		case reg.Metadata.Reconcilable && !reconcilable:
+			errs = append(errs, fmt.Errorf("tool %q: reconcilable declared but executor does not implement ReconcilableToolExecutor", reg.Metadata.Name))
+		case !reg.Metadata.Reconcilable && reconcilable:
+			errs = append(errs, fmt.Errorf("tool %q: executor implements ReconcilableToolExecutor but metadata does not declare reconcilable", reg.Metadata.Name))
 		}
 	}
 

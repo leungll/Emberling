@@ -197,6 +197,13 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return err
 		}
 		now := s.deps.Clock.Now()
+		if call.release != nil {
+			// A release concludes from whichever wait its Action is in: on production, or
+			// on a person who was handed it at the confirm deadline. The Agent NodeRun is
+			// resumed only when it is still waiting.
+			src.fromAction = action.Status
+			src.resumesWaiting = nodeRun.Status == domain.NodeRunWaitingCallback
+		}
 
 		if err := s.consumeReplayedPendingLocked(ctx, tx, call, src, now); err != nil {
 			return err
@@ -204,13 +211,40 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		if err := recordToolArtifacts(ctx, tx, call, result.Artifacts, now); err != nil {
 			return err
 		}
+		// A change request the result carries is re-verified against the content Artifact
+		// recorded above, the workspace's current patch and the Run's facts, and recorded,
+		// or found already recorded with the same content, before the Attempt's result is
+		// written: the result the Agent reads names the record. A request the Runtime will
+		// not record rolls the whole result back and the call fails as an invalid Tool
+		// result below. Like the Artifacts, a recorded request is a fact of the Tool's
+		// successful result and stays with the SUCCEEDED Attempt whatever the round decides.
+		output := result.Output
+		if result.ChangeRequest != nil {
+			stored, created, err := s.recordChangeRequestLocked(ctx, tx, call, decision.Arguments, result, now)
+			if err != nil {
+				return err
+			}
+			if output, err = changeRequestResultOutput(output, stored, created); err != nil {
+				return &errChangeRequestRejected{reason: err.Error()}
+			}
+		}
 		// The conditional Attempt update is what decides that this caller, and not a stale
 		// duplicate of the same Tool call, a late callback or the timeout, owns the result.
-		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, result.Output, result.Cost); err != nil {
+		if err := tx.ToolAttempts().MarkSucceeded(ctx, call.attemptID, src.fromAttempt, now, output, result.Cost); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
 			}
 			return err
+		}
+
+		// A deployed release frees its target, closes an open human wait and resumes the
+		// Agent's clock before the round is judged: production did deploy, so neither the
+		// occupation nor the wait may stay open when a state patch or the fact below fails
+		// the Action and ends the Agent Run.
+		if call.release != nil {
+			if agentRun, err = s.settleReleaseSuccessLocked(ctx, tx, lock, nodeRun, agentRun, call.actionID, now); err != nil {
+				return err
+			}
 		}
 
 		// The state patch is decided before anything else is written: a patch that cannot
@@ -255,6 +289,16 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return nil
 		}
 
+		// A workspace patch the result carries is re-verified against the patch text and
+		// the frozen allowed paths and appended with the next sequence number, all inside
+		// this transaction. A patch the Runtime will not record rolls the whole result back
+		// (nothing of it is written) and the call fails as an invalid Tool result below.
+		if result.WorkspacePatch != nil {
+			if err := s.recordWorkspacePatchLocked(ctx, tx, call, *result.WorkspacePatch, now); err != nil {
+				return err
+			}
+		}
+
 		if err := tx.AgentActions().MarkSucceeded(ctx, call.actionID, src.fromAction, now); err != nil {
 			if errors.Is(err, domain.ErrStaleClaim) {
 				return errAgentTurnSuperseded
@@ -272,7 +316,7 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 			return err
 		}
 
-		messages, err := s.appendToolRoundContext(ctx, tx, agentRun, call, decision, result.Output, now)
+		messages, err := s.appendToolRoundContext(ctx, tx, agentRun, call, decision, output, now)
 		if err != nil {
 			return err
 		}
@@ -316,10 +360,24 @@ func (s *ExecutionService) commitAgentToolResult(ctx context.Context, call agent
 		commit = agentCommit{runID: call.runID, lastSeq: lock.LastSeq()}
 		return nil
 	})
-	if errors.Is(err, errAgentTurnSuperseded) {
+	var rejected *errWorkspacePatchRejected
+	var requestRejected *errChangeRequestRejected
+	switch {
+	case errors.Is(err, errAgentTurnSuperseded):
 		return agentToolCommit{}, nil
-	}
-	if err != nil {
+	case errors.As(err, &rejected):
+		// The result transaction rolled back with the Attempt still in its pre-result
+		// status, so the shared Tool failure commits in its place with the same source.
+		return s.commitAgentToolFailure(ctx, call, src, domain.ExecutionError{
+			Code:    codeWorkspacePatchInvalid,
+			Message: fmt.Sprintf("tool %q returned a workspace patch the runtime will not record: %s", call.toolName, rejected.reason),
+		})
+	case errors.As(err, &requestRejected):
+		return s.commitAgentToolFailure(ctx, call, src, domain.ExecutionError{
+			Code:    codeChangeRequestInvalid,
+			Message: fmt.Sprintf("tool %q returned a change request the runtime will not record: %s", call.toolName, requestRejected.reason),
+		})
+	case err != nil:
 		return agentToolCommit{}, err
 	}
 	s.wake(commit)

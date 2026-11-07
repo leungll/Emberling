@@ -86,6 +86,7 @@ type tx struct {
 
 	agentRuns            *agentRunRepository
 	agentTurns           *agentTurnRepository
+	agentTurnManifests   *agentTurnManifestRepository
 	agentDecisions       *agentDecisionRepository
 	agentActions         *agentActionRepository
 	toolAttempts         *toolAttemptRepository
@@ -93,6 +94,13 @@ type tx struct {
 	agentStateVersions   *agentStateVersionRepository
 	executionFacts       *executionFactRepository
 	providerSlots        *providerSlotRepository
+	agentWorkspaces      *agentWorkspaceRepository
+	workspacePatches     *workspacePatchRepository
+	approvals            *approvalRepository
+	changeRequests       *changeRequestRepository
+	releaseOccupations   *releaseOccupationRepository
+	humanWaits           *humanWaitRepository
+	agentCompletions     *agentCompletionRepository
 }
 
 func newTx(conn pgx.Tx) *tx {
@@ -110,6 +118,7 @@ func newTx(conn pgx.Tx) *tx {
 
 		agentRuns:            &agentRunRepository{conn: conn},
 		agentTurns:           &agentTurnRepository{conn: conn},
+		agentTurnManifests:   &agentTurnManifestRepository{conn: conn},
 		agentDecisions:       &agentDecisionRepository{conn: conn},
 		agentActions:         &agentActionRepository{conn: conn},
 		toolAttempts:         &toolAttemptRepository{conn: conn},
@@ -117,6 +126,13 @@ func newTx(conn pgx.Tx) *tx {
 		agentStateVersions:   &agentStateVersionRepository{conn: conn},
 		executionFacts:       &executionFactRepository{conn: conn},
 		providerSlots:        &providerSlotRepository{conn: conn},
+		agentWorkspaces:      &agentWorkspaceRepository{conn: conn},
+		workspacePatches:     &workspacePatchRepository{conn: conn},
+		approvals:            &approvalRepository{conn: conn},
+		changeRequests:       &changeRequestRepository{conn: conn},
+		releaseOccupations:   &releaseOccupationRepository{conn: conn},
+		humanWaits:           &humanWaitRepository{conn: conn},
+		agentCompletions:     &agentCompletionRepository{conn: conn},
 	}
 }
 
@@ -132,8 +148,11 @@ func (t *tx) Events() store.EventRepository             { return t.events }
 func (t *tx) CallbackBindings() store.CallbackBindingRepository { return t.callbackBindings }
 func (t *tx) PendingCallbacks() store.PendingCallbackRepository { return t.pendingCallbacks }
 
-func (t *tx) AgentRuns() store.AgentRunRepository           { return t.agentRuns }
-func (t *tx) AgentTurns() store.AgentTurnRepository         { return t.agentTurns }
+func (t *tx) AgentRuns() store.AgentRunRepository   { return t.agentRuns }
+func (t *tx) AgentTurns() store.AgentTurnRepository { return t.agentTurns }
+func (t *tx) AgentTurnManifests() store.AgentTurnManifestRepository {
+	return t.agentTurnManifests
+}
 func (t *tx) AgentDecisions() store.AgentDecisionRepository { return t.agentDecisions }
 func (t *tx) AgentActions() store.AgentActionRepository     { return t.agentActions }
 func (t *tx) ToolAttempts() store.ToolAttemptRepository     { return t.toolAttempts }
@@ -144,6 +163,13 @@ func (t *tx) AgentContextVersions() store.AgentContextVersionRepository {
 func (t *tx) AgentStateVersions() store.AgentStateVersionRepository { return t.agentStateVersions }
 func (t *tx) ExecutionFacts() store.ExecutionFactRepository         { return t.executionFacts }
 func (t *tx) ProviderSlots() store.ProviderSlotRepository           { return t.providerSlots }
+func (t *tx) AgentWorkspaces() store.AgentWorkspaceRepository       { return t.agentWorkspaces }
+func (t *tx) WorkspacePatches() store.WorkspacePatchRepository      { return t.workspacePatches }
+func (t *tx) Approvals() store.ApprovalRepository                   { return t.approvals }
+func (t *tx) ChangeRequests() store.ChangeRequestRepository         { return t.changeRequests }
+func (t *tx) ReleaseOccupations() store.ReleaseOccupationRepository { return t.releaseOccupations }
+func (t *tx) HumanWaits() store.HumanWaitRepository                 { return t.humanWaits }
+func (t *tx) AgentCompletions() store.AgentCompletionRepository     { return t.agentCompletions }
 
 var (
 	_ store.UnitOfWork = (*UnitOfWork)(nil)

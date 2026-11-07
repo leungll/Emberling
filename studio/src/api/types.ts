@@ -96,6 +96,49 @@ export interface Validation {
  */
 export type RunInputSchema = JsonSchema;
 
+/** The deployment target an agent node's workspace releases to. */
+export interface AgentDeployTarget {
+  service: string;
+  environment: string;
+}
+
+/** The repository binding of an agent node. The Backend validates it against the registered repositories. */
+export interface AgentWorkspaceConfig {
+  repositoryId: string;
+  /** Full 40-character lowercase commit hash the workspace starts from. */
+  baseCommit: string;
+  /** Relative paths inside the repository the Agent may change; no leading slash, no `..`. */
+  allowedPaths: string[];
+  deployTarget?: AgentDeployTarget;
+}
+
+/** How far an Agent Run may take a repair: prepare the patch only, or also deploy it. */
+export type AgentGoal = 'PREPARE_ONLY' | 'FIX_AND_DEPLOY';
+
+/**
+ * The agent node config keys Studio knows about. Studio stores a node's config as a
+ * JsonObject and never drops keys it does not render, so a Definition saved from the
+ * editor keeps every one of these as the Backend returned it.
+ */
+export interface AgentNodeConfig {
+  instructions: string;
+  modelId: string;
+  allowedTools: string[];
+  maxTurns: number;
+  timeoutMs: number;
+  modelConfig?: JsonObject;
+  imageModelId?: string;
+  reviewModelId?: string;
+  workspace?: AgentWorkspaceConfig;
+  /** JSON Pointer into the node input that selects the AgentGoal. */
+  goalPointer?: string;
+  approvalTimeoutMs?: number;
+  releaseConfirmTimeoutMs?: number;
+  voidGraceMs?: number;
+  maxReleaseRetries?: number;
+  humanWaitTimeoutMs?: number;
+}
+
 export interface Definition {
   workflowId: string;
   version: number;
@@ -185,7 +228,10 @@ export interface UiSchemaField {
   order: number;
   group: UiGroup;
   widget: UiWidget;
-  /** Model capability the Model Selector filters on. Only meaningful for model widgets. */
+  /**
+   * Model capability the Model Selector filters on. Only meaningful for model widgets; absent,
+   * the selector lists every registered model and the Backend checks the capability on save.
+   */
   capability?: string;
 }
 
@@ -273,11 +319,60 @@ export interface ToolMetadata {
    */
   usesImageModel: boolean;
   /**
-   * True when the Tool reviews with the vision model optionally selected on its Agent node
-   * (`reviewModelId`); without a selection it applies the mock review policy.
+   * True when the Tool reviews with the review model optionally selected on its Agent node
+   * (`reviewModelId`); without a selection it applies the mock review policy, unless
+   * `requiresReviewModel` is set.
    */
   usesReviewModel: boolean;
+  /**
+   * The model capability the selected review model must declare for this Tool, such as
+   * `vision_input` for an image review or `structured_decision` for a text review. Absent
+   * when the Tool uses no review model.
+   */
+  reviewModelCapability?: string;
+  /**
+   * True when the Tool gives an independent second opinion: its Agent node must select a
+   * review model, and that model must differ from the node's own `modelId`.
+   */
+  requiresReviewModel: boolean;
+  /**
+   * The authorization the Tool's Actions need. Absent means LOW risk: the Backend treats an
+   * undeclared authorization as LOW.
+   */
+  authorization?: ToolAuthorization;
+  /** The records a result of this Tool may carry; a result carrying any other kind is invalid. */
+  records: ToolRecordKind[];
+  /** True when the Tool runs against the workspace bound on its Agent node. */
+  usesWorkspace: boolean;
+  /**
+   * JSON Pointer into the call's arguments naming the repository path the Tool writes; the
+   * Backend refuses a path outside the Agent's allowed paths before the Tool runs. Absent
+   * when the Tool declares no single written path.
+   */
+  workspaceWritePath?: string;
+  /**
+   * JSON Pointer into the arguments naming the workspace patch digest a call acts on; the
+   * Backend refuses a call naming a digest other than the current patch's with
+   * `STALE_PATCH`. Absent when the Tool declares none.
+   */
+  workspacePatchDigestPath?: string;
+  /** True when an uncertain asynchronous result of this Tool is reconciled by polling. */
+  reconcilable: boolean;
+  /**
+   * True when an unmet fact requirement is returned to the Agent as a REJECTED tool message
+   * instead of ending the Agent Run.
+   */
+  returnUnmetRequirement: boolean;
 }
+
+export type ToolAuthorizationRisk = 'LOW' | 'PRODUCTION';
+
+export interface ToolAuthorization {
+  risk: ToolAuthorizationRisk;
+  reversible: boolean;
+}
+
+export type ToolRecordKind = 'WORKSPACE_PATCH' | 'CHANGE_REQUEST';
 
 export interface NodeTypeListResponse {
   items: NodeMetadata[];
@@ -569,222 +664,11 @@ export interface NodeRunDetail {
   capacityWait?: CapacityWait | null;
 }
 
-/**
- * Why the Agent Loop stopped, as decided and persisted by the Backend. `null` while the
- * Agent Run is still going; Studio never infers a termination from the Turns it can see.
- */
-export type AgentTermination =
-  'FINAL_RESPONSE' | 'MAX_TURNS' | 'TIMEOUT' | 'MODEL_ERROR' | 'TOOL_ERROR' | 'INVALID_ACTION';
+// ---------------------------------------------------------------------------
+// Agent Runs, approvals and Agent Trace
+// ---------------------------------------------------------------------------
 
-export type AgentTurnStatus = 'READY' | 'RUNNING' | 'COMPLETED' | 'FAILED';
-
-/** Agent Action success is `SUCCEEDED`, matching NodeRun rather than Turn vocabulary. */
-export type AgentActionStatus = 'READY' | 'RUNNING' | 'WAITING_CALLBACK' | 'SUCCEEDED' | 'FAILED';
-
-export type ToolAttemptStatus = 'STARTED' | 'DISPATCHED' | 'SUCCEEDED' | 'FAILED';
-
-export type AgentDecisionKind = 'TOOL_CALL' | 'FINAL';
-
-export interface AgentRunTrace {
-  id: string;
-  nodeRunId: string;
-  /** `null` until the Agent Run reached a terminal outcome. */
-  termination: AgentTermination | null;
-  currentTurnNo: number;
-  currentContextVersion: number;
-  currentStateVersion: number;
-  /** Absolute Agent deadline; entering WAITING_CALLBACK does not restart it. */
-  deadline: string | null;
-  terminatedAt: string | null;
-  error: ExecutionError | null;
-}
-
-/**
- * The committed Decision of one Turn. `tool` is `null` for a `FINAL` Decision.
- * `hasStatePatch` is the persisted fact that the Decision carried a State patch; the patch
- * itself belongs to Execution State, not to this projection.
- */
-export interface AgentDecisionTrace {
-  kind: AgentDecisionKind;
-  tool: string | null;
-  hasStatePatch: boolean;
-}
-
-/** Who won the conditional claim of a Turn or Action. */
-export type ClaimSource = 'IMMEDIATE' | 'RECONCILER';
-
-/** The path that delivered an Action's successful result. */
-export type CompletionSource = 'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL';
-
-/**
- * The path that failed an Action. `RUNNER_LOST` means the process running a synchronous
- * Tool call stopped before the call returned.
- */
-export type FailureSource =
-  'SYNC_EXECUTION' | 'CALLBACK' | 'PROVIDER_POLL' | 'TIMEOUT' | 'RUNNER_LOST';
-
-export interface AgentActionTrace {
-  id: string;
-  type: string;
-  status: AgentActionStatus;
-  startedAt: string | null;
-  completedAt: string | null;
-  error: ExecutionError | null;
-  /** Read from the Action's committed Events; `null` until the Action was claimed. */
-  claimSource: ClaimSource | null;
-  /** `null` unless the Action succeeded. */
-  completionSource: CompletionSource | null;
-  /** `null` unless the Action failed. */
-  failureSource: FailureSource | null;
-}
-
-/** One Tool Attempt. A retry preserves the earlier Attempt and adds a new `attemptNo`. */
-export interface ToolAttemptTrace {
-  id: string;
-  toolName: string;
-  attemptNo: number;
-  status: ToolAttemptStatus;
-  /** `null` for a synchronous Tool call. It never carries a token hash or credential. */
-  callbackBinding: CallbackBindingSummary | null;
-  startedAt: string | null;
-  dispatchedAt: string | null;
-  completedAt: string | null;
-  error: ExecutionError | null;
-  /** The charge the Provider reported for this Tool call; `null` when none is known. */
-  cost: Cost | null;
-  /** `generate_image` only: the photo the call works on, from its arguments. */
-  photo?: ToolPhotoTrace;
-  /** `generate_image` only: the named generation settings, from its arguments. */
-  settings?: ToolSettingsTrace;
-  /** `review_asset` only, once the Attempt `SUCCEEDED`: the verdict and its reasons. */
-  review?: ToolReviewTrace;
-  /** `sandbox_test` only, once the Attempt `SUCCEEDED`: the runner's verdict and counts. */
-  test?: ToolTestTrace;
-  /** `deploy` only: the target from its arguments, the version once it `SUCCEEDED`. */
-  deployment?: ToolDeploymentTrace;
-  /** `generate_video` only, once the Attempt `SUCCEEDED` and the URL is credential-free. */
-  video?: ToolVideoTrace;
-  /** Members left out of this Attempt's projection, and why. */
-  withheld?: WithheldToolField[];
-}
-
-/**
- * A photo by Asset ID. `position` (1-based) and `count` place it in the Run input's photo
- * set; both are absent when the set does not determine a single position.
- */
-export interface ToolPhotoTrace {
-  photoAssetId: string;
-  position?: number;
-  count?: number;
-}
-
-/**
- * The generation settings a `generate_image` call asked for. Each member is absent when
- * the call did not set it. A prompt over 500 bytes is cut and `promptTruncated` is true.
- */
-export interface ToolSettingsTrace {
-  prompt?: string;
-  promptTruncated?: boolean;
-  aspectRatio?: string;
-  resolution?: string;
-}
-
-/** A `review_asset` verdict. `reasons` is absent when the review gave none. */
-export interface ToolReviewTrace {
-  passed: boolean;
-  reasons?: string[];
-}
-
-export interface ToolTestTrace {
-  passed: boolean;
-  summary: { total: number; failed: number };
-}
-
-export interface ToolDeploymentTrace {
-  target?: { service: string; environment: string };
-  version?: string;
-}
-
-export interface ToolVideoTrace {
-  videoUrl: string;
-}
-
-/**
- * A projected member the Backend did not return. `TOO_LARGE`: over the Trace field bound,
- * never cut. `UNSAFE_URL`: a URL with userinfo, query or fragment, which could carry a
- * credential. `field` is a dotted path such as `video.videoUrl`.
- */
-export interface WithheldToolField {
-  field: string;
-  reason: 'TOO_LARGE' | 'UNSAFE_URL';
-}
-
-/** One Turn with its Decision, Action and Tool Attempts, as persisted. */
-export interface AgentTurnTrace {
-  id: string;
-  turnNo: number;
-  status: AgentTurnStatus;
-  startedAt: string | null;
-  completedAt: string | null;
-  error: ExecutionError | null;
-  /** Usage the model reported for this Turn; `null` when unreported or not yet known. */
-  usage: TokenUsage | null;
-  /** The charge the model reported for this Turn; `null` when unreported or not yet known. */
-  cost: Cost | null;
-  /** Read from the Turn's committed Event; `null` until the Turn was claimed. */
-  claimSource: ClaimSource | null;
-  /** `null` before the Turn committed a Decision. */
-  decision: AgentDecisionTrace | null;
-  /** `null` for a Turn whose Decision created no Action. */
-  action: AgentActionTrace | null;
-  toolAttempts: ToolAttemptTrace[];
-}
-
-/**
- * Read-only projection of one Agent NodeRun's internals. `turns` is in persisted order,
- * by `turnNo`. A MANAGED_AGENT NodeRun's Node Detail carries no Attempts; its inner facts
- * are read here instead.
- */
-export interface AgentTrace {
-  agentRun: AgentRunTrace;
-  turns: AgentTurnTrace[];
-  facts: AgentTraceFacts;
-  generationBudget: GenerationBudgetTrace;
-}
-
-/**
- * One execution fact the Agent Run recorded from a Tool result. `bindings` hold only
- * references and digests; `verdict` and `basisFactId` are `null` for a fact that carries
- * no judgement.
- */
-export interface ExecutionFactTrace {
-  id: string;
-  factType: string;
-  subject: string;
-  bindings: Record<string, unknown>;
-  verdict: boolean | null;
-  basisFactId: string | null;
-  toolAttemptId: string;
-  createdAt: string;
-}
-
-/**
- * The bounded fact ledger, oldest first. `truncated` means the Agent Run recorded more
- * facts than `items` shows; the stored facts are never cut.
- */
-export interface AgentTraceFacts {
-  items: ExecutionFactTrace[];
-  truncated: boolean;
-}
-
-/**
- * `maxGenerationCalls` is the frozen limit, `null` when the Agent has none.
- * `generationCallsUsed` counts every generation call already made, whatever its outcome.
- */
-export interface GenerationBudgetTrace {
-  maxGenerationCalls: number | null;
-  generationCallsUsed: number;
-}
+export * from './agent-types';
 
 // ---------------------------------------------------------------------------
 // Events
@@ -814,11 +698,19 @@ export type AgentEventType =
   | 'AGENT_ACTION_FAILED'
   | 'AGENT_STATE_UPDATED'
   | 'AGENT_COMPLETED'
-  | 'AGENT_FAILED';
+  | 'AGENT_FAILED'
+  | 'AGENT_ACTION_WAITING_APPROVAL'
+  | 'APPROVAL_DECIDED'
+  | 'AGENT_PAUSED'
+  | 'AGENT_RESUMED'
+  | 'RELEASE_OUTCOME_UNKNOWN'
+  | 'RELEASE_VOIDED'
+  | 'AGENT_ACTION_WAITING_HUMAN'
+  | 'AGENT_COMPLETION_EVALUATED';
 
 /**
- * The 24 MVP Event types. RUN_CANCELLED, NODE_SKIPPED, NODE_CANCELLED and the
- * MODEL_STREAM_* types are Phase 2 and are absent on purpose.
+ * The 32 Event types the Backend may write. RUN_CANCELLED, NODE_SKIPPED, NODE_CANCELLED and
+ * the MODEL_STREAM_* types are Phase 2 and are absent on purpose.
  */
 export type EventType = RunEventType | NodeEventType | AgentEventType;
 

@@ -41,15 +41,29 @@
 #     NodeRun or Tool Attempt is a failure while a replayed one passes with a note;
 #   - accepted callback deliveries are at least the callback-received Events;
 #   - status queries the Provider answered with a finished task (`polled` with taskStatus
-#     SUCCEEDED or FAILED) are at least the completions whose source is PROVIDER_POLL. A
+#     SUCCEEDED or FAILED) are at least the completions whose source is PROVIDER_POLL,
+#     release and sandbox runner Tool Attempts excepted; for each Tool Attempt bound to
+#     the sandbox runner, the runner's own `polled` lines answering its test or
+#     verification as finished are at least that Attempt's PROVIDER_POLL completions. A
 #     poll that finds the task still RUNNING changes nothing and is only counted;
-#   - every test the Runs bound to the sandbox runner arrived, started and completed
-#     exactly once there, and the runner's 2xx callback deliveries for it are at least the
-#     callback completions of its Tool Attempt. Further 2xx deliveries are duplicates the
-#     Backend answered without a new Event and are only noted;
+#   - every test and every verification the Runs bound to the sandbox runner arrived,
+#     started and completed exactly once there, and the runner's 2xx callback deliveries
+#     for it are at least the callback completions of its Tool Attempt. Further 2xx
+#     deliveries are duplicates the Backend answered without a new Event and are only
+#     noted;
 #   - every deploy Attempt reached the mock production service at most once under its
 #     operationId, was deployed exactly once when it SUCCEEDED and at most once
 #     otherwise, and production deployed nothing else under the Runs' deploy Actions;
+#   - every deploy_change Action deployed at most once across all of its operation keys,
+#     exactly once when it SUCCEEDED, each operation key reached production at most once,
+#     each PROVIDER_POLL completion of a release Attempt is answered by a deployment of its
+#     operation key, and production deployed nothing else under the Runs' release Actions;
+#     a voided or abandoned operation is noted;
+#   - every release operation in a Trace's release view matches production's record of its
+#     operation key one to one by outcome (DEPLOYED, VOIDED, REFUSED, UNKNOWN), and
+#     production holds no line under the Runs' release Actions for any other key;
+#   - every occupation traces to the operation that created it, and the reason it was freed
+#     (including after the task ended) is supported by production's record of that key;
 #   - with LEDGER_REQUIRE_COMPLETED=1, no submission was lost;
 #   - when the Mock Provider has an in-flight limit, its in-flight peak never exceeded it
 #     and no acceptance in the window is marked over the limit.
@@ -61,7 +75,10 @@
 #
 # The sandbox runner and production records are read whole and filtered by the ids the
 # Runs' Traces name, because a restarted runner redelivers results of earlier Runs too.
-# Their bindings and callbacks are excluded from the Mock Provider checks above.
+# Their bindings, callbacks and poll completions are excluded from the Mock Provider
+# checks above. The release Tool's Callback Binding names the production service as its
+# Provider and only routes polling there; one release Action may hold several operation
+# keys after a void, so its bindings are judged by the release check instead.
 set -euo pipefail
 
 # shellcheck source=scripts/demo/lib.sh
@@ -92,6 +109,7 @@ events='[]'
 statuses='[]'
 bindings='[]'
 tool_calls='[]'
+release_views='[]'
 for run_id in "${run_ids[@]}"; do
   snapshot=$(curl -fsS "$BACKEND_URL/api/runs/$run_id")
   statuses=$(jq -c --arg id "$run_id" --arg status "$(jq -r '.run.status' <<<"$snapshot")" \
@@ -105,7 +123,7 @@ for run_id in "${run_ids[@]}"; do
         | {unit: $unit, attempt: .attemptNo, id: .callbackBinding.externalTaskId}]' <<<"$detail")
     if [[ "$node_type" == agent ]]; then
       trace=$(curl -fsS "$BACKEND_URL/api/runs/$run_id/nodes/$node_run_id/agent")
-      rows=$(jq --argjson rows "$rows" --arg unit "$node_run_id" '$rows + [paths(objects) as $p
+      rows=$(jq --slurpfile rows <(printf '%s' "$rows") --arg unit "$node_run_id" '$rows[0] as $rows | $rows + [paths(objects) as $p
           | getpath($p) | select(type == "object" and (.externalTaskId? | type) == "string")
           | {unit: ($unit + ":" + ($p | map(tostring) | join("."))), attempt: (.attemptNo // null), id: .externalTaskId,
              provider: (.providerId // null)}]' <<<"$trace")
@@ -113,6 +131,10 @@ for run_id in "${run_ids[@]}"; do
           | {attemptId: .id, toolName, attemptNo, status, actionId: $a.id, actionStatus: $a.status,
              provider: (.callbackBinding.providerId // null), testId: (.callbackBinding.externalTaskId // null)}]' <<<"$trace")
       tool_calls=$(jq -s 'add' <(printf '%s' "$tool_calls") <(printf '%s' "$calls"))
+      views=$(jq --arg run "$run_id" '[.turns[].action | select(. != null and .release != null)
+          | {runId: $run, actionId: .id, actionStatus: .status, operations: (.release.operations // []),
+             occupation: .release.occupation}]' <<<"$trace")
+      release_views=$(jq -s 'add' <(printf '%s' "$release_views") <(printf '%s' "$views"))
     fi
     bindings=$(jq -s 'add' <(printf '%s' "$bindings") <(printf '%s' "$rows"))
   done < <(jq -r '.nodeRuns[] | [.id, .nodeType] | @tsv' <<<"$snapshot")
@@ -120,7 +142,9 @@ done
 runner_calls=$(jq '[.[] | select(.provider == "sandboxrunner")]' <<<"$tool_calls")
 runner_attempt_ids=$(jq '[.[].attemptId]' <<<"$runner_calls")
 deploy_calls=$(jq '[.[] | select(.toolName == "deploy") | . + {operationId: "op_\(.actionId)_\(.attemptNo)"}]' <<<"$tool_calls")
-bindings=$(jq '[.[] | select(.provider != "sandboxrunner") | del(.provider)]' <<<"$bindings")
+release_calls=$(jq '[.[] | select(.toolName == "deploy_change") | . + {operationId: "op_\(.actionId)_\(.attemptNo)"}]' <<<"$tool_calls")
+release_attempt_ids=$(jq '[.[] | select(.provider == "release") | .attemptId]' <<<"$tool_calls")
+bindings=$(jq '[.[] | select(.provider != "sandboxrunner" and .provider != "release") | del(.provider)]' <<<"$bindings")
 
 window=$(record_after "$record_after_seq" | jq -s '.')
 record=$(jq '[.[] | select(.kind == "task")]' <<<"$window")
@@ -137,7 +161,7 @@ printf 'ledger events: %s, bound external tasks: %s, record task lines: %s, reco
 created=$(jq "[.[] | select($created_line) | .externalTaskId]" <<<"$record")
 
 # 1. Every created task arrived exactly once.
-bad=$(jq --argjson created "$created" '[$created[] as $id
+bad=$(jq --slurpfile created <(printf '%s' "$created") '$created[0] as $created | [$created[] as $id
     | {id: $id, arrived: ([.[] | select(.event == "arrived" and .externalTaskId == $id)] | length)}
     | select(.arrived != 1)]' <<<"$record")
 if [[ $(jq 'length' <<<"$bad") -eq 0 ]]; then
@@ -148,14 +172,14 @@ fi
 
 # 2. Per external task id: each bound task was created exactly once and belongs to exactly
 # one dispatch unit; each task created in the window is bound; no unit has two tasks.
-tasks=$(jq -n --argjson bindings "$bindings" --argjson full "$full_record" '
+tasks=$(jq -n --slurpfile bindings <(printf '%s' "$bindings") --slurpfile full <(printf '%s' "$full_record") '$bindings[0] as $bindings | $full[0] as $full | 
     [$bindings[].id] | unique | map(. as $id | {
       id: $id,
       created: ([$full[] | select(.externalTaskId == $id and ('"$created_line"'))] | length),
       units: ([$bindings[] | select(.id == $id) | .unit | sub(":.*"; "")] | unique | length),
       replayed: ([$full[] | select(.externalTaskId == $id and .event == "responded" and .replayed == true)] | length)})')
 not_created_once=$(jq '[.[] | select(.created != 1 or .units != 1)]' <<<"$tasks")
-orphan=$(jq --argjson bindings "$bindings" '[.[] as $id | select([$bindings[] | select(.id == $id)] | length == 0) | $id]' <<<"$created")
+orphan=$(jq --slurpfile bindings <(printf '%s' "$bindings") '$bindings[0] as $bindings | [.[] as $id | select([$bindings[] | select(.id == $id)] | length == 0) | $id]' <<<"$created")
 duplicate_units=$(jq '[.[]] | group_by(.unit | sub(":.*"; "")) | map(select((map(.id) | unique | length) > 1))
     | map({unit: .[0].unit, tasks: (map(.id) | unique)})' <<<"$bindings")
 if [[ $(jq 'length' <<<"$not_created_once") -eq 0 && $(jq 'length' <<<"$orphan") -eq 0 &&
@@ -173,17 +197,17 @@ jq -r '.[] | select(.event == "responseDropped")
 jq -r '.[] | select(.event == "abandoned")
     | "dispatch \(.externalTaskId) was abandoned: the caller disconnected while it was held, so no task was created"' <<<"$record" |
   while IFS= read -r line; do note "$line"; done
-jq -r --argjson created "$created" '. as $all | [.[] | select(.event == "arrived") | .externalTaskId]
+jq -r --slurpfile created <(printf '%s' "$created") '$created[0] as $created | . as $all | [.[] | select(.event == "arrived") | .externalTaskId]
     | map(select(. as $id | ($created | index($id) | not)
         and ([$all[] | select(.externalTaskId == $id and (.event == "abandoned" or .event == "rejected"))] | length == 0)))
     | .[] | "arrival \(.) names no task: it is the arrival of a re-sent dispatch"' <<<"$record" |
   while IFS= read -r line; do note "$line"; done
 
 # 3. Accepted callback deliveries cover every callback-received Event.
-deliveries=$(jq --argjson created "$created" '[.[] | select(.event == "callback" and (.externalTaskId as $id | $created | index($id)))]' <<<"$record")
+deliveries=$(jq --slurpfile created <(printf '%s' "$created") '$created[0] as $created | [.[] | select(.event == "callback" and (.externalTaskId as $id | $created | index($id)))]' <<<"$record")
 attempted=$(jq 'length' <<<"$deliveries")
 accepted=$(jq '[.[] | select(.status >= 200 and .status < 300)] | length' <<<"$deliveries")
-received=$(jq --argjson runner "$runner_attempt_ids" '[.[] | select(.type == "NODE_CALLBACK_RECEIVED"
+received=$(jq --slurpfile runner <(printf '%s' "$runner_attempt_ids") '$runner[0] as $runner | [.[] | select(.type == "NODE_CALLBACK_RECEIVED"
     or ((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED")
         and ((.payload.completionSource // .payload.failureSource) == "CALLBACK")
         and (.payload.toolAttemptId as $id | $runner | index($id) | not)))] | length' <<<"$events")
@@ -197,37 +221,66 @@ if ((attempted > accepted)); then
 fi
 
 # 4. Finished-task poll answers cover every completion whose source is a Provider poll.
-polled=$(jq --argjson created "$created" '[.[] | select(.event == "polled" and (.externalTaskId as $id | $created | index($id)))]' <<<"$polls")
+polled=$(jq --slurpfile created <(printf '%s' "$created") '$created[0] as $created | [.[] | select(.event == "polled" and (.externalTaskId as $id | $created | index($id)))]' <<<"$polls")
 poll_answers=$(jq 'length' <<<"$polled")
 poll_finished=$(jq '[.[] | select(.status == 200 and (.taskStatus == "SUCCEEDED" or .taskStatus == "FAILED"))] | length' <<<"$polled")
 poll_running=$(jq '[.[] | select(.status == 200 and .taskStatus == "RUNNING")] | length' <<<"$polled")
-poll_completions=$(jq '[.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
-    and .payload.completionSource == "PROVIDER_POLL")] | length' <<<"$events")
-if ((poll_finished >= poll_completions)); then
-  pass "poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions"
+poll_completions=$(jq --slurpfile release <(printf '%s' "$release_attempt_ids") --slurpfile runner <(printf '%s' "$runner_attempt_ids") '$release[0] as $release | $runner[0] as $runner
+    | [.[] | select((.type == "NODE_COMPLETED" or .type == "AGENT_ACTION_COMPLETED")
+    and .payload.completionSource == "PROVIDER_POLL"
+    and (.payload.toolAttemptId as $id | $id == null or (($release | index($id) | not) and ($runner | index($id) | not))))] | length' <<<"$events")
+# The sandbox runner answers its own status queries: each of its tests and verifications
+# is judged by the runner's polled lines under its id, which carry the kind's id member.
+runner_record='[]'
+runner_poll_rows='[]'
+if [[ $(jq 'length' <<<"$runner_calls") -gt 0 ]]; then
+  runner_record=$(record_after 0 "$RUNNER_URL" | jq -s '.')
+  runner_poll_rows=$(jq --slurpfile record <(printf '%s' "$runner_record") --slurpfile events <(printf '%s' "$events") '$record[0] as $record | $events[0] as $events | [.[] | . as $c
+      | (if $c.toolName == "verify_patch" then "verification" else "test" end) as $kind
+      | (if $kind == "verification" then "verificationId" else "testId" end) as $idKey
+      | [$record[] | select(.event == "polled" and .kind == $kind and .[$idKey] == $c.testId)] as $polled | {
+      testId, attemptId, kind: $kind,
+      polled: ($polled | length),
+      finished: ([$polled[] | select(.status == 200 and (.taskStatus == "SUCCEEDED" or .taskStatus == "FAILED"))] | length),
+      running: ([$polled[] | select(.status == 200 and (.taskStatus == "RUNNING" or .taskStatus == "ACCEPTED"))] | length),
+      pollCompletions: ([$events[] | select((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED")
+          and ((.payload.completionSource // .payload.failureSource) == "PROVIDER_POLL")
+          and .payload.toolAttemptId == $c.attemptId)] | length)}]' <<<"$runner_calls")
+fi
+runner_polled=$(jq '[.[].polled] | add // 0' <<<"$runner_poll_rows")
+runner_finished=$(jq '[.[].finished] | add // 0' <<<"$runner_poll_rows")
+runner_running=$(jq '[.[].running] | add // 0' <<<"$runner_poll_rows")
+runner_poll_completions=$(jq '[.[].pollCompletions] | add // 0' <<<"$runner_poll_rows")
+runner_uncovered=$(jq -c '[.[] | select(.finished < .pollCompletions) | {testId, kind, finished, pollCompletions}]' <<<"$runner_poll_rows")
+poll_line="poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions runner_polled=$runner_polled runner_finished=$runner_finished runner_running=$runner_running runner_poll_completions=$runner_poll_completions"
+if ((poll_finished >= poll_completions)) && [[ "$runner_uncovered" == "[]" ]]; then
+  pass "$poll_line"
 else
-  fail "poll_answers_cover_completions    polled=$poll_answers finished=$poll_finished running=$poll_running provider_poll_completions=$poll_completions"
+  fail "$poll_line"
+  [[ "$runner_uncovered" == "[]" ]] || note "runner jobs completed by poll without a finished poll answer: $runner_uncovered"
 fi
 jq -r '[.[] | select(.type == "NODE_COMPLETED")] | group_by(.payload.completionSource)
     | .[] | "\(length) NODE_COMPLETED event(s) with completionSource \(.[0].payload.completionSource)"' <<<"$events" |
   while IFS= read -r line; do note "$line"; done
 
-# 5. Each test bound to the sandbox runner ran there once and its callback completions
-# were delivered.
+# 5. Each test or verification bound to the sandbox runner ran there once and its callback
+# completions were delivered. The runner records a verification under its own kind and id
+# member; its callback lines carry the id in the shared testId member.
 if [[ $(jq 'length' <<<"$runner_calls") -gt 0 ]]; then
-  runner_record=$(record_after 0 "$RUNNER_URL" | jq -s '.')
-  runner_rows=$(jq --argjson record "$runner_record" --argjson events "$events" '[.[] | . as $c | {
-      testId, attemptId,
-      arrived: ([$record[] | select(.event == "arrived" and .kind == "test" and .testId == $c.testId)] | length),
-      started: ([$record[] | select(.event == "started" and .testId == $c.testId)] | length),
-      completed: ([$record[] | select(.event == "completed" and .testId == $c.testId)] | length),
+  runner_rows=$(jq --slurpfile record <(printf '%s' "$runner_record") --slurpfile events <(printf '%s' "$events") '$record[0] as $record | $events[0] as $events | [.[] | . as $c
+      | (if $c.toolName == "verify_patch" then "verification" else "test" end) as $kind
+      | (if $kind == "verification" then "verificationId" else "testId" end) as $idKey | {
+      testId, attemptId, kind: $kind,
+      arrived: ([$record[] | select(.event == "arrived" and .kind == $kind and .[$idKey] == $c.testId)] | length),
+      started: ([$record[] | select(.event == "started" and .kind == $kind and .[$idKey] == $c.testId)] | length),
+      completed: ([$record[] | select(.event == "completed" and .kind == $kind and .[$idKey] == $c.testId)] | length),
       delivered: ([$record[] | select(.event == "callback" and .testId == $c.testId and .httpStatus >= 200 and .httpStatus < 300)] | length),
       completions: ([$events[] | select((.type == "AGENT_ACTION_COMPLETED" or .type == "AGENT_ACTION_FAILED")
           and ((.payload.completionSource // .payload.failureSource) == "CALLBACK")
           and .payload.toolAttemptId == $c.attemptId)] | length)}]' <<<"$runner_calls")
   bad=$(jq '[.[] | select(.arrived != 1 or .started != 1 or .completed != 1 or .delivered < .completions)]' <<<"$runner_rows")
   if [[ $(jq 'length' <<<"$bad") -eq 0 ]]; then
-    pass "runner_ran_each_bound_test_once   $(jq -c 'map({testId, arrived, started, completed, delivered, completions})' <<<"$runner_rows")"
+    pass "runner_ran_each_bound_test_once   $(jq -c 'map({testId, kind, arrived, started, completed, delivered, completions})' <<<"$runner_rows")"
   else
     fail "runner_ran_each_bound_test_once   $(jq -c '.' <<<"$bad")"
   fi
@@ -239,12 +292,12 @@ fi
 # 6. Each deploy Attempt reached production at most once and deployed at most once.
 if [[ $(jq 'length' <<<"$deploy_calls") -gt 0 ]]; then
   production_record=$(record_after 0 "$PRODUCTION_URL" | jq -s '.')
-  deploy_rows=$(jq --argjson record "$production_record" '[.[] | . as $c | {
+  deploy_rows=$(jq --slurpfile record <(printf '%s' "$production_record") '$record[0] as $record | [.[] | . as $c | {
       operationId, status,
       arrived: ([$record[] | select(.event == "arrived" and .operationId == $c.operationId)] | length),
       deployed: ([$record[] | select(.event == "deployed" and .operationId == $c.operationId and (.replayed | not))] | length),
       abandoned: ([$record[] | select(.event == "abandoned" and .operationId == $c.operationId)] | length)}]' <<<"$deploy_calls")
-  stray=$(jq --argjson calls "$deploy_calls" '($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
+  stray=$(jq --slurpfile calls <(printf '%s' "$deploy_calls") '$calls[0] as $calls | ($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
       | [.[] | select(.event == "deployed" and (.operationId as $op | $known | index($op) | not)
           and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
         | .operationId]' <<<"$production_record")
@@ -259,6 +312,125 @@ if [[ $(jq 'length' <<<"$deploy_calls") -gt 0 ]]; then
     while IFS= read -r line; do note "$line"; done
 fi
 
+# 6b. Each release Action deployed at most once across its operations, exactly once when it
+# SUCCEEDED, every operation key reached production at most once, every PROVIDER_POLL
+# completion of a release Attempt is matched by production's deployment of that Attempt's
+# operation key, and production deployed nothing else under the Runs' release Actions. A
+# voided operation is noted, never counted. Production does not record status queries, so
+# its deployed line is the answer a successful poll must have observed.
+if [[ $(jq 'length' <<<"$release_calls") -gt 0 ]]; then
+  production_record=${production_record:-$(record_after 0 "$PRODUCTION_URL" | jq -s '.')}
+  release_rows=$(jq --slurpfile record <(printf '%s' "$production_record") --slurpfile events <(printf '%s' "$events") '$record[0] as $record | $events[0] as $events | [.[] | . as $c | {
+      operationId, status, actionId, actionStatus,
+      pollCompletions: ([$events[] | select(.type == "AGENT_ACTION_COMPLETED"
+          and .payload.completionSource == "PROVIDER_POLL" and .payload.toolAttemptId == $c.attemptId)] | length),
+      arrived: ([$record[] | select(.event == "arrived" and .kind == "release" and .operationId == $c.operationId)] | length),
+      deployed: ([$record[] | select(.event == "deployed" and .kind == "release" and .operationId == $c.operationId and (.replayed | not))] | length),
+      voided: ([$record[] | select(.event == "voided" and .kind == "release" and .operationId == $c.operationId)] | length),
+      abandoned: ([$record[] | select(.event == "abandoned" and .kind == "release" and .operationId == $c.operationId)] | length)}]' <<<"$release_calls")
+  release_actions=$(jq '[group_by(.actionId)[] | {actionId: .[0].actionId, actionStatus: .[0].actionStatus,
+      operations: length, deployed: (map(.deployed) | add)}]' <<<"$release_rows")
+  release_stray=$(jq --slurpfile calls <(printf '%s' "$release_calls") '$calls[0] as $calls | ($calls | map(.operationId)) as $known | ($calls | map(.actionId) | unique) as $actions
+      | [.[] | select(.event == "deployed" and .kind == "release" and (.operationId as $op | $known | index($op) | not)
+          and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
+        | .operationId]' <<<"$production_record")
+  bad_operations=$(jq '[.[] | select(.arrived > 1 or .deployed > 1 or (.status == "SUCCEEDED" and .deployed != 1)
+      or .pollCompletions > .deployed)]' <<<"$release_rows")
+  bad_actions=$(jq '[.[] | select(.deployed > 1 or (.actionStatus == "SUCCEEDED" and .deployed != 1))]' <<<"$release_actions")
+  if [[ $(jq 'length' <<<"$bad_operations") -eq 0 && $(jq 'length' <<<"$bad_actions") -eq 0 && $(jq 'length' <<<"$release_stray") -eq 0 ]]; then
+    pass "release_deployed_once_per_action   $(jq -c 'map({actionId, actionStatus, operations, deployed})' <<<"$release_actions") operations=$(jq -c 'map({operationId, status, arrived, deployed, voided, pollCompletions})' <<<"$release_rows")"
+  else
+    fail "release_deployed_once_per_action   operations=$(jq -c '.' <<<"$bad_operations") actions=$(jq -c '.' <<<"$bad_actions") deployed-outside-ledger=$(jq -c '.' <<<"$release_stray")"
+  fi
+  jq -r '.[] | select(.voided > 0)
+      | "release operation \(.operationId) was voided at production; its Action released again under the next key or returned to the Agent"' <<<"$release_rows" |
+    while IFS= read -r line; do note "$line"; done
+  jq -r '.[] | select(.abandoned > 0)
+      | "release operation \(.operationId) was abandoned: the caller disconnected while it was held, so nothing was deployed under it"' <<<"$release_rows" |
+    while IFS= read -r line; do note "$line"; done
+fi
+
+# 6c. Each release operation's Attempt, as the Trace's release view reports it, matches
+# production's own record of that operation key one to one, including operations that were
+# voided, abandoned or settled only after a person stopped waiting:
+#   - the operation key is the Attempt's own "op_<actionId>_<attemptNo>";
+#   - DEPLOYED was deployed exactly once there and never voided;
+#   - VOIDED was voided there and never deployed;
+#   - REFUSED was neither deployed nor voided, and when it reached production, production
+#     answered it with a 4xx refusal;
+#   - UNKNOWN that no occupation still names was not deployed; the one an occupation names
+#     is judged by the occupation check below;
+#   - production holds no line of any kind under one of these Actions for an operation key
+#     the ledger does not hold.
+# 6d. Each occupation traces to the operation that created it: its operation key is one of
+# its Action's operations, and the reason it was freed is supported by production's record
+# of that key. DEPLOYED was deployed there, and a version recorded as deployed but
+# unchecked is the version production deployed; VOIDED was voided and not deployed;
+# REFUSED was refused and not deployed; NOT_DEPLOYED means no operation of the Action was
+# deployed. A SUCCEEDED Action freed its occupation as DEPLOYED. An occupation still ACTIVE
+# is noted as pending post-task reconciliation.
+if [[ $(jq 'length' <<<"$release_views") -gt 0 ]]; then
+  production_record=${production_record:-$(record_after 0 "$PRODUCTION_URL" | jq -s '.')}
+  release_lines=$(jq '[.[] | select(.kind == "release" and (.operationId | type) == "string")]' <<<"$production_record")
+  view_rows=$(jq --slurpfile record <(printf '%s' "$release_lines") '$record[0] as $record | [.[] | . as $v | .operations[] | . as $o | {
+      runId: $v.runId, actionId: $v.actionId, operationKey, attemptNo, status, outcome,
+      keyMatches: (.operationKey == "op_\($v.actionId)_\(.attemptNo)"),
+      occupied: ($v.occupation != null and $v.occupation.operationKey == $o.operationKey),
+      arrived: ([$record[] | select(.event == "arrived" and .operationId == $o.operationKey)] | length),
+      deployed: ([$record[] | select(.event == "deployed" and .operationId == $o.operationKey and (.replayed | not))] | length),
+      voided: ([$record[] | select(.event == "voided" and .operationId == $o.operationKey)] | length),
+      refusals: ([$record[] | select(.event == "responded" and .operationId == $o.operationKey
+          and .status >= 400 and .status < 500)] | length)}]' <<<"$release_views")
+  bad_rows=$(jq '[.[] | select((.keyMatches | not)
+      or (.outcome == "DEPLOYED" and (.deployed != 1 or .voided > 0))
+      or (.outcome == "VOIDED" and (.voided < 1 or .deployed > 0))
+      or (.outcome == "REFUSED" and (.deployed > 0 or .voided > 0 or (.arrived > 0 and .refusals < 1)))
+      or (.outcome == "UNKNOWN" and (.occupied | not) and .deployed > 0)
+      or .deployed > 1)]' <<<"$view_rows")
+  outside=$(jq --slurpfile views <(printf '%s' "$release_views") '$views[0] as $views | ($views | map(.operations[].operationKey)) as $known
+      | ($views | map(.actionId) | unique) as $actions
+      | [.[] | select((.operationId as $op | $known | index($op) | not)
+          and (.operationId as $op | any($actions[]; . as $a | $op | startswith("op_\($a)_"))))
+        | {event, operationId}] | unique' <<<"$release_lines")
+  if [[ $(jq 'length' <<<"$bad_rows") -eq 0 && $(jq 'length' <<<"$outside") -eq 0 ]]; then
+    pass "release_operations_match_record    $(jq -c 'map({operationKey, outcome, arrived, deployed, voided, refusals})' <<<"$view_rows")"
+  else
+    fail "release_operations_match_record    mismatched=$(jq -c '.' <<<"$bad_rows") outside-ledger=$(jq -c '.' <<<"$outside")"
+  fi
+
+  occupation_rows=$(jq --slurpfile rows <(printf '%s' "$view_rows") --slurpfile record <(printf '%s' "$release_lines") '$rows[0] as $rows | $record[0] as $record | [.[] | select(.occupation != null)
+      | . as $v | .occupation as $occ
+      | ([$rows[] | select(.actionId == $v.actionId and .operationKey == $occ.operationKey)] | first) as $op
+      | {runId, actionId, actionStatus, operationKey: $occ.operationKey, status: $occ.status,
+         reason: $occ.releaseReason, unchecked: $occ.deployedUncheckedVersion,
+         ownOperation: ($op != null), outcome: ($op.outcome // null),
+         deployed: ($op.deployed // 0), voided: ($op.voided // 0), refusals: ($op.refusals // 0),
+         deployedVersions: ([$record[] | select(.event == "deployed" and .operationId == $occ.operationKey and (.replayed | not))
+             | .version] | unique),
+         actionDeployed: ([$rows[] | select(.actionId == $v.actionId) | .deployed] | add // 0)}]' <<<"$release_views")
+  bad_occupations=$(jq '[.[] | select((.ownOperation | not)
+      or (.status == "RELEASED" and .reason == "DEPLOYED" and (.deployed != 1
+          or (.unchecked != null and ([.unchecked] != .deployedVersions))))
+      or (.status == "RELEASED" and .reason == "VOIDED" and (.voided < 1 or .deployed > 0))
+      or (.status == "RELEASED" and .reason == "REFUSED" and (.refusals < 1 or .deployed > 0))
+      or (.status == "RELEASED" and .reason == "NOT_DEPLOYED" and .actionDeployed > 0)
+      or (.status == "RELEASED" and .reason == null)
+      or (.unchecked != null and .reason != "DEPLOYED")
+      or (.actionStatus == "SUCCEEDED" and (.status != "RELEASED" or .reason != "DEPLOYED" or .outcome != "DEPLOYED")))]' <<<"$occupation_rows")
+  succeeded_without=$(jq '[.[] | select(.actionStatus == "SUCCEEDED" and .occupation == null) | .actionId]' <<<"$release_views")
+  if [[ $(jq 'length' <<<"$bad_occupations") -eq 0 && $(jq 'length' <<<"$succeeded_without") -eq 0 ]]; then
+    pass "occupation_traces_to_operation     $(jq -c 'map({actionId, operationKey, status, reason, unchecked})' <<<"$occupation_rows")"
+  else
+    fail "occupation_traces_to_operation     untraceable=$(jq -c '.' <<<"$bad_occupations") succeeded-without-occupation=$(jq -c '.' <<<"$succeeded_without")"
+  fi
+  jq -r '.[] | select(.status == "ACTIVE")
+      | "occupation of \(.actionId) under \(.operationKey) is still ACTIVE: post-task reconciliation has not settled it yet"' <<<"$occupation_rows" |
+    while IFS= read -r line; do note "$line"; done
+  jq -r '.[] | select(.unchecked != null)
+      | "occupation of \(.actionId) was freed after the task with version \(.unchecked) deployed but never checked by the Agent"' <<<"$occupation_rows" |
+    while IFS= read -r line; do note "$line"; done
+fi
+
 # 7. Serving summary, per external task id, and the checks it carries.
 runs_total=${#run_ids[@]}
 runs_completed=$(jq '[.[] | select(.status == "COMPLETED")] | length' <<<"$statuses")
@@ -269,9 +441,9 @@ duplicate_generations=$(($(jq 'length' <<<"$orphan") + $(jq 'length' <<<"$duplic
 takeovers=$(jq '[.[] | select(.type == "NODE_DISPATCHED" and .payload.replayed == true)] | length' <<<"$events")
 replayed_answers=$(jq '[.[].replayed] | add // 0' <<<"$tasks")
 bound_units=$(jq '[.[].unit | sub(":.*"; "")] | unique' <<<"$bindings")
-callback_completed=$(jq --argjson units "$bound_units" '[.[] | select(.type == "NODE_COMPLETED" and .payload.completionSource == "CALLBACK"
+callback_completed=$(jq --slurpfile units <(printf '%s' "$bound_units") '$units[0] as $units | [.[] | select(.type == "NODE_COMPLETED" and .payload.completionSource == "CALLBACK"
     and (.nodeRunId as $u | $units | index($u)))] | length' <<<"$events")
-poll_completed=$(jq --argjson units "$bound_units" '[.[] | select(.type == "NODE_COMPLETED" and .payload.completionSource == "PROVIDER_POLL"
+poll_completed=$(jq --slurpfile units <(printf '%s' "$bound_units") '$units[0] as $units | [.[] | select(.type == "NODE_COMPLETED" and .payload.completionSource == "PROVIDER_POLL"
     and (.nodeRunId as $u | $units | index($u)))] | length' <<<"$events")
 over_limit_lines=$(jq '[.[] | select(.overLimit == true)] | length' <<<"$record")
 inflight=$(curl -fsS "$MOCK_URL/control/inflight" 2>/dev/null || printf '{}')

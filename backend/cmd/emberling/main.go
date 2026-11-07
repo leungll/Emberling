@@ -30,6 +30,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaresult"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
+	"github.com/leungll/Emberling/backend/internal/nodes/taskinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/textinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textoutput"
@@ -104,7 +105,9 @@ func run(logger *slog.Logger) error {
 	nodeRegistry := registry.NewNodeRegistry()
 	modelRegistry := registry.NewModelRegistry()
 	toolRegistry := registry.NewToolRegistry()
-	compiler := runtime.NewCompiler(nodeRegistry, clock)
+	// The Compiler validates an agent node's workspace against the repositories registered
+	// here; it never reads a repository itself.
+	compiler := runtime.NewCompiler(nodeRegistry, clock, runtime.WithWorkspaceRepositories(cfg.WorkspaceRepositoryIDs()))
 
 	queue := work.NewQueue(0)
 	notifier := api.NewHub()
@@ -210,6 +213,7 @@ func run(logger *slog.Logger) error {
 			registrations := []registry.NodeRegistration{
 				textinput.Registration(),
 				imageinput.Registration(),
+				taskinput.Registration(),
 				mediabrief.Registration(),
 				prompttemplate.Registration(),
 				textoutput.Registration(),
@@ -257,6 +261,18 @@ func run(logger *slog.Logger) error {
 				return err
 			}
 			if err := registerSandboxTool(toolRegistry, cfg.SandboxRunner, taskClient); err != nil {
+				return err
+			}
+			if err := registerVerifyTool(toolRegistry, cfg.VerifyRunner, taskClient, artifactStore); err != nil {
+				return err
+			}
+			if err := registerChangeRequestTool(toolRegistry, cfg.VerifyRunner, artifactStore); err != nil {
+				return err
+			}
+			if err := registerReviewPatchTool(toolRegistry, cfg.VerifyRunner, modelRegistry, artifactStore, cfg.WorkspaceRepositories); err != nil {
+				return err
+			}
+			if err := registerWorkspaceTools(toolRegistry, cfg.WorkspaceRepositories); err != nil {
 				return err
 			}
 			// Fact declarations may name a producer Tool registered after its consumer, so
@@ -321,6 +337,9 @@ func run(logger *slog.Logger) error {
 		CallbackMaxPayloadBytes: cfg.PendingCallback.MaxPayloadBytes,
 		AssetMaxUploadBytes:     int64(cfg.AssetStorage.MaxUploadBytes),
 		TraceMaxFieldBytes:      cfg.Projection.MaxFieldBytes,
+		// The credential is revealed only here, where it is handed to the comparison
+		// that needs it; it reaches no log, Event or response.
+		Operator: api.OperatorConfig{Token: cfg.Operator.Token.Reveal(), Name: cfg.Operator.Name},
 	})
 
 	httpServer := &http.Server{Addr: cfg.HTTP.Addr, Handler: router, ReadHeaderTimeout: readHeaderTimeout}

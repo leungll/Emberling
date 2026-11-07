@@ -34,7 +34,8 @@ import (
 // PollAttempt is the Provider poll use case. The Reconciler hands it each Attempt whose
 // persisted poll time is due; the use case owns the conditional poll claim, the single
 // Provider query and the entry into ResumeNode, so the Reconciler never claims a poll,
-// queries a Provider or reschedules anything itself.
+// queries a Provider or reschedules anything itself. PollToolAttempt is the same use case
+// for the Attempt of an asynchronous Agent Tool that declares a poll policy.
 //
 // The Agent use cases are the same ones immediate advancement calls, entered with
 // domain.ClaimReconciler instead of domain.ClaimImmediate. Each one owns its own
@@ -50,11 +51,16 @@ type Advancer interface {
 	TimeoutAttempt(ctx context.Context, attemptID string) error
 	ResumeNode(ctx context.Context, req service.ResumeNode) (service.ResumeOutcome, error)
 	PollAttempt(ctx context.Context, req service.PollAttempt) (service.PollAttemptOutcome, error)
+	PollToolAttempt(ctx context.Context, req service.PollToolAttempt) (service.PollToolAttemptOutcome, error)
 	AdvanceAgentTurn(ctx context.Context, turnID string, claimSource domain.ClaimSource) error
 	ExecuteAgentAction(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
 	CompleteAgentFinal(ctx context.Context, actionID string, claimSource domain.ClaimSource) error
 	TimeoutAgentRun(ctx context.Context, agentRunID string) error
 	HandleOrphanToolAttempt(ctx context.Context, attemptID string) error
+	ExpireApproval(ctx context.Context, approvalID string) error
+	OpenReleaseHumanWait(ctx context.Context, attemptID string) error
+	ExpireHumanWait(ctx context.Context, humanWaitID string) error
+	ReconcileReleaseOccupation(ctx context.Context, occupationID string) (service.ReleaseReconcileOutcome, error)
 }
 
 // defaultBatchLimit bounds one RunOnce scan of ListReadyOrRetryable/ListExpired. MVP
@@ -131,6 +137,21 @@ type Report struct {
 	// returned without error (a handling that writes nothing is a success).
 	OrphanToolAttemptsFound   int
 	OrphanToolAttemptsHandled int
+	// DueConfirmDeadlinesFound is how many release Attempts had passed their confirm
+	// deadline without a definite production answer; HumanWaitsOpened counts the
+	// OpenReleaseHumanWait calls that returned without error.
+	DueConfirmDeadlinesFound int
+	HumanWaitsOpened         int
+	// ExpiredHumanWaitsFound is how many OPEN human waits had passed their deadline;
+	// HumanWaitsExpired counts the ExpireHumanWait calls that returned without error.
+	ExpiredHumanWaitsFound int
+	HumanWaitsExpired      int
+	// DueOccupationQueriesFound is how many ACTIVE occupations of ended Runs had a due
+	// post-task query; OccupationQueriesClaimed counts the queries this pass claimed and
+	// OccupationsReleased the subset whose definite answer freed the target.
+	DueOccupationQueriesFound int
+	OccupationQueriesClaimed  int
+	OccupationsReleased       int
 	// DuePollsFound is how many DISPATCHED Attempts ListDuePolls found with a due poll.
 	// PollsClaimed counts the polls this pass claimed whose answer either resolved
 	// nothing or won the resume; PollsResumed is the subset that won the resume.
@@ -142,6 +163,20 @@ type Report struct {
 	PollsResumed   int
 	PollsSkipped   int
 	PollsDuplicate int
+	// DueToolPollsFound is how many DISPATCHED Tool Attempts had a due poll, and the
+	// ToolPolls counts classify each PollToolAttempt outcome as the Node ones above do.
+	// ToolPollsReturned is the subset of claimed polls whose Provider no longer knew the
+	// task and whose call was handed back to the Agent.
+	DueToolPollsFound  int
+	ToolPollsClaimed   int
+	ToolPollsResumed   int
+	ToolPollsReturned  int
+	ToolPollsSkipped   int
+	ToolPollsDuplicate int
+	// ExpiredApprovalsFound is how many PENDING approvals had passed their deadline;
+	// ApprovalsExpired counts the ExpireApproval calls that returned without error.
+	ExpiredApprovalsFound int
+	ApprovalsExpired      int
 	// ConsumablePendingFound is how many stored early callbacks
 	// ListConsumableForWaiting found routed to a still-waiting Attempt.
 	ConsumablePendingFound int
@@ -247,6 +282,8 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 // scanAgentWork performs the Agent rows of the Reconciler scan table, each bounded by the
 // same BatchLimit as every other scan:
 //
+//   - PENDING approvals past their deadline -> the approval expiry use case, which hands
+//     the call back to the Agent and resumes its clock.
 //   - Agent Runs past their deadline -> the Agent timeout use case.
 //   - STARTED synchronous Tool Attempts another process created -> the orphaned Tool
 //     Attempt use case, which hands the call back to the Agent without calling it again.
@@ -273,6 +310,10 @@ func (r *Reconciler) RunOnce(ctx context.Context) (Report, error) {
 // Each use case takes its own conditional claim, so a lost race with immediate advancement
 // is a normal outcome, not an error; only a real failure is collected into the report.
 func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *Report) error {
+	if err := r.scanExpiredApprovals(ctx, now, report); err != nil {
+		return err
+	}
+
 	var expired []domain.AgentRun
 	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		var err error
@@ -291,6 +332,12 @@ func (r *Reconciler) scanAgentWork(ctx context.Context, now time.Time, report *R
 	}
 
 	if err := r.scanOrphanToolAttempts(ctx, now, report); err != nil {
+		return err
+	}
+	if err := r.scanDueConfirmDeadlines(ctx, now, report); err != nil {
+		return err
+	}
+	if err := r.scanExpiredHumanWaits(ctx, now, report); err != nil {
 		return err
 	}
 
@@ -363,12 +410,123 @@ func (r *Reconciler) scanOrphanToolAttempts(ctx context.Context, now time.Time, 
 	return nil
 }
 
+// scanDueConfirmDeadlines hands every release Attempt that passed its confirm deadline
+// while its Action still waits on production to the release human wait use case, which
+// re-checks everything under the Run lock and owns every write.
+func (r *Reconciler) scanDueConfirmDeadlines(ctx context.Context, now time.Time, report *Report) error {
+	var due []store.DueConfirmDeadline
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		due, err = tx.ToolAttempts().ListDueConfirmDeadlines(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list due release confirm deadlines: %w", err)
+	}
+	report.DueConfirmDeadlinesFound = len(due)
+	for _, row := range due {
+		if err := r.cfg.Executor.OpenReleaseHumanWait(ctx, row.AttemptID); err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: open release human wait for tool attempt %s: %w", row.AttemptID, err))
+			continue
+		}
+		report.HumanWaitsOpened++
+	}
+	return nil
+}
+
+// scanExpiredHumanWaits hands every OPEN human wait whose deadline has passed to the human
+// wait expiry use case, which ends the release exactly as a person's stop would. A stop or
+// a production answer that commits first wins, and the expiry then writes nothing.
+func (r *Reconciler) scanExpiredHumanWaits(ctx context.Context, now time.Time, report *Report) error {
+	var expired []domain.HumanWait
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		expired, err = tx.HumanWaits().ListExpiredOpen(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list expired human waits: %w", err)
+	}
+	report.ExpiredHumanWaitsFound = len(expired)
+	for _, wait := range expired {
+		if err := r.cfg.Executor.ExpireHumanWait(ctx, wait.ID); err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: expire human wait %s: %w", wait.ID, err))
+			continue
+		}
+		report.HumanWaitsExpired++
+	}
+	return nil
+}
+
+// scanDueOccupationQueries hands every ACTIVE occupation of an ended Run whose post-task
+// query is due to the release reconciliation use case, which owns the conditional claim,
+// the single production query and the write to the occupation. It only discovers the work.
+func (r *Reconciler) scanDueOccupationQueries(ctx context.Context, now time.Time, report *Report) error {
+	var due []domain.ReleaseOccupation
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		due, err = tx.ReleaseOccupations().ListDueQueries(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list due occupation queries: %w", err)
+	}
+	report.DueOccupationQueriesFound = len(due)
+	for _, occupation := range due {
+		outcome, err := r.cfg.Executor.ReconcileReleaseOccupation(ctx, occupation.ID)
+		if outcome.Claimed {
+			report.OccupationQueriesClaimed++
+		}
+		if outcome.Released {
+			report.OccupationsReleased++
+		}
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: reconcile occupation %s: %w", occupation.ID, err))
+		}
+	}
+	return nil
+}
+
+// scanExpiredApprovals hands every PENDING approval whose deadline has passed to the
+// approval expiry use case. It runs before the Agent deadline scan: an Agent waiting on an
+// approval is paused and therefore never listed as expired, and once the expiry resumes it
+// the deadline has moved. The use case owns the conditional decision; a person who decided
+// first wins and the expiry writes nothing.
+func (r *Reconciler) scanExpiredApprovals(ctx context.Context, now time.Time, report *Report) error {
+	var expired []domain.Approval
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		expired, err = tx.Approvals().ListExpiredPending(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list expired approvals: %w", err)
+	}
+	report.ExpiredApprovalsFound = len(expired)
+	for _, approval := range expired {
+		if err := r.cfg.Executor.ExpireApproval(ctx, approval.ID); err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: expire approval %s: %w", approval.ID, err))
+			continue
+		}
+		report.ApprovalsExpired++
+	}
+	return nil
+}
+
 // scanDuePolls hands every DISPATCHED Attempt whose persisted poll time is due to the
-// Provider poll use case. It runs after the timeout scan so an Attempt already past its
-// deadline is failed rather than polled, and before the Pending Callback replay, which
-// does not depend on it. A poll and a callback or timeout racing for the same Attempt are
-// decided by the use case's conditional updates; the Reconciler only discovers the work.
+// Provider poll use case: Node Attempts first, then the Attempts of asynchronous Agent
+// Tools. It runs after the timeout scans so an Attempt already past its deadline is failed
+// rather than polled, and before the Pending Callback replay, which does not depend on it.
+// A poll and a callback or timeout racing for the same Attempt are decided by the use
+// case's conditional updates; the Reconciler only discovers the work.
 func (r *Reconciler) scanDuePolls(ctx context.Context, now time.Time, report *Report) error {
+	if err := r.scanDueNodePolls(ctx, now, report); err != nil {
+		return err
+	}
+	if err := r.scanDueToolPolls(ctx, now, report); err != nil {
+		return err
+	}
+	return r.scanDueOccupationQueries(ctx, now, report)
+}
+
+// scanDueNodePolls is the Node Attempt row of the due-poll scan.
+func (r *Reconciler) scanDueNodePolls(ctx context.Context, now time.Time, report *Report) error {
 	var due []store.DuePoll
 	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
 		var err error
@@ -399,6 +557,47 @@ func (r *Reconciler) scanDuePolls(ctx context.Context, now time.Time, report *Re
 			report.PollsDuplicate++
 		default:
 			report.PollsSkipped++
+		}
+	}
+	return nil
+}
+
+// scanDueToolPolls is the Tool Attempt row of the due-poll scan. It only discovers the due
+// Attempts through the store and hands each to the Tool poll use case, which owns the
+// claim, the Provider query and every state change.
+func (r *Reconciler) scanDueToolPolls(ctx context.Context, now time.Time, report *Report) error {
+	var due []store.DueToolPoll
+	if err := r.cfg.UoW.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		due, err = tx.ToolAttempts().ListDuePolls(ctx, now, r.cfg.BatchLimit)
+		return err
+	}); err != nil {
+		return fmt.Errorf("reconciler: list due tool polls: %w", err)
+	}
+	report.DueToolPollsFound = len(due)
+
+	for _, row := range due {
+		outcome, err := r.cfg.Executor.PollToolAttempt(ctx, service.PollToolAttempt{
+			AttemptID: row.AttemptID,
+			ActionID:  row.ActionID,
+		})
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Errorf("reconciler: poll tool attempt %s: %w", row.AttemptID, err))
+			continue
+		}
+		switch outcome.Kind {
+		case service.PollAttemptClaimedNotFinal:
+			report.ToolPollsClaimed++
+		case service.PollAttemptResumed:
+			report.ToolPollsClaimed++
+			report.ToolPollsResumed++
+		case service.PollAttemptReturned:
+			report.ToolPollsClaimed++
+			report.ToolPollsReturned++
+		case service.PollAttemptDuplicate:
+			report.ToolPollsDuplicate++
+		default:
+			report.ToolPollsSkipped++
 		}
 	}
 	return nil

@@ -1,8 +1,11 @@
 import type {
   AgentActionTrace,
+  AgentPauseReason,
   AgentTrace,
   AgentTurnTrace,
+  Approval,
   Definition,
+  HumanWaitTrace,
   Node,
   NodeAttempt,
   NodeMetadata,
@@ -228,8 +231,10 @@ function buildTree(
     else if (decision.kind === 'FINAL') what = t().turnFinished;
     else if (!action) what = t().turnCalling(tool);
     else if (action.status === 'SUCCEEDED') what = t().turnCalled(tool);
+    else if (action.status === 'WAITING_APPROVAL') what = t().turnAwaitingApproval(tool);
     else if (
       action.status === 'WAITING_CALLBACK' ||
+      action.status === 'WAITING_HUMAN' ||
       action.status === 'RUNNING' ||
       action.status === 'READY'
     )
@@ -597,7 +602,14 @@ export function axisOf(model: RunModel): Axis {
 }
 
 function openStatus(v: string): boolean {
-  return v === 'RUNNING' || v === 'STARTED' || v === 'WAITING_CALLBACK' || v === 'DISPATCHED';
+  return (
+    v === 'RUNNING' ||
+    v === 'STARTED' ||
+    v === 'WAITING_CALLBACK' ||
+    v === 'WAITING_APPROVAL' ||
+    v === 'WAITING_HUMAN' ||
+    v === 'DISPATCHED'
+  );
 }
 
 /** Start and end on the axis; `end` null means not finished. */
@@ -695,21 +707,46 @@ export function failFocusId(model: RunModel): string | null {
 
 export interface WaitInfo {
   step: Step;
+  /**
+   * `callback`: an outside service must reply. `approval`: a person must decide first.
+   * `human`: a release passed its confirm deadline and a person must confirm its outcome.
+   */
+  kind: 'callback' | 'approval' | 'human';
   turn: AgentTurnTrace | null;
   attempt: ToolAttemptTrace | null;
+  /** The pending approval a person decides, when the wait is for one. */
+  approval: Approval | null;
+  /** The open human wait, when the wait is for a person to confirm a release. */
+  humanWait: HumanWaitTrace | null;
   provider: string | null;
   task: string | null;
   since: string | null;
+  /**
+   * When the wait itself ends: the Agent's deadline for a callback, the approval's own
+   * deadline for an approval. Stored values only; the Backend settles both.
+   */
   deadline: string | null;
+  /** Why the Agent's own clock is stopped during this wait, or `null` while it runs. */
+  pauseReason: AgentPauseReason | null;
   /** The element that shows the wait: the wait row, else the tool call, else the step. */
   focus: string;
+}
+
+/** Whether an Action is an open wait a person or an outside service must end. */
+function waitingAction(status: string | undefined): boolean {
+  return (
+    status === 'WAITING_CALLBACK' || status === 'WAITING_APPROVAL' || status === 'WAITING_HUMAN'
+  );
 }
 
 /** The step that is waiting, for what and since when, from stored values only. */
 export function waitInfo(model: RunModel): WaitInfo | null {
   const ws = model.waitingStep;
   if (!ws) return null;
-  const turn = ws.trace?.turns.find((x) => x.action?.status === 'WAITING_CALLBACK') ?? null;
+  const turn = ws.trace?.turns.find((x) => waitingAction(x.action?.status)) ?? null;
+  const approval = turn?.action?.status === 'WAITING_APPROVAL' ? turn.action.approval : null;
+  const humanWait =
+    turn?.action?.status === 'WAITING_HUMAN' ? (turn.action.release?.humanWait ?? null) : null;
   const attempt = turn?.toolAttempts.find((a) => a.status === 'DISPATCHED') ?? null;
   // A step that is not an Agent waits on its own dispatched attempt.
   const stepAttempt = ws.trace
@@ -726,14 +763,53 @@ export function waitInfo(model: RunModel): WaitInfo | null {
   } else if (stepAttempt && model.byId.has(stepAttempt.id)) {
     focus = stepAttempt.id;
   }
+  const agentRun = ws.trace && !ws.trace.agentRun.terminatedAt ? ws.trace.agentRun : null;
+  if (approval) {
+    return {
+      step: ws,
+      kind: 'approval',
+      turn,
+      attempt: null,
+      approval,
+      humanWait: null,
+      provider: null,
+      task: null,
+      since: approval.requestedAt,
+      deadline: approval.deadline,
+      pauseReason: agentRun?.pauseReason ?? null,
+      focus,
+    };
+  }
+  if (humanWait) {
+    return {
+      step: ws,
+      kind: 'human',
+      turn,
+      attempt,
+      approval: null,
+      humanWait,
+      provider: binding?.providerId ?? null,
+      task: binding?.externalTaskId ?? null,
+      since: humanWait.openedAt,
+      // The human wait's own deadline; the Backend settles it.
+      deadline: humanWait.deadline,
+      pauseReason: agentRun?.pauseReason ?? null,
+      focus,
+    };
+  }
   return {
     step: ws,
+    kind: 'callback',
     turn,
     attempt,
+    approval: null,
+    humanWait: null,
     provider: binding?.providerId ?? null,
     task: binding?.externalTaskId ?? null,
     since: attempt?.dispatchedAt ?? stepAttempt?.dispatchedAt ?? ws.nodeRun?.waitingAt ?? null,
-    deadline: ws.trace && !ws.trace.agentRun.terminatedAt ? ws.trace.agentRun.deadline : null,
+    // The Agent deadline is only a countdown while its clock runs.
+    deadline: agentRun && !agentRun.pausedAt ? agentRun.deadline : null,
+    pauseReason: agentRun?.pauseReason ?? null,
     focus,
   };
 }
@@ -804,7 +880,12 @@ export function toolSequence(trace: AgentTrace): string {
       continue;
     }
     const tool = d.tool ?? '';
-    if (a.status === 'WAITING_CALLBACK' || a.status === 'RUNNING') {
+    if (
+      a.status === 'WAITING_CALLBACK' ||
+      a.status === 'WAITING_APPROVAL' ||
+      a.status === 'WAITING_HUMAN' ||
+      a.status === 'RUNNING'
+    ) {
       pending = tool;
       continue;
     }

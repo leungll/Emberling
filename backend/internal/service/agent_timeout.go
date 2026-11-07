@@ -70,7 +70,9 @@ func (s *ExecutionService) TimeoutAgentRun(ctx context.Context, agentRunID strin
 		}
 
 		now := s.deps.Clock.Now()
-		if agentRun.Termination != nil || now.Before(agentRun.Deadline) {
+		// A paused Agent Run's deadline is not running: it waits on a person or a release,
+		// and the deadline moves later when it resumes, so no timeout is decided here.
+		if agentRun.Termination != nil || agentRun.PausedAt != nil || now.Before(agentRun.Deadline) {
 			return nil
 		}
 		if nodeRun.Status != domain.NodeRunRunning && nodeRun.Status != domain.NodeRunWaitingCallback {

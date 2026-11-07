@@ -148,11 +148,12 @@ func (s *ExecutionService) startAgentRun(
 		}
 		imageModelID = &cfg.ImageModelID
 	}
-	// The review model is frozen the same way. Without one the review Tools apply the mock
-	// policy; a selected one that no longer resolves never falls back to it.
+	// The review model is frozen the same way, checked against every capability the
+	// allowlist's review Tools declare. Without one the review Tools that allow it apply the
+	// mock policy; a selected one that no longer resolves never falls back to it.
 	var reviewModelID *string
 	if cfg.ReviewModelID != "" {
-		if unusable := unusableModel(s.deps.Models, "review model", cfg.ReviewModelID, domain.ModelCapabilityVisionInput); unusable != nil {
+		if unusable := unusableReviewModel(s.deps.Models, cfg.ReviewModelID, reviewModelCapabilities(s.deps.Tools, cfg.AllowedTools)); unusable != nil {
 			return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil, *unusable, now)
 		}
 		reviewModelID = &cfg.ReviewModelID
@@ -180,6 +181,19 @@ func (s *ExecutionService) startAgentRun(
 	if err != nil {
 		return fmt.Errorf("execution: encode agent context version 0 for node %q: %w", nr.NodeID, err)
 	}
+	// The goal is read once from the input the node received and frozen with the Agent
+	// Run; a node that configures no goal pointer freezes none. An input the pointer does
+	// not resolve in is a configuration failure of this Run, decided before any Agent Run
+	// exists, never a default goal.
+	var goal *domain.AgentGoal
+	if cfg.GoalPointer != "" {
+		resolved, err := runtime.ResolveAgentGoal(cfg, ports[inputPort])
+		if err != nil {
+			return s.failAgentNodeRun(ctx, tx, lock, run, nr, nil,
+				domain.ExecutionError{Code: "AGENT_CONFIG_INVALID", Message: err.Error()}, now)
+		}
+		goal = &resolved
+	}
 
 	agentRunID := s.deps.IDs.NewID(domain.IDPrefixAgentRun)
 	deadline := now.Add(time.Duration(cfg.TimeoutMs) * time.Millisecond)
@@ -199,6 +213,7 @@ func (s *ExecutionService) startAgentRun(
 		MaxGenerationCalls: cfg.MaxGenerationCalls,
 		ImageModelID:       imageModelID,
 		ReviewModelID:      reviewModelID,
+		Goal:               goal,
 		// The Agent Run starts pointing at the facts this same transaction creates: Turn
 		// 1, Context Version 0 and State Version 0.
 		CurrentTurnNo:         1,
@@ -208,6 +223,14 @@ func (s *ExecutionService) startAgentRun(
 		Deadline:              deadline,
 	}); err != nil {
 		return err
+	}
+	// The workspace binding is frozen with the Agent Run and in the same transaction: a
+	// running Agent never reads the Definition's repository, commit or allowed paths again,
+	// and a failed initialisation leaves no binding behind.
+	if cfg.Workspace != nil {
+		if err := freezeAgentWorkspaceLocked(ctx, tx, agentRunID, *cfg.Workspace, now); err != nil {
+			return err
+		}
 	}
 
 	if err := tx.AgentContextVersions().Create(ctx, domain.AgentContextVersion{

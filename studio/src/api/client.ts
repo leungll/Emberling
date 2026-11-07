@@ -1,6 +1,12 @@
 import type {
   AgentTrace,
   ApiError,
+  ApprovalDecisionRequest,
+  ApprovalDecisionResponse,
+  ApprovalDetail,
+  ApprovalListResponse,
+  ApprovalStatus,
+  ApprovalView,
   AssetRef,
   CreateDefinitionRequest,
   CreateRunOptions,
@@ -11,6 +17,8 @@ import type {
   DefinitionListItem,
   DefinitionListResponse,
   EventListResponse,
+  HumanWaitListResponse,
+  HumanWaitView,
   ModelListResponse,
   ModelMetadata,
   NodeMetadata,
@@ -21,6 +29,7 @@ import type {
   RunListResponse,
   RunSnapshot,
   SaveDefinitionRequest,
+  StopHumanWaitResponse,
   ToolListResponse,
   ToolMetadata,
   ValidateResponse,
@@ -303,4 +312,81 @@ export function listEvents(
     `/runs/${encodeURIComponent(runId)}/events?${query.toString()}`,
     { ...(signal ? { signal } : {}) },
   ).then((r) => r.items);
+}
+
+// --- Approvals --------------------------------------------------------------
+
+/**
+ * The header the approval routes authenticate with. The credential comes from the viewer
+ * for the current page only; it is never stored by the client and never logged.
+ */
+export const OPERATOR_TOKEN_HEADER = 'X-Emberling-Operator-Token';
+
+function operatorHeaders(token: string): Record<string, string> {
+  return { [OPERATOR_TOKEN_HEADER]: token };
+}
+
+/** Approvals with the given status, oldest request first. */
+export function listApprovals(
+  status: ApprovalStatus,
+  token: string,
+  signal?: AbortSignal,
+): Promise<ApprovalView[]> {
+  const query = new URLSearchParams({ status });
+  return request<ApprovalListResponse>(`/approvals?${query.toString()}`, {
+    headers: operatorHeaders(token),
+    ...(signal ? { signal } : {}),
+  }).then((r) => r.items);
+}
+
+/**
+ * One approval with the Tool name, the committed call arguments, and the change request and
+ * patch the call names, for a person to decide on.
+ */
+export function getApproval(
+  approvalId: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<ApprovalDetail> {
+  return request<ApprovalDetail>(`/approvals/${encodeURIComponent(approvalId)}`, {
+    headers: operatorHeaders(token),
+    ...(signal ? { signal } : {}),
+  });
+}
+
+/**
+ * Records a person's decision. The Backend settles the approval once; the same decision
+ * again is answered as `repeated`, a different one as a 409 conflict.
+ */
+export function decideApproval(
+  approvalId: string,
+  body: ApprovalDecisionRequest,
+  token: string,
+): Promise<ApprovalDecisionResponse> {
+  return request<ApprovalDecisionResponse>(
+    `/approvals/${encodeURIComponent(approvalId)}/decision`,
+    { method: 'POST', body, headers: operatorHeaders(token) },
+  );
+}
+
+// --- Human waits ------------------------------------------------------------
+
+/** The OPEN human waits, earliest deadline first, behind the operator credential. */
+export function listHumanWaits(token: string, signal?: AbortSignal): Promise<HumanWaitView[]> {
+  return request<HumanWaitListResponse>('/human-waits', {
+    headers: operatorHeaders(token),
+    ...(signal ? { signal } : {}),
+  }).then((r) => r.items);
+}
+
+/**
+ * Stops waiting for production's answer: the task ends while the deploy target stays held
+ * until production answers. A wait already stopped is answered as `repeated`; one the
+ * release answer settled first, or whose task already ended, is a 409 conflict.
+ */
+export function stopHumanWait(humanWaitId: string, token: string): Promise<StopHumanWaitResponse> {
+  return request<StopHumanWaitResponse>(`/human-waits/${encodeURIComponent(humanWaitId)}/stop`, {
+    method: 'POST',
+    headers: operatorHeaders(token),
+  });
 }

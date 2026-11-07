@@ -217,6 +217,30 @@ func TestToolMetadata_Validate_RejectsInvalidRegistration(t *testing.T) {
 		{"malformed output schema", func(m *ToolMetadata) { m.OutputSchema = json.RawMessage(`nope`) }, "outputSchema is not valid JSON"},
 		{"unknown side effect kind", func(m *ToolMetadata) { m.SideEffect.Kind = "" }, `sideEffect.kind ""`},
 		{"unknown idempotency mode", func(m *ToolMetadata) { m.SideEffect.Idempotency = "BEST_EFFORT" }, `sideEffect.idempotency "BEST_EFFORT"`},
+		{"write path without a pointer", func(m *ToolMetadata) {
+			m.UsesWorkspace, m.Records, m.WorkspaceWritePath = true, []ToolRecordKind{ToolRecordWorkspacePatch}, "path"
+		}, `workspaceWritePath must be a JSON Pointer`},
+		{"write path without the patch record", func(m *ToolMetadata) {
+			m.UsesWorkspace, m.WorkspaceWritePath = true, "/path"
+		}, `workspaceWritePath is only allowed`},
+		{"write path without the workspace", func(m *ToolMetadata) {
+			m.Records, m.WorkspaceWritePath = []ToolRecordKind{ToolRecordWorkspacePatch}, "/path"
+		}, `workspaceWritePath is only allowed`},
+		{"patch digest path without a pointer", func(m *ToolMetadata) {
+			m.UsesWorkspace, m.WorkspacePatchDigestPath = true, "patchDigest"
+		}, `workspacePatchDigestPath must be a JSON Pointer`},
+		{"patch digest path without the workspace", func(m *ToolMetadata) {
+			m.WorkspacePatchDigestPath = "/patchDigest"
+		}, `workspacePatchDigestPath is only allowed`},
+		{"review model use without a capability", func(m *ToolMetadata) {
+			m.UsesReviewModel = true
+		}, `usesReviewModel requires reviewModelCapability`},
+		{"review model capability without the review model", func(m *ToolMetadata) {
+			m.ReviewModelCapability = ModelCapabilityVisionInput
+		}, `reviewModelCapability is only allowed`},
+		{"required review model without the review model", func(m *ToolMetadata) {
+			m.RequiresReviewModel = true
+		}, `requiresReviewModel is only allowed`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -331,7 +355,7 @@ func TestModelMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 }
 
 func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
-	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false}`
+	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"requiresReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
 
 	fixture := ToolMetadata{
 		Name:          "lookup",
@@ -341,6 +365,7 @@ func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 		SideEffect:    SideEffectPolicy{Kind: SideEffectNone, Idempotency: IdempotencySafe},
 		ExecutionKind: ToolExecutionSync,
 		Requires:      []FactRequirement{},
+		Records:       []ToolRecordKind{},
 	}
 	encoded, err := json.Marshal(fixture)
 	if err != nil {
@@ -449,8 +474,9 @@ func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
 		ExecutionKind: ToolExecutionAsync,
 		Poll:          &PollPolicy{IntervalMs: 2000, MaxPolls: 10},
 		Requires:      []FactRequirement{},
+		Records:       []ToolRecordKind{},
 	}
-	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false}`
+	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"requiresReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
 	encoded, err := json.Marshal(tool)
 	if err != nil {
 		t.Fatalf("Marshal() error: %v", err)

@@ -55,6 +55,20 @@ const (
 	EventAgentStateUpdated      EventType = "AGENT_STATE_UPDATED"
 	EventAgentCompleted         EventType = "AGENT_COMPLETED"
 	EventAgentFailed            EventType = "AGENT_FAILED"
+
+	// The authorization and human-wait vocabulary. The approval and pause paths write the
+	// first four. RELEASE_OUTCOME_UNKNOWN and RELEASE_VOIDED are written by the release
+	// reconciliation path and AGENT_ACTION_WAITING_HUMAN when a release's confirm deadline
+	// passes. AGENT_COMPLETION_EVALUATED is written by the goal-based completion check,
+	// which does not exist yet; the vocabulary and the database constraint already admit it.
+	EventAgentActionWaitingApproval EventType = "AGENT_ACTION_WAITING_APPROVAL"
+	EventApprovalDecided            EventType = "APPROVAL_DECIDED"
+	EventAgentPaused                EventType = "AGENT_PAUSED"
+	EventAgentResumed               EventType = "AGENT_RESUMED"
+	EventReleaseOutcomeUnknown      EventType = "RELEASE_OUTCOME_UNKNOWN"
+	EventReleaseVoided              EventType = "RELEASE_VOIDED"
+	EventAgentActionWaitingHuman    EventType = "AGENT_ACTION_WAITING_HUMAN"
+	EventAgentCompletionEvaluated   EventType = "AGENT_COMPLETION_EVALUATED"
 )
 
 var eventTypes = map[EventType]struct{}{
@@ -70,6 +84,11 @@ var eventTypes = map[EventType]struct{}{
 	EventAgentActionWaiting: {}, EventAgentActionCompleted: {},
 	EventAgentActionFailed: {}, EventAgentStateUpdated: {},
 	EventAgentCompleted: {}, EventAgentFailed: {},
+
+	EventAgentActionWaitingApproval: {}, EventApprovalDecided: {},
+	EventAgentPaused: {}, EventAgentResumed: {},
+	EventReleaseOutcomeUnknown: {}, EventReleaseVoided: {},
+	EventAgentActionWaitingHuman: {}, EventAgentCompletionEvaluated: {},
 }
 
 func (t EventType) IsValid() bool {
@@ -110,19 +129,28 @@ func (s CompletionSource) IsValid() bool {
 // FailureSource records which path produced a failure. It adds TIMEOUT to the completion
 // sources, because a deadline can fail work that no path ever completed, and RUNNER_LOST,
 // because a synchronous call can be left without the process that was executing it.
+//
+// AUTHORIZATION, HUMAN and PROVIDER_REFUSAL are the sources of a definite refusal that is
+// returned to the Agent rather than ending the Agent Run: the Runtime refused the call on
+// the Run's facts, a person rejected or let expire what the call asked for, or the
+// external system answered with a definite no. Their Events carry returnedToAgent.
 type FailureSource string
 
 const (
-	FailureSyncExecution FailureSource = "SYNC_EXECUTION"
-	FailureCallback      FailureSource = "CALLBACK"
-	FailureProviderPoll  FailureSource = "PROVIDER_POLL"
-	FailureTimeout       FailureSource = "TIMEOUT"
-	FailureRunnerLost    FailureSource = "RUNNER_LOST"
+	FailureSyncExecution   FailureSource = "SYNC_EXECUTION"
+	FailureCallback        FailureSource = "CALLBACK"
+	FailureProviderPoll    FailureSource = "PROVIDER_POLL"
+	FailureTimeout         FailureSource = "TIMEOUT"
+	FailureRunnerLost      FailureSource = "RUNNER_LOST"
+	FailureAuthorization   FailureSource = "AUTHORIZATION"
+	FailureHuman           FailureSource = "HUMAN"
+	FailureProviderRefusal FailureSource = "PROVIDER_REFUSAL"
 )
 
 func (s FailureSource) IsValid() bool {
 	switch s {
-	case FailureSyncExecution, FailureCallback, FailureProviderPoll, FailureTimeout, FailureRunnerLost:
+	case FailureSyncExecution, FailureCallback, FailureProviderPoll, FailureTimeout, FailureRunnerLost,
+		FailureAuthorization, FailureHuman, FailureProviderRefusal:
 		return true
 	default:
 		return false

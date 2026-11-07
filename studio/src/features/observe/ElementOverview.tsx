@@ -2,6 +2,7 @@ import { ChevronRight, CircleAlert } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 
+import { CompletionCard } from './CompletionCard';
 import { FailCard, SelectLink, WaitCard } from './Diagnosis';
 import { ElementTime, RunOffset, Tokens } from './RunFacts';
 import { StepImages, ValueView } from './ValueView';
@@ -311,8 +312,70 @@ function StepFacts({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
       });
     }
     facts.push({ label: f.timeLimit, value: limitText(numberOf(config, 'timeoutMs')) });
-    const term = trace.agentRun.termination;
+    const agentRun = trace.agentRun;
+    if (agentRun.goal) facts.push({ label: f.agentGoal, value: agentRun.goal });
+    // A stopped clock is a stored fact (pausedAt and its reason); the deadline is only a
+    // countdown while the clock runs, so a paused Agent shows the pause instead.
+    if (agentRun.pausedAt && agentRun.pauseReason) {
+      facts.push({
+        label: f.agentClock,
+        value: (
+          <span className="flex flex-col">
+            <span>{copy.status.pause[agentRun.pauseReason]}</span>
+            <Muted>
+              {copy.runs.details.pausedSince} <Timestamp iso={agentRun.pausedAt} />
+            </Muted>
+          </span>
+        ),
+      });
+    }
+    const term = agentRun.termination;
     if (term) facts.push({ label: f.ended, value: copy.status.termination[term] });
+    const ws = trace.workspace;
+    if (ws) {
+      facts.push({ label: f.repository, value: ws.repositoryId });
+      facts.push({
+        label: f.baseCommit,
+        value: <span className="font-mono">{ws.baseCommit.slice(0, 12)}</span>,
+      });
+      facts.push({ label: f.allowedPaths, value: ws.allowedPaths.join(', ') });
+      if (ws.deployTarget) {
+        facts.push({
+          label: f.deployTarget,
+          value: `${ws.deployTarget.service} (${ws.deployTarget.environment})`,
+        });
+      }
+      const latest = ws.patches.at(-1);
+      facts.push({
+        label: f.patches,
+        value: (
+          <>
+            <span className="tabular-nums">{ws.patches.length}</span>
+            {latest ? <Muted> {f.latestPatch(latest.patchDigest.slice(0, 12))}</Muted> : null}
+            {ws.patchesTruncated ? <Muted> ({f.morePatches})</Muted> : null}
+          </>
+        ),
+      });
+    }
+    const requests = trace.changeRequests;
+    if (requests && requests.items.length > 0) {
+      const latestRequest = requests.items.at(-1);
+      facts.push({
+        label: f.changeRequests,
+        value: (
+          <>
+            <span className="tabular-nums">{requests.items.length}</span>
+            {latestRequest ? (
+              <Muted>
+                {' '}
+                <span className="font-mono">{f.latestChangeRequest(latestRequest.id)}</span>
+              </Muted>
+            ) : null}
+            {requests.truncated ? <Muted> ({f.moreChangeRequests})</Muted> : null}
+          </>
+        ),
+      });
+    }
   } else if (policy && (policy.maxAttempts ?? 1) > 1) {
     facts.push({
       label: f.attempts,
@@ -429,12 +492,14 @@ function StepOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
         }
       : null,
   ];
+  const completion = step.trace?.agentRun.completion ?? null;
   return (
     <>
       {failure ? <FailCard failure={failure} workflowId={ctx.workflowId} /> : null}
       {wait ? (
         <WaitCard wait={wait} model={ctx.model} tools={ctx.tools} onSelect={ctx.onSelect} />
       ) : null}
+      {completion ? <CompletionCard completion={completion} /> : null}
       {sequence ? (
         <Lead>
           <Words text={sequence} tools={allowedTools(step)} />{' '}
@@ -675,7 +740,11 @@ function TurnOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
           ? turn.toolAttempts.length
             ? d.turnLead.FAILED
             : d.turnLead.BLOCKED
-          : status === 'SUCCEEDED' || status === 'WAITING_CALLBACK' || status === 'RUNNING'
+          : status === 'SUCCEEDED' ||
+              status === 'WAITING_CALLBACK' ||
+              status === 'WAITING_APPROVAL' ||
+              status === 'WAITING_HUMAN' ||
+              status === 'RUNNING'
             ? d.turnLead[status]
             : d.turnLead.other;
       lead = `${d.turnLead.call(tool)}${tail}`;
@@ -774,7 +843,12 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   if (!turn || !action || !decision || !step) return null;
   const focus = ctx.failure?.focus === el.id;
   const wait =
-    action.status === 'WAITING_CALLBACK' && ctx.model.waitingStep === step ? ctx.wait : null;
+    (action.status === 'WAITING_CALLBACK' ||
+      action.status === 'WAITING_APPROVAL' ||
+      action.status === 'WAITING_HUMAN') &&
+    ctx.model.waitingStep === step
+      ? ctx.wait
+      : null;
   const ids: (Fact | null)[] = [
     { label: f.actionId, value: <IdChip id={action.id} label={f.actionId.toLowerCase()} /> },
   ];
@@ -810,6 +884,13 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   const source = action.completionSource;
   const claim = action.claimSource;
   const claimWords = claim ? copy.status.claimSource[claim] : null;
+  const approval = action.approval;
+  const approvalWords = approval ? copy.status.approval[approval.status] : null;
+  const release = action.release;
+  const lastOperation = release?.operations.at(-1) ?? null;
+  const authorizationWords = action.authorization
+    ? copy.status.authorization[action.authorization]
+    : null;
   const attemptEls = attempts
     .map((x) => ctx.model.byId.get(x.id))
     .filter((x): x is TraceElement => Boolean(x));
@@ -825,7 +906,13 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
       {wait ? (
         <WaitCard wait={wait} model={ctx.model} tools={ctx.tools} onSelect={ctx.onSelect} />
       ) : null}
-      {!attempts.length && action.status === 'FAILED' && !focus ? <Lead>{d.blocked}</Lead> : null}
+      {!attempts.length && action.status === 'FAILED' && !focus ? (
+        <Lead>
+          {action.authorization === 'DENY' && action.authorizationReason
+            ? d.denied(action.authorizationReason)
+            : d.blocked}
+        </Lead>
+      ) : null}
       <Section>
         <FactList
           compact
@@ -854,7 +941,103 @@ function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
               ? { label: f.result, value: d.receivedVia[source] ?? d.received }
               : null,
             claimWords ? { label: f.pickedUp, value: claimWords } : null,
+            authorizationWords ? { label: f.authorization, value: authorizationWords } : null,
+            approval && approvalWords
+              ? {
+                  label: f.approval,
+                  value: (
+                    <span className="flex flex-col">
+                      <span>
+                        <Link
+                          to={`/approvals/${encodeURIComponent(approval.id)}`}
+                          className="text-accent-fg underline-offset-3 hover:underline"
+                        >
+                          {approvalWords}
+                        </Link>
+                      </span>
+                      {approval.decidedBy ? (
+                        <span className="text-fg-muted">
+                          {f.decidedBy}: {approval.decidedBy}
+                        </span>
+                      ) : null}
+                      {approval.reason ? (
+                        <span className="text-fg-muted">
+                          {f.reason}: {approval.reason}
+                        </span>
+                      ) : null}
+                    </span>
+                  ),
+                }
+              : null,
             attempts.length > 1 ? { label: f.attempts, value: String(attempts.length) } : null,
+            release?.operations.length
+              ? {
+                  label: f.operations,
+                  value: (
+                    <span className="flex flex-col">
+                      {release.operations.map((op) => (
+                        <span key={op.operationKey}>
+                          {f.operation(op.operationKey, copy.status.releaseOutcome[op.outcome])}
+                        </span>
+                      ))}
+                    </span>
+                  ),
+                }
+              : null,
+            release?.occupation
+              ? {
+                  label: f.releaseTarget,
+                  value:
+                    release.occupation.status === 'ACTIVE' || !release.occupation.releaseReason
+                      ? f.occupationHeld(release.occupation.targetKey)
+                      : f.occupationReleased(
+                          release.occupation.targetKey,
+                          copy.status.releaseReason[release.occupation.releaseReason],
+                        ),
+                }
+              : null,
+            release?.occupation?.status === 'ACTIVE' && release.occupation.nextQueryAt
+              ? {
+                  label: f.postTaskQuery,
+                  value: <Timestamp iso={release.occupation.nextQueryAt} />,
+                }
+              : null,
+            release?.occupation?.deployedUncheckedVersion
+              ? {
+                  label: f.uncheckedVersion,
+                  value: f.uncheckedVersionValue(release.occupation.deployedUncheckedVersion),
+                }
+              : null,
+            lastOperation?.confirmDeadline &&
+            action.status !== 'SUCCEEDED' &&
+            action.status !== 'FAILED'
+              ? {
+                  label: f.confirmDeadline,
+                  value: <Timestamp iso={lastOperation.confirmDeadline} />,
+                }
+              : null,
+            release?.humanWait
+              ? {
+                  label: f.humanWait,
+                  value: (
+                    <span className="flex flex-col">
+                      <span>
+                        {release.humanWait.outcome
+                          ? f.humanWaitOutcome(
+                              copy.status.humanWait[release.humanWait.status],
+                              release.humanWait.outcome,
+                            )
+                          : copy.status.humanWait[release.humanWait.status]}
+                      </span>
+                      {release.humanWait.closedBy ? (
+                        <span className="text-fg-muted">
+                          {f.decidedBy}: {release.humanWait.closedBy}
+                        </span>
+                      ) : null}
+                    </span>
+                  ),
+                }
+              : null,
           ]}
         />
       </Section>

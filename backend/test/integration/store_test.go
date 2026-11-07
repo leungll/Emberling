@@ -403,7 +403,7 @@ func TestMigrations_ApplyOnFreshDatabase_Succeeds(t *testing.T) {
 		"callback_bindings", "pending_callbacks",
 		"agent_runs", "agent_turns", "agent_decisions", "agent_actions",
 		"tool_attempts", "agent_context_versions", "agent_state_versions",
-		"execution_facts",
+		"execution_facts", "agent_completions",
 	} {
 		var exists bool
 		err := pool.QueryRow(ctx,
@@ -433,8 +433,8 @@ func TestMigrations_ApplyTwice_Idempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM goose_db_version WHERE version_id > 0`).Scan(&applied); err != nil {
 		t.Fatalf("read goose version table: %v", err)
 	}
-	if applied != 13 {
-		t.Fatalf("applied migrations after two runs: want 13, got %d", applied)
+	if applied != 20 {
+		t.Fatalf("applied migrations after two runs: want 20, got %d", applied)
 	}
 }
 

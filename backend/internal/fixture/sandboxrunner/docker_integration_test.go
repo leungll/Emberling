@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -129,5 +130,80 @@ func TestDockerBackendIntegration_TinyTimeout_TimesOutAndLeavesNoContainer(t *te
 	}
 	if strings.TrimSpace(string(output)) != "" {
 		t.Fatalf("container left behind: %s", output)
+	}
+}
+
+// verifyImage names the verification image, built by deploy/sandboxrunner-verify/build.sh
+// and pinned by digest, that the verification integration test runs. It is a test flag
+// because the image is built locally and never published; without it the test skips.
+var verifyImage = flag.String("verify-image", "", "verification image reference pinned by digest (name@sha256:...)")
+
+func requireVerifyImage(t *testing.T) string {
+	t.Helper()
+	requireDocker(t)
+	if *verifyImage == "" {
+		t.Skip("no verification image: pass -verify-image=<name@sha256:...> built by deploy/sandboxrunner-verify/build.sh")
+	}
+	if !strings.Contains(*verifyImage, "@sha256:") {
+		t.Fatalf("-verify-image %q is not pinned by digest", *verifyImage)
+	}
+	return *verifyImage
+}
+
+// A test that only passes when it can open a network connection must fail inside the
+// verification container, which has no network.
+func TestDockerVerification_NetworkAccess_TestFails(t *testing.T) {
+	image := requireVerifyImage(t)
+	f := vulnRepo(t)
+	verifier, err := NewDockerVerifier(NewLocalRepositories(map[string]string{vulnRepoID: f.repoDir}), image, 5*time.Minute, ExecRunner{})
+	if err != nil {
+		t.Fatalf("NewDockerVerifier: %v", err)
+	}
+	networkTest := fixturePatch(t, "fix-complete.patch") + `diff --git a/tests/network_test.go b/tests/network_test.go
+new file mode 100644
+--- /dev/null
++++ b/tests/network_test.go
+@@ -0,0 +1,15 @@
++package tests
++
++import (
++	"net"
++	"testing"
++	"time"
++)
++
++func TestNetwork_IsReachable(t *testing.T) {
++	conn, err := net.DialTimeout("tcp", "1.1.1.1:80", 3*time.Second)
++	if err != nil {
++		t.Fatalf("dial: %v", err)
++	}
++	_ = conn.Close()
++}
+`
+	outcome := verifier.Verify(context.Background(), vulnJob(dockerTestID("itest_network"), networkTest))
+	if !outcome.Verdict || outcome.TestsPassed || outcome.Tests.Failed != 1 {
+		t.Fatalf("outcome = %+v, want a verdict with exactly the network test failing\n%s", outcome, outcome.Log)
+	}
+	if !outcome.ScanClean || !outcome.DependenciesClean || outcome.Scanner != scannerGovulncheck {
+		t.Fatalf("outcome = %+v, want a clean govulncheck scan and clean dependencies", outcome)
+	}
+}
+
+// The complete fix passes every check in the container, with govulncheck reading the
+// pinned snapshot and the module cache baked into the image.
+func TestDockerVerification_CompleteFix_PassesAllChecks(t *testing.T) {
+	image := requireVerifyImage(t)
+	f := vulnRepo(t)
+	verifier, err := NewDockerVerifier(NewLocalRepositories(map[string]string{vulnRepoID: f.repoDir}), image, 5*time.Minute, ExecRunner{})
+	if err != nil {
+		t.Fatalf("NewDockerVerifier: %v", err)
+	}
+	outcome := verifier.Verify(context.Background(), vulnJob(dockerTestID("itest_complete"), fixturePatch(t, "fix-complete.patch")))
+	if !outcome.Verdict || !outcome.Passed() || outcome.Scanner != scannerGovulncheck {
+		t.Fatalf("outcome = %+v\n%s", outcome, outcome.Log)
+	}
+	baseline := verifier.Verify(context.Background(), vulnJob(dockerTestID("itest_baseline"), ""))
+	if !baseline.Verdict || !baseline.TestsPassed || baseline.ScanClean || baseline.DependenciesClean {
+		t.Fatalf("baseline outcome = %+v, want passing tests with a vulnerable scan and dependency list\n%s", baseline, baseline.Log)
 	}
 }

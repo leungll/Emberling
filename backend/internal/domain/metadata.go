@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Extension metadata is the single shared description of a registered Node, Model or
@@ -129,7 +130,8 @@ type UIField struct {
 	Order int     `json:"order"`
 	Group UIGroup `json:"group"`
 	// Widget is the control hint; Capability filters the Model Selector list and must be
-	// empty for every other Widget.
+	// empty for every other Widget. A Model Selector without a Capability lists every
+	// registered model, and the Backend checks the capability the selection needs on save.
 	Widget     UIWidget `json:"widget"`
 	Capability string   `json:"capability,omitempty"`
 }
@@ -310,16 +312,124 @@ type ToolMetadata struct {
 	// node. Saving a Definition requires that node to select one, and each call receives
 	// the Agent Run's frozen image Model ID; the Runtime never decides this by Tool Name.
 	UsesImageModel bool `json:"usesImageModel"`
-	// UsesReviewModel marks a Tool that reviews with the vision model optionally selected
+	// UsesReviewModel marks a Tool that reviews with the review model optionally selected
 	// on its Agent node. Each call receives the Agent Run's frozen review Model ID, or none
 	// when the node selected none; the Runtime never decides this by Tool Name.
 	UsesReviewModel bool `json:"usesReviewModel"`
+	// ReviewModelCapability names the model capability the selected review model must
+	// declare for this Tool: a vision review needs inline image input, a text review needs
+	// the strict structured output every Agent model gives. It is required with
+	// UsesReviewModel and forbidden without it; the Runtime checks the selection against it
+	// when a Definition is saved, when the Agent Run freezes the model and when a call is
+	// claimed. Omitted on the wire when undeclared.
+	ReviewModelCapability string `json:"reviewModelCapability,omitempty"`
+	// RequiresReviewModel marks a review Tool that gives an independent second opinion: its
+	// Agent node must select a review model, and that model must not be the node's own
+	// decision model. A Tool that leaves it false falls back to its mock policy when the
+	// node selects no review model. Only a Tool that declares UsesReviewModel may set it.
+	RequiresReviewModel bool `json:"requiresReviewModel"`
 	// CostSource is the stable identifier the charges of this Tool's calls are attributed
 	// to when the call is bound to no Model ID, such as a task sent to a Provider that
 	// names no model. A Tool that calls a registered model attributes its charges to that
 	// Model ID instead and leaves it empty. It is a Runtime attribution key, not a
 	// Provider identifier or a credential, and it is not part of the catalog projection.
 	CostSource string `json:"-"`
+	// Authorization declares the risk and reversibility the per-Action authorization
+	// decision reads. A Tool that declares none is a LOW-risk Tool: every Tool registered
+	// before this declaration existed keeps its behaviour, and the Runtime never infers
+	// risk from a Tool Name. Omitted on the wire when undeclared.
+	Authorization *ToolAuthorization `json:"authorization,omitempty"`
+	// Records lists the record kinds a successful result of this Tool may carry, which the
+	// result transaction persists. A result carrying a record of an undeclared kind is an
+	// invalid Tool result; the Runtime decides this by the declaration, never by Tool Name.
+	Records []ToolRecordKind `json:"records"`
+	// UsesWorkspace marks a Tool whose calls receive the Agent Run's frozen workspace view.
+	UsesWorkspace bool `json:"usesWorkspace"`
+	// WorkspaceWritePath is a JSON Pointer into the call's arguments naming the repository
+	// path a call of this Tool writes, for a Tool that records a WORKSPACE_PATCH. The
+	// Runtime checks that path against the Agent Run's frozen allowed paths before any
+	// Attempt exists and returns a SCOPE_DENIED refusal to the Agent when it falls outside
+	// them. Empty means the Tool declares no single written path; the recorded patch's
+	// touched paths are still checked in the result transaction. Omitted on the wire when
+	// undeclared.
+	WorkspaceWritePath string `json:"workspaceWritePath,omitempty"`
+	// WorkspacePatchDigestPath is a JSON Pointer into the call's arguments naming the
+	// workspace patch digest the call is about, for a Tool that acts on the Agent Run's
+	// current patch, such as a verification. The Runtime compares it with the digest of
+	// the newest recorded patch before any Attempt exists and returns a STALE_PATCH
+	// refusal to the Agent when they differ, so a result can never be bound to a patch
+	// the workspace has moved past. Empty means the Tool declares no such argument.
+	// Omitted on the wire when undeclared.
+	WorkspacePatchDigestPath string `json:"workspacePatchDigestPath,omitempty"`
+	// Reconcilable marks an ASYNC Tool whose uncertain or lost external operation the
+	// Runtime may query for an authoritative result after the fact. It requires a Poll
+	// declaration: reconciliation is a status query, never a resend.
+	Reconcilable bool `json:"reconcilable"`
+	// OccupiesReleaseTarget marks a reconcilable Tool whose approved call holds the Agent
+	// Run's frozen deploy target until the release settles. The approval transaction
+	// acquires the occupation for a Tool that declares it; the Runtime never decides this by
+	// Tool Name. Omitted on the wire when false.
+	OccupiesReleaseTarget bool `json:"occupiesReleaseTarget,omitempty"`
+	// ReturnUnmetRequirement makes an unmet fact requirement a definite refusal that is
+	// returned to the Agent, so it can establish the missing fact and call again, instead
+	// of ending the Agent Run. A Tool that leaves it false keeps the terminal behaviour.
+	ReturnUnmetRequirement bool `json:"returnUnmetRequirement"`
+}
+
+// ToolAuthorizationRisk is the declared risk class of a Tool's calls.
+type ToolAuthorizationRisk string
+
+const (
+	// ToolRiskLow calls are allowed without a human decision. It is also what an
+	// undeclared Authorization means.
+	ToolRiskLow ToolAuthorizationRisk = "LOW"
+	// ToolRiskProduction calls change a production system and need a human decision.
+	ToolRiskProduction ToolAuthorizationRisk = "PRODUCTION"
+)
+
+func (r ToolAuthorizationRisk) IsValid() bool {
+	return r == ToolRiskLow || r == ToolRiskProduction
+}
+
+// ToolAuthorization is the declared authorization profile of one Tool.
+type ToolAuthorization struct {
+	Risk ToolAuthorizationRisk `json:"risk"`
+	// Reversible reports whether the effect of a call can be undone by a later call.
+	Reversible bool `json:"reversible"`
+}
+
+// EffectiveRisk is the risk the authorization decision reads: the declared one, or LOW
+// when the Tool declares no Authorization.
+func (m ToolMetadata) EffectiveRisk() ToolAuthorizationRisk {
+	if m.Authorization == nil {
+		return ToolRiskLow
+	}
+	return m.Authorization.Risk
+}
+
+// ToolRecordKind names a record a Tool result may carry for the result transaction to
+// persist.
+type ToolRecordKind string
+
+const (
+	// ToolRecordWorkspacePatch is a new cumulative workspace patch.
+	ToolRecordWorkspacePatch ToolRecordKind = "WORKSPACE_PATCH"
+	// ToolRecordChangeRequest is a change request assembled from verified facts.
+	ToolRecordChangeRequest ToolRecordKind = "CHANGE_REQUEST"
+)
+
+func (k ToolRecordKind) IsValid() bool {
+	return k == ToolRecordWorkspacePatch || k == ToolRecordChangeRequest
+}
+
+// DeclaresRecord reports whether the Tool's registration lists the record kind.
+func (m ToolMetadata) DeclaresRecord(kind ToolRecordKind) bool {
+	for _, declared := range m.Records {
+		if declared == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // Validate mirrors NodeMetadata.Validate for Tool registrations. Executor presence and
@@ -342,11 +452,73 @@ func (m ToolMetadata) Validate() error {
 	errs = append(errs, validateSideEffect(m.SideEffect)...)
 	errs = append(errs, validatePollPolicy(m.Poll, m.ExecutionKind == ToolExecutionAsync)...)
 	errs = append(errs, validateToolFactDeclarations(m.Produces, m.Requires)...)
+	errs = append(errs, validateToolAuthorization(m.Authorization)...)
+	errs = append(errs, validateToolRecords(m.Records)...)
+	if m.Reconcilable && (m.ExecutionKind != ToolExecutionAsync || m.Poll == nil) {
+		errs = append(errs, errors.New("reconcilable is only allowed on an ASYNC tool that declares poll"))
+	}
+	if m.OccupiesReleaseTarget && (!m.Reconcilable || !m.UsesWorkspace) {
+		errs = append(errs, errors.New("occupiesReleaseTarget is only allowed on a reconcilable tool that uses the workspace"))
+	}
+	if m.WorkspaceWritePath != "" {
+		if err := ValidateJSONPointer(m.WorkspaceWritePath); err != nil || !strings.HasPrefix(m.WorkspaceWritePath, "/") {
+			errs = append(errs, errors.New("workspaceWritePath must be a JSON Pointer starting with \"/\""))
+		}
+		if !m.UsesWorkspace || !m.DeclaresRecord(ToolRecordWorkspacePatch) {
+			errs = append(errs, errors.New("workspaceWritePath is only allowed on a tool that uses the workspace and records WORKSPACE_PATCH"))
+		}
+	}
+	if m.WorkspacePatchDigestPath != "" {
+		if err := ValidateJSONPointer(m.WorkspacePatchDigestPath); err != nil || !strings.HasPrefix(m.WorkspacePatchDigestPath, "/") {
+			errs = append(errs, errors.New("workspacePatchDigestPath must be a JSON Pointer starting with \"/\""))
+		}
+		if !m.UsesWorkspace {
+			errs = append(errs, errors.New("workspacePatchDigestPath is only allowed on a tool that uses the workspace"))
+		}
+	}
+	switch {
+	case m.UsesReviewModel && m.ReviewModelCapability == "":
+		errs = append(errs, errors.New("usesReviewModel requires reviewModelCapability to name the capability the review model must declare"))
+	case !m.UsesReviewModel && m.ReviewModelCapability != "":
+		errs = append(errs, errors.New("reviewModelCapability is only allowed on a tool that uses the review model"))
+	}
+	if m.RequiresReviewModel && !m.UsesReviewModel {
+		errs = append(errs, errors.New("requiresReviewModel is only allowed on a tool that uses the review model"))
+	}
 
 	if len(errs) == 0 {
 		return nil
 	}
 	return fmt.Errorf("invalid tool metadata %q: %w", m.Name, errors.Join(errs...))
+}
+
+// validateToolAuthorization checks an optional authorization declaration. Absence is the
+// LOW profile and needs no check.
+func validateToolAuthorization(authorization *ToolAuthorization) []error {
+	if authorization == nil {
+		return nil
+	}
+	if !authorization.Risk.IsValid() {
+		return []error{fmt.Errorf("authorization.risk %q is not a supported risk", authorization.Risk)}
+	}
+	return nil
+}
+
+// validateToolRecords checks that every declared record kind is known and listed once.
+func validateToolRecords(records []ToolRecordKind) []error {
+	var errs []error
+	seen := make(map[ToolRecordKind]struct{}, len(records))
+	for _, kind := range records {
+		if !kind.IsValid() {
+			errs = append(errs, fmt.Errorf("records: %q is not a supported record kind", kind))
+			continue
+		}
+		if _, duplicate := seen[kind]; duplicate {
+			errs = append(errs, fmt.Errorf("records: %q is declared more than once", kind))
+		}
+		seen[kind] = struct{}{}
+	}
+	return errs
 }
 
 // validatePorts checks one port list. Port names identify Edge handles, so a duplicate
