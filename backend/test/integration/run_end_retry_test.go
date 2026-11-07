@@ -360,3 +360,67 @@ func TestRunEnd_RacingTheRetryClaim_OneWinner(t *testing.T) {
 	}
 	h.assertRetrySettled(run, task, attempt)
 }
+
+// A row left behind by a Run that ended before the Run's end settled pending retries. Its
+// retry never starts and no later end of that Run comes, so Advance, which the recovery
+// scan runs for it, settles it under the Run lock as the Run's end would have: with its
+// Event, its slot freed, and the Event order persisted.
+func TestAdvance_EndedRunWithAPendingRetry_OnePassSettlesIt(t *testing.T) {
+	h := newOrphanHarness(t, 1)
+	run, _, task, attempt := h.retryScheduled()
+	rec := h.restart()
+	completedAt := h.clock.Now()
+	if _, err := h.pool.Exec(h.ctx, `UPDATE runs SET status = 'FAILED', completed_at = $2 WHERE id = $1`, run.ID, completedAt); err != nil {
+		t.Fatalf("end the Run without settling: %v", err)
+	}
+
+	h.clock.Advance(orphanLongAfter)
+	h.pass(rec)
+
+	got := h.nodeRun(run.ID, "z_task")
+	if got.Status != domain.NodeRunFailed || got.NextAttemptAt != nil || got.Error == nil || got.Error.Code != attempt.Error.Code {
+		t.Fatalf("z_task = %s next=%v error=%+v, want FAILED with its last Attempt's failure", got.Status, got.NextAttemptAt, got.Error)
+	}
+	h.assertNotHeld(task)
+	h.assertNotRecoverable(task)
+	if n := len(h.attempts(task.ID)); n != 1 {
+		t.Fatalf("attempts = %d, want no new Attempt", n)
+	}
+	events := h.events(run.ID)
+	if n := len(asyncNodeEventsOfType(events, task.ID, domain.EventNodeFailed)); n != 1 {
+		t.Fatalf("z_task NODE_FAILED events = %d, want 1", n)
+	}
+	ended := h.run(run.ID)
+	if ended.Status != domain.RunFailed || !ended.CompletedAt.Equal(completedAt) {
+		t.Fatalf("run = %s completed %v, want FAILED and completed at %v", ended.Status, ended.CompletedAt, completedAt)
+	}
+	if last := events[len(events)-1].Seq; ended.LastSeq != last {
+		t.Fatalf("run last_seq = %d, want the newest Event's %d", ended.LastSeq, last)
+	}
+}
+
+// Advance on an ended Run with nothing to settle writes nothing, so a queue item left over
+// for that Run moves no fact and no timestamp.
+func TestAdvance_EndedRunWithNothingToSettle_WritesNothing(t *testing.T) {
+	h := newOrphanHarness(t, 1)
+	run, waiting, _, _ := h.retryScheduled()
+	h.failSibling(waiting)
+	before := h.run(run.ID)
+	seen := len(h.events(run.ID))
+
+	h.clock.Advance(orphanLongAfter)
+	outcome, err := h.svc.Advance(h.ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+
+	if outcome.Claimed {
+		t.Fatalf("outcome = %+v, want nothing claimed", outcome)
+	}
+	if got := h.run(run.ID); !got.UpdatedAt.Equal(before.UpdatedAt) || got.LastSeq != before.LastSeq {
+		t.Fatalf("run updated %v seq %d, want the %v and %d it ended with", got.UpdatedAt, got.LastSeq, before.UpdatedAt, before.LastSeq)
+	}
+	if n := len(h.events(run.ID)); n != seen {
+		t.Fatalf("events = %d, want %d", n, seen)
+	}
+}
