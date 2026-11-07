@@ -1,0 +1,60 @@
+{
+  "turns": [
+    {
+      "toolCall": {
+        "toolName": "read_material",
+        "arguments": {"artifactId": "{{task:/transcript/artifactId}}", "startLine": 1, "lineCount": 200}
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "run_checks",
+        "arguments": {
+          "kind": "TIMELINE",
+          "timeline": {
+            "sourceId": "{{task:/sourceId}}",
+            "transcriptSha256": "{{task:/transcript/sha256}}",
+            "targetDurationMs": 45000,
+            "segments": [
+              {"from": "S3", "to": "S4"},
+              {"from": "S5", "to": "S5"},
+              {"from": "S6", "to": "S6"}
+            ]
+          }
+        },
+        "statePatch": {
+          "plan": {
+            "goal": "A 45-second vertical clip on why she loves engineering and what the job involves from one day to the next.",
+            "opening": "How a guidance counselor steered her from architecture to civil engineering (S3-S4).",
+            "mainSegments": [
+              "Why she loves engineering: breaking things, seeing how they work, redesigning them (S5).",
+              "What the job involves day to day: lab work one day, a construction site the next (S6)."
+            ]
+          }
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "render_timeline",
+        "arguments": {"timelineSha256": "{{tool:1:/timelineSha256}}"}
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "run_checks",
+        "arguments": {"kind": "CLIP", "clipSha256": "{{tool:2:/clipSha256}}"}
+      }
+    },
+    {
+      "final": {
+        "output": {
+          "outcome": "DELIVERED",
+          "clipSha256": "{{tool:2:/clipSha256}}",
+          "selectionReason": "S3-S4 open with how she chose civil engineering, S5 states why she loves the work in her own words, and S6 is the one passage describing what the job involves from one day to the next; together they run 42.5 seconds, inside the 45-second target.",
+          "cannotSatisfyReason": null
+        }
+      }
+    }
+  ]
+}

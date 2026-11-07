@@ -1,0 +1,91 @@
+{
+  "turns": [
+    {
+      "toolCall": {
+        "toolName": "read_material",
+        "arguments": {"artifactId": "{{task:/transcript/artifactId}}", "startLine": 1, "lineCount": 200}
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "run_checks",
+        "arguments": {
+          "kind": "TIMELINE",
+          "timeline": {
+            "sourceId": "{{task:/sourceId}}",
+            "transcriptSha256": "{{task:/transcript/sha256}}",
+            "targetDurationMs": 45000,
+            "segments": [
+              {"from": "S3", "to": "S4"},
+              {"from": "S5", "to": "S5"},
+              {"from": "S6", "to": "S6"},
+              {"from": "S11", "to": "S13"}
+            ]
+          }
+        },
+        "statePatch": {
+          "plan": {
+            "goal": "A 45-second vertical clip on why she loves engineering and what the job involves from one day to the next.",
+            "opening": "How a guidance counselor steered her from architecture to civil engineering (S3-S4).",
+            "mainSegments": [
+              "Why she loves engineering: breaking things, seeing how they work, redesigning them (S5).",
+              "What the job involves day to day: lab work one day, a construction site the next (S6).",
+              "How she joined the public health service and loves it (S11-S13)."
+            ]
+          }
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "render_timeline",
+        "arguments": {"timelineSha256": "{{latest:/timelineSha256}}"}
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "run_checks",
+        "arguments": {"kind": "CLIP", "clipSha256": "{{tool:2:/clipSha256}}"}
+      }
+    },
+    {
+      "final": {
+        "output": {
+          "outcome": "DELIVERED",
+          "clipSha256": "{{tool:2:/clipSha256}}",
+          "selectionReason": "The first cut ran 60.4 seconds, outside the 45-second target, so the closing passage about joining the public health service was dropped; S3-S4, S5 and S6 keep the choice of engineering, why she loves it and what the job involves, at 42.5 seconds.",
+          "cannotSatisfyReason": null
+        }
+      }
+    }
+  ],
+  "onToolResult": [
+    {
+      "when": {"tool": 1, "pointer": "/passed", "equals": false},
+      "toolCall": {
+        "toolName": "run_checks",
+        "arguments": {
+          "kind": "TIMELINE",
+          "timeline": {
+            "sourceId": "{{task:/sourceId}}",
+            "transcriptSha256": "{{task:/transcript/sha256}}",
+            "targetDurationMs": 45000,
+            "segments": [
+              {"from": "S3", "to": "S4"},
+              {"from": "S5", "to": "S5"},
+              {"from": "S6", "to": "S6"}
+            ]
+          }
+        },
+        "statePatch": {
+          "plan": {
+            "mainSegments": [
+              "Why she loves engineering: breaking things, seeing how they work, redesigning them (S5).",
+              "What the job involves day to day: lab work one day, a construction site the next (S6)."
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
