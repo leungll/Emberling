@@ -164,6 +164,12 @@ type NodeResult struct {
 // copies that object into Run.output.
 type NodeOutput struct {
 	Ports map[string]json.RawMessage
+	// Artifacts declares the Execution Artifacts whose content the node already wrote to
+	// content storage, with the same meaning as ToolResult.Artifacts: the Runtime commits
+	// their metadata and their link to the Node Attempt in the transaction that commits
+	// the output, so an output that never commits leaves only unreferenced content
+	// behind. A node that produces no artifact leaves it nil.
+	Artifacts []domain.ArtifactRef
 	// Cost is the charge the Provider reported for the external call that produced this
 	// output, or nil when it reported none. The completion transaction records it on the
 	// Attempt beside the result; it takes no part in any execution decision.
