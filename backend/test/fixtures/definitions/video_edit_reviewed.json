@@ -1,0 +1,207 @@
+{
+  "workflowId": "wf_video_edit_reviewed",
+  "name": "Video Edit (Reviewed)",
+  "description": "An Agent plans a short vertical clip from a transcribed talk, selects sentences, has the timeline checked and its content reviewed by an independent model before it is rendered, checks the clip and delivers it or declares that the requirement cannot be satisfied",
+  "nodes": [
+    {
+      "id": "node_task",
+      "type": "task_input",
+      "name": "Editing Task",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "config": {
+        "inputKey": "task",
+        "label": "Editing Task",
+        "required": true,
+        "schema": {
+          "properties": {
+            "sourceId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sourceSha256": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64
+            },
+            "durationMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "requirement": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "goal": {
+              "type": "string",
+              "enum": [
+                "DELIVER_CLIP"
+              ]
+            }
+          },
+          "required": [
+            "sourceId",
+            "sourceSha256",
+            "durationMs",
+            "requirement",
+            "goal"
+          ]
+        }
+      }
+    },
+    {
+      "id": "node_transcript",
+      "type": "media_transcript",
+      "name": "Transcript",
+      "position": {
+        "x": 200,
+        "y": 0
+      },
+      "config": {},
+      "executionPolicy": {
+        "timeoutMs": 600000,
+        "maxAttempts": 2,
+        "backoff": "FIXED"
+      }
+    },
+    {
+      "id": "node_agent",
+      "type": "agent",
+      "name": "Video Editing Agent",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "config": {
+        "instructions": "Prompt version: video-edit/v1.\n\nYou edit one recorded talk into a short vertical clip. Your input is a task object: the user's requirement, the goal DELIVER_CLIP, the source video's id, digest and duration, and under \"transcript\" a reference to the transcript material (artifactId, sha256, lineCount, sentenceCount, language). The transcript is not in your context. Read it with read_material by artifactId, up to 200 lines per call, starting at line 1 and continuing until you have read every line. Each line is one sentence: its id (S1, S2, ...), start and end time in seconds, and the words spoken.\n\nWork in this order.\n\n1. Plan before you select. Write your plan into the state as {\"plan\": {\"goal\", \"opening\", \"mainSegments\"}}: the goal restates what the requirement asks for in one sentence, the opening names the sentences that open the clip and why they hold attention, and mainSegments lists the passages that carry the clip, each with its sentence ids. The plan is the basis for every later revision.\n\n2. Select sentences, never times. A timeline is a list of segments, each a range from one sentence id to another in the original order, with no overlap. Keep the original order. Include the qualifiers, conditions, negations and contrasts a sentence depends on: a sentence that is only true because of what comes before or after it must be cut together with that sentence. Do not cut a sentence off from the condition that follows it, and do not quote a view the speaker goes on to reject. Prefer passages a viewer who has not seen the talk can follow.\n\n3. Check the timeline with run_checks: kind TIMELINE, the sourceId and the transcript sha256 from your task, the segments, and targetDurationMs when the requirement names a duration (45 seconds is 45000; leave it out when the requirement names none, and the clip must then run between 30 and 60 seconds). A check that passes returns the timelineSha256 and timelineArtifactId of the canonical timeline; one that fails returns findings with codes. Revise the timeline from the findings and check again. The checks report facts only; deciding what to change is your job.\n\n4. Render only a checked timeline: render_timeline takes the timelineSha256 a passing check returned. A render of an unchecked or failed timeline is refused before anything runs; do not retry the same digest.\n\n5. Check the clip with run_checks: kind CLIP and the clipSha256 the render returned. Revise the timeline when a blocking finding appears; warnings are reported but need no change.\n\n6. Finish. When the clip passed its check, answer DELIVERED with that clipSha256 and a selectionReason that names the sentences you chose and why. When the material cannot satisfy the requirement without distorting what the speaker said, such as a requirement that asks for a view the speaker does not express, or a passage that cannot be shortened to the target without dropping its condition, answer CANNOT_SATISFY with a cannotSatisfyReason and no clip. Do not invent a view, do not drop a qualifier to reach a duration, and do not deliver a clip that failed a check.\n\nA tool message with status REJECTED, VERIFICATION_MISSING or REVISION_LIMIT_REACHED is a definite refusal: read its code and continue without repeating the refused call. When the revision limit is reached, finish with what the facts support. Your final answer is the object {\"outcome\", \"clipSha256\", \"selectionReason\", \"cannotSatisfyReason\"}: outcome is DELIVERED or CANNOT_SATISFY; the fields that do not apply are null.\n\nReview before you render. After a timeline passes its check, call review_artifact with that check's timelineArtifactId, the transcript's artifactId and the requirement copied verbatim from your task. An independent review model reads the selected sentences with their neighbours and reports whether the clip satisfies the requirement and whether any selected sentence, standing alone, distorts what the speaker meant. A review that does not pass returns issues naming the sentences and what would fix them, such as the sentence to add or remove; revise the timeline accordingly, check it again and review it again. You may revise once after a failed review. Render only a timeline whose latest review passed, and deliver only a clip rendered from it.",
+        "modelId": "text-model-v1",
+        "modelConfig": {
+          "script": "video-edit-review-fail"
+        },
+        "allowedTools": [
+          "read_material",
+          "run_checks",
+          "render_timeline",
+          "review_artifact"
+        ],
+        "reviewModelId": "text-review-v1",
+        "maxTurns": 30,
+        "timeoutMs": 1800000,
+        "maxFailedFacts": {
+          "media_checked": 3,
+          "content_reviewed": 1
+        },
+        "goalPointer": "/goal",
+        "stateSchema": {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "object",
+              "properties": {
+                "goal": {
+                  "type": "string",
+                  "description": "What the requirement asks for, in one sentence."
+                },
+                "opening": {
+                  "type": "string",
+                  "description": "The sentences that open the clip and why they hold attention."
+                },
+                "mainSegments": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "The passages that carry the clip, each with its sentence ids."
+                }
+              },
+              "required": [
+                "goal",
+                "opening",
+                "mainSegments"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "DELIVERED",
+                "CANNOT_SATISFY"
+              ],
+              "description": "DELIVERED when a checked clip is handed over; CANNOT_SATISFY when the material cannot meet the requirement without distorting it."
+            },
+            "clipSha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The digest render_timeline returned for the delivered clip; null when nothing is delivered."
+            },
+            "selectionReason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Which sentences were chosen and why; null when nothing is delivered."
+            },
+            "cannotSatisfyReason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Why the requirement cannot be satisfied; null when a clip is delivered."
+            }
+          },
+          "required": [
+            "outcome",
+            "clipSha256",
+            "selectionReason",
+            "cannotSatisfyReason"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "id": "node_result",
+      "type": "text_output",
+      "name": "Delivery Report",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_task_transcript",
+      "source": "node_task",
+      "sourceHandle": "task",
+      "target": "node_transcript",
+      "targetHandle": "task"
+    },
+    {
+      "id": "edge_transcript_agent",
+      "source": "node_transcript",
+      "sourceHandle": "assignment",
+      "target": "node_agent",
+      "targetHandle": "input"
+    },
+    {
+      "id": "edge_agent_result",
+      "source": "node_agent",
+      "sourceHandle": "text",
+      "target": "node_result",
+      "targetHandle": "text"
+    }
+  ]
+}

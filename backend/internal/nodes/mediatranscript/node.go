@@ -48,11 +48,14 @@ const DefaultProviderID = "media-service"
 
 // Port names. The input port takes the task object a Task Input node published; the
 // transcript output carries the material reference and its structure, and the task
-// output republishes the task object byte for byte so the Agent can read the requirement
-// and the goal beside the material.
+// output republishes the task object byte for byte. The assignment output is the task
+// object with the transcript reference added under "transcript": an Agent node has one
+// input port, so this is the port that lets the Agent read the requirement, the goal and
+// the material reference together and lets its goal pointer resolve.
 const (
 	TaskPort       = "task"
 	TranscriptPort = "transcript"
+	AssignmentPort = "assignment"
 )
 
 // pollIntervalMs and maxPolls bound the Runtime's status queries for one Attempt: one
@@ -122,6 +125,7 @@ func Registration(ports Ports) (registry.NodeRegistration, error) {
 			Outputs: []domain.PortMetadata{
 				{Name: TranscriptPort, DataType: domain.PortTypeJSON, Required: true},
 				{Name: TaskPort, DataType: domain.PortTypeJSON, Required: true},
+				{Name: AssignmentPort, DataType: domain.PortTypeJSON, Required: true},
 			},
 			ConfigSchema: json.RawMessage(configSchema),
 			// Transcription is deterministic for one source, so repeating the task would be

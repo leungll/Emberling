@@ -136,8 +136,9 @@ func TestRegistration_Metadata_AsyncExternalSafePolledWithoutModel(t *testing.T)
 	if md.DispatchModelPath != "" {
 		t.Fatalf("DispatchModelPath = %q, want none", md.DispatchModelPath)
 	}
-	if len(md.Inputs) != 1 || md.Inputs[0].Name != "task" || len(md.Outputs) != 2 || md.Outputs[0].Name != "transcript" || md.Outputs[1].Name != "task" {
-		t.Fatalf("ports = in %+v out %+v, want task -> transcript, task", md.Inputs, md.Outputs)
+	if len(md.Inputs) != 1 || md.Inputs[0].Name != "task" || len(md.Outputs) != 3 ||
+		md.Outputs[0].Name != "transcript" || md.Outputs[1].Name != "task" || md.Outputs[2].Name != "assignment" {
+		t.Fatalf("ports = in %+v out %+v, want task -> transcript, task, assignment", md.Inputs, md.Outputs)
 	}
 }
 
@@ -240,8 +241,15 @@ func TestOnCallback_Succeeded_StoresMaterialAndPublishesReferenceOnly(t *testing
 	if got := string(output.Ports["task"]); got != string(taskJSON) {
 		t.Fatalf("task port = %s, want the task object unchanged", got)
 	}
-	if len(output.Ports) != 2 {
-		t.Fatalf("ports = %v, want transcript and task only", output.Ports)
+	// The assignment is the task object with the transcript reference added under
+	// "transcript", in key order, so one Agent input port carries the requirement, the
+	// goal and the material reference together.
+	wantAssignment := `{"durationMs":421000,"goal":"DELIVER_CLIP","requirement":"a 30 s clip about the welcome","sourceId":"` + sourceID + `","sourceSha256":"` + sourceSHA + `","transcript":` + wantTranscript + `}`
+	if got := string(output.Ports["assignment"]); got != wantAssignment {
+		t.Fatalf("assignment port = %s\nwant %s", got, wantAssignment)
+	}
+	if len(output.Ports) != 3 {
+		t.Fatalf("ports = %v, want transcript, task and assignment only", output.Ports)
 	}
 	if len(output.Artifacts) != 1 || output.Artifacts[0].ArtifactID != wantID || output.Artifacts[0].MediaType != domain.ArtifactMediaTypeTextPlain {
 		t.Fatalf("artifacts = %+v, want the stored text artifact", output.Artifacts)

@@ -277,7 +277,7 @@ evals-test:
 	@echo "==> evals: video_editing self-tests"
 	@cd evals/video_editing && uv run --frozen pytest
 
-.PHONY: demo demo-studio demo-down
+.PHONY: demo demo-studio demo-down video-demo
 
 ## demo: fault-injection, photo-set, software-delivery and serving demo on the Compose
 ## stack. Builds and starts postgres, the Mock Provider, the mock production service, the
@@ -399,3 +399,24 @@ demo-studio:
 ## the three mock services.
 demo-down:
 	@bash scripts/demo/demo.sh down
+
+## video-demo: the video-editing stories against the real media service, with the Agent's
+## decisions scripted by the mock decision model: the transcript, timeline checks, render
+## and clip check are real work of the media service. Each story saves a fixture Definition,
+## uploads the source talk once (idempotent by digest), runs it to the end and checks the
+## Run, its facts, its committed Decisions and the delivered clip through the public API,
+## then prints the clip URL. EMBERLING_DEMO_VIDEO_STORY selects pass (default), too-long or
+## review-fail; EMBERLING_DEMO_VIDEO_STORY=all runs the three in turn.
+## Starts postgres, the backend and the media service (compose profile media; the first
+## start downloads the transcription model) and keeps them running. EMBERLING_DEMO_MEDIA_URL
+## points the backend at a media service elsewhere instead, for example
+## http://host.docker.internal:9201 for one on the host, with EMBERLING_DEMO_MEDIA_HOST_URL
+## (default http://localhost:9201) as the address this host reaches it at.
+## EMBERLING_DEMO_VIDEO_SOURCE names the source file to upload when the media service lacks
+## it. See scripts/demo/video-edit.sh for the stories and their checks.
+## Needs Docker, curl, jq and shasum; deliberately not part of `check`.
+video-demo:
+	@case "$${EMBERLING_DEMO_VIDEO_STORY:-pass}" in \
+	  all) for story in pass too-long review-fail; do bash scripts/demo/video-edit.sh "$$story" || exit 1; done ;; \
+	  *) bash scripts/demo/video-edit.sh "$${EMBERLING_DEMO_VIDEO_STORY:-pass}" ;; \
+	esac

@@ -172,6 +172,13 @@ func (p *Provider) Models(context.Context) ([]registry.ModelRegistration, error)
 			ConfigSchema: json.RawMessage(configSchema),
 			ProviderID:   ImageModelProviderID,
 		}},
+		{ModelMetadata: domain.ModelMetadata{
+			ID:           ReviewModelID,
+			DisplayName:  "Mock Text Review v1",
+			Description:  "Deterministic test fixture that reviews a transcript excerpt under a fixed policy, with no external calls and no cost.",
+			Capabilities: []string{domain.ModelCapabilityStructuredDecision},
+			ConfigSchema: json.RawMessage(configSchema),
+		}},
 	}, nil
 }
 
@@ -279,15 +286,19 @@ func (p *Provider) finish(scenario Scenario, modelID string, decision registry.M
 	return response
 }
 
-// resolveScenario applies Script first, then the `script` model config parameter, then the
-// `mock:` directive in the last user message, and defaults to ScenarioFinal. An error return means the directive itself was
-// malformed (invalid syntax, not merely an unrecognised kind); every other outcome is a
-// valid Scenario and a nil error.
+// resolveScenario applies Script first, then the review policy when the request names the
+// review model, then the `script` model config parameter, then the `mock:` directive in
+// the last user message, and defaults to ScenarioFinal. An error return means the
+// directive itself was malformed (invalid syntax, not merely an unrecognised kind); every
+// other outcome is a valid Scenario and a nil error.
 func (p *Provider) resolveScenario(request registry.ModelRequest) (Scenario, error) {
 	if p.Script != nil {
 		if scenario := p.Script(request); scenario != nil {
 			return *scenario, nil
 		}
+	}
+	if request.ModelID == ReviewModelID {
+		return reviewScenario(lastUserMessageText(request))
 	}
 	if name := configuredScript(request); name != "" {
 		return scriptedScenario(request, name)

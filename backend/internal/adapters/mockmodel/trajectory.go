@@ -117,10 +117,13 @@ type TrajectoryTurn struct {
 	Final    *TrajectoryFinal    `json:"final,omitempty"`
 }
 
-// TrajectoryToolCall is a scripted TOOL_CALL Decision.
+// TrajectoryToolCall is a scripted TOOL_CALL Decision. StatePatch optionally carries the
+// Decision's state patch (RFC 7386), with placeholders resolved like the arguments, so a
+// script can write the plan an Agent is asked to keep in its State.
 type TrajectoryToolCall struct {
-	ToolName  string          `json:"toolName"`
-	Arguments json.RawMessage `json:"arguments"`
+	ToolName   string          `json:"toolName"`
+	Arguments  json.RawMessage `json:"arguments"`
+	StatePatch json.RawMessage `json:"statePatch,omitempty"`
 }
 
 // TrajectoryFinal is a scripted FINAL Decision: exactly one of Output, sent as the JSON
@@ -131,6 +134,7 @@ type TrajectoryToolCall struct {
 type TrajectoryFinal struct {
 	Output     json.RawMessage `json:"output,omitempty"`
 	OutputText json.RawMessage `json:"outputText,omitempty"`
+	StatePatch json.RawMessage `json:"statePatch,omitempty"`
 }
 
 // trajectories is the immutable set of embedded trajectories, loaded once at start-up. A
@@ -185,6 +189,8 @@ func parseTrajectory(raw []byte) (Trajectory, error) {
 			return Trajectory{}, fmt.Errorf("turn %d must set exactly one of toolCall and final", index)
 		case turn.ToolCall != nil && (turn.ToolCall.ToolName == "" || !json.Valid(turn.ToolCall.Arguments)):
 			return Trajectory{}, fmt.Errorf("turn %d tool call needs a toolName and JSON arguments", index)
+		case !validStatePatch(turn.statePatch()):
+			return Trajectory{}, fmt.Errorf("turn %d state patch must be a JSON object", index)
 		case turn.Final != nil && (len(turn.Final.Output) == 0) == (len(turn.Final.OutputText) == 0):
 			return Trajectory{}, fmt.Errorf("turn %d final must set exactly one of output and outputText", index)
 		case turn.Final != nil && !json.Valid(turn.Final.Output) && !json.Valid(turn.Final.OutputText):
@@ -245,12 +251,36 @@ func validateDecision(toolCall *TrajectoryToolCall, final *TrajectoryFinal) erro
 		return errors.New("must set exactly one of toolCall and final")
 	case toolCall != nil && (toolCall.ToolName == "" || !json.Valid(toolCall.Arguments)):
 		return errors.New("needs a tool call with a toolName and JSON arguments")
+	case toolCall != nil && !validStatePatch(toolCall.StatePatch):
+		return errors.New("tool call state patch must be a JSON object")
 	case final != nil && (len(final.Output) == 0) == (len(final.OutputText) == 0):
 		return errors.New("final must set exactly one of output and outputText")
 	case final != nil && !json.Valid(final.Output) && !json.Valid(final.OutputText):
 		return errors.New("final needs a JSON output")
+	case final != nil && !validStatePatch(final.StatePatch):
+		return errors.New("final state patch must be a JSON object")
 	}
 	return nil
+}
+
+// statePatch returns the Turn's scripted state patch, whichever shape the Turn has.
+func (t TrajectoryTurn) statePatch() json.RawMessage {
+	if t.ToolCall != nil {
+		return t.ToolCall.StatePatch
+	}
+	if t.Final != nil {
+		return t.Final.StatePatch
+	}
+	return nil
+}
+
+// validStatePatch accepts an absent patch or a JSON object: a merge patch that is not an
+// object would replace the whole State, which no scripted Agent means to do.
+func validStatePatch(patch json.RawMessage) bool {
+	if len(patch) == 0 {
+		return true
+	}
+	return json.Valid(patch) && strings.HasPrefix(strings.TrimSpace(string(patch)), "{")
 }
 
 // TrajectoryNames returns the embedded trajectory names, sorted.
@@ -319,7 +349,15 @@ func (r placeholderResolver) scenario(toolCall *TrajectoryToolCall, final *Traje
 		if err != nil {
 			return Scenario{}, err
 		}
-		return Scenario{Kind: ScenarioToolCall, ToolName: toolCall.ToolName, ToolArguments: arguments}, nil
+		patch, err := r.resolveStatePatch(toolCall.StatePatch)
+		if err != nil {
+			return Scenario{}, err
+		}
+		return Scenario{Kind: ScenarioToolCall, ToolName: toolCall.ToolName, ToolArguments: arguments, StatePatch: patch}, nil
+	}
+	patch, err := r.resolveStatePatch(final.StatePatch)
+	if err != nil {
+		return Scenario{}, err
 	}
 	if len(final.OutputText) > 0 {
 		document, err := r.resolve(final.OutputText)
@@ -330,13 +368,26 @@ func (r placeholderResolver) scenario(toolCall *TrajectoryToolCall, final *Traje
 		if err != nil {
 			return Scenario{}, fmt.Errorf("encode output text: %w", err)
 		}
-		return Scenario{Kind: ScenarioFinal, FinalOutput: output}, nil
+		return Scenario{Kind: ScenarioFinal, FinalOutput: output, StatePatch: patch}, nil
 	}
 	output, err := r.resolve(final.Output)
 	if err != nil {
 		return Scenario{}, err
 	}
-	return Scenario{Kind: ScenarioFinal, FinalOutput: output}, nil
+	return Scenario{Kind: ScenarioFinal, FinalOutput: output, StatePatch: patch}, nil
+}
+
+// resolveStatePatch resolves the placeholders of a scripted state patch; an absent patch
+// stays absent.
+func (r placeholderResolver) resolveStatePatch(patch json.RawMessage) (json.RawMessage, error) {
+	if len(patch) == 0 {
+		return nil, nil
+	}
+	resolved, err := r.resolve(patch)
+	if err != nil {
+		return nil, fmt.Errorf("state patch: %w", err)
+	}
+	return resolved, nil
 }
 
 // insertedDecision is the conditional Decision the latest tool message triggers.

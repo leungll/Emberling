@@ -158,13 +158,32 @@ func (e *Executor) publish(ctx context.Context, state registry.NodeAsyncState, r
 	if err != nil {
 		return registry.NodeOutput{}, fmt.Errorf("media_transcript: encode transcript output: %w", err)
 	}
+	assignment, err := assignmentOf(rawTask, transcript)
+	if err != nil {
+		return registry.NodeOutput{}, fmt.Errorf("media_transcript: encode assignment output: %w", err)
+	}
 	return registry.NodeOutput{
 		Ports: map[string]json.RawMessage{
 			TranscriptPort: transcript,
 			TaskPort:       rawTask,
+			AssignmentPort: assignment,
 		},
 		Artifacts: []domain.ArtifactRef{ref},
 	}, nil
+}
+
+// assignmentOf builds the assignment port value: every member of the task object plus
+// the transcript reference under "transcript". Members are encoded in key order, so the
+// same task and transcript always yield the same bytes. A task member named
+// "transcript" would be replaced; readTask has already required the task to be an
+// object.
+func assignmentOf(rawTask, transcript json.RawMessage) (json.RawMessage, error) {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(rawTask, &members); err != nil {
+		return nil, err
+	}
+	members["transcript"] = transcript
+	return json.Marshal(members)
 }
 
 // sourceMismatch reports why the result does not belong to the task's source, or "".
