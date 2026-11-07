@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "batch-manifest/v1",
+  "batchId": "eval-2026-11-07",
+  "type": "eval",
+  "description": "Evaluation batch: six samples, basic and reviewed variants, real decision and review models, prompt video-edit/v2. Frozen once run; human blind scoring follows.",
+  "datasetVersion": "v1",
+  "definitions": {
+    "basic": {
+      "workflowId": "wf_eddaad6c4276442cb0e1edd25116e4ef",
+      "version": 1
+    },
+    "reviewed": {
+      "workflowId": "wf_13727de1dfab42ad8ba5f5c66df944f2",
+      "version": 1
+    }
+  },
+  "models": {
+    "decision": "opus-5.5",
+    "review": "text-review",
+    "judge": "opus-5.5"
+  },
+  "promptVersion": "video-edit/v2",
+  "toolSchemaDigest": "sha256:00de915d4a79f56f45faad9ef7ffd032480a1945c982341817555aa1cddbf103",
+  "ruleVersion": "v1",
+  "randomSeed": 20261107
+}
