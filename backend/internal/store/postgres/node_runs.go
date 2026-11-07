@@ -127,18 +127,28 @@ func (r *nodeRunRepository) Transition(ctx context.Context, nodeRunID string, fr
 	return nil
 }
 
+// advancingRunPredicate holds for a row aliased nr whose Run can still advance. A scan
+// whose use case does nothing once a Run is terminal applies it, because such a row would
+// come back on every pass and a batch full of them would hide live work behind it. A scan
+// whose use case still does something for a terminal Run must not: its row leaves the set
+// by being processed.
+const advancingRunPredicate = `EXISTS (SELECT 1 FROM runs r WHERE r.id = nr.run_id AND r.status IN ('RUNNING', 'PAUSED'))`
+
 // ListReadyOrRetryable returns persisted work the Reconciler can rediscover after a
 // crash: READY NodeRuns that nobody claimed, and RUNNING NodeRuns whose retry backoff
 // has elapsed. WAITING_CALLBACK NodeRuns are recovered through their Callback Binding,
-// so they are deliberately excluded here.
+// so they are deliberately excluded here. A READY NodeRun a terminal Run left behind is
+// excluded too: Advance never claims for a terminal Run, and the row stays as a historic
+// fact. A due retry of a terminal Run stays listed, because Advance settles it there and
+// the row leaves by being processed.
 func (r *nodeRunRepository) ListReadyOrRetryable(ctx context.Context, before time.Time, limit int) ([]domain.NodeRun, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("store/postgres node_runs.ListReadyOrRetryable: limit must be positive, got %d", limit)
 	}
 
 	const query = `SELECT ` + nodeRunColumns + `
-		  FROM node_runs
-		 WHERE status = 'READY'
+		  FROM node_runs nr
+		 WHERE (status = 'READY' AND ` + advancingRunPredicate + `)
 		    OR (status = 'RUNNING' AND next_attempt_at IS NOT NULL AND next_attempt_at <= $1)
 		 ORDER BY ready_at ASC, id ASC
 		 LIMIT $2`
@@ -291,14 +301,15 @@ func (r *nodeRunRepository) MarkFailed(ctx context.Context, nodeRunID string, fr
 
 	const update = `
 		UPDATE node_runs
-		   SET status       = 'FAILED',
-		       error        = $4,
-		       token_usage  = $5,
-		       latency_ms   = CASE WHEN started_at IS NOT NULL
-		                           THEN ROUND(EXTRACT(EPOCH FROM ($3 - started_at)) * 1000)::BIGINT
-		                           ELSE latency_ms END,
-		       completed_at = $3,
-		       updated_at   = $3
+		   SET status          = 'FAILED',
+		       next_attempt_at = NULL,
+		       error           = $4,
+		       token_usage     = $5,
+		       latency_ms      = CASE WHEN started_at IS NOT NULL
+		                              THEN ROUND(EXTRACT(EPOCH FROM ($3 - started_at)) * 1000)::BIGINT
+		                              ELSE latency_ms END,
+		       completed_at    = $3,
+		       updated_at      = $3
 		 WHERE id = $1 AND status = $2`
 	affected, err := affectedRows(ctx, r.conn, "node_runs.MarkFailed", update,
 		nodeRunID, string(from), now, errPayload, tokenUsage)

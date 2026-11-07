@@ -129,15 +129,22 @@ func (r *agentTurnRepository) ClaimReady(ctx context.Context, turnID string, now
 
 // ListReady returns persisted READY Turns for Reconciler rediscovery. RUNNING
 // Turns are excluded on purpose: the MVP never re-issues a model request that may still
-// be in flight; such a Turn ends through the Agent deadline instead.
+// be in flight; such a Turn ends through the Agent deadline instead. A READY Turn of a
+// terminal Run is excluded too: the Turn claim refuses it, and the same deadline ends it.
 func (r *agentTurnRepository) ListReady(ctx context.Context, limit int) ([]domain.AgentTurn, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("store/postgres agent_turns.ListReady: limit must be positive, got %d", limit)
 	}
 
 	const query = `SELECT ` + agentTurnSelectColumns + `
-		  FROM agent_turns
+		  FROM agent_turns t
 		 WHERE status = 'READY'
+		   AND EXISTS (
+		       SELECT 1
+		         FROM agent_runs ar
+		         JOIN node_runs nr ON nr.id = ar.node_run_id
+		        WHERE ar.id = t.agent_run_id
+		          AND ` + advancingRunPredicate + `)
 		 ORDER BY id ASC
 		 LIMIT $1`
 

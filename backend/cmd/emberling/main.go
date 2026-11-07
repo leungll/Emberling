@@ -136,6 +136,7 @@ func run(logger *slog.Logger) error {
 			PendingTTL:    cfg.PendingCallback.TTL,
 		},
 		ProviderCapacity: cfg.ProviderCapacity,
+		NodeMaxWait:      cfg.NodeAttemptMaxWait,
 	}
 
 	definitionService := service.NewDefinitionService(serviceDeps)

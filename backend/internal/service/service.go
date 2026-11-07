@@ -81,6 +81,11 @@ type Deps struct {
 	// persisted, so a restart with a smaller value only stops new admissions until the
 	// held count drops below it.
 	ProviderCapacity map[string]int
+	// NodeMaxWait bounds how long a dispatched Node Attempt with no deadline of its own may
+	// wait, read once at startup. Dispatch writes the bound onto the Attempt as its deadline,
+	// so a later change of this value leaves dispatched Attempts as they are. Zero uses the
+	// default.
+	NodeMaxWait time.Duration
 	// CapacityHooks lets a test synchronize admission at exact points inside the claim
 	// transaction. The zero value installs no hook.
 	CapacityHooks CapacityHooks
@@ -97,6 +102,10 @@ type Deps struct {
 // defaultPendingCallbackTTL bounds an early callback that arrived before its Callback
 // Binding committed, when no TTL was configured.
 const defaultPendingCallbackTTL = 15 * time.Minute
+
+// defaultNodeMaxWait bounds a dispatched Node Attempt with no deadline of its own when no
+// value was configured.
+const defaultNodeMaxWait = 24 * time.Hour
 
 // withDefaults fills in the collaborators that are optional at a call site, so that a
 // service is usable in tests without wiring a queue or a notifier.
@@ -115,6 +124,9 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.Callback.PendingTTL <= 0 {
 		d.Callback.PendingTTL = defaultPendingCallbackTTL
+	}
+	if d.NodeMaxWait <= 0 {
+		d.NodeMaxWait = defaultNodeMaxWait
 	}
 	if d.RunnerID == "" {
 		// Every new Tool Attempt carries a runner identity; an Attempt without one is

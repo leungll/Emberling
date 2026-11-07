@@ -18,7 +18,7 @@ type nodeAttemptRepository struct {
 
 const nodeAttemptColumns = `id, node_run_id, attempt_no, status, input, result,
 	callback_token_hash, started_at, deadline_at, dispatched_at, completed_at, error,
-	next_poll_at, poll_count, uncertain`
+	next_poll_at, poll_count, uncertain, runner_id`
 
 // nodeAttemptSelectColumns is nodeAttemptColumns followed by the cost columns, which are
 // written only by MarkSucceeded and therefore are not part of the INSERT list.
@@ -34,12 +34,12 @@ func (r *nodeAttemptRepository) Create(ctx context.Context, attempt domain.NodeA
 
 	const insert = `
 		INSERT INTO node_attempts (` + nodeAttemptColumns + `)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`
 	if _, err := r.conn.Exec(ctx, insert,
 		attempt.ID, attempt.NodeRunID, attempt.AttemptNo, string(attempt.Status),
 		attempt.Input, nullableJSON(attempt.Result), attempt.CallbackTokenHash,
 		attempt.StartedAt, attempt.DeadlineAt, attempt.DispatchedAt, attempt.CompletedAt, errPayload,
-		attempt.NextPollAt, attempt.PollCount, attempt.Uncertain,
+		attempt.NextPollAt, attempt.PollCount, attempt.Uncertain, attempt.RunnerID,
 	); err != nil {
 		return mapError("node_attempts.Create", err, attempt.ID, attempt.NodeRunID, attempt.AttemptNo)
 	}
@@ -114,14 +114,17 @@ func (r *nodeAttemptRepository) Transition(ctx context.Context, attemptID string
 // write; a later retry or timeout that also targets a STARTED row loses here instead.
 // The first next_poll_at is written in the same UPDATE, so a restart can rediscover a
 // due poll from the committed dispatch alone; firstPollAt is nil when no poll policy is
-// registered.
-func (r *nodeAttemptRepository) MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error {
+// registered. maxWaitAt becomes the deadline of an Attempt that has none, and only of such
+// an Attempt: this NULL-to-value write is the one change a deadline ever sees, so a wait
+// that nothing else would end is bounded and a configured timeout is never moved.
+func (r *nodeAttemptRepository) MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time, maxWaitAt time.Time) error {
 	const update = `
 		UPDATE node_attempts
-		   SET status = 'DISPATCHED', dispatched_at = $2, next_poll_at = $3
+		   SET status = 'DISPATCHED', dispatched_at = $2, next_poll_at = $3,
+		       deadline_at = COALESCE(deadline_at, $4)
 		 WHERE id = $1 AND status = 'STARTED'`
 
-	affected, err := affectedRows(ctx, r.conn, "node_attempts.MarkDispatched", update, attemptID, now, firstPollAt)
+	affected, err := affectedRows(ctx, r.conn, "node_attempts.MarkDispatched", update, attemptID, now, firstPollAt, maxWaitAt)
 	if err != nil {
 		return err
 	}
@@ -225,6 +228,37 @@ func (r *nodeAttemptRepository) ListExpired(ctx context.Context, before time.Tim
 	attempts, err := scanNodeAttempts(rows)
 	if err != nil {
 		return nil, mapError("node_attempts.ListExpired", err)
+	}
+	return attempts, nil
+}
+
+// ListOrphanStarted lists the STARTED Attempts with no deadline another process created,
+// oldest first, using the partial orphan index. A NULL runner_id is never an orphan: which
+// process wrote it is unknown. A deadline already bounds an Attempt through the Node
+// timeout. The Run is deliberately not read: an Attempt of an ended Run must still end and
+// free its Provider slot, and a handled row leaves this list by leaving STARTED, so rows
+// cannot accumulate and fill the batch.
+func (r *nodeAttemptRepository) ListOrphanStarted(ctx context.Context, currentRunnerID string, limit int) ([]domain.NodeAttempt, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("store/postgres node_attempts.ListOrphanStarted: limit must be positive, got %d", limit)
+	}
+
+	const query = `SELECT ` + nodeAttemptSelectColumns + `
+		  FROM node_attempts
+		 WHERE status = 'STARTED'
+		   AND runner_id IS NOT NULL
+		   AND deadline_at IS NULL
+		   AND runner_id <> $1
+		 ORDER BY started_at ASC, id ASC
+		 LIMIT $2`
+
+	rows, err := r.conn.Query(ctx, query, currentRunnerID, limit)
+	if err != nil {
+		return nil, mapError("node_attempts.ListOrphanStarted", err)
+	}
+	attempts, err := scanNodeAttempts(rows)
+	if err != nil {
+		return nil, mapError("node_attempts.ListOrphanStarted", err)
 	}
 	return attempts, nil
 }
@@ -363,7 +397,7 @@ func scanNodeAttempts(rows pgx.Rows) ([]domain.NodeAttempt, error) {
 			&attempt.Input, &result, &attempt.CallbackTokenHash,
 			&attempt.StartedAt, &attempt.DeadlineAt, &attempt.DispatchedAt,
 			&attempt.CompletedAt, &errPayload,
-			&attempt.NextPollAt, &attempt.PollCount, &attempt.Uncertain,
+			&attempt.NextPollAt, &attempt.PollCount, &attempt.Uncertain, &attempt.RunnerID,
 			&costAmount, &costCurrency, &costSource,
 		); err != nil {
 			return nil, err

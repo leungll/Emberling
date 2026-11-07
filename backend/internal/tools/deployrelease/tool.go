@@ -242,8 +242,8 @@ func (e *Executor) OnCallback(context.Context, registry.ToolAsyncState, []byte) 
 
 // Poll queries the operation once. ACCEPTED and DEPLOYING are RUNNING; DEPLOYED is
 // SUCCEEDED with the version; VOIDED is FAILED with the VOIDED code; a 404 is UNKNOWN_TASK;
-// a 409 is FAILED with production's code; anything else is UNKNOWN. A transport failure is
-// an error: production gave no answer.
+// a 409 with production's code is FAILED with that code; anything else is UNKNOWN. A
+// transport failure is an error: production gave no answer.
 func (e *Executor) Poll(ctx context.Context, state registry.ToolAsyncState) (registry.PollResult, error) {
 	response, err := e.send(ctx, http.MethodGet, deploymentsPath+"/"+state.ExternalTask.ExternalTaskID, nil)
 	if err != nil {
@@ -254,14 +254,23 @@ func (e *Executor) Poll(ctx context.Context, state registry.ToolAsyncState) (reg
 }
 
 // Void asks production to void the operation once and reports the status production
-// answers with, in Poll's vocabulary.
+// answers with, in Poll's vocabulary. A refusal here is of the void, not of the operation,
+// which may be in flight, so only a confirmed void is a definite failure; any other refusal
+// is UNKNOWN and leaves the next query to find out.
 func (e *Executor) Void(ctx context.Context, state registry.ToolAsyncState) (registry.PollResult, error) {
 	response, err := e.send(ctx, http.MethodPost, deploymentsPath+"/"+state.ExternalTask.ExternalTaskID+"/void", nil)
 	if err != nil {
 		return registry.PollResult{}, err
 	}
 	defer drain(response)
-	return interpret(response, state.ExternalTask.ExternalTaskID)
+	result, err := interpret(response, state.ExternalTask.ExternalTaskID)
+	if err != nil {
+		return registry.PollResult{}, err
+	}
+	if result.Status == registry.PollFailed && (result.Error == nil || result.Error.Code != domain.ReleaseCodeVoided) {
+		return registry.PollResult{Status: registry.PollStatusUnknown}, nil
+	}
+	return result, nil
 }
 
 // CheckTarget reads what the deploy target runs now. A 404 is a target with no deployment;
@@ -297,8 +306,14 @@ func interpret(response *http.Response, operationKey string) (registry.PollResul
 	case response.StatusCode == http.StatusNotFound:
 		return registry.PollResult{Status: registry.PollUnknownTask}, nil
 	case response.StatusCode == http.StatusConflict:
+		// Production's refusal names its code. A 409 without one, from something in front
+		// of production for example, is not a definite answer about the operation.
+		code, ok := refusalCode(response.Body)
+		if !ok {
+			return registry.PollResult{Status: registry.PollStatusUnknown}, nil
+		}
 		return registry.PollResult{Status: registry.PollFailed, Error: &domain.ExecutionError{
-			Code: rejectionCode(response.Body), Message: ToolName + ": production refused the release",
+			Code: code, Message: ToolName + ": production refused the release",
 		}}, nil
 	case response.StatusCode != http.StatusOK:
 		return registry.PollResult{Status: registry.PollStatusUnknown}, nil
@@ -360,12 +375,21 @@ func drain(response *http.Response) {
 // rejectionCode reads the refusal's code when it is a short upper-case identifier, and
 // falls back to defaultRejectionCode otherwise, so no free text from the body travels on.
 func rejectionCode(body io.Reader) string {
+	code, ok := refusalCode(body)
+	if !ok {
+		return defaultRejectionCode
+	}
+	return code
+}
+
+// refusalCode reads the refusal's code and reports whether the body carried a usable one.
+func refusalCode(body io.Reader) (string, bool) {
 	var refusal refusalResponse
 	if err := json.NewDecoder(io.LimitReader(body, maxResponseBytes)).Decode(&refusal); err != nil ||
 		!rejectionCodePattern.MatchString(refusal.Code) {
-		return defaultRejectionCode
+		return "", false
 	}
-	return refusal.Code
+	return refusal.Code, true
 }
 
 // releaseError builds a failure from fixed labels only, so no request or response content

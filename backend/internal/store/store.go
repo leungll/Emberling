@@ -209,8 +209,9 @@ type NodeRunRepository interface {
 	Transition(ctx context.Context, nodeRunID string, from, to domain.NodeRunStatus, now time.Time) error
 
 	// ListReadyOrRetryable returns persisted work the Reconciler can rediscover after a
-	// crash: READY NodeRuns, and RUNNING NodeRuns whose retry backoff has elapsed.
-	// The limit bounds the scan batch.
+	// crash: READY NodeRuns of Runs that are not terminal, and RUNNING NodeRuns whose retry
+	// backoff has elapsed, whatever their Run, because Advance settles those on a terminal
+	// Run. The limit bounds the scan batch.
 	ListReadyOrRetryable(ctx context.Context, before time.Time, limit int) ([]domain.NodeRun, error)
 
 	// ClaimRetry conditionally clears next_attempt_at on a RUNNING NodeRun whose backoff
@@ -270,6 +271,11 @@ type NodeRunOutcome struct {
 // NodeAttemptRepository preserves every real execution. A retry creates a new Attempt;
 // old Attempts are never overwritten.
 type NodeAttemptRepository interface {
+	// ListOrphanStarted lists the STARTED Attempts with no deadline that a process other
+	// than currentRunnerID created, oldest first, up to limit. It does not filter on the
+	// Run: an Attempt of an ended Run must still end and free its Provider slot, and a
+	// handled row leaves the list by leaving STARTED.
+	ListOrphanStarted(ctx context.Context, currentRunnerID string, limit int) ([]domain.NodeAttempt, error)
 	Create(ctx context.Context, attempt domain.NodeAttempt) error
 	Get(ctx context.Context, attemptID string) (domain.NodeAttempt, error)
 	ListByNodeRun(ctx context.Context, nodeRunID string) ([]domain.NodeAttempt, error)
@@ -281,8 +287,9 @@ type NodeAttemptRepository interface {
 	// MarkDispatched conditionally moves an Attempt from STARTED to DISPATCHED and
 	// stamps dispatched_at. In the same UPDATE it writes firstPollAt as the first
 	// next_poll_at; firstPollAt is nil when the registration declares no poll policy.
+	// maxWaitAt becomes the deadline of an Attempt that has none and is ignored otherwise.
 	// It returns domain.ErrStaleClaim when the row is not STARTED.
-	MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time) error
+	MarkDispatched(ctx context.Context, attemptID string, now time.Time, firstPollAt *time.Time, maxWaitAt time.Time) error
 
 	// ClaimPoll conditionally claims one Provider poll of a DISPATCHED Attempt whose
 	// next_poll_at is due and whose poll_count is below maxPolls. It increments
@@ -498,9 +505,10 @@ type AgentTurnRepository interface {
 	// result is not an error.
 	ClaimReady(ctx context.Context, turnID string, now time.Time) (bool, error)
 
-	// ListReady returns persisted READY Turns the Reconciler can rediscover after a
-	// crash. A RUNNING Turn is deliberately excluded: the MVP never re-issues
-	// a model request that may already be in flight. The limit bounds the scan batch.
+	// ListReady returns persisted READY Turns of non-terminal Runs the Reconciler can
+	// rediscover after a crash. A RUNNING Turn is deliberately excluded: the MVP never
+	// re-issues a model request that may already be in flight. The limit bounds the scan
+	// batch.
 	ListReady(ctx context.Context, limit int) ([]domain.AgentTurn, error)
 
 	// MarkCompleted conditionally moves a RUNNING Turn to COMPLETED and writes the model
@@ -546,8 +554,9 @@ type AgentActionRepository interface {
 	// closes the Action out inside the same transaction. A false result is not an error.
 	ClaimReady(ctx context.Context, actionID string, now time.Time) (bool, error)
 
-	// ListReady returns persisted READY Actions the Reconciler can rediscover after a
-	// crash. It advances the original Action; it never asks the model again.
+	// ListReady returns persisted READY Actions of non-terminal Runs the Reconciler can
+	// rediscover after a crash. It advances the original Action; it never asks the model
+	// again.
 	// The limit bounds the scan batch.
 	ListReady(ctx context.Context, limit int) ([]domain.AgentAction, error)
 
@@ -656,11 +665,17 @@ type ReleaseOccupationRepository interface {
 	// domain.ErrStaleClaim.
 	Release(ctx context.Context, id string, reason domain.ReleaseReason, now time.Time) error
 
-	// ScheduleQuery hands the query schedule of an ACTIVE occupation to the occupation
-	// itself, in the transaction that ends its Run while the release outcome is unknown:
-	// next_query_at is written and the post-task reconciliation takes over. A row no
-	// longer ACTIVE returns domain.ErrStaleClaim.
+	// ScheduleQuery hands the query schedule of one ACTIVE occupation to the occupation
+	// itself: next_query_at is written and the post-task reconciliation takes over. A row
+	// no longer ACTIVE returns domain.ErrStaleClaim.
 	ScheduleQuery(ctx context.Context, id string, at time.Time) error
+
+	// ScheduleQueriesOfRun writes the first post-task query time onto every ACTIVE
+	// occupation of a Run that has none, in the transaction that ends the Run, so the
+	// target is never held by work nobody will pick up. Released occupations and a
+	// schedule already written stay as they are, which makes a repeat a no-op. The caller
+	// holds the Run aggregate lock, keeping the order Run first, then the occupation rows.
+	ScheduleQueriesOfRun(ctx context.Context, runID string, at time.Time) error
 
 	// ClaimQuery conditionally claims one post-task query of an ACTIVE occupation whose
 	// next_query_at is due at now: it moves next_query_at to next and increments
@@ -791,9 +806,9 @@ type ToolAttemptRepository interface {
 	MarkTimedOut(ctx context.Context, attemptID string, now time.Time, execErr domain.ExecutionError) (bool, error)
 
 	// ListOrphanStarted returns STARTED synchronous Tool Attempts written by a runner other
-	// than currentRunnerID, of Agent Runs that have not terminated and whose deadline has
-	// not passed, oldest first and at most limit of them. An Attempt with no recorded
-	// runner is never returned. Read-only; the caller decides nothing from it except which
+	// than currentRunnerID, of non-terminal Runs whose Agent Run has not terminated and whose
+	// deadline has not passed, oldest first and at most limit of them. An Attempt with no
+	// recorded runner is never returned. Read-only; the caller decides nothing from it except which
 	// use case to call.
 	ListOrphanStarted(ctx context.Context, currentRunnerID string, now time.Time, limit int) ([]domain.ToolAttempt, error)
 
@@ -810,10 +825,11 @@ type ToolAttemptRepository interface {
 	// row that is neither STARTED nor DISPATCHED returns domain.ErrStaleClaim.
 	MarkOutcomeUnknown(ctx context.Context, attemptID string, now, nextPollAt time.Time) (first bool, err error)
 
-	// RecordOutcomeUnknownSince writes outcome_unknown_since on a release Attempt that has
-	// already completed with an uncertain outcome, only when it is still empty, and changes
-	// nothing else. It serves the post-task reconciliation, which learns after the Run ended
-	// that production does not know the operation. It reports whether this call wrote it.
+	// RecordOutcomeUnknownSince writes outcome_unknown_since on a release Attempt production
+	// has not settled, whether still STARTED or DISPATCHED or already FAILED with an
+	// uncertain outcome, only when it is still empty, and changes nothing else. It serves
+	// the post-task reconciliation, which learns after the Run ended that production does
+	// not know the operation. It reports whether this call wrote it.
 	RecordOutcomeUnknownSince(ctx context.Context, attemptID string, now time.Time) (bool, error)
 
 	// MarkVoidRequested writes void_requested_at once on a DISPATCHED Attempt; a later
@@ -827,10 +843,10 @@ type ToolAttemptRepository interface {
 	// in `from` returns domain.ErrStaleClaim.
 	MarkFailedDefinite(ctx context.Context, attemptID string, from domain.ToolAttemptStatus, now time.Time, execErr domain.ExecutionError) error
 
-	// ListDueConfirmDeadlines returns release Attempts that are still STARTED or
-	// DISPATCHED, whose confirm deadline is at or before now and whose Action is RUNNING
-	// or WAITING_CALLBACK, oldest deadline first, bounded by limit. It discovers persisted
-	// work only; opening the human wait is the use case's conditional update.
+	// ListDueConfirmDeadlines returns release Attempts of non-terminal Runs that are still
+	// STARTED or DISPATCHED, whose confirm deadline is at or before now and whose Action is
+	// RUNNING or WAITING_CALLBACK, oldest deadline first, bounded by limit. It discovers
+	// persisted work only; opening the human wait is the use case's conditional update.
 	ListDueConfirmDeadlines(ctx context.Context, now time.Time, limit int) ([]DueConfirmDeadline, error)
 
 	// CountByAgentRunForTools counts the Tool Attempts of one Agent Run whose Tool is

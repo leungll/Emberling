@@ -71,6 +71,14 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 			return err
 		}
 		if run.Status.IsTerminal() {
+			lock, settled, err := s.settleEndedRun(ctx, tx, runID)
+			if err != nil {
+				return err
+			}
+			if settled {
+				lastSeq = lock.LastSeq()
+				notifyRunID = runID
+			}
 			return nil
 		}
 
@@ -257,6 +265,29 @@ func (s *ExecutionService) Advance(ctx context.Context, runID string) (AdvanceOu
 	return outcome, nil
 }
 
+// settleEndedRun gives a pending retry left on an ended Run the end that Run's own end
+// would have written. Nothing claims work of an ended Run, so such a row, which only a Run
+// that ended before the settlement can leave behind, would otherwise keep its slot and
+// come back from the recovery scan for good. It goes through the same write as the Run's
+// end, under the Run lock, and a Run with nothing to settle is not written at all.
+func (s *ExecutionService) settleEndedRun(ctx context.Context, tx store.Tx, runID string) (*store.RunLock, bool, error) {
+	lock, err := tx.Runs().LockForUpdate(ctx, runID)
+	if err != nil {
+		return nil, false, err
+	}
+	nodeRuns, err := tx.NodeRuns().ListByRun(ctx, runID)
+	if err != nil {
+		return nil, false, err
+	}
+	for _, nr := range nodeRuns {
+		if nr.Status == domain.NodeRunRunning && nr.NextAttemptAt != nil {
+			err := s.writeRunStatusLocked(ctx, tx, lock, lock.Status(), s.deps.Clock.Now())
+			return lock, err == nil, err
+		}
+	}
+	return lock, false, nil
+}
+
 // resolveInputPorts resolves nodeID's input ports from its upstream NodeRuns' recorded
 // SUCCEEDED output, using the frozen edge list. Design decision: NodeRun.Output is
 // stored as json.Marshal(NodeOutput.Ports) (see startAttempt/CompleteNode), so decoding
@@ -389,6 +420,7 @@ func (s *ExecutionService) startAttempt(ctx context.Context, tx store.Tx, lock *
 		return err
 	}
 
+	runnerID := s.deps.RunnerID
 	if err := tx.NodeAttempts().Create(ctx, domain.NodeAttempt{
 		ID:                attemptID,
 		NodeRunID:         nr.ID,
@@ -398,6 +430,7 @@ func (s *ExecutionService) startAttempt(ctx context.Context, tx store.Tx, lock *
 		CallbackTokenHash: tokenHash,
 		StartedAt:         now,
 		DeadlineAt:        deadlinePtr,
+		RunnerID:          &runnerID,
 	}); err != nil {
 		return err
 	}

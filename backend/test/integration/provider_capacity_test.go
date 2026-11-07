@@ -214,6 +214,13 @@ type capHarness struct {
 	hooks service.CapacityHooks
 	limit map[string]int
 	svc   *service.ExecutionService
+	// runnerID is the identity of the process h.svc models; empty lets the service
+	// generate one. extraNodes are registered beside the capacity Nodes.
+	runnerID   string
+	extraNodes []registry.NodeRegistration
+	// maxWait is the bound dispatch writes onto an Attempt with no deadline; zero uses the
+	// default.
+	maxWait time.Duration
 }
 
 func newCapHarness(t *testing.T, limit int) *capHarness {
@@ -239,9 +246,9 @@ func newCapHarness(t *testing.T, limit int) *capHarness {
 func (h *capHarness) registries() (*registry.NodeRegistry, *registry.ModelRegistry) {
 	h.t.Helper()
 	nodes := registry.NewNodeRegistry()
-	for _, reg := range []registry.NodeRegistration{
+	for _, reg := range append([]registry.NodeRegistration{
 		textinput.Registration(), textoutput.Registration(), capTaskRegistration(h.exec), capSyncRegistration(),
-	} {
+	}, h.extraNodes...) {
 		if err := nodes.Register(reg); err != nil {
 			h.t.Fatalf("register node type: %v", err)
 		}
@@ -275,6 +282,8 @@ func (h *capHarness) newService() *service.ExecutionService {
 		},
 		ProviderCapacity: h.limit,
 		CapacityHooks:    h.hooks,
+		RunnerID:         h.runnerID,
+		NodeMaxWait:      h.maxWait,
 	})
 }
 

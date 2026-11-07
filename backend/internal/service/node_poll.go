@@ -68,6 +68,7 @@ const (
 	PollSkipBindingMismatch      PollSkipReason = "BINDING_MISMATCH"
 	PollSkipRegistryDrift        PollSkipReason = "REGISTRY_DRIFT"
 	PollSkipNotClaimed           PollSkipReason = "NOT_CLAIMED"
+	PollSkipRunEnded             PollSkipReason = "RUN_ENDED"
 )
 
 // PollAttemptOutcome is PollAttempt's result. Status is the normalized Provider answer
