@@ -13,7 +13,7 @@ from .ffmpeg import FFmpeg
 from .render import CLIP_MEDIA_TYPE, Renderer
 from .sources import SourceRejected, SourceStore
 from .storage import is_sha256_hex
-from .tasks import TASK_ID_PATTERN, TaskStore
+from .tasks import TASK_ID_MAX_LENGTH, TaskStore
 from .transcribe import Transcriber
 from .worker import Worker
 
@@ -24,7 +24,7 @@ _MAX_TOKEN = 4096
 class TaskRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    taskId: str = Field(pattern=TASK_ID_PATTERN.pattern)
+    taskId: str = Field(min_length=1, max_length=TASK_ID_MAX_LENGTH)
     type: Literal["TRANSCRIBE", "CHECK_TIMELINE", "CHECK_CLIP", "RENDER"]
     input: dict
     callbackUrl: str = Field(min_length=1, max_length=_MAX_CALLBACK_URL)
@@ -83,6 +83,13 @@ def build_router(services: Services) -> APIRouter:
         except SourceRejected as exc:
             raise HTTPException(400, str(exc)) from exc
         return JSONResponse(record.to_dict(), status_code=200)
+
+    @router.get("/v1/sources/{source_id}")
+    def get_source(source_id: str) -> JSONResponse:
+        record = services.sources.get(source_id)
+        if record is None:
+            raise HTTPException(404, "unknown sourceId")
+        return JSONResponse(record.to_dict())
 
     @router.post("/v1/tasks")
     def create_task(request: TaskRequest) -> JSONResponse:

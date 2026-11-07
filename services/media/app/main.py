@@ -37,7 +37,7 @@ def create_app(
     transcripts = TranscriptStore(data)
     timelines = TimelineStore(data)
     renderer = Renderer(data, ffmpeg, sources, transcripts, timelines, settings.public_url)
-    clip_checker = ClipChecker(ffmpeg, data.clips, timelines)
+    clip_checker = ClipChecker(ffmpeg, data.clips, timelines, transcripts)
     executors = TaskExecutors(sources, transcriber, transcripts, timelines, renderer, clip_checker)
     tasks = TaskStore(data)
     worker = Worker(tasks, executors.by_type, callbacks or CallbackDeliverer(), transcriber)

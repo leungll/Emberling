@@ -84,8 +84,8 @@ def test_task_state_is_unchanged_when_the_callback_fails(make_service, callback_
     assert view["status"] == "FAILED"
     assert finished.wait(30), "delivery did not finish"
     assert len(receiver.deliveries) >= 2
-    assert receiver.deliveries[0]["body"]["payload"]["status"] == "FAILED"
-    assert receiver.deliveries[0]["body"]["payload"]["code"] == "CLIP_UNKNOWN"
+    payload = receiver.deliveries[0]["body"]["payload"]
+    assert payload == {"status": "FAILED", "error": {"code": "CLIP_NOT_FOUND", "message": view["error"]["message"]}}
     assert service.client.get("/v1/tasks/ext_cb_fail").json() == view
     assert service.services.tasks.get("ext_cb_fail").attempts == 1
 
@@ -101,6 +101,7 @@ def test_successful_task_delivers_result_with_token(make_service, callback_recei
     assert delivery["token"] == "test-token-ext_cb_ok"
     assert delivery["body"]["externalTaskId"] == "ext_cb_ok"
     payload = delivery["body"]["payload"]
+    assert set(payload) == {"status", "result"}
     assert payload["status"] == "SUCCEEDED"
-    assert payload["transcriptSha256"] == view["result"]["transcriptSha256"]
+    assert payload["result"] == view["result"]
     assert CALLBACK_TOKEN_HEADER == "X-Emberling-Callback-Token"

@@ -60,9 +60,24 @@ def test_duplicate_task_id_with_different_input_conflicts(service) -> None:
 def test_task_failure_has_a_code_and_no_result(service) -> None:
     view = service.run("ext_missing", "TRANSCRIBE", {"sourceId": "src_" + "0" * 32})
     assert view["status"] == "FAILED"
-    assert view["error"]["code"] == "SOURCE_UNKNOWN"
-    assert "result" not in view
-    assert "callbackUrl" not in view and "callbackToken" not in view
+    assert view["error"]["code"] == "SOURCE_NOT_FOUND"
+    assert set(view) == {"taskId", "status", "error"}
+
+
+def test_status_view_of_a_succeeded_task_has_only_the_result(service) -> None:
+    source = service.upload()
+    view = service.run("ext_" + "a" * 32, "TRANSCRIBE", {"sourceId": source["sourceId"]})
+    assert view["status"] == "SUCCEEDED"
+    assert set(view) == {"taskId", "status", "result"}
+    assert view["taskId"] == "ext_" + "a" * 32
+
+
+def test_any_task_id_up_to_128_characters_is_accepted(service) -> None:
+    odd = "ext:" + "x" * 60 + " with spaces and ünïcode"
+    assert service.submit(odd, "CHECK_CLIP", {"clipSha256": "a" * 64}).status_code == 202
+    assert service.wait(odd)["taskId"] == odd
+    assert service.submit("y" * 129, "CHECK_CLIP", {"clipSha256": "a" * 64}).status_code == 422
+    assert service.submit("", "CHECK_CLIP", {"clipSha256": "a" * 64}).status_code == 422
 
 
 def test_task_record_never_stores_the_callback_token(service) -> None:
@@ -87,5 +102,5 @@ def test_running_task_found_on_restart_is_executed_again(make_service, tmp_path:
     second = make_service(data_dir)
     view = second.wait("ext_restart")
     assert view["status"] == "FAILED"
-    assert view["error"]["code"] == "CLIP_UNKNOWN"
+    assert view["error"]["code"] == "CLIP_NOT_FOUND"
     assert second.services.tasks.get("ext_restart").attempts == 2

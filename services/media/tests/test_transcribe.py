@@ -79,8 +79,29 @@ def test_transcript_of_another_source_fails_the_timeline_check(service, ffmpeg, 
         },
     )
     assert view["status"] == "FAILED"
-    assert view["error"]["code"] == "TRANSCRIPT_SOURCE_MISMATCH"
+    assert view["error"]["code"] == "TIMELINE_INPUT_INVALID"
     assert list((service.settings.data_dir / "timelines").iterdir()) == []
+
+
+def test_unparsable_sentence_id_fails_the_timeline_check(service) -> None:
+    source = service.upload()
+    transcript = service.run("ext_tr_bad", "TRANSCRIBE", {"sourceId": source["sourceId"]})["result"]
+    view = service.run(
+        "ext_ct_bad",
+        "CHECK_TIMELINE",
+        {"sourceId": source["sourceId"], "transcriptSha256": transcript["transcriptSha256"], "segments": [{"from": "S1", "to": "sentence two"}]},
+    )
+    assert view["status"] == "FAILED"
+    assert view["error"]["code"] == "TIMELINE_INPUT_INVALID"
+
+
+def test_get_source_returns_the_reference(service) -> None:
+    source = service.upload(crop_center_x=0.25)
+    response = service.client.get(f"/v1/sources/{source['sourceId']}")
+    assert response.status_code == 200
+    assert response.json() == source
+    assert set(source) == {"sourceId", "sha256", "durationMs", "mediaType", "cropCenterX"}
+    assert service.client.get("/v1/sources/src_" + "0" * 32).status_code == 404
 
 
 def test_upload_same_content_returns_same_reference(service) -> None:

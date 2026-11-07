@@ -15,6 +15,7 @@ from . import rules_v1
 from .ffmpeg import FFmpeg, FFmpegError
 from .rules_v1 import ClipFacts, Cue, Finding
 from .timeline import TimelineStore, clip_spans
+from .transcripts import TranscriptStore
 
 _BLACK_RUN = re.compile(r"black_duration:\s*([0-9.]+)")
 _SILENCE_RUN = re.compile(r"silence_duration:\s*([0-9.]+)")
@@ -24,13 +25,21 @@ _SILENCE_NOISE_DB = "-50dB"
 
 
 class ClipChecker:
-    def __init__(self, ffmpeg: FFmpeg, clips_dir: Path, timelines: TimelineStore) -> None:
+    def __init__(self, ffmpeg: FFmpeg, clips_dir: Path, timelines: TimelineStore, transcripts: TranscriptStore) -> None:
         self._ffmpeg = ffmpeg
         self._clips = clips_dir
         self._timelines = timelines
+        self._transcripts = transcripts
 
     def clip_path(self, clip_sha256: str) -> Path:
         return self._clips / f"{clip_sha256}.mp4"
+
+    def timeline_sha256(self, clip_sha256: str) -> str | None:
+        """The timeline the clip was rendered from, per its cue record."""
+        cues_path = self._clips / f"{clip_sha256}.cues.json"
+        if not cues_path.exists():
+            return None
+        return json.loads(cues_path.read_text("utf-8"))["timelineSha256"]
 
     def check(self, clip_sha256: str) -> list[Finding]:
         path = self.clip_path(clip_sha256)
@@ -38,7 +47,9 @@ class ClipChecker:
         facts = self._measure(path, timeline)
         findings = rules_v1.check_clip(facts)
         if facts.decodable and timeline is not None:
-            findings.extend(rules_v1.check_subtitles(clip_spans(timeline), self._load_cues(clip_sha256)))
+            transcript = self._transcripts.load(timeline["transcriptSha256"])
+            spans = [] if transcript is None else clip_spans(timeline, transcript)
+            findings.extend(rules_v1.check_subtitles(spans, self._load_cues(clip_sha256)))
         return findings
 
     def _measure(self, path: Path, timeline: dict | None) -> ClipFacts:
@@ -102,11 +113,8 @@ class ClipChecker:
         return tuple(runs)
 
     def _load_timeline(self, clip_sha256: str) -> dict | None:
-        cues_path = self._clips / f"{clip_sha256}.cues.json"
-        if not cues_path.exists():
-            return None
-        record = json.loads(cues_path.read_text("utf-8"))
-        return self._timelines.load(record["timelineSha256"])
+        timeline_sha256 = self.timeline_sha256(clip_sha256)
+        return None if timeline_sha256 is None else self._timelines.load(timeline_sha256)
 
     def _load_cues(self, clip_sha256: str) -> list[Cue]:
         cues_path = self._clips / f"{clip_sha256}.cues.json"

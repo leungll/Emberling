@@ -1,7 +1,7 @@
 """Rendering a timeline into a 9:16 clip with burned-in subtitles.
 
-The render is a pure function of the timeline: the segments it names, the transcript's
-word timestamps and the crop centre it recorded. FFmpeg runs with one thread, bit-exact
+The render is a function of the timeline (the segments it names and the transcript's
+word timestamps) and of the source's crop centre. FFmpeg runs with one thread, bit-exact
 flags and no timestamp metadata, so the same timeline produces the same bytes in the
 same environment. The subtitle cues are kept beside the clip for the clip check.
 """
@@ -16,8 +16,8 @@ from .ffmpeg import FFmpeg
 from .rules_v1 import Cue
 from .sources import SourceStore
 from .storage import DataDir, sha256_file
-from .timeline import TimelineStore
-from .transcribe import Sentence
+from .timeline import TimelineStore, segment_sentences
+from .transcribe import Transcript
 from .transcripts import TranscriptStore
 
 CLIP_MEDIA_TYPE = "video/mp4"
@@ -58,15 +58,14 @@ class RenderResult:
         return asdict(self)
 
 
-def build_cues(timeline: dict, sentences_by_id: dict[str, Sentence]) -> list[Cue]:
+def build_cues(timeline: dict, transcript: Transcript) -> list[Cue]:
     """Cues of at most MAX_WORDS_PER_CUE words, timed by the words, on the clip's axis."""
     cues: list[Cue] = []
     offset = 0
     for segment in timeline["segments"]:
         if segment["startMs"] is None or segment["endMs"] is None:
             continue
-        for entry in segment["sentences"]:
-            sentence = sentences_by_id[entry["id"]]
+        for sentence in segment_sentences(transcript, segment["from"], segment["to"]):
             words = list(sentence.words)
             for start in range(0, len(words), MAX_WORDS_PER_CUE):
                 group = words[start : start + MAX_WORDS_PER_CUE]
@@ -103,7 +102,7 @@ def _ass_text(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}").replace("\n", " ")
 
 
-def filter_graph(timeline: dict) -> str:
+def filter_graph(timeline: dict, crop_center_x: float) -> str:
     """The ffmpeg filter graph: trim and concatenate segments, crop, scale, subtitle."""
     parts: list[str] = []
     labels: list[str] = []
@@ -118,9 +117,8 @@ def filter_graph(timeline: dict) -> str:
         labels.append(f"[v{index}][a{index}]")
     count = len(labels)
     parts.append(f"{''.join(labels)}concat=n={count}:v=1:a=1[vc][ac]")
-    cx = timeline["cropCenterX"]
     parts.append(
-        f"[vc]crop=w='min(iw,ih*9/16)':h=ih:x='min(max({cx}*iw-ow/2,0),iw-ow)':y=0,"
+        f"[vc]crop=w='min(iw,ih*9/16)':h=ih:x='min(max({crop_center_x:.4f}*iw-ow/2,0),iw-ow)':y=0,"
         f"scale=1080:1920:flags=bicubic,setsar=1,subtitles={_ASS_FILE}[vout]"
     )
     return ";".join(parts)
@@ -166,8 +164,7 @@ class Renderer:
         transcript = self._transcripts.load(timeline["transcriptSha256"])
         if transcript is None:
             raise RenderError(f"transcript {timeline['transcriptSha256']} is unknown")
-        sentences_by_id = {s.id: s for s in transcript.sentences}
-        cues = build_cues(timeline, sentences_by_id)
+        cues = build_cues(timeline, transcript)
 
         with self._data.temp_dir() as work:
             (work / _ASS_FILE).write_text(ass_document(cues), encoding="utf-8")
@@ -186,7 +183,7 @@ class Renderer:
                     "-i",
                     str(self._sources.content_path(source.sha256)),
                     "-filter_complex",
-                    filter_graph(timeline),
+                    filter_graph(timeline, source.cropCenterX),
                     "-map",
                     "[vout]",
                     "-map",

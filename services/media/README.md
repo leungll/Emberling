@@ -51,8 +51,9 @@ Configuration is read from the environment once at startup:
 | Route | Purpose |
 |---|---|
 | `POST /v1/sources` | Multipart upload of a video (`file`) with an optional `cropCenterX` form field in `[0, 1]`. Returns `sourceId`, `sha256`, `durationMs`, `mediaType`, `cropCenterX`. The same bytes always yield the same `sourceId`. |
-| `POST /v1/tasks` | Submit a task: `taskId`, `type`, `input`, `callbackUrl`, `callbackToken`. A new task is answered `202`; a repeated `taskId` with the same type and input is answered `200` with the original task and is not run again; a repeated `taskId` with different content is answered `409`. |
-| `GET /v1/tasks/{taskId}` | Status `QUEUED`, `RUNNING`, `SUCCEEDED` or `FAILED`, with `result` or `error`. Unknown tasks are `404`. |
+| `POST /v1/tasks` | Submit a task: `taskId` (any string of 1 to 128 characters), `type`, `input`, `callbackUrl`, `callbackToken`. A new task is answered `202`; a repeated `taskId` with the same type and input is answered `200` with the original task and is not run again; a repeated `taskId` with different content is answered `409`. |
+| `GET /v1/tasks/{taskId}` | `{"taskId", "status"}` with `status` one of `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, plus `result` (an object) only when `SUCCEEDED` and `error` (`{"code", "message"}`) only when `FAILED`. Unknown tasks are `404`. |
+| `GET /v1/sources/{sourceId}` | The same reference as the upload returns. Unknown ids are `404`. |
 | `GET /v1/clips/{sha256}` | The rendered clip as `video/mp4`. |
 | `GET /healthz` | `200` when FFmpeg, ffprobe, the filters, the encoders and the transcription model are usable, otherwise `503` with the problems listed. |
 
@@ -64,10 +65,12 @@ When a task finishes, the service sends one `POST` to `callbackUrl` with the
 header `X-Emberling-Callback-Token: <callbackToken>` and the body
 
 ```json
-{"externalTaskId": "<taskId>", "payload": {"status": "SUCCEEDED", "...": "result members"}}
+{"externalTaskId": "<taskId>", "payload": {"status": "SUCCEEDED", "result": {"...": "the task's result object"}}}
 ```
 
-A failed task carries `{"status": "FAILED", "code": "...", "message": "..."}`.
+A failed task carries `{"status": "FAILED", "error": {"code": "...", "message": "..."}}`
+as the payload. The `result` and `error` objects are the same ones the status
+route returns.
 Delivery starts only after the task record is written. A transport error or a
 `5xx` answer is retried with exponential backoff (1 s doubling to 30 s) for up
 to ten minutes; any other `4xx` is taken as the receiver's final answer. The
@@ -77,7 +80,8 @@ finished after a restart has no callback and is collected by polling.
 
 ### Task types
 
-**`TRANSCRIBE`**, input `{"sourceId"}`. Runs faster-whisper on CPU with the
+**`TRANSCRIBE`**, input `{"sourceId"}`; an unknown id fails the task with
+`SOURCE_NOT_FOUND`. Runs faster-whisper on CPU with the
 language fixed to English and word timestamps on, then splits the words into
 sentences at terminal punctuation or a pause of at least 0.8 s and numbers them
 `S1`, `S2`, ... The result is the material text, one line per sentence:
@@ -92,19 +96,28 @@ with `material`, `language`, `sentenceCount`, `lineCount`, `durationMs`,
 text) and `model`. Word timestamps stay in the service. A transcript is cached
 per source hash and model name.
 
-**`CHECK_TIMELINE`**, input `{"sourceId", "transcriptSha256", "targetDurationMs"?,
-"segments": [{"from": "S12", "to": "S13"}, ...]}`. The transcript must belong to
-the source, otherwise the task fails with `TRANSCRIPT_SOURCE_MISMATCH`. Each
-segment is resolved to the start of its first sentence and the end of its last
-sentence, and the result is written as canonical JSON (sorted keys, no
-whitespace, integer milliseconds) whose SHA-256 is `timelineSha256`. The result
-carries `kind` `TIMELINE`, `ruleVersion`, `passed`, `subjectSha256` and
+**`CHECK_TIMELINE`**, input `{"sourceId", "transcriptSha256", "targetDurationMs":
+int or null, "segments": [{"from": "S12", "to": "S13"}, ...]}`. An unknown
+source or transcript, a transcript that belongs to another source, or a
+sentence id that is not of the form `S<n>` fails the task with
+`TIMELINE_INPUT_INVALID`; a well-formed id that does not exist is a blocking
+finding. Each segment is resolved to the start of its first sentence and the
+end of its last sentence, and the timeline is written as canonical JSON: sorted
+keys, separators `,` and `:`, non-ASCII kept, no trailing newline, integer
+milliseconds. Its SHA-256 is `timelineSha256`:
+
+```json
+{"durationMs":58940,"ruleVersion":"v1","segments":[{"endMs":85600,"from":"S1","startMs":26660,"text":"joined sentence text","to":"S5"}],"sourceId":"src_...","sourceSha256":"...","targetDurationMs":null,"transcriptSha256":"..."}
+```
+
+A segment that cannot be resolved keeps `null` times and an empty `text`. The
+result carries `kind` `TIMELINE`, `ruleVersion`, `passed`, `subjectSha256` and
 `timelineSha256` (equal), `durationMs`, `findings`, and `timeline`, the
 canonical text verbatim, so a caller can store it and get the same hash. The
-timeline records the source's `cropCenterX`, so rendering depends on nothing
-outside the timeline.
+crop centre is read from the source record at render time.
 
-**`RENDER`**, input `{"timelineSha256"}`. Cuts and concatenates the segments,
+**`RENDER`**, input `{"timelineSha256"}`; an unknown hash fails the task with
+`TIMELINE_NOT_FOUND`. Cuts and concatenates the segments,
 crops a fixed 9:16 window of full height centred on `cropCenterX`, scales to
 1080x1920, burns subtitles of at most seven words timed by the word timestamps,
 and encodes with libx264 and AAC using one thread, bit-exact flags and no
@@ -115,8 +128,9 @@ it. The result carries `clipSha256`, `clipUrl`, `sizeBytes`, `mediaType`,
 
 **`CHECK_CLIP`**, input `{"clipSha256"}`. Probes the clip, decodes it fully,
 runs `blackdetect` and `silencedetect`, and compares the stored cue data with
-the clip's timeline. The result carries `kind` `CLIP`, `ruleVersion`, `passed`,
-`subjectSha256` and `findings`.
+the clip's timeline. An unknown hash fails the task with `CLIP_NOT_FOUND`. The
+result carries `kind` `CLIP`, `ruleVersion`, `passed`, `subjectSha256`,
+`timelineSha256` (the timeline the clip was rendered from) and `findings`.
 
 A check that does not pass is still a `SUCCEEDED` task; the verdict is in
 `passed` and `findings`. `FAILED` means the task could not be carried out.

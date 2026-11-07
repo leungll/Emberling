@@ -96,7 +96,7 @@ class Worker:
             # restart); the caller learns the outcome by polling.
             return
         if task.status == STATUS_SUCCEEDED:
-            payload = {"status": STATUS_SUCCEEDED, **(task.result or {})}
+            payload = {"status": STATUS_SUCCEEDED, "result": task.result or {}}
         else:
-            payload = {"status": STATUS_FAILED, **(task.error or {})}
+            payload = {"status": STATUS_FAILED, "error": task.error or {}}
         self._callbacks.deliver_async(task.taskId, task.callbackUrl, token, payload)

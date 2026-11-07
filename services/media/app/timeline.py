@@ -8,15 +8,16 @@ same bytes, and the hash of those bytes is the timeline's identity.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .rules_v1 import SegmentFacts, SentenceSpan
+from .rules_v1 import RULE_VERSION, SegmentFacts, SentenceSpan
 from .sources import SourceRecord
 from .storage import DataDir, sha256_text
-from .transcribe import Transcript
+from .transcribe import Sentence, Transcript
 
-CROP_CENTER_DECIMALS = 4
+SENTENCE_ID_PATTERN = re.compile(r"^S[1-9][0-9]*$")
 
 
 @dataclass(frozen=True)
@@ -65,30 +66,25 @@ def build_timeline(
     segments: list[SegmentFacts],
     target_duration_ms: int | None,
 ) -> dict:
-    """The canonical timeline document. Unresolved segments keep null times."""
+    """The canonical timeline document. Unresolved segments keep null times and no text."""
     entries = []
     total_ms = 0
     for segment in segments:
-        sentences = []
-        if segment.from_index is not None and segment.to_index is not None and segment.from_index <= segment.to_index:
-            sentences = [
-                {"endMs": s.endMs, "id": s.id, "startMs": s.startMs, "text": s.text}
-                for s in transcript.sentences[segment.from_index : segment.to_index + 1]
-            ]
+        text = " ".join(s.text for s in segment_sentences(transcript, segment.from_id, segment.to_id))
         if segment.start_ms is not None and segment.end_ms is not None:
             total_ms += segment.end_ms - segment.start_ms
         entries.append(
             {
                 "endMs": segment.end_ms,
                 "from": segment.from_id,
-                "sentences": sentences,
                 "startMs": segment.start_ms,
+                "text": text,
                 "to": segment.to_id,
             }
         )
     return {
-        "cropCenterX": round(source.cropCenterX, CROP_CENTER_DECIMALS),
         "durationMs": total_ms,
+        "ruleVersion": RULE_VERSION,
         "segments": entries,
         "sourceId": source.sourceId,
         "sourceSha256": source.sha256,
@@ -97,20 +93,29 @@ def build_timeline(
     }
 
 
-def clip_spans(timeline: dict) -> list[SentenceSpan]:
+def segment_sentences(transcript: Transcript, from_id: str, to_id: str) -> list[Sentence]:
+    """The sentences a segment covers, empty when it cannot be resolved."""
+    index_of = {s.id: i for i, s in enumerate(transcript.sentences)}
+    from_index, to_index = index_of.get(from_id), index_of.get(to_id)
+    if from_index is None or to_index is None or from_index > to_index:
+        return []
+    return list(transcript.sentences[from_index : to_index + 1])
+
+
+def clip_spans(timeline: dict, transcript: Transcript) -> list[SentenceSpan]:
     """Places every chosen sentence on the clip's time axis, segment after segment."""
     spans: list[SentenceSpan] = []
     offset = 0
     for segment in timeline["segments"]:
         if segment["startMs"] is None or segment["endMs"] is None:
             continue
-        for sentence in segment["sentences"]:
+        for sentence in segment_sentences(transcript, segment["from"], segment["to"]):
             spans.append(
                 SentenceSpan(
-                    id=sentence["id"],
-                    text=sentence["text"],
-                    start_ms=offset + sentence["startMs"] - segment["startMs"],
-                    end_ms=offset + sentence["endMs"] - segment["startMs"],
+                    id=sentence.id,
+                    text=sentence.text,
+                    start_ms=offset + sentence.startMs - segment["startMs"],
+                    end_ms=offset + sentence.endMs - segment["startMs"],
                 )
             )
         offset += segment["endMs"] - segment["startMs"]

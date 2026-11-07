@@ -14,16 +14,15 @@ from .render import RenderError, Renderer
 from .sources import SourceStore
 from .storage import is_sha256_hex
 from .tasks import TYPE_CHECK_CLIP, TYPE_CHECK_TIMELINE, TYPE_RENDER, TYPE_TRANSCRIBE, TaskFailure
-from .timeline import SegmentRequest, TimelineStore, build_timeline, canonical_json, resolve_segments
+from .timeline import SENTENCE_ID_PATTERN, SegmentRequest, TimelineStore, build_timeline, canonical_json, resolve_segments
 from .transcribe import Transcriber
 from .transcripts import TranscriptStore
 
 INPUT_INVALID = "INPUT_INVALID"
-SOURCE_UNKNOWN = "SOURCE_UNKNOWN"
-TRANSCRIPT_UNKNOWN = "TRANSCRIPT_UNKNOWN"
-TRANSCRIPT_SOURCE_MISMATCH = "TRANSCRIPT_SOURCE_MISMATCH"
-TIMELINE_UNKNOWN = "TIMELINE_UNKNOWN"
-CLIP_UNKNOWN = "CLIP_UNKNOWN"
+SOURCE_NOT_FOUND = "SOURCE_NOT_FOUND"
+TIMELINE_INPUT_INVALID = "TIMELINE_INPUT_INVALID"
+TIMELINE_NOT_FOUND = "TIMELINE_NOT_FOUND"
+CLIP_NOT_FOUND = "CLIP_NOT_FOUND"
 MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
 FFMPEG_FAILED = "FFMPEG_FAILED"
 RENDER_FAILED = "RENDER_FAILED"
@@ -58,7 +57,7 @@ class TaskExecutors:
         source_id = _required_str(task_input, "sourceId")
         source = self._sources.get(source_id)
         if source is None:
-            raise TaskFailure(SOURCE_UNKNOWN, f"source {source_id} is unknown")
+            raise TaskFailure(SOURCE_NOT_FOUND, f"source {source_id} is unknown")
         model = self._transcriber.model_name
         transcript_sha256 = self._transcripts.cached_sha256(source.sha256, model)
         if transcript_sha256 is None:
@@ -86,23 +85,28 @@ class TaskExecutors:
         }
 
     def check_timeline(self, task_input: dict) -> dict:
-        source_id = _required_str(task_input, "sourceId")
-        transcript_sha256 = _required_str(task_input, "transcriptSha256")
+        # Every input problem of this task, including a transcript that belongs to another
+        # source, is a FAILED task; only a well-formed selection is checked by the rules.
+        try:
+            source_id = _required_str(task_input, "sourceId")
+            transcript_sha256 = _required_str(task_input, "transcriptSha256")
+            requests = _segment_requests(task_input.get("segments"))
+        except TaskFailure as failure:
+            raise TaskFailure(TIMELINE_INPUT_INVALID, failure.message) from failure
         target = task_input.get("targetDurationMs")
         if target is not None and (not isinstance(target, int) or isinstance(target, bool) or target <= 0):
-            raise TaskFailure(INPUT_INVALID, "targetDurationMs must be a positive integer")
-        requests = _segment_requests(task_input.get("segments"))
+            raise TaskFailure(TIMELINE_INPUT_INVALID, "targetDurationMs must be a positive integer or null")
         source = self._sources.get(source_id)
         if source is None:
-            raise TaskFailure(SOURCE_UNKNOWN, f"source {source_id} is unknown")
+            raise TaskFailure(TIMELINE_INPUT_INVALID, f"source {source_id} is unknown")
         if not is_sha256_hex(transcript_sha256):
-            raise TaskFailure(INPUT_INVALID, "transcriptSha256 must be a hex SHA-256")
+            raise TaskFailure(TIMELINE_INPUT_INVALID, "transcriptSha256 must be a hex SHA-256")
         transcript = self._transcripts.load(transcript_sha256)
         if transcript is None:
-            raise TaskFailure(TRANSCRIPT_UNKNOWN, f"transcript {transcript_sha256} is unknown")
+            raise TaskFailure(TIMELINE_INPUT_INVALID, f"transcript {transcript_sha256} is unknown")
         if transcript.sourceSha256 != source.sha256:
             raise TaskFailure(
-                TRANSCRIPT_SOURCE_MISMATCH, f"transcript {transcript_sha256} does not belong to source {source_id}"
+                TIMELINE_INPUT_INVALID, f"transcript {transcript_sha256} does not belong to source {source_id}"
             )
         segments = resolve_segments(transcript, requests)
         findings = rules_v1.check_timeline(segments, target)
@@ -125,7 +129,7 @@ class TaskExecutors:
         if not is_sha256_hex(timeline_sha256):
             raise TaskFailure(INPUT_INVALID, "timelineSha256 must be a hex SHA-256")
         if self._timelines.load(timeline_sha256) is None:
-            raise TaskFailure(TIMELINE_UNKNOWN, f"timeline {timeline_sha256} is unknown")
+            raise TaskFailure(TIMELINE_NOT_FOUND, f"timeline {timeline_sha256} is unknown")
         try:
             return self._renderer.render(timeline_sha256).to_dict()
         except RenderError as exc:
@@ -138,7 +142,7 @@ class TaskExecutors:
         if not is_sha256_hex(clip_sha256):
             raise TaskFailure(INPUT_INVALID, "clipSha256 must be a hex SHA-256")
         if not self._clip_checker.clip_path(clip_sha256).exists():
-            raise TaskFailure(CLIP_UNKNOWN, f"clip {clip_sha256} is unknown")
+            raise TaskFailure(CLIP_NOT_FOUND, f"clip {clip_sha256} is unknown")
         try:
             findings = self._clip_checker.check(clip_sha256)
         except FFmpegError as exc:
@@ -148,7 +152,7 @@ class TaskExecutors:
             "ruleVersion": rules_v1.RULE_VERSION,
             "passed": rules_v1.passed(findings),
             "subjectSha256": clip_sha256,
-            "clipSha256": clip_sha256,
+            "timelineSha256": self._clip_checker.timeline_sha256(clip_sha256),
             "findings": [f.to_dict() for f in findings],
         }
 
@@ -169,7 +173,7 @@ def _segment_requests(value: object) -> list[SegmentRequest]:
             raise TaskFailure(INPUT_INVALID, "each segment must be an object with from and to")
         from_id, to_id = entry.get("from"), entry.get("to")
         for ref in (from_id, to_id):
-            if not isinstance(ref, str) or not ref or len(ref) > _SENTENCE_ID_MAX:
+            if not isinstance(ref, str) or len(ref) > _SENTENCE_ID_MAX or not SENTENCE_ID_PATTERN.match(ref):
                 raise TaskFailure(INPUT_INVALID, "segment from and to must be sentence ids such as S12")
         requests.append(SegmentRequest(from_id=from_id, to_id=to_id))
     return requests

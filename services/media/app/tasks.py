@@ -7,6 +7,7 @@ is not part of it and is held in memory only.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import threading
@@ -16,7 +17,10 @@ from pathlib import Path
 
 from .storage import DataDir
 
-TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+# Any string of 1 to 128 characters is a task id. Ids that are safe as file names keep
+# their own name on disk; any other id is stored under a hash of itself.
+TASK_ID_MAX_LENGTH = 128
+_FILE_SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 TYPE_TRANSCRIBE = "TRANSCRIBE"
 TYPE_CHECK_TIMELINE = "CHECK_TIMELINE"
@@ -54,11 +58,12 @@ class Task:
     attempts: int = field(default=0)
 
     def view(self) -> dict:
-        """The response body of a status query. It never carries the callback URL."""
-        data = {"taskId": self.taskId, "type": self.type, "status": self.status, "input": self.input}
-        if self.result is not None:
+        """The response body of a status query: result only when SUCCEEDED, error only
+        when FAILED, and never the callback URL or token."""
+        data = {"taskId": self.taskId, "status": self.status}
+        if self.status == STATUS_SUCCEEDED and self.result is not None:
             data["result"] = self.result
-        if self.error is not None:
+        if self.status == STATUS_FAILED and self.error is not None:
             data["error"] = self.error
         return data
 
@@ -100,7 +105,7 @@ class TaskStore:
         self._seq = 0
 
     def _path(self, task_id: str) -> Path:
-        return self._data.tasks / f"{task_id}.json"
+        return self._data.tasks / f"{record_file_name(task_id)}.json"
 
     def load_all(self) -> list[Task]:
         """Reads every record; a task found RUNNING is reset to QUEUED to run again."""
@@ -177,3 +182,9 @@ class TaskStore:
 
     def _write(self, task: Task) -> None:
         self._data.write_text(self._path(task.taskId), json.dumps(task.to_record(), sort_keys=True))
+
+
+def record_file_name(task_id: str) -> str:
+    if _FILE_SAFE_ID.match(task_id):
+        return task_id
+    return "id-" + hashlib.sha256(task_id.encode("utf-8")).hexdigest()

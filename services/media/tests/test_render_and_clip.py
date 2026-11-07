@@ -40,7 +40,11 @@ def test_check_timeline_result_is_canonical_and_passes(service, chain) -> None:
     text = result["timeline"]
     assert hashlib.sha256(text.encode("utf-8")).hexdigest() == result["subjectSha256"] == result["timelineSha256"]
     timeline = json.loads(text)
-    assert list(timeline) == sorted(timeline)
+    assert list(timeline) == ["durationMs", "ruleVersion", "segments", "sourceId", "sourceSha256", "targetDurationMs", "transcriptSha256"]
+    assert timeline["ruleVersion"] == rules_v1.RULE_VERSION
+    assert list(timeline["segments"][0]) == ["endMs", "from", "startMs", "text", "to"]
+    first_line_text = transcript["material"].splitlines()[0].split("\t")[3]
+    assert timeline["segments"][0]["text"].startswith(first_line_text)
     assert timeline["sourceSha256"] == source["sha256"]
     assert timeline["transcriptSha256"] == transcript["transcriptSha256"]
     assert timeline["durationMs"] == result["durationMs"] > 0
@@ -130,6 +134,8 @@ def test_rendered_clip_passes_the_clip_check(service, rendered) -> None:
     assert result["kind"] == "CLIP"
     assert result["ruleVersion"] == rules_v1.RULE_VERSION
     assert result["subjectSha256"] == render["clipSha256"]
+    assert result["timelineSha256"] == render["timelineSha256"]
+    assert set(result) == {"kind", "passed", "ruleVersion", "subjectSha256", "timelineSha256", "findings"}
     assert result["passed"] is True, result["findings"]
 
 
@@ -225,6 +231,8 @@ def test_subtitle_cue_outside_its_sentence_is_blocking(service, rendered) -> Non
 
 def test_unknown_clip_fails_the_task(service) -> None:
     view = service.run("ext_cc_unknown", "CHECK_CLIP", {"clipSha256": "e" * 64})
-    assert view["status"] == "FAILED" and view["error"]["code"] == "CLIP_UNKNOWN"
+    assert view["status"] == "FAILED" and view["error"]["code"] == "CLIP_NOT_FOUND"
+    unknown_timeline = service.run("ext_render_unknown", "RENDER", {"timelineSha256": "e" * 64})
+    assert unknown_timeline["error"]["code"] == "TIMELINE_NOT_FOUND"
     assert service.client.get("/v1/clips/" + "e" * 64).status_code == 404
     assert service.client.get("/v1/clips/not-a-hash").status_code == 404
