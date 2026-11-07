@@ -1,19 +1,23 @@
 // Package nodes has no production code of its own; it only proves that every built-in
 // Node registers cleanly together against one NodeRegistry; nodes/textinput, .../
 // prompttemplate, .../textgeneration, .../textoutput, .../mediaoutput, .../imageinput,
-// .../mediabrief, .../mediaresult and .../imagegeneration each still own their focused, per-node tests.
+// .../mediabrief, .../mediaresult, .../mediatranscript and .../imagegeneration each still own their
+// focused, per-node tests.
 package nodes
 
 import (
 	"context"
 	"testing"
 
+	"github.com/leungll/Emberling/backend/internal/adapters/externaltask"
 	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
+	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/nodes/imagegeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/imageinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediabrief"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaoutput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediaresult"
+	"github.com/leungll/Emberling/backend/internal/nodes/mediatranscript"
 	"github.com/leungll/Emberling/backend/internal/nodes/prompttemplate"
 	"github.com/leungll/Emberling/backend/internal/nodes/taskinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/textgeneration"
@@ -40,8 +44,16 @@ func (noopModelResolver) ProviderID(string) (string, error) {
 // share one startup check rather than a second, parallel list.
 func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 	r := registry.NewNodeRegistry()
+	transcript, err := mediatranscript.Registration(mediatranscript.Ports{
+		Tasks:     externaltask.New("http://media-service.test", nil),
+		Artifacts: asset.NewArtifactStore(t.TempDir(), 1<<20),
+	})
+	if err != nil {
+		t.Fatalf("mediatranscript.Registration() error = %v", err)
+	}
 	registrations := []registry.NodeRegistration{
 		textinput.Registration(),
+		transcript,
 		taskinput.Registration(),
 		imageinput.Registration(),
 		mediabrief.Registration(),
@@ -73,6 +85,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 		"media_output":     false,
 		"media_result":     false,
 		"image_generation": false,
+		"media_transcript": false,
 	}
 	for _, meta := range list {
 		if _, known := wantTypes[meta.Type]; !known {

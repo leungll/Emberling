@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/leungll/Emberling/backend/internal/asset"
 	"github.com/leungll/Emberling/backend/internal/domain"
 	"github.com/leungll/Emberling/backend/internal/registry"
 	"github.com/leungll/Emberling/backend/internal/runtime"
@@ -130,6 +131,12 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 			return err
 		}
 
+		// The Attempt has just won its conditional update above, so these links belong
+		// to the one completion that commits the output.
+		if err := recordNodeArtifacts(ctx, tx, attempt.ID, run.ID, p.output.Artifacts, now); err != nil {
+			return err
+		}
+
 		var latencyMs int64
 		if nodeRun.StartedAt != nil {
 			latencyMs = now.Sub(*nodeRun.StartedAt).Milliseconds()
@@ -206,6 +213,49 @@ func (s *ExecutionService) completeNode(ctx context.Context, p completeNodeParam
 		s.releaseHandoff(ctx, releasedProvider)
 	}
 	return result, nil
+}
+
+// recordNodeArtifacts commits the metadata of each Execution Artifact the node declared
+// with its output and links it to the Node Attempt and Run, under the same rules as a Tool
+// Attempt's artifacts: content addressing keeps an existing row with the same content and
+// rejects one that disagrees, the storage key is derived from the digest here rather than
+// taken from the node, and the link comes from the declaration, never from parsing the
+// output.
+//
+// It runs inside the completion transaction, after the Attempt's conditional update to
+// SUCCEEDED has been won and before the NodeRun's. A completion that lost that update
+// never reaches it, and a transaction that fails afterwards rolls the links back with
+// everything else, so a link exists exactly when a committed output declared the
+// artifact.
+func recordNodeArtifacts(ctx context.Context, tx store.Tx, attemptID, runID string, artifacts []domain.ArtifactRef, now time.Time) error {
+	for _, ref := range artifacts {
+		key, err := asset.ArtifactStorageKey(ref.SHA256)
+		if err != nil {
+			return fmt.Errorf("service: record node artifact %s: %w", ref.ArtifactID, err)
+		}
+		record := store.ArtifactRecord{
+			Artifact: domain.Artifact{
+				ArtifactID: ref.ArtifactID,
+				MediaType:  ref.MediaType,
+				SizeBytes:  ref.SizeBytes,
+				SHA256:     ref.SHA256,
+				CreatedAt:  now,
+			},
+			StorageKey: key,
+		}
+		if err := tx.Artifacts().CreateIfAbsent(ctx, record); err != nil {
+			return err
+		}
+		if err := tx.Artifacts().LinkToNodeAttempt(ctx, store.NodeAttemptArtifact{
+			NodeAttemptID: attemptID,
+			ArtifactID:    ref.ArtifactID,
+			RunID:         runID,
+			CreatedAt:     now,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // advanceAfterNodeSuccess is the shared tail of every transaction that succeeds one

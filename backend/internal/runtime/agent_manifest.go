@@ -74,9 +74,12 @@ type workspaceFileMessage struct {
 
 // DeriveTurnManifest lists the materials of one model request: the instructions, every
 // user message as task input, every tool message as a tool result or a workspace file,
-// the Agent State, and, as omitted items, every Execution Artifact a tool message refers
-// to. Assistant messages are the model's own earlier decisions, not material, and are not
-// listed.
+// the Agent State, and, as omitted items, every Execution Artifact a user or tool message
+// refers to. A task input refers to an artifact when an upstream node, such as the
+// transcript node, handed the Agent material by reference rather than inline; the
+// reference is listed so a reviewer can see which material the Agent started from
+// without its content ever having entered the request. Assistant messages are the
+// model's own earlier decisions, not material, and are not listed.
 //
 // An included item's digest and length are computed over the bytes that enter the
 // request. The Manifest never copies content: a label is a fixed word or a path, and the
@@ -92,6 +95,7 @@ func DeriveTurnManifest(in ManifestInput) []domain.ManifestItem {
 		case AgentRoleUser:
 			items = append(items, includedItem(domain.ManifestTaskInput, manifestLabelTaskInput,
 				in.NodeRunID, "", message.Content))
+			items = appendArtifactItems(items, message.Content, seenArtifacts)
 		case AgentRoleTool:
 			items = append(items, toolMessageItem(message))
 			items = appendArtifactItems(items, message.Content, seenArtifacts)

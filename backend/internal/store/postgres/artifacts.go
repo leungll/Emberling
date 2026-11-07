@@ -84,16 +84,35 @@ func (r *artifactRepository) LinkToToolAttempt(ctx context.Context, link store.T
 	return nil
 }
 
-// GetForRun reads an artifact through a link of runID whose Tool Attempt succeeded. A
-// missing Run, link or metadata row all leave the join empty and map to the same
-// domain.ErrNotFound.
+// LinkToNodeAttempt inserts one node_attempt_artifacts row, under the same no-ON-CONFLICT
+// rule as LinkToToolAttempt: the node's result transaction writes each declared link
+// exactly once, so a duplicate is a defect that must fail the transaction.
+func (r *artifactRepository) LinkToNodeAttempt(ctx context.Context, link store.NodeAttemptArtifact) error {
+	const insert = `
+		INSERT INTO node_attempt_artifacts (node_attempt_id, artifact_id, run_id, created_at)
+		VALUES ($1, $2, $3, $4)`
+	if _, err := r.conn.Exec(ctx, insert, link.NodeAttemptID, link.ArtifactID, link.RunID, link.CreatedAt); err != nil {
+		return mapError("artifacts.LinkToNodeAttempt", err, link.NodeAttemptID, link.ArtifactID)
+	}
+	return nil
+}
+
+// GetForRun reads an artifact through a link of runID whose declaring Attempt succeeded:
+// a Tool Attempt link or a Node Attempt link, both requiring SUCCEEDED. A missing Run,
+// link or metadata row all leave the union empty and map to the same domain.ErrNotFound.
 func (r *artifactRepository) GetForRun(ctx context.Context, runID, artifactID string) (store.ArtifactRecord, error) {
 	const query = `
 		SELECT a.artifact_id, a.media_type, a.size_bytes, a.sha256, a.storage_key, a.created_at
-		FROM tool_attempt_artifacts l
-		JOIN tool_attempts t ON t.id = l.tool_attempt_id
-		JOIN execution_artifacts a ON a.artifact_id = l.artifact_id
-		WHERE l.run_id = $1 AND l.artifact_id = $2 AND t.status = 'SUCCEEDED'
+		FROM execution_artifacts a
+		WHERE a.artifact_id = $2 AND (
+			EXISTS (
+				SELECT 1 FROM tool_attempt_artifacts l
+				JOIN tool_attempts t ON t.id = l.tool_attempt_id
+				WHERE l.run_id = $1 AND l.artifact_id = $2 AND t.status = 'SUCCEEDED')
+			OR EXISTS (
+				SELECT 1 FROM node_attempt_artifacts l
+				JOIN node_attempts n ON n.id = l.node_attempt_id
+				WHERE l.run_id = $1 AND l.artifact_id = $2 AND n.status = 'SUCCEEDED'))
 		LIMIT 1`
 
 	var record store.ArtifactRecord

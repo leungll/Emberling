@@ -137,11 +137,17 @@ type ArtifactRepository interface {
 	// domain.ErrConflict rather than being ignored.
 	LinkToToolAttempt(ctx context.Context, link ToolAttemptArtifact) error
 
+	// LinkToNodeAttempt records that a Node Attempt of a Run declared an Execution
+	// Artifact with its output, under the same rules as LinkToToolAttempt: it belongs to
+	// the node's result transaction, the artifact's row must already exist in it, and a
+	// second link of the same Attempt and artifact yields domain.ErrConflict.
+	LinkToNodeAttempt(ctx context.Context, link NodeAttemptArtifact) error
+
 	// GetForRun returns the Metadata and storage key of an Execution Artifact that a
-	// SUCCEEDED Tool Attempt of runID declared, or domain.ErrNotFound when the Run does
-	// not exist, no such link exists, or the artifact has no row. The three cases are
-	// deliberately indistinguishable, so a Run reveals nothing about another Run's
-	// artifacts.
+	// SUCCEEDED Tool Attempt or a SUCCEEDED Node Attempt of runID declared, or
+	// domain.ErrNotFound when the Run does not exist, no such link exists, or the
+	// artifact has no row. The cases are deliberately indistinguishable, so a Run
+	// reveals nothing about another Run's artifacts.
 	GetForRun(ctx context.Context, runID, artifactID string) (ArtifactRecord, error)
 }
 
@@ -149,6 +155,15 @@ type ArtifactRepository interface {
 // declared which Execution Artifact.
 type ToolAttemptArtifact struct {
 	ToolAttemptID string
+	ArtifactID    string
+	RunID         string
+	CreatedAt     time.Time
+}
+
+// NodeAttemptArtifact is one node_attempt_artifacts row: which Node Attempt of which Run
+// declared which Execution Artifact.
+type NodeAttemptArtifact struct {
+	NodeAttemptID string
 	ArtifactID    string
 	RunID         string
 	CreatedAt     time.Time

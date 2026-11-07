@@ -229,6 +229,9 @@ func run(logger *slog.Logger) error {
 					return fmt.Errorf("register node type: %w", err)
 				}
 			}
+			if err := registerMediaNodes(nodeRegistry, cfg.MediaService, taskClient, artifactStore); err != nil {
+				return err
+			}
 			if err := toolRegistry.Register(lookup.Registration()); err != nil {
 				return fmt.Errorf("register tool: %w", err)
 			}

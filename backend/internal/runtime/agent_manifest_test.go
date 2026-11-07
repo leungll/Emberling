@@ -281,3 +281,38 @@ func TestDeriveTurnManifest_ToolMessageWithoutAttempt_RefersToAction(t *testing.
 		t.Errorf("tool message without Attempt: %+v, want TOOL_RESULT ref act_9 and no version", got)
 	}
 }
+
+// TestDeriveTurnManifest_TaskInputReferencesArtifact_ListedAsOmittedReference: a task
+// input that hands the Agent material by reference, as the transcript node does, yields
+// an omitted ARTIFACT item beside the included TASK_INPUT, carrying the declared digest
+// and size and nothing of the input's other members.
+func TestDeriveTurnManifest_TaskInputReferencesArtifact_ListedAsOmittedReference(t *testing.T) {
+	in := ManifestInput{
+		AgentRunID: "ar_1", NodeRunID: "nr_agent", Instructions: "Cut a clip.",
+		Messages: []ManifestMessage{{Role: AgentRoleUser, Content: json.RawMessage(
+			`{"transcript":{"artifactId":"art_material","sha256":"abcd","sizeBytes":1234,"lineCount":3},"task":{"requirement":"a short clip"}}`)}},
+		StateVersionID: "asv_0", State: json.RawMessage(`{}`),
+	}
+	items := DeriveTurnManifest(in)
+
+	var artifacts []domain.ManifestItem
+	for _, item := range items {
+		if item.Kind == domain.ManifestArtifact {
+			artifacts = append(artifacts, item)
+		}
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("ARTIFACT items = %+v, want exactly one", artifacts)
+	}
+	got := artifacts[0]
+	if got.Ref != "art_material" || got.SHA256 != "abcd" || got.Length != 1234 || got.Included ||
+		got.OmittedReason == nil || *got.OmittedReason != domain.ManifestReferenceOnly {
+		t.Fatalf("ARTIFACT item = %+v, want an omitted reference to art_material", got)
+	}
+	for _, item := range items {
+		encoded, _ := json.Marshal(item)
+		if strings.Contains(string(encoded), "a short clip") {
+			t.Fatalf("manifest item copies task input content: %s", encoded)
+		}
+	}
+}

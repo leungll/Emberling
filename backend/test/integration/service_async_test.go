@@ -68,6 +68,10 @@ type asyncFakeExecutor struct {
 	replayKeyed      bool
 	loseNextResponse bool
 	tasksByKey       map[string]string
+
+	// artifacts are declared with every completed output, as a node that wrote material
+	// to content storage declares it; nil declares none.
+	artifacts []domain.ArtifactRef
 }
 
 func (e *asyncFakeExecutor) ValidateSemantics(context.Context, map[string]any) error { return nil }
@@ -159,7 +163,7 @@ func (e *asyncFakeExecutor) OnCallback(_ context.Context, _ registry.NodeAsyncSt
 	case body.Text != "":
 		return registry.NodeOutput{Ports: map[string]json.RawMessage{
 			"text": json.RawMessage(strconv.Quote(body.Text)),
-		}}, nil
+		}, Artifacts: e.artifacts}, nil
 	default:
 		return registry.NodeOutput{}, errors.New("async_dispatch: payload carries neither a status nor a text result")
 	}
