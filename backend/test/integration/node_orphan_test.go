@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
@@ -417,16 +418,27 @@ func (h *orphanHarness) holdRunLock(runID string) func() {
 	return release
 }
 
-// waitForBlocked returns once n backends of this database wait on a lock.
+// waitForBlocked returns once n backends of this database wait on a lock. It watches from a
+// connection of its own, outside the pool: the lock holder and the racers it is waiting for
+// can take every pooled connection, and only this function's return lets the holder go, so
+// asking the pool for one would wait forever.
 func (h *orphanHarness) waitForBlocked(n int) {
 	h.t.Helper()
 	const query = `
 		SELECT count(*) FROM pg_stat_activity
 		 WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0`
+	ctx, cancel := context.WithTimeout(h.ctx, blockedWaitTimeout)
+	defer cancel()
+	observer, err := pgx.ConnectConfig(ctx, h.pool.Config().ConnConfig)
+	if err != nil {
+		h.t.Fatalf("connect the lock observer: %v", err)
+	}
+	defer func() { _ = observer.Close(h.ctx) }()
+
 	deadline := time.Now().Add(blockedWaitTimeout)
 	for {
 		var blocked int
-		if err := h.pool.QueryRow(h.ctx, query).Scan(&blocked); err != nil {
+		if err := observer.QueryRow(ctx, query).Scan(&blocked); err != nil {
 			h.t.Fatalf("query blocked backends: %v", err)
 		}
 		if blocked >= n {
