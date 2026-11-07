@@ -145,16 +145,18 @@ type transcriptEnv struct {
 	media     *fakeMediaService
 	server    *httptest.Server
 	artifacts *asset.ArtifactStore
+	// tools are the Tools registered beside lookup, kept so a restart registers them too.
+	tools []registry.ToolRegistration
 }
 
-func newTranscriptEnv(t *testing.T) *transcriptEnv {
+func newTranscriptEnv(t *testing.T, tools ...registry.ToolRegistration) *transcriptEnv {
 	t.Helper()
 	media := &fakeMediaService{}
 	server := httptest.NewServer(media)
 	t.Cleanup(server.Close)
 	artifacts := asset.NewArtifactStore(t.TempDir(), 1<<20)
-	env := &transcriptEnv{media: media, server: server, artifacts: artifacts}
-	env.agentHarness = newAgentHarness(t, agentHarnessOptions{Nodes: env.nodes(t)})
+	env := &transcriptEnv{media: media, server: server, artifacts: artifacts, tools: tools}
+	env.agentHarness = newAgentHarness(t, agentHarnessOptions{Nodes: env.nodes(t), Tools: tools})
 	env.provider.Script = func(registry.ModelRequest) *mockmodel.Scenario {
 		return &mockmodel.Scenario{Kind: mockmodel.ScenarioFinal, Output: "cut"}
 	}
@@ -179,7 +181,7 @@ func (env *transcriptEnv) restart(t *testing.T) {
 	t.Helper()
 	previous := env.agentHarness
 	env.agentHarness = newAgentHarness(t, agentHarnessOptions{
-		Pool: previous.pool, Clock: previous.clock, Nodes: env.nodes(t), RunnerID: previous.runnerID + "-restarted",
+		Pool: previous.pool, Clock: previous.clock, Nodes: env.nodes(t), Tools: env.tools, RunnerID: previous.runnerID + "-restarted",
 	})
 	env.provider.Script = previous.provider.Script
 }
