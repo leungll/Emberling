@@ -42,6 +42,10 @@ type ManifestMessage struct {
 	// ToolUsesWorkspace is the Tool's registered declaration that it works on the Agent
 	// Run's workspace. Only such a Tool's message can be recorded as a workspace file.
 	ToolUsesWorkspace bool
+	// ToolMaterialPointer is the Tool's registered declaration of where its result names
+	// the material it read by range; empty for a Tool that returns no material. Only such
+	// a Tool's message can be recorded as a material range.
+	ToolMaterialPointer string
 	// AttemptID and AttemptNo identify the Tool Attempt whose result the message carries.
 	// AttemptID is empty when the message was returned to the Agent without an Attempt,
 	// such as a refusal decided before any Attempt existed.
@@ -74,8 +78,8 @@ type workspaceFileMessage struct {
 
 // DeriveTurnManifest lists the materials of one model request: the instructions, every
 // user message as task input, every tool message as a tool result or a workspace file,
-// the Agent State, and, as omitted items, every Execution Artifact a user or tool message
-// refers to. A task input refers to an artifact when an upstream node, such as the
+// the material range a tool message of a material Tool carried, the Agent State, and, as
+// omitted items, every Execution Artifact a user or tool message refers to. A task input refers to an artifact when an upstream node, such as the
 // transcript node, handed the Agent material by reference rather than inline; the
 // reference is listed so a reviewer can see which material the Agent started from
 // without its content ever having entered the request. Assistant messages are the
@@ -98,6 +102,12 @@ func DeriveTurnManifest(in ManifestInput) []domain.ManifestItem {
 			items = appendArtifactItems(items, message.Content, seenArtifacts)
 		case AgentRoleTool:
 			items = append(items, toolMessageItem(message))
+			if item, ok := materialRangeItem(message); ok {
+				// The material's content entered the request, so its artifact is the range
+				// item, not an omitted reference as well.
+				seenArtifacts[item.Ref] = true
+				items = append(items, item)
+			}
 			items = appendArtifactItems(items, message.Content, seenArtifacts)
 		}
 	}
@@ -145,6 +155,62 @@ func workspaceFileOf(content json.RawMessage) (path, patchSeq string, ok bool) {
 		return "", "", false
 	}
 	return *shape.Path, strconv.Itoa(int(seq)), true
+}
+
+// materialVersionPrefixLen is how many leading hex characters of a material's content
+// digest version a MATERIAL_RANGE item: enough to tell artifact versions apart in a
+// Trace, while the item's own SHA256 stays the digest of the text itself.
+const materialVersionPrefixLen = 12
+
+// materialObject is the shape the declared material pointer must resolve to: the artifact
+// read, its content digest and the lines returned. Any other member is ignored here.
+type materialObject struct {
+	ArtifactID string `json:"artifactId"`
+	SHA256     string `json:"sha256"`
+	StartLine  int    `json:"startLine"`
+	LineCount  int    `json:"lineCount"`
+	TotalLines int    `json:"totalLines"`
+}
+
+// materialRangeItem records the material a tool message of a material Tool carried: the
+// object at the declared pointer names the artifact and the range, and the "text" member
+// beside it is the text that entered the request, which the item digests. A message
+// without a complete material object, such as a NOT_FOUND result, names no material.
+func materialRangeItem(message ManifestMessage) (domain.ManifestItem, bool) {
+	if message.ToolMaterialPointer == "" {
+		return domain.ManifestItem{}, false
+	}
+	var doc any
+	if err := json.Unmarshal(message.Content, &doc); err != nil {
+		return domain.ManifestItem{}, false
+	}
+	tokens := domain.JSONPointerTokens(message.ToolMaterialPointer)
+	materialValue, found := lookupJSONPointer(doc, tokens)
+	if !found {
+		return domain.ManifestItem{}, false
+	}
+	parent, _ := lookupJSONPointer(doc, tokens[:len(tokens)-1])
+	parentObject, ok := parent.(map[string]any)
+	if !ok {
+		return domain.ManifestItem{}, false
+	}
+	text, ok := parentObject["text"].(string)
+	if !ok {
+		return domain.ManifestItem{}, false
+	}
+	encoded, err := json.Marshal(materialValue)
+	if err != nil {
+		return domain.ManifestItem{}, false
+	}
+	var material materialObject
+	if err := json.Unmarshal(encoded, &material); err != nil || material.ArtifactID == "" || material.SHA256 == "" ||
+		material.StartLine < 1 || material.LineCount < 0 || material.TotalLines < 0 {
+		return domain.ManifestItem{}, false
+	}
+	item := includedItem(domain.ManifestMaterialRange, material.ArtifactID, material.ArtifactID,
+		material.SHA256[:min(len(material.SHA256), materialVersionPrefixLen)], []byte(text))
+	item.Range = &domain.ManifestRange{StartLine: material.StartLine, LineCount: material.LineCount, TotalLines: material.TotalLines}
+	return item, true
 }
 
 // artifactReference is the shape by which a tool message refers to an Execution Artifact:

@@ -48,6 +48,7 @@ func (s *ExecutionService) writeTurnManifest(
 			if message.ToolName != nil {
 				if reg, ok := s.deps.Tools.Get(*message.ToolName); ok {
 					entry.ToolUsesWorkspace = reg.Metadata.UsesWorkspace
+					entry.ToolMaterialPointer = reg.Metadata.MaterialPointer
 				}
 			}
 			if message.ToolActionID != nil {
