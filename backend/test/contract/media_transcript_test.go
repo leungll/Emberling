@@ -54,8 +54,10 @@ func (s *contractMediaService) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		s.mu.Lock()
 		s.submits = append(s.submits, body)
 		s.mu.Unlock()
+		// The acceptance names the task it queued, as the task protocol requires.
+		taskID, _ := body["taskId"].(string)
 		w.WriteHeader(http.StatusAccepted)
-		_, _ = io.WriteString(w, `{"status":"QUEUED"}`)
+		_, _ = io.WriteString(w, `{"taskId":"`+taskID+`","status":"QUEUED"}`)
 		s.received <- body
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/tasks/"):
 		id := strings.TrimPrefix(r.URL.Path, "/v1/tasks/")
