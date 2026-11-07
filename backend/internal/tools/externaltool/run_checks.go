@@ -44,6 +44,8 @@ const maxTimelineSegments = "200"
 const (
 	failureTimelineIncomplete     = "TIMELINE_RESULT_INCOMPLETE"
 	failureTimelineDigestMismatch = "TIMELINE_DIGEST_MISMATCH"
+	// failureTimelineTooLarge is the code of a timeline the artifact store refuses.
+	failureTimelineTooLarge = "TIMELINE_TOO_LARGE"
 )
 
 const runChecksInputSchema = `{
@@ -324,6 +326,15 @@ func keepTimeline(ctx context.Context, artifacts ArtifactTextStore, result media
 		return domain.ArtifactRef{}, errors.New("artifact content storage is not configured")
 	}
 	ref, err := artifacts.WriteText(ctx, strings.NewReader(*result.Timeline))
+	if errors.Is(err, domain.ErrArtifactTooLarge) || errors.Is(err, domain.ErrUnsupportedAssetMediaType) {
+		// A timeline the store refuses by its content or type is refused the same way on
+		// every later delivery and poll, so waiting for another delivery would only run
+		// the poll budget down without a Trace; the Attempt fails with the reason instead.
+		return domain.ArtifactRef{}, &registry.ProviderFailure{Err: domain.ExecutionError{
+			Code:    failureTimelineTooLarge,
+			Message: "the canonical timeline cannot be kept as an artifact: it exceeds the size limit or has an unsupported type",
+		}}
+	}
 	if err != nil {
 		// The store's error names no path; the timeline is not quoted either.
 		return domain.ArtifactRef{}, fmt.Errorf("store timeline artifact: %w", err)

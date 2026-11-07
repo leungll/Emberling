@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -300,6 +301,18 @@ func TestRunChecks_TimelineResult_StoreFails_IsNotAToolFailure(t *testing.T) {
 	var failure *registry.ProviderFailure
 	if err == nil || errors.As(err, &failure) {
 		t.Fatalf("OnCallback error = %v, want a plain error, not a tool failure", err)
+	}
+}
+
+func TestRunChecks_TimelineResult_StoreRefusesContent_IsAToolFailure(t *testing.T) {
+	store := &fakeArtifactTextStore{err: fmt.Errorf("artifact: %w", domain.ErrArtifactTooLarge)}
+	executor := pollable(t, mustRegistration(t, externaltool.RunChecksSpec(store), &fakeTaskClient{}))
+	payload, _ := json.Marshal(map[string]any{"status": "SUCCEEDED", "result": json.RawMessage(timelineCheckResult(nil))})
+
+	_, err := executor.OnCallback(context.Background(), echoState("ext_1"), payload)
+	var failure *registry.ProviderFailure
+	if !errors.As(err, &failure) || failure.Err.Code != "TIMELINE_TOO_LARGE" {
+		t.Fatalf("OnCallback error = %v, want a TIMELINE_TOO_LARGE tool failure", err)
 	}
 }
 
