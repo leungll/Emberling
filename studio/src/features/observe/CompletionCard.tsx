@@ -18,6 +18,8 @@ const TONE: Record<CompletionOutcome, { icon: typeof CircleCheck; bg: string; fg
   DEPLOYED_CHECK_FAILED: { icon: TriangleAlert, bg: 'bg-st-waiting-bg', fg: 'text-st-waiting-fg' },
   RELEASE_UNKNOWN: { icon: CircleHelp, bg: 'bg-st-waiting-bg', fg: 'text-st-waiting-fg' },
   INCOMPLETE: { icon: CircleAlert, bg: 'bg-st-failed-bg', fg: 'text-st-failed-fg' },
+  CLIP_DELIVERED: { icon: CircleCheck, bg: 'bg-st-succeeded-bg', fg: 'text-st-succeeded-fg' },
+  CANNOT_SATISFY: { icon: CircleHelp, bg: 'bg-st-waiting-bg', fg: 'text-st-waiting-fg' },
 };
 
 export function CompletionCard({ completion }: { completion: AgentCompletion }) {

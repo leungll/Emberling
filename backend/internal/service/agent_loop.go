@@ -211,9 +211,12 @@ func (s *ExecutionService) startAgentRun(
 		// The generation limit is frozen with the rest of the config: claims read it from
 		// the Agent Run, never from the Definition. Nil keeps the Agent Run unlimited.
 		MaxGenerationCalls: cfg.MaxGenerationCalls,
-		ImageModelID:       imageModelID,
-		ReviewModelID:      reviewModelID,
-		Goal:               goal,
+		// The revision limits are frozen the same way; nil leaves every fact type
+		// unbounded.
+		MaxFailedFacts: cfg.MaxFailedFacts,
+		ImageModelID:   imageModelID,
+		ReviewModelID:  reviewModelID,
+		Goal:           goal,
 		// The Agent Run starts pointing at the facts this same transaction creates: Turn
 		// 1, Context Version 0 and State Version 0.
 		CurrentTurnNo:         1,

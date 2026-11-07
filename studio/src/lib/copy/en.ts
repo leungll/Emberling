@@ -372,6 +372,16 @@ export const en = {
           label: 'Not complete',
           description: 'The agent stopped before every required fact was recorded.',
         },
+        CLIP_DELIVERED: {
+          label: 'Clip delivered',
+          description:
+            'The clip the agent named was rendered and its newest checks passed, including the content review when one applied.',
+        },
+        CANNOT_SATISFY: {
+          label: 'Request cannot be satisfied',
+          description:
+            'The agent ended with a reason instead of a clip. Whether the reason holds is judged against the material, not by Emberling.',
+        },
       },
     },
     completionSource: {

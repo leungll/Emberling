@@ -8,15 +8,16 @@ import (
 
 func TestAgentReturnCode_ClosedSet_MapsEveryCodeToItsFailureSource(t *testing.T) {
 	cases := map[AgentReturnCode]FailureSource{
-		ReturnScopeDenied:         FailureAuthorization,
-		ReturnStalePatch:          FailureAuthorization,
-		ReturnVerificationMissing: FailureAuthorization,
-		ReturnGoalDenied:          FailureAuthorization,
-		ReturnTargetOccupied:      FailureAuthorization,
-		ReturnApprovalRejected:    FailureHuman,
-		ReturnApprovalExpired:     FailureHuman,
-		ReturnReleaseRefused:      FailureProviderRefusal,
-		ReturnReleaseNotDeployed:  FailureProviderRefusal,
+		ReturnScopeDenied:          FailureAuthorization,
+		ReturnStalePatch:           FailureAuthorization,
+		ReturnVerificationMissing:  FailureAuthorization,
+		ReturnGoalDenied:           FailureAuthorization,
+		ReturnTargetOccupied:       FailureAuthorization,
+		ReturnRevisionLimitReached: FailureAuthorization,
+		ReturnApprovalRejected:     FailureHuman,
+		ReturnApprovalExpired:      FailureHuman,
+		ReturnReleaseRefused:       FailureProviderRefusal,
+		ReturnReleaseNotDeployed:   FailureProviderRefusal,
 	}
 	for code, want := range cases {
 		if !code.IsValid() {

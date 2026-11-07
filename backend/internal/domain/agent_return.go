@@ -15,6 +15,9 @@ const (
 	ReturnVerificationMissing AgentReturnCode = "VERIFICATION_MISSING"
 	ReturnGoalDenied          AgentReturnCode = "GOAL_DENIED"
 	ReturnTargetOccupied      AgentReturnCode = "TARGET_OCCUPIED"
+	// ReturnRevisionLimitReached: the Agent Run has collected more failed facts of a type
+	// the Tool's calls are bounded by than its frozen limit allows.
+	ReturnRevisionLimitReached AgentReturnCode = "REVISION_LIMIT_REACHED"
 	// Human decisions: an authenticated person rejected the request or let it expire.
 	ReturnApprovalRejected AgentReturnCode = "APPROVAL_REJECTED"
 	ReturnApprovalExpired  AgentReturnCode = "APPROVAL_EXPIRED"
@@ -26,15 +29,16 @@ const (
 // agentReturnSources is the closed mapping from return code to failure source. A code
 // absent from it is not returnable to the Agent.
 var agentReturnSources = map[AgentReturnCode]FailureSource{
-	ReturnScopeDenied:         FailureAuthorization,
-	ReturnStalePatch:          FailureAuthorization,
-	ReturnVerificationMissing: FailureAuthorization,
-	ReturnGoalDenied:          FailureAuthorization,
-	ReturnTargetOccupied:      FailureAuthorization,
-	ReturnApprovalRejected:    FailureHuman,
-	ReturnApprovalExpired:     FailureHuman,
-	ReturnReleaseRefused:      FailureProviderRefusal,
-	ReturnReleaseNotDeployed:  FailureProviderRefusal,
+	ReturnScopeDenied:          FailureAuthorization,
+	ReturnStalePatch:           FailureAuthorization,
+	ReturnVerificationMissing:  FailureAuthorization,
+	ReturnGoalDenied:           FailureAuthorization,
+	ReturnTargetOccupied:       FailureAuthorization,
+	ReturnRevisionLimitReached: FailureAuthorization,
+	ReturnApprovalRejected:     FailureHuman,
+	ReturnApprovalExpired:      FailureHuman,
+	ReturnReleaseRefused:       FailureProviderRefusal,
+	ReturnReleaseNotDeployed:   FailureProviderRefusal,
 }
 
 // IsValid reports whether the code belongs to the closed returnable set.

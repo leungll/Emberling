@@ -33,6 +33,11 @@ type AgentNodeConfig struct {
 	// MaxGenerationCalls optionally bounds how many calls of Tools that count toward the
 	// generation limit one Agent Run may start. Nil means unlimited.
 	MaxGenerationCalls *int `json:"maxGenerationCalls,omitempty"`
+	// MaxFailedFacts optionally bounds, per fact type, how many failed verdicts of that
+	// type one Agent Run may collect before a Tool whose calls are bounded by it is
+	// refused. A limit of N allows N revisions after failures: the call that would follow
+	// the N+1th failure is the first one refused. A fact type absent here is unbounded.
+	MaxFailedFacts map[string]int `json:"maxFailedFacts,omitempty"`
 	// ImageModelID optionally names the image model the node's image-model Tools run
 	// with. Whether it resolves, declares the right capability and is required by the
 	// allowlist is decided in service, which holds the Registries.
@@ -115,6 +120,8 @@ func (e *AgentConfigError) Error() string {
 //   - maxTurns and timeoutMs are both present and >= 1 (AgentRun invariants).
 //   - maxGenerationCalls, when present, is an integer >= 1. It has no upper bound and is
 //     not tied to maxTurns; absent means unlimited.
+//   - maxFailedFacts, when present, maps non-empty fact type names to integers >= 0;
+//     absent means no fact type bounds the Agent's calls.
 //   - contextSchema, stateSchema and outputSchema, when present, are each a compilable
 //     JSON Schema document.
 //   - stateSchema, when present, accepts `{}` -- an Agent Run's State Version 0
@@ -139,6 +146,9 @@ func ParseAgentNodeConfig(raw json.RawMessage) (AgentNodeConfig, error) {
 		var typeErr *json.UnmarshalTypeError
 		if errors.As(err, &typeErr) && slices.Contains(agentPositiveIntegerFields, typeErr.Field) {
 			return AgentNodeConfig{}, &AgentConfigError{Field: typeErr.Field, Message: typeErr.Field + " must be an integer"}
+		}
+		if errors.As(err, &typeErr) && strings.HasPrefix(typeErr.Field, "maxFailedFacts") {
+			return AgentNodeConfig{}, &AgentConfigError{Field: "maxFailedFacts", Message: "maxFailedFacts must be an object from fact type to integer"}
 		}
 		return AgentNodeConfig{}, &AgentConfigError{Message: "config has an unknown or malformed field: " + err.Error()}
 	}
@@ -165,6 +175,14 @@ func ParseAgentNodeConfig(raw json.RawMessage) (AgentNodeConfig, error) {
 	} {
 		if field.value != nil && *field.value < 1 {
 			return AgentNodeConfig{}, &AgentConfigError{Field: field.name, Message: field.name + " must be >= 1 when present"}
+		}
+	}
+	for factType, limit := range cfg.MaxFailedFacts {
+		if factType == "" {
+			return AgentNodeConfig{}, &AgentConfigError{Field: "maxFailedFacts", Message: "maxFailedFacts names an empty fact type"}
+		}
+		if limit < 0 {
+			return AgentNodeConfig{}, &AgentConfigError{Field: "maxFailedFacts", Message: fmt.Sprintf("maxFailedFacts[%q] must be >= 0", factType)}
 		}
 	}
 	if cfg.Workspace != nil {
@@ -283,12 +301,13 @@ type AgentGoal = domain.AgentGoal
 const (
 	AgentGoalPrepareOnly  = domain.AgentGoalPrepareOnly
 	AgentGoalFixAndDeploy = domain.AgentGoalFixAndDeploy
+	AgentGoalDeliverClip  = domain.AgentGoalDeliverClip
 )
 
 // ResolveAgentGoal reads the Agent Run's goal from the node input at config.GoalPointer.
 // It is a pure decision made once, in the transaction that starts the Agent Run; the
 // result is frozen there and never re-read. A config without a goal pointer, a pointer
-// that does not resolve in the input, or a value that is not one of the two goals is a
+// that does not resolve in the input, or a value that is not one of the goals is a
 // configuration failure of the goalPointer field, reported as an AgentConfigError: the
 // Runtime never substitutes a default goal.
 func ResolveAgentGoal(config AgentNodeConfig, nodeInput json.RawMessage) (AgentGoal, error) {
@@ -309,7 +328,7 @@ func ResolveAgentGoal(config AgentNodeConfig, nodeInput json.RawMessage) (AgentG
 	text, isString := value.(string)
 	goal := AgentGoal(text)
 	if !isString || !goal.IsValid() {
-		return "", &AgentConfigError{Field: "goalPointer", Message: fmt.Sprintf("the value at goalPointer %q is not one of %s or %s", config.GoalPointer, AgentGoalPrepareOnly, AgentGoalFixAndDeploy)}
+		return "", &AgentConfigError{Field: "goalPointer", Message: fmt.Sprintf("the value at goalPointer %q is not one of %s, %s or %s", config.GoalPointer, AgentGoalPrepareOnly, AgentGoalFixAndDeploy, AgentGoalDeliverClip)}
 	}
 	return goal, nil
 }

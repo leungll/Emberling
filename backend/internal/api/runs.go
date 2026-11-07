@@ -359,11 +359,14 @@ type agentRunDTO struct {
 	// PausedAt and PauseReason are set while the Agent's clock is stopped; the deadline is
 	// then not running and moves later on resume. Goal is the frozen task goal, nil when
 	// the node configures none.
-	PausedAt     *time.Time               `json:"pausedAt"`
-	PauseReason  *domain.AgentPauseReason `json:"pauseReason"`
-	Goal         *domain.AgentGoal        `json:"goal"`
-	TerminatedAt *time.Time               `json:"terminatedAt"`
-	Error        *domain.ExecutionError   `json:"error"`
+	PausedAt    *time.Time               `json:"pausedAt"`
+	PauseReason *domain.AgentPauseReason `json:"pauseReason"`
+	Goal        *domain.AgentGoal        `json:"goal"`
+	// MaxFailedFacts is the frozen revision limit per fact type, null when the node bounds
+	// none. The failures already collected are not projected; the fact ledger shows them.
+	MaxFailedFacts map[string]int         `json:"maxFailedFacts"`
+	TerminatedAt   *time.Time             `json:"terminatedAt"`
+	Error          *domain.ExecutionError `json:"error"`
 	// Completion is the goal-based completion verdict: null while the Agent Run runs and
 	// for an Agent Run without a goal, which is never evaluated.
 	Completion *agentCompletionDTO `json:"completion"`
@@ -568,6 +571,7 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			PausedAt:              utcTimePtr(trace.AgentRun.PausedAt),
 			PauseReason:           trace.AgentRun.PauseReason,
 			Goal:                  trace.AgentRun.Goal,
+			MaxFailedFacts:        trace.AgentRun.MaxFailedFacts,
 			TerminatedAt:          utcTimePtr(trace.AgentRun.TerminatedAt),
 			Error:                 trace.AgentRun.Error,
 			Completion:            toAgentCompletionDTO(trace.Completion),

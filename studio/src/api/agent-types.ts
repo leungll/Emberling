@@ -153,6 +153,8 @@ export interface AgentRunTrace {
   pausedAt: string | null;
   pauseReason: AgentPauseReason | null;
   goal: AgentGoal | null;
+  /** The frozen revision limit per fact type; `null` when the node bounds none. */
+  maxFailedFacts: Record<string, number> | null;
   terminatedAt: string | null;
   error: ExecutionError | null;
   /**
@@ -163,11 +165,18 @@ export interface AgentRunTrace {
 }
 
 /**
- * The task result the Backend decided for an Agent Run with a frozen goal. The first three
- * outcomes succeed the Agent's step; INCOMPLETE and RELEASE_UNKNOWN fail it.
+ * The task result the Backend decided for an Agent Run with a frozen goal. INCOMPLETE and
+ * RELEASE_UNKNOWN fail the Agent's step; every other outcome succeeds it, CANNOT_SATISFY
+ * included (a clip task ended with a reason instead of a clip).
  */
 export type CompletionOutcome =
-  'READY_FOR_APPROVAL' | 'DEPLOYED' | 'DEPLOYED_CHECK_FAILED' | 'RELEASE_UNKNOWN' | 'INCOMPLETE';
+  | 'READY_FOR_APPROVAL'
+  | 'DEPLOYED'
+  | 'DEPLOYED_CHECK_FAILED'
+  | 'RELEASE_UNKNOWN'
+  | 'INCOMPLETE'
+  | 'CLIP_DELIVERED'
+  | 'CANNOT_SATISFY';
 
 /** One item the completion check went through; `refs` name the records it rested on. */
 export interface CompletionCheck {

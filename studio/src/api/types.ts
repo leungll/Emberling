@@ -112,8 +112,11 @@ export interface AgentWorkspaceConfig {
   deployTarget?: AgentDeployTarget;
 }
 
-/** How far an Agent Run may take a repair: prepare the patch only, or also deploy it. */
-export type AgentGoal = 'PREPARE_ONLY' | 'FIX_AND_DEPLOY';
+/**
+ * The task an Agent Run is frozen to: prepare the patch only, also deploy it, or deliver
+ * one rendered clip.
+ */
+export type AgentGoal = 'PREPARE_ONLY' | 'FIX_AND_DEPLOY' | 'DELIVER_CLIP';
 
 /**
  * The agent node config keys Studio knows about. Studio stores a node's config as a
@@ -132,6 +135,11 @@ export interface AgentNodeConfig {
   workspace?: AgentWorkspaceConfig;
   /** JSON Pointer into the node input that selects the AgentGoal. */
   goalPointer?: string;
+  /**
+   * Per fact type, how many failed verdicts the Agent may collect before a tool bounded by
+   * that type is refused; a type absent here is unbounded.
+   */
+  maxFailedFacts?: Record<string, number>;
   approvalTimeoutMs?: number;
   releaseConfirmTimeoutMs?: number;
   voidGraceMs?: number;

@@ -42,11 +42,14 @@ type agentCompletionEvaluatedPayload struct {
 // nil when the Agent Run froze no goal: such an Agent is not a goal-bound task, and its
 // behaviour is exactly what it was before the check existed.
 //
-// Otherwise it reads the latest workspace patch, the Agent Run's facts, change requests and
-// approvals, decides the verdict, inserts the agent_completions row and appends
-// AGENT_COMPLETION_EVALUATED. The row and the Event commit with the termination; a failure
-// of either rolls the whole termination back, so a terminated goal-bound Agent Run always
-// has its verdict and a verdict never exists without its termination.
+// Otherwise it reads what the goal's check needs (the latest workspace patch, the Agent
+// Run's facts, change requests and approvals for a repair; the media facts for a clip
+// delivery), decides the verdict, inserts the agent_completions row and appends
+// AGENT_COMPLETION_EVALUATED. finalOutput is the Agent's validated FINAL output when the
+// termination is FINAL_RESPONSE and nil otherwise. The row and the Event commit with the
+// termination; a failure of either rolls the whole termination back, so a terminated
+// goal-bound Agent Run always has its verdict and a verdict never exists without its
+// termination.
 func (s *ExecutionService) evaluateAgentCompletionLocked(
 	ctx context.Context,
 	tx store.Tx,
@@ -54,12 +57,13 @@ func (s *ExecutionService) evaluateAgentCompletionLocked(
 	nodeRun domain.NodeRun,
 	agentRun domain.AgentRun,
 	termination domain.AgentTermination,
+	finalOutput json.RawMessage,
 	now time.Time,
 ) (*runtime.CompletionResult, error) {
 	if agentRun.Goal == nil {
 		return nil, nil
 	}
-	input, err := s.completionInput(ctx, tx, agentRun, termination)
+	input, err := s.completionInput(ctx, tx, agentRun, termination, finalOutput)
 	if err != nil {
 		return nil, fmt.Errorf("execution: completion check of agent run %s: %w", agentRun.ID, err)
 	}
@@ -90,8 +94,11 @@ func (s *ExecutionService) evaluateAgentCompletionLocked(
 // completionInput gathers everything the completion check reads about one Agent Run. The
 // reads are bounded and happen inside the caller's transaction, so the verdict rests on
 // exactly the facts that are committed when the Agent Run terminates.
-func (s *ExecutionService) completionInput(ctx context.Context, tx store.Tx, agentRun domain.AgentRun, termination domain.AgentTermination) (runtime.CompletionInput, error) {
-	input := runtime.CompletionInput{Goal: *agentRun.Goal, Termination: termination}
+func (s *ExecutionService) completionInput(ctx context.Context, tx store.Tx, agentRun domain.AgentRun, termination domain.AgentTermination, finalOutput json.RawMessage) (runtime.CompletionInput, error) {
+	input := runtime.CompletionInput{Goal: *agentRun.Goal, Termination: termination, FinalOutput: finalOutput}
+	if input.Goal == domain.AgentGoalDeliverClip {
+		return s.clipCompletionInput(ctx, tx, agentRun, input)
+	}
 
 	latest, err := tx.WorkspacePatches().Latest(ctx, agentRun.ID)
 	if err != nil {
@@ -139,14 +146,46 @@ func (s *ExecutionService) completionInput(ctx context.Context, tx store.Tx, age
 	// Review is part of the change material only when the Agent could have the patch
 	// reviewed: one of its allowed Tools declares, in its registered metadata, that it
 	// produces the review fact. The Tool's name decides nothing.
-	for _, name := range agentRun.AllowedTools {
-		reg, ok := s.deps.Tools.Get(name)
-		if ok && reg.Metadata.Produces != nil && reg.Metadata.Produces.FactType == domain.FactTypePatchReviewed {
-			input.ReviewRequired = true
-			break
+	input.ReviewRequired = s.agentCanProduceFact(agentRun, domain.FactTypePatchReviewed)
+	return input, nil
+}
+
+// clipCompletionInput gathers what the clip delivery check reads: the Agent Run's
+// clip_rendered, media_checked and content_reviewed facts in recorded order, and whether
+// a content review is part of delivery, which holds when one of the Agent's allowed Tools
+// declares in its registered metadata that it produces content_reviewed. The Tool list is
+// frozen in the Definition version, so a Run's input cannot bypass the review.
+func (s *ExecutionService) clipCompletionInput(ctx context.Context, tx store.Tx, agentRun domain.AgentRun, input runtime.CompletionInput) (runtime.CompletionInput, error) {
+	facts, err := tx.ExecutionFacts().ListByAgentRun(ctx, agentRun.ID, maxCompletionRecords)
+	if err != nil {
+		return runtime.CompletionInput{}, err
+	}
+	for _, fact := range facts {
+		converted := runtime.CompletionFact{ID: fact.ID, Subject: fact.SubjectRef, Verdict: fact.Verdict, Binding: completionBinding(fact.Binding)}
+		switch fact.FactType {
+		case domain.FactTypeClipRendered:
+			input.ClipRenders = append(input.ClipRenders, converted)
+		case domain.FactTypeMediaChecked:
+			input.MediaChecks = append(input.MediaChecks, converted)
+		case domain.FactTypeContentReviewed:
+			input.ContentReviews = append(input.ContentReviews, converted)
 		}
 	}
+	input.ContentReviewRequired = s.agentCanProduceFact(agentRun, domain.FactTypeContentReviewed)
 	return input, nil
+}
+
+// agentCanProduceFact reports whether one of the Agent Run's frozen allowed Tools declares,
+// in its current registered metadata, that it produces factType. Registration decides;
+// the Tool's name never does.
+func (s *ExecutionService) agentCanProduceFact(agentRun domain.AgentRun, factType string) bool {
+	for _, name := range agentRun.AllowedTools {
+		reg, ok := s.deps.Tools.Get(name)
+		if ok && reg.Metadata.Produces != nil && reg.Metadata.Produces.FactType == factType {
+			return true
+		}
+	}
+	return false
 }
 
 // completionBinding reads a fact's binding object as name to string. Bindings are recorded

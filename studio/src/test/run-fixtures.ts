@@ -206,6 +206,7 @@ export function agentTrace(
       pausedAt: null,
       pauseReason: null,
       goal: null,
+      maxFailedFacts: null,
       terminatedAt: null,
       error: null,
       completion: null,
