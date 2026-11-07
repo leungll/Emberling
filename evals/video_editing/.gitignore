@@ -1,0 +1,6 @@
+# Prepared source videos and downloaded clips never enter the repository.
+data/
+batches/*/blind/clips/
+.venv/
+__pycache__/
+.pytest_cache/

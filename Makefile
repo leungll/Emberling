@@ -252,6 +252,15 @@ check:
 check-fast:
 	@MAKE='$(MAKE)' sh scripts/run-phases.sh $(CHECK_FAST_PHASES)
 
+.PHONY: evals-test
+
+## evals-test: self-tests of the video-editing evaluation tooling (Python, uv-locked).
+## They run against in-process fake services and need neither Emberling nor the media
+## service to be running.
+evals-test:
+	@echo "==> evals: video_editing self-tests"
+	@cd evals/video_editing && uv run --frozen pytest
+
 .PHONY: demo demo-studio demo-down
 
 ## demo: fault-injection, photo-set, software-delivery and serving demo on the Compose

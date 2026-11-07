@@ -1,0 +1,22 @@
+[project]
+name = "emberling-video-editing-evals"
+version = "0.1.0"
+description = "Evaluation tooling and dataset records for the video-editing Agent demo"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "httpx>=0.28,<1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = [".", "tests"]
+
+# The scripts are run in place with `uv run`; nothing here is built or installed.
+[tool.uv]
+package = false
