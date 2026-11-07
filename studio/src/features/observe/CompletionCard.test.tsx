@@ -27,6 +27,8 @@ describe('CompletionCard', () => {
     ['DEPLOYED_CHECK_FAILED', 'Deployed, health check failed'],
     ['RELEASE_UNKNOWN', 'Release outcome unknown'],
     ['INCOMPLETE', 'Not complete'],
+    ['CLIP_DELIVERED', 'Clip delivered'],
+    ['CANNOT_SATISFY', 'Request cannot be satisfied'],
   ])('renders the %s outcome with its own title and description', (outcome, title) => {
     render(<CompletionCard completion={completion(outcome)} />);
     const card = screen.getByRole('group', { name: 'Task result' });
