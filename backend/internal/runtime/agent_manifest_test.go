@@ -356,8 +356,9 @@ func TestDeriveTurnManifest_MaterialMessage_RecordsRangeWithDigestOfTheText(t *t
 	if results := itemsOfKind(items, domain.ManifestToolResult); len(results) != 2 {
 		t.Errorf("TOOL_RESULT items = %d, want the lookup result and the material result", len(results))
 	}
-	// The material's artifact is what the range item names; it is not also an omitted
-	// reference, since its content did enter the request.
+	// The tool message's own reference to the artifact is the range item, not also an
+	// omitted reference: the content it names did enter the request. A task input that
+	// hands the same artifact by reference still lists its own omitted item.
 	for _, item := range itemsOfKind(items, domain.ManifestArtifact) {
 		if item.Ref == "art_material" {
 			t.Errorf("material artifact also listed as an omitted reference: %+v", item)
