@@ -49,8 +49,14 @@ type Spec struct {
 	// ProviderID is the stable Provider identifier recorded in the Callback Binding of
 	// every dispatch; empty means DefaultProviderID.
 	ProviderID string
-	// TaskType names the task the service runs, sent verbatim with every dispatch.
+	// TaskType names the task the service runs, sent verbatim with every dispatch. A Tool
+	// whose task type depends on the call leaves it empty and sets TaskTypeFor instead.
 	TaskType string
+	// TaskTypeFor selects the task type from the committed Action, for a Tool whose one
+	// stable Name dispatches to more than one task type. It is called once per dispatch,
+	// before anything is sent; an error means nothing is dispatched. Exactly one of
+	// TaskType and TaskTypeFor is set.
+	TaskTypeFor func(action registry.ToolAction) (string, error)
 	// MapInput builds the task input from the committed Action. The arguments already
 	// passed the Tool's InputSchema. An error means nothing is dispatched.
 	MapInput func(action registry.ToolAction) (json.RawMessage, error)
@@ -104,12 +110,13 @@ func Registration(spec Spec, client TaskClient) (registry.ToolRegistration, erro
 	return registry.ToolRegistration{
 		Metadata: metadata,
 		Executor: &Executor{
-			toolName:   metadata.Name,
-			providerID: providerID,
-			taskType:   spec.TaskType,
-			mapInput:   spec.MapInput,
-			mapResult:  spec.MapResult,
-			client:     client,
+			toolName:    metadata.Name,
+			providerID:  providerID,
+			taskType:    spec.TaskType,
+			taskTypeFor: spec.TaskTypeFor,
+			mapInput:    spec.MapInput,
+			mapResult:   spec.MapResult,
+			client:      client,
 		},
 	}, nil
 }
@@ -119,8 +126,11 @@ func validateSpec(spec Spec) error {
 	if spec.Metadata.Name == "" {
 		errs = append(errs, errors.New("metadata names no tool"))
 	}
-	if spec.TaskType == "" {
-		errs = append(errs, errors.New("task type is empty"))
+	switch {
+	case spec.TaskType == "" && spec.TaskTypeFor == nil:
+		errs = append(errs, errors.New("task type is empty: set TaskType or TaskTypeFor"))
+	case spec.TaskType != "" && spec.TaskTypeFor != nil:
+		errs = append(errs, errors.New("task type is declared twice: set TaskType or TaskTypeFor, not both"))
 	}
 	if spec.MapInput == nil {
 		errs = append(errs, errors.New("MapInput is nil"))

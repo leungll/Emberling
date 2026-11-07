@@ -32,6 +32,7 @@ const deploy: ToolMetadata = {
   usesWorkspace: false,
   reconcilable: false,
   returnUnmetRequirement: false,
+  countedFailedFacts: [],
 };
 
 describe('failureOf', () => {

@@ -30,12 +30,13 @@ const maxFailureTextBytes = 512
 // one registered operation per call and owns no retry, timeout, callback routing, state
 // transition or Event.
 type Executor struct {
-	toolName   string
-	providerID string
-	taskType   string
-	mapInput   func(registry.ToolAction) (json.RawMessage, error)
-	mapResult  func(context.Context, json.RawMessage) (registry.ToolResult, error)
-	client     TaskClient
+	toolName    string
+	providerID  string
+	taskType    string
+	taskTypeFor func(registry.ToolAction) (string, error)
+	mapInput    func(registry.ToolAction) (json.RawMessage, error)
+	mapResult   func(context.Context, json.RawMessage) (registry.ToolResult, error)
+	client      TaskClient
 }
 
 // Execute dispatches one task and returns its external identity. The id is computed from
@@ -50,18 +51,39 @@ func (e *Executor) Execute(ctx context.Context, action registry.ToolAction) (reg
 	if action.ActionID == "" || action.AttemptNo <= 0 {
 		return registry.ToolExecutionResult{}, e.dispatchError("", "build request", errors.New("the call names no action id and attempt number"))
 	}
+	taskType, err := e.selectTaskType(action)
+	if err != nil {
+		return registry.ToolExecutionResult{}, e.dispatchError("", "select task type", err)
+	}
 	input, err := e.mapInput(action)
 	if err != nil {
 		return registry.ToolExecutionResult{}, e.dispatchError("", "map input", err)
 	}
 	taskID := TaskID(action.ActionID, action.AttemptNo)
-	if err := e.client.Submit(ctx, taskID, e.taskType, input, *action.Callback); err != nil {
+	if err := e.client.Submit(ctx, taskID, taskType, input, *action.Callback); err != nil {
 		return registry.ToolExecutionResult{}, e.dispatchError(taskID, "submit task", err)
 	}
 	return registry.ToolExecutionResult{
 		Kind:         registry.ToolResultDispatched,
 		ExternalTask: &registry.ExternalTask{ProviderID: e.providerID, ExternalTaskID: taskID},
 	}, nil
+}
+
+// selectTaskType returns the task type of one dispatch: the Spec's fixed type, or the one
+// its selector picks from the Action. A selector that picks an empty type is an error, so
+// a task is never submitted without a type.
+func (e *Executor) selectTaskType(action registry.ToolAction) (string, error) {
+	if e.taskTypeFor == nil {
+		return e.taskType, nil
+	}
+	taskType, err := e.taskTypeFor(action)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(taskType) == "" {
+		return "", errors.New("the task type selector picked an empty task type")
+	}
+	return taskType, nil
 }
 
 // terminalPayload is the service's report of a finished task, as a callback payload and as
