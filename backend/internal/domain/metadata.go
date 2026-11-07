@@ -374,6 +374,13 @@ type ToolMetadata struct {
 	// returned to the Agent, so it can establish the missing fact and call again, instead
 	// of ending the Agent Run. A Tool that leaves it false keeps the terminal behaviour.
 	ReturnUnmetRequirement bool `json:"returnUnmetRequirement"`
+	// MaterialPointer is a JSON Pointer into a successful result naming the material
+	// object a Tool that reads text by range returns: the artifact id, its content digest
+	// and the line range, with the text itself under "text" beside that object. The
+	// Context Manifest records such a result as a MATERIAL_RANGE item by this declaration,
+	// never by Tool Name. Empty means the Tool returns no material. Omitted on the wire
+	// when undeclared.
+	MaterialPointer string `json:"materialPointer,omitempty"`
 }
 
 // ToolAuthorizationRisk is the declared risk class of a Tool's calls.
@@ -484,6 +491,11 @@ func (m ToolMetadata) Validate() error {
 	}
 	if m.RequiresReviewModel && !m.UsesReviewModel {
 		errs = append(errs, errors.New("requiresReviewModel is only allowed on a tool that uses the review model"))
+	}
+	if m.MaterialPointer != "" {
+		if err := ValidateJSONPointer(m.MaterialPointer); err != nil {
+			errs = append(errs, errors.New("materialPointer must be a JSON Pointer starting with \"/\""))
+		}
 	}
 
 	if len(errs) == 0 {

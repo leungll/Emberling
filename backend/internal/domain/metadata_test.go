@@ -241,6 +241,12 @@ func TestToolMetadata_Validate_RejectsInvalidRegistration(t *testing.T) {
 		{"required review model without the review model", func(m *ToolMetadata) {
 			m.RequiresReviewModel = true
 		}, `requiresReviewModel is only allowed`},
+		{"material pointer without a pointer", func(m *ToolMetadata) {
+			m.MaterialPointer = "material"
+		}, `materialPointer must be a JSON Pointer`},
+		{"material pointer with a malformed escape", func(m *ToolMetadata) {
+			m.MaterialPointer = "/material~2"
+		}, `materialPointer must be a JSON Pointer`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -509,5 +515,29 @@ func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), `"poll"`) {
 		t.Fatalf("Marshal() = %s, want no poll key for an undeclared policy", encoded)
+	}
+}
+
+// TestToolMetadata_MaterialPointer_AcceptedAndOffTheWireWhenEmpty: a Tool that returns
+// material by range declares where its result names the material; the declaration is a
+// JSON Pointer and is omitted from the catalogue when undeclared.
+func TestToolMetadata_MaterialPointer_AcceptedAndOffTheWireWhenEmpty(t *testing.T) {
+	metadata := ToolMetadata{
+		Name: "read_material", Description: "Read lines", InputSchema: json.RawMessage(`{"type":"object"}`),
+		OutputSchema: json.RawMessage(`{"type":"object"}`), ExecutionKind: ToolExecutionSync,
+		SideEffect:      SideEffectPolicy{Kind: SideEffectNone, Idempotency: IdempotencySafe},
+		MaterialPointer: "/material",
+	}
+	if err := metadata.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want nil", err)
+	}
+	encoded, _ := json.Marshal(metadata)
+	if !strings.Contains(string(encoded), `"materialPointer":"/material"`) {
+		t.Fatalf("encoded = %s, want the material pointer on the wire", encoded)
+	}
+	metadata.MaterialPointer = ""
+	encoded, _ = json.Marshal(metadata)
+	if strings.Contains(string(encoded), "materialPointer") {
+		t.Fatalf("encoded = %s, want no materialPointer member when undeclared", encoded)
 	}
 }
