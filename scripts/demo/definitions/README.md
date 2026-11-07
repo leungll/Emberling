@@ -246,7 +246,7 @@ check passed and, in the reviewed variant, the latest review of its timeline pas
 
 Both Definitions embed the same instructions, kept once in `video_edit_prompt.md`; the
 reviewed one appends the single paragraph of `video_edit_review_rules.md`. The prompt's
-first line is its version, `Prompt version: video-edit/v1.`, so the version a saved
+first line is its version, `Prompt version: video-edit/v2.`, so the version a saved
 Definition ran with is read back from the Definition's own instructions, and the
 evaluation batch records it with every Run. After editing either file, run
 

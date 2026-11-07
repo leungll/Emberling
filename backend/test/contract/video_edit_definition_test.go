@@ -37,7 +37,7 @@ const (
 	videoEditReviewedLivePath = videoEditDefinitionsDir + "video_edit_reviewed_live.json"
 	videoEditBasicFixture     = "../fixtures/definitions/video_edit_basic.json"
 	videoEditReviewedFixture  = "../fixtures/definitions/video_edit_reviewed.json"
-	videoEditPromptVersion    = "Prompt version: video-edit/v1."
+	videoEditPromptVersion    = "Prompt version: video-edit/v2."
 	videoEditLiveReviewModel  = "text-review"
 )
 
