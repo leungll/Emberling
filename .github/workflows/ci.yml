@@ -94,6 +94,38 @@ jobs:
       - name: Check
         run: make check
 
+  media:
+    name: media
+    runs-on: ubuntu-latest
+    # The media service has its own toolchain (Python, uv, FFmpeg) and its tests run
+    # FFmpeg for real, so it reports a separate signal; `check` keeps using the Go fake.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        # Debian's ffmpeg carries libass, which the subtitles filter needs.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core
+          ffmpeg -hide_banner -filters | grep -E ' (subtitles|blackdetect|silencedetect) '
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.3"
+          enable-cache: true
+          cache-dependency-glob: services/media/uv.lock
+
+      - name: Cache the tiny.en transcription model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: media-whisper-tiny.en-v1
+
+      - name: Media tests
+        run: make media-test
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest

@@ -189,6 +189,26 @@ services:
       # host side of the published port above.
       EMBERLING_TASK_GATEWAY_PUBLIC_URL: ${EMBERLING_TASK_GATEWAY_PUBLIC_URL:-http://localhost:9104}
 
+  # Media service for the video-editing workload: source upload, transcription,
+  # timeline checks, rendering and clip checks over the external task protocol (submit,
+  # callback, poll). It keeps its own content-addressed data and the downloaded
+  # transcription model on one volume, so a restart neither re-transcribes nor
+  # re-downloads. Start it with `--profile media`. Clip URLs in its results start with
+  # MEDIA_PUBLIC_URL, which must match the host side of the published port for a browser
+  # to open them. The callback token it receives stays in memory and is never written.
+  media:
+    profiles: ["media"]
+    build:
+      context: ../services/media
+      dockerfile: ../../deploy/Dockerfile.media
+    ports:
+      - "9201:9201"
+    environment:
+      MEDIA_WHISPER_MODEL: ${MEDIA_WHISPER_MODEL:-small.en}
+      MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-http://localhost:9201}
+    volumes:
+      - emberling-media-data:/var/lib/emberling/media
+
   backend:
     build:
       context: ../backend
@@ -326,3 +346,4 @@ volumes:
   emberling-mockprovider-record:
   emberling-mockproduction-record:
   emberling-sandboxrunner-record:
+  emberling-media-data:
