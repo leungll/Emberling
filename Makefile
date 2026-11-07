@@ -24,10 +24,12 @@ GOLANGCI_LINT         := $(TOOLS_BIN)/golangci-lint
 
 BACKEND := backend
 STUDIO  := studio
+MEDIA   := services/media
 
 .PHONY: bootstrap dev test test-integration test-e2e test-ui lint check check-fast \
         check-go-version check-node-version fmt-check lint-go lint-studio install-golangci-lint check-doc-refs \
-        check-migrations migrations-checksum check-file-size test-engineering studio-build whitespace-check
+        check-migrations migrations-checksum check-file-size test-engineering studio-build whitespace-check \
+        media-test media-dev
 
 ## bootstrap: verify toolchain versions and install dependencies. Starts no service.
 bootstrap: check-go-version check-node-version install-golangci-lint
@@ -135,6 +137,20 @@ test-e2e:
 	else \
 		echo "studio: not present, skipped"; \
 	fi
+
+## media-test: the media service's pytest suite. FFmpeg runs for real and transcription
+## uses the tiny.en model, which is downloaded on first use. Dependencies come from the
+## uv lockfile; MEDIA_FFMPEG_BIN and MEDIA_FFPROBE_BIN select the binaries, as for the
+## service itself. Not part of `check`: the Go tests use a fake media service instead.
+media-test:
+	@echo "==> media: pytest (real FFmpeg, tiny.en)"
+	@cd $(MEDIA) && uv run --frozen pytest
+
+## media-dev: run the media service locally from the lockfile. Configure it with
+## MEDIA_DATA_DIR, MEDIA_WHISPER_MODEL, MEDIA_FFMPEG_BIN, MEDIA_FFPROBE_BIN, MEDIA_PORT and
+## MEDIA_PUBLIC_URL.
+media-dev:
+	@cd $(MEDIA) && uv run --frozen python -m app
 
 ## lint: formatting check, golangci-lint (which includes go vet) and Studio lint.
 lint: fmt-check lint-go lint-studio

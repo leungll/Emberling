@@ -12,6 +12,11 @@ studio/dist/
 studio/test-results/
 studio/playwright-report/
 
+# Media service virtual environment and Python caches.
+services/media/.venv/
+__pycache__/
+.pytest_cache/
+
 # Local environment files.
 .env
 .env.*
