@@ -315,8 +315,10 @@ func TestToolAttempts_RecordOutcomeUnknownSince_OnlyUnsettledAttempts(t *testing
 			return repo.MarkDispatched(ctx, "tool_attempt_rel_1", fixtureTime, nil)
 		}, true},
 		"failed uncertain": {func(ctx context.Context, repo store.ToolAttemptRepository) error {
-			_, err := repo.MarkTimedOut(ctx, "tool_attempt_rel_1", fixtureTime, failure)
-			return err
+			if err := repo.MarkDispatched(ctx, "tool_attempt_rel_1", fixtureTime, nil); err != nil {
+				return err
+			}
+			return repo.MarkLost(ctx, "tool_attempt_rel_1", fixtureTime, failure, true)
 		}, true},
 		"failed definitely": {func(ctx context.Context, repo store.ToolAttemptRepository) error {
 			return repo.MarkFailedDefinite(ctx, "tool_attempt_rel_1", domain.ToolAttemptStarted, fixtureTime, failure)
