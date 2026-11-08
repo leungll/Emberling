@@ -44,8 +44,9 @@ test('Document Processing completes synchronously and shows its output', async (
   await expect(page.getByText('PROPERTIES, DEFINITION')).toHaveCount(0);
 
   await expect(runStatus(page)).toHaveText('Completed', { timeout: 30_000 });
-  // The run is bound to one Definition version, shown in its overview.
-  await expect(details(page).getByText('Workflow version', { exact: true })).toBeVisible();
+  // The run is bound to one Definition version: the step map is that version's steps.
+  await expect(page.getByRole('treeitem').first()).toBeVisible();
+  await expect(page.getByRole('tree')).toHaveAccessibleName(/^Workflow steps, version \d+$/);
 
   // The Events view is exactly the committed Event list, in order.
   const events = await eventList(page);
@@ -55,7 +56,7 @@ test('Document Processing completes synchronously and shows its output', async (
   await expect(events.getByRole('row', { name: /Run completed/ })).toHaveCount(1);
 
   // The run's output, formed once its Output step succeeded.
-  await details(page).getByRole('tab', { name: 'Output' }).click();
+  await details(page).getByRole('tab', { name: 'Data' }).click();
   const output = details(page).getByRole('tabpanel');
   await expect(output.getByText('No output.')).toHaveCount(0);
   await expect(output).toContainText(/\S/);

@@ -49,7 +49,7 @@ test('Agent with a synchronous Tool runs the Tool on Turn 1, answers FINAL on Tu
 
   // The Agent Run's termination as the Backend recorded it.
   await stepCard(page, 'Answering Agent').click();
-  await expect(details(page).getByText('Finished with an answer')).toBeVisible();
+  await expect(details(page).getByText('Finished with an answer').first()).toBeVisible();
 
   const events = await eventList(page);
   await expect(events.getByRole('row', { name: /Run completed/ })).toHaveCount(1);

@@ -56,7 +56,7 @@ test('Agent with an asynchronous Tool pauses at the Agent NodeRun, then resumes 
   await expect(status).toHaveText('Waiting', { timeout: 15_000 });
   await expect(stepCard(page, 'Answering Agent')).toHaveAccessibleName(/, Waiting for reply,/);
   await expect(
-    page.getByText('Answering Agent is waiting for Mock task provider.', { exact: true }),
+    page.getByText(/^Answering Agent is waiting for Mock task provider\./),
   ).toBeVisible();
   // The run opens on the wait: the dispatched remote_lookup call.
   await expect(details(page).getByText('remote_lookup').first()).toBeVisible();
@@ -73,5 +73,5 @@ test('Agent with an asynchronous Tool pauses at the Agent NodeRun, then resumes 
   await expect(trace.getByRole('row', { name: /Waited for / })).toBeVisible();
   await expect(trace.getByRole('row', { name: /Turn 2: finished/ })).toBeVisible();
   await stepCard(page, 'Answering Agent').click();
-  await expect(details(page).getByText('Finished with an answer')).toBeVisible();
+  await expect(details(page).getByText('Finished with an answer').first()).toBeVisible();
 });
