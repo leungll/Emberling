@@ -21,6 +21,9 @@
 #                                  Template (from <RUN_ID>)").
 #   EMBERLING_DEMO_V1_WIDTH        the width used when the settings name no resolution
 #                                  (default 1024); the output says so.
+#   EMBERLING_DEMO_V1_TIMEOUT_MS   the image_generation Attempt deadline (default 60000;
+#                                  a real model behind the task gateway needs several
+#                                  minutes).
 #
 # Field mapping. The node config takes `modelId` and `width` only, so:
 #   prompt      -> prompt_template.template, followed by " {{text}}" for the user request;
@@ -47,6 +50,8 @@ model_id=${EMBERLING_DEMO_V1_IMAGE_MODEL:-image-model-v1}
 name=${EMBERLING_DEMO_V1_NAME:-"Photo Effect Serving Template (from $run_id)"}
 default_width=${EMBERLING_DEMO_V1_WIDTH:-1024}
 [[ "$default_width" =~ ^[1-9][0-9]*$ ]] || die "EMBERLING_DEMO_V1_WIDTH must be a positive integer"
+timeout_ms=${EMBERLING_DEMO_V1_TIMEOUT_MS:-60000}
+[[ "$timeout_ms" =~ ^[1-9][0-9]*$ ]] || die "EMBERLING_DEMO_V1_TIMEOUT_MS must be a positive integer"
 
 log "reading the FINAL settings of run $run_id"
 snapshot=$(curl -fsS "$BACKEND_URL/api/runs/$run_id") || die "run $run_id could not be read"
@@ -74,7 +79,7 @@ esac
 # Every member the node config cannot take, by name. aspectRatio is the expected one.
 unmapped=$(jq -c '[to_entries[] | select(.key != "prompt" and .key != "resolution") | .key]' <<<"$settings")
 
-definition=$(jq -n --arg name "$name" --arg prompt "$prompt" --arg model "$model_id" --argjson width "$width" '{
+definition=$(jq -n --arg name "$name" --arg prompt "$prompt" --arg model "$model_id" --argjson width "$width" --argjson timeout "$timeout_ms" '{
   name: $name,
   description: "Serving template built from the delivered tuning settings",
   nodes: [
@@ -87,7 +92,7 @@ definition=$(jq -n --arg name "$name" --arg prompt "$prompt" --arg model "$model
      config: {template: ($prompt + " {{text}}")}},
     {id: "node_image", type: "image_generation", name: "Image Generation", position: {x: 400, y: 100},
      config: {modelId: $model, width: $width},
-     executionPolicy: {timeoutMs: 60000, maxAttempts: 2, backoff: "FIXED"}},
+     executionPolicy: {timeoutMs: $timeout, maxAttempts: 2, backoff: "FIXED"}},
     {id: "node_output", type: "media_output", name: "Media Output", position: {x: 600, y: 100}, config: {}}
   ],
   edges: [
