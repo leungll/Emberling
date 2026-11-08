@@ -12,6 +12,9 @@ import {
   runStartError,
   seedValues,
   setAtPath,
+  subFieldErrors,
+  switchObjectView,
+  type ObjectDraft,
   type RunField,
 } from './run-form';
 import { ApiRequestError } from '@/api/client';
@@ -95,6 +98,147 @@ describe('seedValues and buildInput', () => {
     expect(values.reference).toBeNull();
     expect(values.photos).toEqual([]);
     expect(values.brief).toBe('');
+  });
+});
+
+// A task schema as a saved Definition returns it: JSONB reorders `properties`, while
+// `required` keeps the author's order.
+const TASK_SCHEMA: RunInputSchema = {
+  type: 'object',
+  properties: {
+    task: {
+      type: 'object',
+      properties: {
+        goal: { type: 'string', enum: ['DELIVER_CLIP'] },
+        notes: { type: 'string' },
+        loud: { type: 'boolean' },
+        sourceId: { type: 'string', minLength: 1, title: 'Source video' },
+        durationMs: { type: 'integer', minimum: 0 },
+        requirement: { type: 'string', minLength: 1, maxLength: 2000 },
+        sourceSha256: { type: 'string', minLength: 64, maxLength: 64 },
+      },
+      required: ['requirement', 'sourceId', 'sourceSha256', 'durationMs', 'goal'],
+    },
+  },
+  required: ['task'],
+};
+const SHA = 'a'.repeat(64);
+const only = (fields: readonly RunField[]): RunField => {
+  const [f] = fields;
+  if (!f) throw new Error('no field');
+  return f;
+};
+const TASK = {
+  requirement: 'A 30 second clip about tests',
+  sourceId: 'src_1',
+  sourceSha256: SHA,
+  durationMs: 120000,
+  goal: 'DELIVER_CLIP',
+};
+
+describe('object fields', () => {
+  const fields = runFields(TASK_SCHEMA, { task: 'Editing Task' });
+  const task = only(fields);
+
+  it('reads an object with properties as labelled sub-fields, required ones first', () => {
+    expect([task.kind, task.label, task.required]).toEqual(['object', 'Editing Task', true]);
+    expect(task.fields?.map((f) => [f.key, f.label, f.control, f.required])).toEqual([
+      ['requirement', 'Requirement', 'longtext', true],
+      ['sourceId', 'Source video', 'text', true],
+      ['sourceSha256', 'Source sha256', 'text', true],
+      ['durationMs', 'Duration ms', 'number', true],
+      ['goal', 'Goal', 'choice', true],
+      ['loud', 'Loud', 'bool', false],
+      ['notes', 'Notes', 'text', false],
+    ]);
+  });
+
+  it('starts a first run with a one-value choice chosen and the rest empty', () => {
+    const draft = seedValues(fields, null).task as ObjectDraft;
+    expect(draft.values).toEqual({
+      requirement: '',
+      sourceId: '',
+      sourceSha256: '',
+      durationMs: '',
+      goal: 'DELIVER_CLIP',
+      loud: false,
+      notes: '',
+    });
+  });
+
+  it('builds typed values and leaves empty optional sub-fields out', () => {
+    const draft = seedValues(fields, null).task as ObjectDraft;
+    const values = {
+      task: {
+        ...draft,
+        values: {
+          ...draft.values,
+          requirement: TASK.requirement,
+          sourceId: 'src_1',
+          sourceSha256: SHA,
+          durationMs: ' 120000 ',
+        },
+      },
+    };
+    expect(checkField(task, values.task)).toBeNull();
+    const input = buildInput(fields, values);
+    expect(input).toEqual({ task: TASK });
+    expect(typeof (input.task as Record<string, unknown>).durationMs).toBe('number');
+  });
+
+  it('round-trips a prior run’s input, keeping keys the schema doesn’t list', () => {
+    const prior = { task: { ...TASK, loud: true, notes: 'n', unknown: { a: 1 } } };
+    expect(buildInput(fields, seedValues(fields, prior))).toEqual(prior);
+  });
+
+  it('checks each sub-field and names it', () => {
+    const draft = seedValues(fields, null).task as ObjectDraft;
+    const with_ = (values: Record<string, string | boolean>): ObjectDraft => ({
+      ...draft,
+      values: { ...draft.values, ...TASK, durationMs: '1', ...values },
+    });
+    expect(subFieldErrors(task, draft)).toMatchObject({
+      requirement: 'Requirement is required.',
+      sourceId: 'Source video is required.',
+    });
+    expect(checkField(task, draft)).toBe('Requirement is required.');
+    expect(subFieldErrors(task, with_({ durationMs: 'x' }))).toEqual({
+      durationMs: 'Duration ms must be a number.',
+    });
+    expect(subFieldErrors(task, with_({ durationMs: '1.5' }))).toEqual({
+      durationMs: 'Duration ms must be a whole number.',
+    });
+    expect(subFieldErrors(task, with_({ sourceSha256: 'abc' }))).toEqual({
+      sourceSha256: 'Source sha256 must be exactly 64 characters.',
+    });
+    expect(subFieldErrors(task, with_({ goal: 'OTHER' }))).toEqual({
+      goal: 'Goal must be one of: DELIVER_CLIP.',
+    });
+    expect(subFieldErrors(task, with_({}))).toEqual({});
+  });
+
+  it('leaves an optional object out while nothing is filled in', () => {
+    const optional = runFields({ ...TASK_SCHEMA, required: [] }, {});
+    const f = only(optional);
+    const values = seedValues(optional, null);
+    expect(checkField(f, values.task ?? null)).toBeNull();
+    expect(buildInput(optional, values)).toEqual({});
+  });
+
+  it('switches to JSON and back without losing the value', () => {
+    const draft = seedValues(fields, { task: TASK }).task as ObjectDraft;
+    const text = switchObjectView(task, draft, 'json');
+    expect(typeof text).toBe('string');
+    expect(JSON.parse(text as string)).toEqual(TASK);
+    expect(buildInput(fields, { task: text })).toEqual({ task: TASK });
+    const back = switchObjectView(task, text, 'fields');
+    expect(back).toEqual(draft);
+    expect(switchObjectView(task, '[1]', 'fields')).toBeNull();
+  });
+
+  it('checks the JSON view as JSON', () => {
+    expect(checkField(task, '{"a": }')).toMatch(/^Line 1, column \d+: /);
+    expect(checkField(task, '')).toBe('Editing Task is required.');
   });
 });
 

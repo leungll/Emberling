@@ -114,6 +114,61 @@ export function mediaSrc(ref: MediaRef, runId: string | null): string | null {
   return ref.id;
 }
 
+/** The run a media-typed value is read against: its id and its input as submitted. */
+export interface MediaUrlContext {
+  runId: string | null;
+  /** The run's input, where an uploaded asset is named by its AssetRef. */
+  runInput: unknown;
+}
+
+export type MediaKindWord = 'image' | 'video' | 'other';
+
+export interface ResolvedMedia {
+  url: string;
+  /** What to render it with, from the schema's media type. */
+  kind: MediaKindWord;
+}
+
+function kindOf(mediaType: string): MediaKindWord {
+  if (mediaType.startsWith('image/')) return 'image';
+  if (mediaType.startsWith('video/')) return 'video';
+  return 'other';
+}
+
+/**
+ * Where a value whose schema declares a media type (JSON Schema `contentMediaType`) loads
+ * from, or null when Studio has no authoritative route for it. Only an uploaded asset
+ * resolves: the value must equal, exactly, the `assetId` of an AssetRef in the run's input,
+ * and it loads through the asset content route. A Provider's own id, a digest or an address
+ * found in a Tool output has no URL here and shows as the reference it is; nothing is ever
+ * resolved through a guessed address.
+ */
+export function resolveMediaUrl(
+  value: string,
+  mediaType: string,
+  ctx: MediaUrlContext,
+): ResolvedMedia | null {
+  if (!value) return null;
+  const found = assetRefNamed(ctx.runInput, value, 0);
+  if (!found) return null;
+  const url = mediaSrc(found, ctx.runId);
+  return url ? { url, kind: kindOf(mediaType) } : null;
+}
+
+/** The uploaded-asset reference in a value whose id is exactly `assetId`, or null. */
+function assetRefNamed(raw: unknown, assetId: string, depth: number): MediaRef | null {
+  if (depth > MAX_DEPTH || raw === null || raw === undefined) return null;
+  const v = parseJsonText(raw);
+  const r = mediaRefOf(v);
+  if (r) return r.kind === 'ASSET' && r.id === assetId ? r : null;
+  const children = Array.isArray(v) ? v : isObj(v) ? Object.values(v) : [];
+  for (const x of children) {
+    const hit = assetRefNamed(x, assetId, depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /** "Uploaded image", "Generated image" or "Linked image". */
 export function mediaWord(ref: MediaRef): string {
   return copy.media.kind[ref.kind];

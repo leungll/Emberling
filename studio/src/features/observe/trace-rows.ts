@@ -31,27 +31,30 @@ export function visibleRows(
   model: RunModel,
   isOpen: (el: TraceElement) => boolean,
   f: TraceFilter,
+  /** The element whose rows alone are shown; the run shows everything. */
+  scope: TraceElement = model.root,
 ): TraceRows {
   const rows: TraceElement[] = [];
   if (!filtering(f)) {
     const walk = (el: TraceElement) => {
       rows.push(el);
-      if (isOpen(el)) el.children.forEach(walk);
+      if (el === scope || isOpen(el)) el.children.forEach(walk);
     };
-    walk(model.root);
+    walk(scope);
     return { rows, hits: null };
   }
+  const within = (el: TraceElement) => el === scope || ancestors(el).includes(scope);
   const keep = new Map<string, 'hit' | 'path'>();
   for (const el of model.byId.values()) {
-    if (!rowMatches(el, f)) continue;
+    if (!within(el) || !rowMatches(el, f)) continue;
     keep.set(el.id, 'hit');
-    for (const a of ancestors(el)) if (!keep.has(a.id)) keep.set(a.id, 'path');
+    for (const a of ancestors(el)) if (within(a) && !keep.has(a.id)) keep.set(a.id, 'path');
   }
   const walk = (el: TraceElement) => {
     if (keep.has(el.id)) rows.push(el);
     el.children.forEach(walk);
   };
-  walk(model.root);
+  walk(scope);
   return { rows, hits: keep };
 }
 

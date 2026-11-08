@@ -40,6 +40,15 @@ describe('visibleRows', () => {
     expect(rows.map((r) => r.id)).toContain('act_2');
     expect(rows.map((r) => r.id)).not.toContain('in');
   });
+
+  it('shows only the selected element and its rows when scoped to it', () => {
+    const agent = m.byId.get('agent');
+    if (!agent) throw new Error('fixture has no agent step');
+    const scoped = visibleRows(m, (el) => el.kind === 'run', none, agent);
+    expect(scoped.rows.map((r) => r.id)).toEqual(['agent', 'turn_1', 'turn_2']);
+    const hit = visibleRows(m, () => false, { query: 'deploy', failuresOnly: false }, agent);
+    expect(hit.rows.map((r) => r.id)).toEqual(['agent', 'turn_2', 'dec:turn_2', 'act_2']);
+  });
 });
 
 describe('rowMatches', () => {

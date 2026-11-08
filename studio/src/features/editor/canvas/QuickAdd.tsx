@@ -180,7 +180,7 @@ export function QuickAdd({ request, onClose }: { request: QuickAddRequest; onClo
                             ),
                           )}
                         </span>
-                        <span className="text-sm text-fg-muted">{purposeOf(m.type)}</span>
+                        <span className="text-sm text-fg-muted">{purposeOf(m)}</span>
                       </span>
                     </div>
                   );

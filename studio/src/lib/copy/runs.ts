@@ -165,6 +165,7 @@ export const runs = {
     runId: 'Run ID',
     workflowId: 'Workflow ID',
     taskOf: (provider: string) => `${provider} task`,
+    tasksOf: (provider: string) => `${provider} tasks`,
     taskIdLabel: (provider: string) => `${provider.toLowerCase()} task ID`,
     olderVersion: (v: number) => `Ran on version ${v}, an older version`,
     olderVersionTip: (n: number) =>
@@ -241,7 +242,6 @@ export const runs = {
     videoReady: 'Video ready',
     videoReadyLinkWithheld: 'Video ready (link not shown)',
     noText: 'No text',
-    jsonWith: (keys: readonly string[]) => `JSON with ${listNames(keys)}`,
     photos: (n: number) => plural(n, 'photo'),
     passedOf: (passed: number, total: number) =>
       `${String(passed)} of ${plural(total, 'photo')} passed review`,
@@ -304,6 +304,8 @@ export const runs = {
   },
 
   logs: {
+    drawer: 'Trace and events',
+    forElement: (what: string) => `for ${what}`,
     view: 'Logs view',
     trace: 'Trace',
     events: 'Events',
@@ -390,6 +392,34 @@ export const runs = {
     },
   },
 
+  /** The run view read as asked, got, how. */
+  summary: {
+    request: 'Request',
+    result: 'Result',
+    steps: 'Steps',
+    sameAsInput: 'Same as the input',
+    inputPlus: (names: string) => `The input plus ${names}`,
+    nothing: 'Nothing',
+    aReference: 'A reference',
+  },
+
+  /** How an Agent worked, one row per turn. */
+  story: {
+    whatHappened: 'What happened',
+    howItGotThere: 'How it got there',
+    turnFailed: 'Turn failed',
+    finalReport: 'Handed back the final report',
+    refused: (tool: string) => `${tool}, refused`,
+    failed: (tool: string) => `${tool}, failed`,
+    passed: (tool: string) => `${tool}, passed`,
+    didNotPass: (tool: string) => `${tool}, did not pass`,
+    took: (clock: string) => `Took ${clock}`,
+    passedLabel: 'Passed',
+    didNotPassLabel: 'Did not pass',
+    openTurn: (n: number) => `Open turn ${n}`,
+    failedPlain: 'Something went wrong',
+  },
+
   details: {
     label: 'Details',
     close: 'Close details',
@@ -397,6 +427,7 @@ export const runs = {
     path: 'Location in this run',
     tabs: {
       overview: 'Overview',
+      data: 'Data',
       input: 'Input',
       output: 'Output',
       result: 'Result',
@@ -407,7 +438,7 @@ export const runs = {
       raw: 'Raw',
     },
     crumb: {
-      run: 'Run overview',
+      run: 'Run',
       turns: (a: number, b: number) => `Turns ${a}–${b}`,
       turn: (n: number) => `Turn ${n}`,
       decision: 'Model decision',
@@ -431,6 +462,7 @@ export const runs = {
     olderNote: (v: number) => `This run used version ${v}. The workflow has changed since.`,
     openLatest: 'Open the latest version in the Editor',
     completed: 'The run completed.',
+    inTime: 'in',
     result: 'Result',
     facts: {
       started: 'Started',
@@ -586,6 +618,17 @@ export const runs = {
     groupLead: (unit: string, reps: number) =>
       `The agent repeated ${unit} ${reps} times. Every call succeeded.`,
     turnsSection: 'Turns',
+    /** The Data tab's sections. */
+    data: {
+      input: 'Input',
+      arguments: 'Arguments',
+      output: 'Output',
+      result: 'Result',
+      savedResults: 'Saved results',
+      runFacts: 'Run facts',
+      details: 'Details',
+      rawRecords: 'Raw records',
+    },
     io: {
       noInput: 'No input.',
       noOutput: 'No output.',

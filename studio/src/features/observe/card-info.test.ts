@@ -97,9 +97,9 @@ describe('failed steps, as recorded', () => {
 describe('a completed delivery run, as recorded', () => {
   const m = recorded('run_d9c23ab668c54acf9ec83c59c55ce742');
 
-  it('lists the fields of a JSON object output, without a clamp', () => {
+  it('shows a JSON object output as a plain status, never its keys', () => {
     const c = info(m, 'node_task');
-    expect(c.line.text).toMatch(/^JSON with baseCommit, patch and /);
+    expect(c.line.text).toBe('Succeeded');
     expect(c.clamp).toBe(false);
   });
 

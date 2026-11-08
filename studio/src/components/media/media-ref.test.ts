@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectMedia, mediaMeta, mediaRefOf, mediaSrc, mediaWord } from './media-ref';
+import {
+  collectMedia,
+  mediaMeta,
+  mediaRefOf,
+  mediaSrc,
+  mediaWord,
+  resolveMediaUrl,
+} from './media-ref';
 
 const ARTIFACT_ID = `artifact_${'a'.repeat(32)}`;
 const external = { source: 'EXTERNAL', uri: 'https://images.example/a.png' } as const;
@@ -94,5 +101,31 @@ describe('words', () => {
     expect(mediaWord(mediaRefOf(external)!)).toBe('Linked image');
     expect(mediaMeta(mediaRefOf(artifact)!)).toBe('PNG, 2 KB');
     expect(mediaMeta(mediaRefOf(external)!)).toBe('');
+  });
+});
+
+describe('resolveMediaUrl', () => {
+  const ctx = (runInput: unknown) => ({ runId: 'run_1', runInput });
+  const input = {
+    task: { source: { source: 'ASSET', asset: { assetId: 'asset_src', mediaType: 'image/png' } } },
+  };
+
+  it('places a value only when the run input carries that exact asset', () => {
+    const hit = resolveMediaUrl('asset_src', 'image/png', ctx(input));
+    expect(hit?.url).toMatch(/\/assets\/asset_src\/content$/);
+    expect(hit?.kind).toBe('image');
+    expect(resolveMediaUrl('asset_other', 'image/png', ctx(input))).toBeNull();
+    expect(resolveMediaUrl('asset_src', 'image/png', ctx(null))).toBeNull();
+    expect(resolveMediaUrl('', 'image/png', ctx(input))).toBeNull();
+  });
+
+  it('names the kind from the declared media type', () => {
+    expect(resolveMediaUrl('asset_src', 'video/mp4', ctx(input))?.kind).toBe('video');
+    expect(resolveMediaUrl('asset_src', 'application/pdf', ctx(input))?.kind).toBe('other');
+  });
+
+  it('never guesses an address from the value alone', () => {
+    expect(resolveMediaUrl('https://cdn.example/a.mp4', 'video/mp4', ctx(input))).toBeNull();
+    expect(resolveMediaUrl('/some/path.mp4', 'video/mp4', ctx(input))).toBeNull();
   });
 });

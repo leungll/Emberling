@@ -275,7 +275,8 @@ function agentRunningLine(step: Step): CardLine {
 
 function textPreview(text: string): Pick<CardInfo, 'line' | 'clamp' | 'full'> {
   const v = parseJsonText(text);
-  if (isObj(v)) return { line: line(c().jsonWith(Object.keys(v))), clamp: false, full: null };
+  // A JSON object reads as the step's status: a card never lists the object's keys.
+  if (isObj(v)) return { line: line(c().succeeded), clamp: false, full: null };
   const flat = text.replace(/\s+/g, ' ').trim();
   return { line: line(flat), clamp: true, full: flat };
 }

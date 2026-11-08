@@ -1,5 +1,5 @@
 import { Play, RotateCw } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { RunAgainDialog } from './RunAgainDialog';
@@ -41,11 +41,21 @@ const RESET: Partial<RunViewState> = {
   fails: false,
   group: 'all',
   q: '',
-  only: false,
+  only: true,
 };
 
 export function RunsTabPage() {
   const { workflowId = '', runId = '' } = useParams();
+  // Once this workflow's step map has not fit beside the details pane, the run list
+  // folds to its toggle and stays folded, so widening the graph never flips it back.
+  const [squeezedFor, setSqueezedFor] = useState<string | null>(null);
+  const squeezed = squeezedFor === workflowId;
+  const onGraphFit = useCallback(
+    (fits: boolean) => {
+      if (!fits) setSqueezedFor(workflowId);
+    },
+    [workflowId],
+  );
   const { search } = useLocation();
   const navigate = useNavigate();
   const copy = useCopy();
@@ -189,6 +199,7 @@ export function RunsTabPage() {
         onRunAgain={() => {
           if (run) setAgain(true);
         }}
+        onGraphFit={onGraphFit}
       />
     );
   } else if (list.state === 'ready' && !list.items.length) {
@@ -286,6 +297,7 @@ export function RunsTabPage() {
             filters={{ status: ui.status, range: ui.range }}
             onFilters={setFilters}
             onOpen={openRun}
+            squeezed={squeezed}
           />
         )}
         {body}
