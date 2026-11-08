@@ -13,6 +13,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { DetailsPane } from './DetailsPane';
 import { EventsPanel } from './EventsPanel';
 import { RunBanner, RunHeader } from './RunHeader';
+import { RunMediaProvider } from './RunMediaProvider';
 import { RunGraph } from './RunGraph';
 import { Splitter } from '@/components/ui/splitter';
 import { TracePanel } from './TracePanel';
@@ -507,17 +508,19 @@ export function RunView({
 
   const showDetails = !narrow || drawerOpen;
   const details = (
-    <DetailsPane
-      el={selected}
-      ctx={ctx}
-      tab={(ui.tab ?? 'overview') as DetailTab}
-      onTab={(t) => {
-        update({ tab: t });
-      }}
-      drawer={narrow}
-      onClose={closeDrawer}
-      focusKey={titleFocus}
-    />
+    <RunMediaProvider model={model}>
+      <DetailsPane
+        el={selected}
+        ctx={ctx}
+        tab={(ui.tab ?? 'overview') as DetailTab}
+        onTab={(t) => {
+          update({ tab: t });
+        }}
+        drawer={narrow}
+        onClose={closeDrawer}
+        focusKey={titleFocus}
+      />
+    </RunMediaProvider>
   );
 
   return (

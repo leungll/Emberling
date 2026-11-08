@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import type { JsonValue } from '@/api/types';
-import { MediaSourceContext } from '@/components/media/media-source';
+import { MediaSourceContext, mediaOfRun } from '@/components/media/media-source';
 import { ReportResult } from './ReportResult';
 import { ShapedValues } from './ShapedValues';
 
@@ -47,6 +47,37 @@ const traced = {
 };
 
 describe('ShapedValues', () => {
+  it('shows a run-input value the Run’s media list serves as that media', () => {
+    const source = {
+      media: mediaOfRun(
+        {
+          items: [
+            {
+              ref: 'src_7f3a',
+              url: 'https://media.example/files/src_7f3a.webm',
+              mediaType: 'video/webm',
+              nodeRunId: 'nr_task',
+            },
+          ],
+          truncated: false,
+        },
+        [],
+      ),
+      runInput: { task: { sourceId: 'src_7f3a', brief: 'Cut the opening.' } },
+    };
+    const task: Obj = { properties: { sourceId: { title: 'Source video' }, brief: {} } };
+    const { container } = render(
+      <MediaSourceContext.Provider value={source}>
+        <ShapedValues schema={task} data={{ sourceId: 'src_7f3a', brief: 'Cut the opening.' }} />
+      </MediaSourceContext.Provider>,
+    );
+    expect(screen.getByRole('button', { name: 'Play Source video' })).toBeInTheDocument();
+    expect(container.querySelector('video')?.getAttribute('src')).toBe(
+      'https://media.example/files/src_7f3a.webm#t=1',
+    );
+    expect(screen.queryByText('src_7f3a')).not.toBeInTheDocument();
+  });
+
   it('shows a value the trace media lists as media when no schema annotates it', () => {
     const plain: Obj = { properties: { clip: { title: 'Clip', type: 'string' } } };
     render(

@@ -10,7 +10,7 @@ import {
   validateDefinition,
 } from '@/api/client';
 import type { Definition, JsonObject, ValidationError } from '@/api/types';
-import { MediaSourceContext, mediaOfTraces } from '@/components/media/media-source';
+import { MediaSourceContext, mediaOfRun } from '@/components/media/media-source';
 import { ListShell } from '@/components/shell/ListShell';
 import { NotFoundView } from '@/components/shell/NotFoundView';
 import { StateBlock } from '@/components/state/StateBlock';
@@ -108,7 +108,7 @@ export function EditPage() {
   // The last run's media, so a media-typed value its Agent wrote shows in the side panel.
   const lastRunMedia = useMemo(
     () => ({
-      media: mediaOfTraces(lastRun.traces.values()),
+      media: mediaOfRun(lastRun.snapshot?.media, lastRun.traces.values()),
       runInput: lastRun.snapshot?.run.input ?? null,
     }),
     [lastRun.traces, lastRun.snapshot],
