@@ -280,15 +280,41 @@ if ((decides_approval)); then
 fi
 
 if [[ -n "$real_model" ]]; then
-  log "creating a Definition from $(basename "$FIXTURE") bound to model $real_model with a ${agent_timeout_ms}ms Agent budget"
+  source_label="$(basename "$FIXTURE") bound to model $real_model with a ${agent_timeout_ms}ms Agent budget"
 else
-  log "creating a Definition from $(basename "$FIXTURE") with script $script"
+  source_label="$(basename "$FIXTURE") with script $script"
 fi
+# Each script or model keeps one Workflow, found by its name, so repeated demos add Runs
+# (and, when the Definition changed, a new version) instead of a new Workflow every time.
+# A saved version is reused only when every value this story sets is saved unchanged and
+# the Nodes and Edges are the same ones; the Backend may add defaults when it saves. A
+# Run stays bound to the version it was created with either way.
 definition=$(build_definition)
-created=$(curl -fsS -X POST -H 'Content-Type: application/json' \
-  --data-binary "$definition" "$BACKEND_URL/api/definitions")
-workflow_id=$(jq -r '.workflowId' <<<"$created")
-version=$(jq -r '.version' <<<"$created")
+definition_name=$(jq -r '.name' <<<"$definition")
+workflow_id=$(curl -fsS "$BACKEND_URL/api/definitions" |
+  jq -r --arg name "$definition_name" '[.items[] | select(.name == $name)] | sort_by(.updatedAt) | last | .workflowId // empty')
+if [[ -z "$workflow_id" ]]; then
+  log "creating a Definition from $source_label"
+  saved=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+    --data-binary "$definition" "$BACKEND_URL/api/definitions")
+else
+  latest=$(curl -fsS "$BACKEND_URL/api/definitions/$workflow_id")
+  if jq -e --argjson want "$definition" '
+    . as $saved
+    | ($want | {name, description, nodes, edges}) as $w
+    | ([$w.nodes[].id, "|", $w.edges[].id] == [$saved.nodes[].id, "|", $saved.edges[].id])
+      and ([$w | paths(scalars)] | all(. as $p | ($w | getpath($p)) == ($saved | getpath($p))))' \
+    <<<"$latest" >/dev/null; then
+    log "reusing $workflow_id, its latest version matches $source_label"
+    saved=$latest
+  else
+    log "saving a new version of $workflow_id from $source_label"
+    saved=$(jq --argjson base "$(jq '.version' <<<"$latest")" '. + {baseVersion: $base}' <<<"$definition" |
+      curl -fsS -X PUT -H 'Content-Type: application/json' --data-binary @- "$BACKEND_URL/api/definitions/$workflow_id")
+  fi
+fi
+workflow_id=$(jq -r '.workflowId' <<<"$saved")
+version=$(jq -r '.version' <<<"$saved")
 log "definition $workflow_id version $version"
 
 record_after_seq=$(record_last_seq)
