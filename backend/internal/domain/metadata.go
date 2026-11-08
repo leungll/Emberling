@@ -182,6 +182,12 @@ type NodeMetadata struct {
 	// declares none is never governed by Provider capacity. It is a registration fact
 	// for the Runtime, not part of the catalogue Studio reads, so it stays off the wire.
 	DispatchModelPath string `json:"-"`
+	// MediaLinks says which output port values are media references and where the URL
+	// that serves each and its media type are read from, so the Run can list the media
+	// its steps produced and Studio can match a reference to its URL instead of building
+	// one from a value. Empty means the Node Type produces no addressable media. Omitted
+	// on the wire when empty.
+	MediaLinks []MediaLink `json:"mediaLinks,omitempty"`
 }
 
 // Validate checks the structural rules a registration must satisfy before the Backend can
@@ -209,6 +215,7 @@ func (m NodeMetadata) Validate() error {
 	errs = append(errs, validateSideEffect(m.SideEffect)...)
 	errs = append(errs, validatePollPolicy(m.Poll, m.ExecutionKind == NodeExecutionAsync)...)
 	errs = append(errs, validateFactInputs(m.FactInputs)...)
+	errs = append(errs, validateNodeMediaLinks(m.MediaLinks, m.Outputs)...)
 
 	if len(errs) == 0 {
 		return nil
@@ -406,7 +413,7 @@ type ToolMetadata struct {
 	// that serves it, so the Agent Trace can list the media a call produced and Studio can
 	// match a reference to its URL instead of building one from a value. Empty means the
 	// Tool produces no addressable media. Omitted on the wire when empty.
-	MediaLinks []ToolMediaLink `json:"mediaLinks,omitempty"`
+	MediaLinks []MediaLink `json:"mediaLinks,omitempty"`
 	// Display lists the members of a call's arguments and result that Studio shows on a run
 	// card, each under a title. Only these members are projected into the Agent Trace; the
 	// whole arguments and result never are. Empty means the call shows no member. Omitted

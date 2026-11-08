@@ -302,6 +302,13 @@ export interface NodeMetadata {
   poll?: PollPolicy | null;
   /** Execution fact types of the current Run this Node Type reads. */
   factInputs: string[];
+  /**
+   * Which output port values are media references and where the URL that serves each and
+   * its media type are read from. The Run Snapshot `media` list is built from these; Studio
+   * resolves a reference to a URL only through that list, never by building one. Absent
+   * when the Node Type produces none.
+   */
+  mediaLinks?: NodeMediaLink[];
 }
 
 export interface ModelMetadata {
@@ -415,6 +422,14 @@ export interface ToolMediaLink {
   urlPointer: string;
   mediaTypePointer?: string;
   mediaType?: string;
+}
+
+/**
+ * One media link of a Node output: the output `port` whose value the pointers read, and the
+ * same pointer members a Tool link has.
+ */
+export interface NodeMediaLink extends ToolMediaLink {
+  port: string;
 }
 
 /** One declared run-card member: which document, which member, and the title shown. */

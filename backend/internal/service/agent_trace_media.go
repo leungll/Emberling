@@ -74,7 +74,7 @@ func agentTraceMedia(rounds []AgentTraceTurn, tools *registry.ToolRegistry) Agen
 // mediaItemOf reads one declared media link out of a decoded Tool result. Every pointer
 // must select a non-empty string; the media type comes from the result when the link
 // points at it and from the declaration otherwise.
-func mediaItemOf(result any, link domain.ToolMediaLink) (AgentTraceMediaItem, bool) {
+func mediaItemOf(result any, link domain.MediaLink) (AgentTraceMediaItem, bool) {
 	ref, ok := stringAtPointer(result, link.RefPointer)
 	if !ok {
 		return AgentTraceMediaItem{}, false

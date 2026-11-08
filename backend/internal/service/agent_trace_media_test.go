@@ -30,7 +30,7 @@ func mediaDeclaringRegistry(t *testing.T) *registry.ToolRegistry {
 				"clipRef":{"type":"string"},"clipUrl":{"type":"string"},"mediaType":{"type":"string"}},"additionalProperties":false}`),
 			SideEffect:    domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencySafe},
 			ExecutionKind: domain.ToolExecutionSync,
-			MediaLinks:    []domain.ToolMediaLink{{RefPointer: "/clipRef", URLPointer: "/clipUrl", MediaTypePointer: "/mediaType"}},
+			MediaLinks:    []domain.MediaLink{{RefPointer: "/clipRef", URLPointer: "/clipUrl", MediaTypePointer: "/mediaType"}},
 		},
 		Executor: mediaTestExecutor{},
 	})

@@ -147,6 +147,13 @@ func Registration(ports Ports) (registry.NodeRegistration, error) {
 			Poll:       &domain.PollPolicy{IntervalMs: pollIntervalMs, MaxPolls: maxPolls},
 			// No DispatchModelPath: the node calls no model and is not governed by
 			// Provider capacity.
+			// The transcript names the source video it belongs to by sourceId, the value
+			// the task object and the Agent's final output use for it, and the service's
+			// result says where that video is served; the Run lists it as media by this
+			// declaration, never by composing a URL from the id.
+			MediaLinks: []domain.MediaLink{{
+				Port: TranscriptPort, RefPointer: "/sourceId", URLPointer: "/sourceUrl", MediaTypePointer: "/sourceMediaType",
+			}},
 		},
 		Binding: registry.ExecutorBinding{Executor: &Executor{
 			tasks: ports.Tasks, artifacts: ports.Artifacts, providerID: providerID,

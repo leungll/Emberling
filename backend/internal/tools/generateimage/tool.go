@@ -152,7 +152,7 @@ func Registration(generators map[string]ImageGenerator, photos PhotoReader, arti
 			// The generated image is addressed by its artifact id and served by the
 			// Run-scoped content route the result names; its media type is the sniffed one
 			// recorded on the artifact.
-			MediaLinks: []domain.ToolMediaLink{{
+			MediaLinks: []domain.MediaLink{{
 				RefPointer: "/assetRef", URLPointer: "/imageUrl", MediaTypePointer: "/artifact/mediaType",
 			}},
 			// The prompt is shown by the named settings view alone, cut at its bound, so it

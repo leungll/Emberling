@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -139,6 +140,10 @@ func TestRegistration_Metadata_AsyncExternalSafePolledWithoutModel(t *testing.T)
 	if len(md.Inputs) != 1 || md.Inputs[0].Name != "task" || len(md.Outputs) != 3 ||
 		md.Outputs[0].Name != "transcript" || md.Outputs[1].Name != "task" || md.Outputs[2].Name != "assignment" {
 		t.Fatalf("ports = in %+v out %+v, want task -> transcript, task, assignment", md.Inputs, md.Outputs)
+	}
+	wantLinks := []domain.MediaLink{{Port: "transcript", RefPointer: "/sourceId", URLPointer: "/sourceUrl", MediaTypePointer: "/sourceMediaType"}}
+	if !reflect.DeepEqual(md.MediaLinks, wantLinks) {
+		t.Fatalf("media links = %+v, want the source video declared on the transcript port", md.MediaLinks)
 	}
 }
 

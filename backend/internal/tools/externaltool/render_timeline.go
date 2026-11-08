@@ -73,7 +73,7 @@ func RenderTimelineSpec() Spec {
 			CountedFailedFacts:     mediaCountedFailedFacts(),
 			// The clip is referenced by its digest, served at the URL the media service
 			// returned, in the media type the service reported.
-			MediaLinks: []domain.ToolMediaLink{{RefPointer: "/clipSha256", URLPointer: "/clipUrl", MediaTypePointer: "/mediaType"}},
+			MediaLinks: []domain.MediaLink{{RefPointer: "/clipSha256", URLPointer: "/clipUrl", MediaTypePointer: "/mediaType"}},
 			Display: []domain.ToolDisplayField{
 				{Source: domain.FactPointerArguments, Pointer: "/timelineSha256", Title: "Timeline"},
 				{Source: domain.FactPointerResult, Pointer: "/durationMs", Title: "Duration (ms)"},

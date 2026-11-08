@@ -13,13 +13,16 @@ import (
 // documents. The Runtime never reads these declarations and a model request never
 // carries them.
 
-// ToolMediaLink says where a successful result of the Tool carries one media reference
-// and the URL that serves it. RefPointer and URLPointer are JSON Pointers into the result;
-// the reference is the value a final output or a fact names the media by (an artifact id,
-// a digest, or the URL itself), so Studio can match it exactly instead of building a URL
-// from it. Exactly one of MediaTypePointer (a result member holding the media type) or
-// MediaType (a literal, for a Tool whose result carries none) is set.
-type ToolMediaLink struct {
+// MediaLink says where a successful result of a Tool, or an output port of a Node, carries
+// one media reference and the URL that serves it. RefPointer and URLPointer are JSON
+// Pointers into the result or the port value; the reference is the value a final output
+// or a fact names the media by (an artifact id, a digest, or the URL itself), so Studio
+// can match it exactly instead of building a URL from it. Exactly one of MediaTypePointer
+// (a member holding the media type) or MediaType (a literal, for a result that carries
+// none) is set. Port names the output port the pointers read; a Node link always sets it
+// and a Tool link never does, because a Tool result is one document.
+type MediaLink struct {
+	Port             string `json:"port,omitempty"`
 	RefPointer       string `json:"refPointer"`
 	URLPointer       string `json:"urlPointer"`
 	MediaTypePointer string `json:"mediaTypePointer,omitempty"`
@@ -37,29 +40,68 @@ type ToolDisplayField struct {
 
 // validateToolMediaLinks checks the shape of a Tool's media link declarations. Whether
 // each pointer lands inside the Output Schema is checked by the Registry.
-func validateToolMediaLinks(links []ToolMediaLink) []error {
+func validateToolMediaLinks(links []MediaLink) []error {
 	var errs []error
 	for i, link := range links {
 		field := fmt.Sprintf("mediaLinks[%d]", i)
-		if err := ValidateJSONPointer(link.RefPointer); err != nil {
-			errs = append(errs, fmt.Errorf("%s.refPointer: %w", field, err))
+		if link.Port != "" {
+			errs = append(errs, fmt.Errorf("%s.port must be empty: a Tool result is one document", field))
 		}
-		if err := ValidateJSONPointer(link.URLPointer); err != nil {
-			errs = append(errs, fmt.Errorf("%s.urlPointer: %w", field, err))
-		}
+		errs = append(errs, validateMediaLinkPointers(field, link)...)
+	}
+	return errs
+}
+
+// validateNodeMediaLinks checks the shape of a Node Type's media link declarations: each
+// names one of the declared output ports and has the pointer shape a Tool link has. A port
+// declares no schema of its value, so whether a pointer selects a member is only known
+// from a committed output; the projection then yields no item for a pointer that selects
+// nothing.
+func validateNodeMediaLinks(links []MediaLink, outputs []PortMetadata) []error {
+	var errs []error
+	for i, link := range links {
+		field := fmt.Sprintf("mediaLinks[%d]", i)
 		switch {
-		case link.MediaTypePointer == "" && link.MediaType == "":
-			errs = append(errs, fmt.Errorf("%s: exactly one of mediaTypePointer or mediaType must be set, got neither", field))
-		case link.MediaTypePointer != "" && link.MediaType != "":
-			errs = append(errs, fmt.Errorf("%s: exactly one of mediaTypePointer or mediaType must be set, got both", field))
-		case link.MediaTypePointer != "":
-			if err := ValidateJSONPointer(link.MediaTypePointer); err != nil {
-				errs = append(errs, fmt.Errorf("%s.mediaTypePointer: %w", field, err))
-			}
-		default:
-			if !isMediaTypeLiteral(link.MediaType) {
-				errs = append(errs, fmt.Errorf("%s.mediaType must be a type/subtype media type", field))
-			}
+		case link.Port == "":
+			errs = append(errs, fmt.Errorf("%s.port is empty", field))
+		case !hasPort(outputs, link.Port):
+			errs = append(errs, fmt.Errorf("%s.port %q is not a declared output port", field, link.Port))
+		}
+		errs = append(errs, validateMediaLinkPointers(field, link)...)
+	}
+	return errs
+}
+
+func hasPort(ports []PortMetadata, name string) bool {
+	for _, port := range ports {
+		if port.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// validateMediaLinkPointers checks the pointers and the media type source of one link.
+func validateMediaLinkPointers(field string, link MediaLink) []error {
+	var errs []error
+	if err := ValidateJSONPointer(link.RefPointer); err != nil {
+		errs = append(errs, fmt.Errorf("%s.refPointer: %w", field, err))
+	}
+	if err := ValidateJSONPointer(link.URLPointer); err != nil {
+		errs = append(errs, fmt.Errorf("%s.urlPointer: %w", field, err))
+	}
+	switch {
+	case link.MediaTypePointer == "" && link.MediaType == "":
+		errs = append(errs, fmt.Errorf("%s: exactly one of mediaTypePointer or mediaType must be set, got neither", field))
+	case link.MediaTypePointer != "" && link.MediaType != "":
+		errs = append(errs, fmt.Errorf("%s: exactly one of mediaTypePointer or mediaType must be set, got both", field))
+	case link.MediaTypePointer != "":
+		if err := ValidateJSONPointer(link.MediaTypePointer); err != nil {
+			errs = append(errs, fmt.Errorf("%s.mediaTypePointer: %w", field, err))
+		}
+	default:
+		if !isMediaTypeLiteral(link.MediaType) {
+			errs = append(errs, fmt.Errorf("%s.mediaType must be a type/subtype media type", field))
 		}
 	}
 	return errs
