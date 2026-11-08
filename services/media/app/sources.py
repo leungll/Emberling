@@ -41,7 +41,18 @@ class SourceRecord:
     cropCenterX: float
 
     def to_dict(self) -> dict:
+        """The persisted record. The served URL is not part of it: it depends on the
+        public URL the service is deployed under, which may change between restarts."""
         return asdict(self)
+
+    def view(self, public_url: str) -> dict:
+        """The reference the API and task results return: the record plus `url`, where
+        the content route serves the bytes."""
+        return {**asdict(self), "url": source_url(public_url, self.sourceId)}
+
+
+def source_url(public_url: str, source_id: str) -> str:
+    return f"{public_url}/v1/sources/{source_id}/content"
 
 
 def source_id_for(sha256: str) -> str:
@@ -49,9 +60,13 @@ def source_id_for(sha256: str) -> str:
 
 
 class SourceStore:
-    def __init__(self, data: DataDir, ffmpeg: FFmpeg) -> None:
+    def __init__(self, data: DataDir, ffmpeg: FFmpeg, public_url: str) -> None:
         self._data = data
         self._ffmpeg = ffmpeg
+        self._public_url = public_url
+
+    def view(self, record: SourceRecord) -> dict:
+        return record.view(self._public_url)
 
     def content_path(self, sha256: str) -> Path:
         return self._data.sources / sha256

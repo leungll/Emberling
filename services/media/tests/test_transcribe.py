@@ -47,6 +47,10 @@ def test_transcribe_returns_numbered_material_and_metadata(service) -> None:
     assert result["model"] == "tiny.en"
     assert result["transcriptSha256"] == hashlib.sha256(result["material"].encode("utf-8")).hexdigest()
     assert "river" in result["material"].lower()
+    # The source the transcript belongs to is addressable from the result itself.
+    assert result["sourceId"] == source["sourceId"]
+    assert result["url"] == source["url"] == f"http://media.test/v1/sources/{source['sourceId']}/content"
+    assert result["mediaType"] == source["mediaType"]
 
 
 def test_transcribe_same_source_and_model_hits_the_cache(service, monkeypatch) -> None:
@@ -100,8 +104,21 @@ def test_get_source_returns_the_reference(service) -> None:
     response = service.client.get(f"/v1/sources/{source['sourceId']}")
     assert response.status_code == 200
     assert response.json() == source
-    assert set(source) == {"sourceId", "sha256", "durationMs", "mediaType", "cropCenterX"}
+    assert set(source) == {"sourceId", "sha256", "durationMs", "mediaType", "cropCenterX", "url"}
+    assert source["url"] == f"{service.settings.public_url}/v1/sources/{source['sourceId']}/content"
     assert service.client.get("/v1/sources/src_" + "0" * 32).status_code == 404
+
+
+def test_source_content_is_served_with_its_media_type(service) -> None:
+    source = service.upload()
+    response = service.client.get(f"/v1/sources/{source['sourceId']}/content")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == source["mediaType"]
+    assert hashlib.sha256(response.content).hexdigest() == source["sha256"]
+    assert service.client.get("/v1/sources/src_" + "0" * 32 + "/content").status_code == 404
+    # The persisted record stays free of the served URL, which depends on deployment.
+    records = list((service.settings.data_dir / "sources").glob("*.json"))
+    assert len(records) == 1 and "url" not in records[0].read_text("utf-8")
 
 
 def test_upload_same_content_returns_same_reference(service) -> None:

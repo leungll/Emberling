@@ -72,6 +72,7 @@ class TaskExecutors:
             transcript_sha256 = self._transcripts.save(transcript)
         else:
             transcript = self._transcripts.load(transcript_sha256)
+        source_view = self._sources.view(source)
         return {
             "material": transcript.material,
             "language": transcript.language,
@@ -82,6 +83,10 @@ class TaskExecutors:
             "sourceSha256": source.sha256,
             "transcriptSha256": transcript_sha256,
             "model": model,
+            # Where the source itself is served and what it is, so a caller can show the
+            # video the transcript belongs to without composing a URL from the id.
+            "url": source_view["url"],
+            "mediaType": source.mediaType,
         }
 
     def check_timeline(self, task_input: dict) -> dict:
