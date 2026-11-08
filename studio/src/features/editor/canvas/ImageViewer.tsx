@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react';
 import { useState } from 'react';
 
+import { LoadedImage } from '@/components/media/LoadedImage';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { useCopy } from '@/lib/copy';
@@ -60,11 +61,13 @@ export function ImageViewer({
         className="flex items-center justify-center rounded-md border border-border-subtle bg-surface-inset"
       >
         {it?.src ? (
-          <img
+          <LoadedImage
             src={it.src}
             alt={it.name ?? t.image(at + 1)}
             style={{ maxHeight: '60vh' }}
-            className="block max-w-full object-contain"
+            className="max-w-full object-contain"
+            placeholder={t.unavailable}
+            iconClassName="size-icon-lg"
           />
         ) : (
           <span className="flex flex-col items-center gap-1 p-4 text-sm text-fg-muted">

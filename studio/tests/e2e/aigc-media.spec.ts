@@ -61,7 +61,7 @@ test('AIGC Media Generation waits for an external callback, then completes with 
   // The step's output names the image the Provider reported; the callback payload always
   // reports an outside image (an EXTERNAL reference), previewed from its own address.
   await stepCard(page, 'Image').click();
-  await details(page).getByRole('tab', { name: 'Output' }).click();
+  await details(page).getByRole('tab', { name: 'Data' }).click();
   const mock = MOCKPROVIDER_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   await expectImageShown(page, 'Linked image', new RegExp(`^${mock}/v1/images/`));
 });
