@@ -125,6 +125,7 @@ class FakeServer {
         tokenUsage: null,
       },
       nodeRuns: this.nodeRuns,
+      media: { items: [], truncated: false },
       lastSeq: this.log.length,
     });
   }

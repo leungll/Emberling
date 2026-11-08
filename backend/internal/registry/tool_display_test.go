@@ -37,7 +37,7 @@ func displayDeclaringRegistration() ToolRegistration {
 
 func TestToolRegistry_Register_AcceptsDisplayPointersInsideSchemas(t *testing.T) {
 	reg := displayDeclaringRegistration()
-	reg.Metadata.MediaLinks = []domain.ToolMediaLink{
+	reg.Metadata.MediaLinks = []domain.MediaLink{
 		{RefPointer: "/clipSha256", URLPointer: "/clipUrl", MediaTypePointer: "/artifact/mediaType"},
 	}
 	reg.Metadata.Display = []domain.ToolDisplayField{
@@ -58,21 +58,21 @@ func TestToolRegistry_Register_RejectsDisplayPointersOutsideSchemas(t *testing.T
 		{
 			name: "media ref pointer names an undeclared result member",
 			mutate: func(m *domain.ToolMetadata) {
-				m.MediaLinks = []domain.ToolMediaLink{{RefPointer: "/clipDigest", URLPointer: "/clipUrl", MediaType: "video/mp4"}}
+				m.MediaLinks = []domain.MediaLink{{RefPointer: "/clipDigest", URLPointer: "/clipUrl", MediaType: "video/mp4"}}
 			},
 			want: `mediaLinks[0].refPointer: pointer "/clipDigest" is outside the outputSchema`,
 		},
 		{
 			name: "media url pointer names an undeclared result member",
 			mutate: func(m *domain.ToolMetadata) {
-				m.MediaLinks = []domain.ToolMediaLink{{RefPointer: "/clipSha256", URLPointer: "/url", MediaType: "video/mp4"}}
+				m.MediaLinks = []domain.MediaLink{{RefPointer: "/clipSha256", URLPointer: "/url", MediaType: "video/mp4"}}
 			},
 			want: `mediaLinks[0].urlPointer: pointer "/url" is outside the outputSchema`,
 		},
 		{
 			name: "media type pointer names an undeclared nested member",
 			mutate: func(m *domain.ToolMetadata) {
-				m.MediaLinks = []domain.ToolMediaLink{{RefPointer: "/clipSha256", URLPointer: "/clipUrl", MediaTypePointer: "/artifact/kind"}}
+				m.MediaLinks = []domain.MediaLink{{RefPointer: "/clipSha256", URLPointer: "/clipUrl", MediaTypePointer: "/artifact/kind"}}
 			},
 			want: `mediaLinks[0].mediaTypePointer: pointer "/artifact/kind" is outside the outputSchema`,
 		},
@@ -111,7 +111,7 @@ func TestToolRegistry_Register_RejectsDisplayPointersOutsideSchemas(t *testing.T
 // type source) fail registration, not only the pointer-resolution rules.
 func TestToolRegistry_Register_DisplayShapeErrorsSurfaceAtStartup(t *testing.T) {
 	reg := displayDeclaringRegistration()
-	reg.Metadata.MediaLinks = []domain.ToolMediaLink{{RefPointer: "/clipSha256", URLPointer: "/clipUrl"}}
+	reg.Metadata.MediaLinks = []domain.MediaLink{{RefPointer: "/clipSha256", URLPointer: "/clipUrl"}}
 	reg.Metadata.Display = []domain.ToolDisplayField{{Source: domain.FactPointerResult, Pointer: "/durationMs"}}
 	err := NewToolRegistry().Register(reg)
 	if err == nil {

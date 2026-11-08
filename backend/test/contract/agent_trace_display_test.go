@@ -79,7 +79,7 @@ func displayTraceToolRegistration() registry.ToolRegistration {
 				"required":["mediaType","durationMs"],"additionalProperties":false}`),
 			SideEffect:    domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencySafe},
 			ExecutionKind: domain.ToolExecutionSync,
-			MediaLinks:    []domain.ToolMediaLink{{RefPointer: "/clipRef", URLPointer: "/clipUrl", MediaTypePointer: "/mediaType"}},
+			MediaLinks:    []domain.MediaLink{{RefPointer: "/clipRef", URLPointer: "/clipUrl", MediaTypePointer: "/mediaType"}},
 			Display: []domain.ToolDisplayField{
 				{Source: domain.FactPointerArguments, Pointer: "/key", Title: "Key"},
 				{Source: domain.FactPointerResult, Pointer: "/durationMs", Title: "Duration (ms)"},

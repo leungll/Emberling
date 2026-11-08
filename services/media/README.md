@@ -50,10 +50,11 @@ Configuration is read from the environment once at startup:
 
 | Route | Purpose |
 |---|---|
-| `POST /v1/sources` | Multipart upload of a video (`file`) with an optional `cropCenterX` form field in `[0, 1]`. Returns `sourceId`, `sha256`, `durationMs`, `mediaType`, `cropCenterX`. The same bytes always yield the same `sourceId`. |
+| `POST /v1/sources` | Multipart upload of a video (`file`) with an optional `cropCenterX` form field in `[0, 1]`. Returns `sourceId`, `sha256`, `durationMs`, `mediaType`, `cropCenterX` and `url`, where `GET /v1/sources/{sourceId}/content` serves the bytes. The same bytes always yield the same `sourceId`. |
 | `POST /v1/tasks` | Submit a task: `taskId` (any string of 1 to 128 characters), `type`, `input`, `callbackUrl`, `callbackToken`. A new task is answered `202`; a repeated `taskId` with the same type and input is answered `200` with the original task and is not run again; a repeated `taskId` with different content is answered `409`. |
 | `GET /v1/tasks/{taskId}` | `{"taskId", "status"}` with `status` one of `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, plus `result` (an object) only when `SUCCEEDED` and `error` (`{"code", "message"}`) only when `FAILED`. Unknown tasks are `404`. |
 | `GET /v1/sources/{sourceId}` | The same reference as the upload returns. Unknown ids are `404`. |
+| `GET /v1/sources/{sourceId}/content` | The stored source video with the reference's `mediaType`. Unknown ids are `404`. |
 | `GET /v1/clips/{sha256}` | The rendered clip as `video/mp4`. |
 | `GET /healthz` | `200` when FFmpeg, ffprobe, the filters, the encoders and the transcription model are usable, otherwise `503` with the problems listed. |
 
@@ -93,7 +94,8 @@ S13	87.110	91.260	unless the sample is large enough
 
 with `material`, `language`, `sentenceCount`, `lineCount`, `durationMs`,
 `sourceId`, `sourceSha256`, `transcriptSha256` (the SHA-256 of the material
-text) and `model`. Word timestamps stay in the service. A transcript is cached
+text), `model`, and the source's `url` and `mediaType` as the source reference
+reports them. Word timestamps stay in the service. A transcript is cached
 per source hash and model name.
 
 **`CHECK_TIMELINE`**, input `{"sourceId", "transcriptSha256", "targetDurationMs":

@@ -88,6 +88,7 @@ export function snapshot(
       ...extra,
     },
     nodeRuns,
+    media: { items: [], truncated: false },
     lastSeq: 0,
   };
 }

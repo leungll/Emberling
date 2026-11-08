@@ -82,14 +82,24 @@ def build_router(services: Services) -> APIRouter:
             record = services.sources.save_upload(file.file, file.content_type, cropCenterX)
         except SourceRejected as exc:
             raise HTTPException(400, str(exc)) from exc
-        return JSONResponse(record.to_dict(), status_code=200)
+        return JSONResponse(services.sources.view(record), status_code=200)
 
     @router.get("/v1/sources/{source_id}")
     def get_source(source_id: str) -> JSONResponse:
         record = services.sources.get(source_id)
         if record is None:
             raise HTTPException(404, "unknown sourceId")
-        return JSONResponse(record.to_dict())
+        return JSONResponse(services.sources.view(record))
+
+    @router.get("/v1/sources/{source_id}/content")
+    def get_source_content(source_id: str) -> FileResponse:
+        record = services.sources.get(source_id)
+        if record is None:
+            raise HTTPException(404, "unknown sourceId")
+        path = services.sources.content_path(record.sha256)
+        if not path.exists():
+            raise HTTPException(404, "unknown sourceId")
+        return FileResponse(path, media_type=record.mediaType)
 
     @router.post("/v1/tasks")
     def create_task(request: TaskRequest) -> JSONResponse:
