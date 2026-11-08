@@ -62,7 +62,7 @@ function StepItem({
       content={
         <>
           <span className="block font-medium">{meta.displayName}</span>
-          <span className="block text-fg-secondary">{purposeOf(meta.type)}</span>
+          <span className="block text-fg-secondary">{purposeOf(meta)}</span>
           <span className="mt-1 block text-xs text-fg-muted">{copy.editor.palette.itemTip}</span>
         </>
       }

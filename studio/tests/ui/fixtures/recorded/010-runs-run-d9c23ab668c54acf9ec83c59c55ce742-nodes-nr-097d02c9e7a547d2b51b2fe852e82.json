@@ -156,5 +156,9 @@
   "generationBudget": {
     "maxGenerationCalls": null,
     "generationCallsUsed": 0
+  },
+  "media": {
+    "items": [],
+    "truncated": false
   }
 }

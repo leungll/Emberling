@@ -1,7 +1,7 @@
 import { Filter, PanelLeft, RotateCw } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 
-import { Splitter } from './Splitter';
+import { Splitter } from '@/components/ui/splitter';
 import type { RunListItem, RunStatusCounts } from '@/api/types';
 import { StateBlock } from '@/components/state/StateBlock';
 import { statusInfo } from '@/components/status/status-info';
@@ -72,6 +72,8 @@ interface RunListProps {
   onFilters: (f: RunListFilters) => void;
   /** A click opens the run as a new history entry; the arrow keys replace the entry. */
   onOpen: (id: string, how: 'click' | 'key') => void;
+  /** The page needs the room; an unset choice folds the list to its toggle. */
+  squeezed?: boolean;
 }
 
 function storedWidth(): number {
@@ -198,10 +200,17 @@ export function RunList({
   filters,
   onFilters,
   onOpen,
+  squeezed = false,
 }: RunListProps) {
   const copy = useCopy();
   const l = copy.runs.list;
-  const [open, setOpen] = useState(() => readString('local', OPEN_KEY) !== 'closed');
+  // The stored choice is 'closed', 'open' (chosen while the page was squeezed) or
+  // unset. Unset follows the page: the list folds to its toggle when the step map needs room.
+  const [choice, setChoice] = useState(() => readString('local', OPEN_KEY));
+  const open = choice === 'open' || (choice !== 'closed' && !squeezed);
+  const setOpen = (next: boolean) => {
+    setChoice(next ? (squeezed ? 'open' : null) : 'closed');
+  };
   const [width, setWidth] = useState(storedWidth);
   const [focusId, setFocusId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -225,7 +234,7 @@ export function RunList({
 
   const setOpenStored = (next: boolean) => {
     setOpen(next);
-    writeString('local', OPEN_KEY, next ? null : 'closed');
+    writeString('local', OPEN_KEY, next ? (squeezed ? 'open' : null) : 'closed');
     window.requestAnimationFrame(() => {
       toggleRef.current?.focus();
     });

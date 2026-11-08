@@ -287,7 +287,7 @@ function TurnBlock({
       ? (copy.errors as Record<string, { short: string } | undefined>)[errorCode]?.short
       : undefined) ?? t.notAllowed;
   return (
-    <li className="relative rounded-lg border border-border bg-surface">
+    <li data-turn-id={turn.id} className="relative rounded-lg border border-border bg-surface">
       {TURN_EDGE[tel.tone] ? (
         <span
           aria-hidden="true"

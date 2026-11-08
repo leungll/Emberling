@@ -96,7 +96,11 @@ export function useCanvasViewport({
   useEffect(() => {
     if (!ready || !size.w || !size.h) return;
     if (mode === 'auto') {
-      const v = openTarget(rect(), bounds);
+      const open = openTarget(rect(), bounds);
+      // The editor opens with every step in view at full-card zoom rather than at
+      // reading zoom; when that still overflows, the steps palette collapses to make room.
+      const fit = fitTarget(rect(), bounds);
+      const v = open.overflow ? { ...fit, overflow: open.overflow } : open;
       if (v.overflow && !overflowed.current) {
         overflowed.current = true;
         onOverflow();

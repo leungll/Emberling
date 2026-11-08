@@ -2,18 +2,22 @@ import { Upload } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 
 import type { Node } from '@/api/types';
+import { SchemaObjectFields } from '@/components/schema/SchemaObjectFields';
 import { Button } from '@/components/ui/button';
+import { Field, GrowArea } from '@/components/ui/field';
 import { useCopy } from '@/lib/copy';
+import { hasFieldList, schemaFields, startValue } from '@/lib/schema-fields';
 import { cn } from '@/lib/utils';
 import { useEditor } from '@/features/editor/editor-context';
 import { ImageViewer } from '@/features/editor/canvas/ImageViewer';
-import { MB, formatNames } from '@/features/editor/model/fields';
+import { MB, formatNames, schemaOf } from '@/features/editor/model/fields';
 import { STAGE_TYPES, assetUrl, type PreviewImage } from '@/features/editor/model/images';
 import { fieldLabel } from '@/features/editor/model/steps';
 
 /**
- * The field the Run dialog shows for an input step. A text field is an inert copy; an image
- * field is live, and what is added to it is staged for the next run started from this page.
+ * The field the Run dialog shows for an input step. A text or task field is a disabled copy
+ * of the dialog's controls; an image field is live, and what is added to it is staged for the
+ * next run started from this page.
  */
 export function RunPreview({ node }: { node: Node }) {
   const copy = useCopy();
@@ -37,19 +41,42 @@ export function RunPreview({ node }: { node: Node }) {
   );
 
   if (!live) {
+    // The Run dialog's own controls, disabled: a task with fields is asked field by field,
+    // a task without them as JSON, and text in a multi-line box.
     const lo = typeof c.minLength === 'number' ? c.minLength : undefined;
     const hi = typeof c.maxLength === 'number' ? c.maxLength : undefined;
-    const length = f.length(lo, hi);
+    const task = node.type === 'task_input';
+    const schema = task ? schemaOf(c.schema) : undefined;
+    const fields = schema && hasFieldList(schema) ? schemaFields(schema) : null;
     return (
       <div
         aria-hidden="true"
-        className="mb-4 flex flex-col gap-1.5 rounded-lg border border-dashed border-border bg-surface-inset p-3"
+        className="rounded-lg border border-dashed border-border bg-surface-inset p-3"
       >
-        {head}
-        <div className="flex h-control-md items-center rounded-md border border-border-control bg-surface px-3 text-sm text-fg-placeholder">
-          {node.name === label ? f.previewType(label) : f.previewTypeHere}
-        </div>
-        {length ? <div className="text-sm text-fg-muted">{length}</div> : null}
+        <fieldset disabled className="m-0 min-w-0 border-0 p-0">
+          <Field label={label} required={required} hint={task ? undefined : f.length(lo, hi)}>
+            {(ctl, { labelId }) =>
+              fields ? (
+                <SchemaObjectFields
+                  idPrefix={ctl.id}
+                  labelledBy={labelId}
+                  fields={fields}
+                  values={Object.fromEntries(fields.map((x) => [x.key, startValue(x)]))}
+                  disabled
+                />
+              ) : (
+                <GrowArea
+                  {...ctl}
+                  rows={4}
+                  readOnly
+                  value=""
+                  placeholder={task ? f.previewJson : undefined}
+                  className={task ? 'font-mono text-sm' : undefined}
+                />
+              )
+            }
+          </Field>
+        </fieldset>
       </div>
     );
   }

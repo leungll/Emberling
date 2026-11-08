@@ -606,3 +606,104 @@ describe('RunInputDialog — photo set', () => {
     expect(within(group).getAllByRole('img')).toHaveLength(1);
   });
 });
+
+describe('RunInputDialog task fields', () => {
+  // Shaped like a saved task schema: JSONB has reordered `properties`, `required` has not.
+  const taskSchema: RunInputSchema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      task: {
+        type: 'object',
+        properties: {
+          goal: { type: 'string', enum: ['DELIVER_CLIP'], title: 'Goal' },
+          sourceId: { type: 'string', minLength: 1, title: 'Source video' },
+          durationMs: { type: 'integer', minimum: 0, title: 'Source duration (ms)' },
+          requirement: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 2000,
+            title: 'Requirement',
+            description: 'What the clip should be about, in plain words.',
+          },
+          sourceSha256: { type: 'string', minLength: 64, maxLength: 64, title: 'SHA-256' },
+        },
+        required: ['requirement', 'sourceId', 'sourceSha256', 'durationMs', 'goal'],
+      },
+    },
+    required: ['task'],
+  };
+  const sha = 'b'.repeat(64);
+  const task = {
+    requirement: 'A short clip',
+    sourceId: 'src_1',
+    sourceSha256: sha,
+    durationMs: 90000,
+    goal: 'DELIVER_CLIP',
+  };
+
+  it('asks for each field of the task on a first run, required ones first', async () => {
+    const { onSubmit } = renderDialog({
+      runInputSchema: taskSchema,
+      inputLabels: { task: 'Editing Task' },
+    });
+    const user = userEvent.setup();
+    const group = screen.getByRole('group', { name: /Editing Task/ });
+    const labels = within(group)
+      .getAllByText(/^(Requirement|Source video|SHA-256|Source duration \(ms\)|Goal)$/)
+      .map((el) => el.firstChild?.textContent);
+    expect(labels).toEqual([
+      'Requirement',
+      'Source video',
+      'SHA-256',
+      'Source duration (ms)',
+      'Goal',
+    ]);
+    const requirement = screen.getByRole('textbox', { name: /^Requirement/ });
+    expect(requirement).toHaveAccessibleDescription(
+      'What the clip should be about, in plain words.',
+    );
+    // The one-value choice starts chosen.
+    expect(screen.getByRole('button', { name: /Goal/ })).toHaveTextContent('DELIVER_CLIP');
+
+    await user.type(requirement, task.requirement);
+    await user.type(screen.getByRole('textbox', { name: /^Source video/ }), 'src_1');
+    await user.type(screen.getByRole('textbox', { name: /^SHA-256/ }), sha);
+    await user.type(screen.getByRole('spinbutton', { name: /^Source duration/ }), '90000');
+    await user.click(startButton());
+    expect(onSubmit).toHaveBeenCalledWith({ task });
+  });
+
+  it('names the sub-field that needs fixing and doesn’t start the run', async () => {
+    const { onSubmit } = renderDialog({ runInputSchema: taskSchema });
+    const user = userEvent.setup();
+    await user.type(screen.getByRole('textbox', { name: /^Requirement/ }), 'x');
+    await user.type(screen.getByRole('textbox', { name: /^SHA-256/ }), 'abc');
+    await user.click(startButton());
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('Source video is required.')).toBeInTheDocument();
+    expect(screen.getByText('SHA-256 must be exactly 64 characters.')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^Source video/ })).toHaveFocus();
+  });
+
+  it('starts Run again from the earlier task and edits it as JSON too', async () => {
+    const { onSubmit } = renderDialog({
+      runInputSchema: taskSchema,
+      source: { runId: 'run_1', startedAt: null, input: { task } },
+    });
+    const user = userEvent.setup();
+    expect(screen.getByRole('spinbutton', { name: /^Source duration/ })).toHaveValue(90000);
+
+    await user.click(screen.getByRole('radio', { name: 'JSON' }));
+    const json = screen.getByRole('textbox', { name: /^Task/ });
+    expect(JSON.parse((json as HTMLTextAreaElement).value)).toEqual(task);
+    fireEvent.change(json, {
+      target: { value: JSON.stringify({ ...task, durationMs: 1000 }) },
+    });
+    await user.click(screen.getByRole('radio', { name: 'Fields' }));
+    expect(screen.getByRole('spinbutton', { name: /^Source duration/ })).toHaveValue(1000);
+
+    await user.click(startButton());
+    expect(onSubmit).toHaveBeenCalledWith({ task: { ...task, durationMs: 1000 } });
+  });
+});

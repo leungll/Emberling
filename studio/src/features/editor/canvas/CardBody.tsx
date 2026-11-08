@@ -4,16 +4,24 @@ import type { ReactNode } from 'react';
 import type { Node, NodeMetadata, PortMetadata } from '@/api/types';
 import { useCopy } from '@/lib/copy';
 import { bytes } from '@/lib/time';
+import { schemaFields } from '@/lib/schema-fields';
 import { cn } from '@/lib/utils';
 import { agentLimits } from '@/lib/workflow-summary';
 import { useEditor } from '@/features/editor/editor-context';
 import { useEditorStore } from '@/features/editor/editor-store';
 import { linkProblem } from '@/features/editor/model/connect';
-import { formatNames } from '@/features/editor/model/fields';
+import { formatNames, schemaOf } from '@/features/editor/model/fields';
 import { fieldLabel, portLabel, sourcesOf } from '@/features/editor/model/steps';
 import { CardMedia } from './CardMedia';
 import { useCanvasView } from './canvas-view';
 import { InPort, type PortHint } from './Ports';
+import { ReportTile } from '@/components/values/ReportResult';
+import { TaskValues } from '@/components/values/TaskValues';
+import { lastReport } from '@/lib/agent-report';
+import { toolFlow } from '@/lib/agent-tools';
+import { taskValues } from '@/lib/task-values';
+import { contentLabel } from '@/lib/port-content';
+import { AgentToolFlow } from './AgentToolFlow';
 
 const ROW_COLS = { gridTemplateColumns: '72px minmax(0, 1fr)' };
 
@@ -135,7 +143,7 @@ export function CardBody({ node, meta }: { node: Node; meta: NodeMetadata }) {
         key={`in-${p.name}`}
         nodeId={node.id}
         field="connections"
-        label={portLabel(p)}
+        label={contentLabel(doc.nodes, doc.edges, node, 'in', p.name) ?? portLabel(p)}
         port={<InPort port={p} hint={hintFor(p)} />}
       >
         {value}
@@ -170,24 +178,37 @@ export function CardBody({ node, meta }: { node: Node; meta: NodeMetadata }) {
       const tools = Array.isArray(c.allowedTools)
         ? c.allowedTools.filter((x): x is string => typeof x === 'string')
         : [];
-      rows.push(
-        <Row key="tools" nodeId={node.id} field="allowedTools" label={t.canvas.rows.tools} top>
-          {tools.length ? (
-            <span className="flex flex-wrap gap-1">
-              {tools.map((x) => (
-                <span
-                  key={x}
-                  className="inline-flex h-control-xs items-center rounded-sm bg-surface-hover px-2 font-mono text-sm text-fg-secondary"
-                >
-                  {x}
-                </span>
-              ))}
-            </span>
-          ) : (
-            <Muted>{t.canvas.none}</Muted>
-          )}
-        </Row>,
-      );
+      // The tools as a small flow when every tool is registered.
+      const maxFailed =
+        c.maxFailedFacts && typeof c.maxFailedFacts === 'object' && !Array.isArray(c.maxFailedFacts)
+          ? (c.maxFailedFacts as Record<string, number>)
+          : {};
+      const flow = toolFlow(tools, registry.tools, maxFailed);
+      if (flow) {
+        rows.push(
+          <Row key="tools" nodeId={node.id} field="allowedTools">
+            <AgentToolFlow steps={flow} />
+          </Row>,
+        );
+      } else
+        rows.push(
+          <Row key="tools" nodeId={node.id} field="allowedTools" label={t.canvas.rows.tools} top>
+            {tools.length ? (
+              <span className="flex flex-wrap gap-1">
+                {tools.map((x) => (
+                  <span
+                    key={x}
+                    className="inline-flex h-control-xs items-center rounded-sm bg-surface-hover px-2 font-mono text-sm text-fg-secondary"
+                  >
+                    {x}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <Muted>{t.canvas.none}</Muted>
+            )}
+          </Row>,
+        );
       rows.push(
         <Row key="limits" nodeId={node.id} field="maxTurns" label={t.canvas.rows.limits}>
           {agentLimits(c, 'card')}
@@ -251,18 +272,31 @@ export function CardBody({ node, meta }: { node: Node; meta: NodeMetadata }) {
       }
       break;
     }
-    case 'task_input':
+    case 'task_input': {
       rows.push(
         <Row key="asks" nodeId={node.id} field="label">
           {asks}
         </Row>,
       );
+      // The last run's task values, laid out by shape.
+      const task = taskValues(node, lastRun.snapshot?.run.input);
+      if (task) {
+        rows.push(
+          <Row key="values" nodeId={node.id} field={null}>
+            <TaskValues node={node} data={task} />
+          </Row>,
+        );
+        break;
+      }
+      // Every field, wrapped: a card never hides one behind "and more".
+      const labels = schemaFields(schemaOf(c.schema)).map((x) => x.label);
       rows.push(
         <Row key="shape" nodeId={node.id} field="schema">
-          <Muted>{t.canvas.taskObject}</Muted>
+          <Muted>{labels.length ? t.canvas.taskFields(labels) : t.canvas.taskAny}</Muted>
         </Row>,
       );
       break;
+    }
     case 'image_input':
       rows.push(
         <Row key="asks" nodeId={node.id} field="label">
@@ -293,12 +327,30 @@ export function CardBody({ node, meta }: { node: Node; meta: NodeMetadata }) {
   }
 
   const nr = lastRun.byNode.get(node.id);
-  const preview = node.type === 'text_output' ? outputPreview(nr?.output) : null;
+  // An output fed by an Agent's report shows that report's media and status.
+  const report = lastReport(doc.nodes, doc.edges, node, nr);
+  const reportRow =
+    report && (report.outcome || report.data) ? (
+      <Row nodeId={node.id} field={null}>
+        <ReportTile report={report} />
+      </Row>
+    ) : null;
+  const preview = node.type === 'text_output' && !reportRow ? outputPreview(nr?.output) : null;
+  // A card that would show only its ports says what the step does.
+  const onlyPorts = rows.length === meta.inputs.length && !reportRow && !preview;
+  if (onlyPorts && meta.description) {
+    rows.push(
+      <Row key="about" nodeId={node.id} field={null}>
+        <Muted>{meta.description}</Muted>
+      </Row>,
+    );
+  }
 
   return (
     <div className="flex flex-col border-t border-border-subtle py-1">
       {rows}
       <CardMedia node={node} />
+      {reportRow}
       {preview ? (
         <Row nodeId={node.id} field={null}>
           {preview}
@@ -308,7 +360,7 @@ export function CardBody({ node, meta }: { node: Node; meta: NodeMetadata }) {
   );
 }
 
-/** The last run's text result: the keys of a JSON object, or the first lines of plain text. */
+/** The last run's text result: the first lines of plain text. */
 function outputPreview(output: unknown): ReactNode {
   const text =
     output &&
@@ -324,11 +376,8 @@ function outputPreview(output: unknown): ReactNode {
   } catch {
     parsed = null;
   }
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    return (
-      <span className="font-mono wrap-anywhere">{`{ ${Object.keys(parsed).join(', ')} }`}</span>
-    );
-  }
+  // A JSON object has no plain preview; the card never lists its keys.
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return null;
   return (
     <span
       data-ui-exempt="overflow:result-preview-full-text-on-run-page"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   ApiRequestError,
+  getAgentTrace,
   getDefinition,
   getRun,
   listDefinitions,
@@ -10,6 +11,7 @@ import {
   listTools,
 } from '@/api/client';
 import type {
+  AgentTrace,
   Definition,
   DefinitionLastRun,
   ModelMetadata,
@@ -36,6 +38,8 @@ export interface LastRunInfo {
   summary: DefinitionLastRun | null;
   snapshot: RunSnapshot | null;
   byNode: ReadonlyMap<string, NodeRun>;
+  /** The Agent trace of each Agent step that ran, by node ID; empty until they load. */
+  traces: ReadonlyMap<string, AgentTrace>;
   loaded: boolean;
 }
 
@@ -46,7 +50,13 @@ export type LoadState =
   | { kind: 'missing' }
   | { kind: 'error'; message: string };
 
-const NO_RUN: LastRunInfo = { summary: null, snapshot: null, byNode: new Map(), loaded: false };
+const NO_RUN: LastRunInfo = {
+  summary: null,
+  snapshot: null,
+  byNode: new Map(),
+  traces: new Map(),
+  loaded: false,
+};
 const NEW_RUN: LastRunInfo = { ...NO_RUN, loaded: true };
 
 /**
@@ -101,12 +111,27 @@ export function useEditorData(workflowId: string | null, reloadKey: number) {
           return;
         }
         const snapshot = await getRun(summary.id, ctl.signal);
-        setLastRun({
+        const info: LastRunInfo = {
           summary,
           snapshot,
           byNode: new Map(snapshot.nodeRuns.map((nr) => [nr.nodeId, nr])),
+          traces: new Map(),
           loaded: true,
-        });
+        };
+        setLastRun(info);
+        // Agent traces load after the snapshot shows; a trace that fails to load leaves its
+        // step without last-run notes and nothing else.
+        const agents = snapshot.nodeRuns.filter((nr) => nr.nodeType === 'agent');
+        const loaded = await Promise.all(
+          agents.map((nr) =>
+            getAgentTrace(summary.id, nr.id, ctl.signal).then(
+              (trace) => [nr.nodeId, trace] as const,
+              () => null,
+            ),
+          ),
+        );
+        const traces = new Map(loaded.filter((x) => x !== null));
+        if (traces.size && !ctl.signal.aborted) setLastRun({ ...info, traces });
       })
       .catch(() => {
         if (!ctl.signal.aborted) setLastRun({ ...NO_RUN, loaded: true });

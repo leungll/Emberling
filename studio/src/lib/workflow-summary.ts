@@ -1,6 +1,16 @@
-import type { Edge, ModelMetadata, Node, NodeMetadata } from '@/api/types';
+import type {
+  Edge,
+  JsonSchema,
+  JsonValue,
+  ModelMetadata,
+  Node,
+  NodeMetadata,
+  ToolMetadata,
+} from '@/api/types';
 import { copy } from '@/lib/copy';
+import { orderedKeys, schemaFields } from '@/lib/schema-fields';
 import { limitText } from '@/lib/time';
+import { toolFlow } from '@/lib/agent-tools';
 
 /**
  * The plain-language overview of a workflow: one sentence per step, what a run needs to start
@@ -17,6 +27,8 @@ export interface SummaryDefinition {
 export interface SummaryRegistry {
   nodeTypes: ReadonlyMap<string, NodeMetadata>;
   models: ReadonlyMap<string, ModelMetadata>;
+  /** Lets an Agent's sentence name its tools in their working order. */
+  tools?: ReadonlyMap<string, ToolMetadata>;
 }
 
 const s = copy.editor.summary;
@@ -60,10 +72,22 @@ export function stepSentence(def: SummaryDefinition, n: Node, reg: SummaryRegist
       const tools = Array.isArray(c.allowedTools)
         ? c.allowedTools.filter((x): x is string => typeof x === 'string')
         : [];
+      // The tools by their display names, in the order their facts allow.
+      const flow = reg.tools ? toolFlow(tools, reg.tools, {}) : null;
+      if (flow) {
+        const labels = flow.map((x) => x.label.toLowerCase());
+        return s.usesTools(model, copy.editor.names(labels), agentLimits(c));
+      }
       return s.agent(model, tools, agentLimits(c));
     }
+    case 'task_input': {
+      // The fields a run must fill in, by their titles.
+      const need = schemaFields(c.schema as JsonSchema | undefined).filter((x) => x.required);
+      if (need.length)
+        return s.asksFields(copy.editor.names(need.map((x) => x.label.toLowerCase())));
+      return s.asks(fieldLabel(n));
+    }
     case 'text_input':
-    case 'task_input':
     case 'image_input':
       return s.asks(fieldLabel(n));
     case 'media_brief':
@@ -80,7 +104,7 @@ export function stepSentence(def: SummaryDefinition, n: Node, reg: SummaryRegist
     case 'media_output':
       return s.output(from());
     default:
-      return copy.editor.purpose[n.type] ?? '';
+      return reg.nodeTypes.get(n.type)?.description ?? copy.editor.purpose[n.type] ?? '';
   }
 }
 
@@ -88,6 +112,14 @@ export interface SummaryInput {
   id: string;
   name: string;
   meta: string;
+}
+
+/** A task in a few words: how many fields it has, or that it takes any object. */
+function taskKind(schema: JsonValue | undefined): string {
+  const fields = orderedKeys(
+    schema !== null && typeof schema === 'object' && !Array.isArray(schema) ? schema : undefined,
+  );
+  return fields.length ? s.taskFields(fields.length) : (s.kind.task ?? '');
 }
 
 /** What a run asks for: the input steps in reading order. */
@@ -101,7 +133,7 @@ export function summaryInputs(def: SummaryDefinition, reg: SummaryRegistry): Sum
         : n.type === 'image_input'
           ? s.kind.image
           : n.type === 'task_input'
-            ? s.kind.task
+            ? taskKind(n.config.schema)
             : s.kind.text;
       return {
         id: n.id,
@@ -116,6 +148,12 @@ export function summaryOutputs(def: SummaryDefinition, reg: SummaryRegistry): Su
   return summaryOrder(def.nodes).flatMap((n) => {
     const meta = reg.nodeTypes.get(n.type);
     if (meta?.category !== 'Output' || meta.outputs.length) return [];
+    // An output fed by an Agent with a final report format produces that report.
+    const report = def.edges.some((e) => {
+      const src = def.nodes.find((x) => x.id === e.source);
+      return e.target === n.id && src?.type === 'agent' && src.config.outputSchema !== undefined;
+    });
+    if (report) return [{ id: n.id, name: n.name, meta: s.agentReport }];
     const ports = meta.inputs.map((p) => (copy.editor.ports[p.name] ?? p.name).toLowerCase());
     return [{ id: n.id, name: n.name, meta: copy.editor.cap(copy.editor.names(ports)) }];
   });

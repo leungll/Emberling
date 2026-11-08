@@ -1,30 +1,31 @@
-import { RotateCw } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { ChevronDown, ChevronUp, RotateCw } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react';
 import { useLocation, useNavigate } from 'react-router';
 
 import { DetailsPane } from './DetailsPane';
 import { EventsPanel } from './EventsPanel';
 import { RunBanner, RunHeader } from './RunHeader';
 import { RunGraph } from './RunGraph';
-import { Splitter } from './Splitter';
+import { Splitter } from '@/components/ui/splitter';
 import { TracePanel } from './TracePanel';
 import type { DetailContext } from './detail-context';
 import type { DetailTab } from './detail-tabs';
 import { crumbLabel } from './detail-tabs';
 import { editHref, failureOf } from './run-diagnosis';
-import { elementOfEvent } from './run-events';
-import {
-  ancestors,
-  failFocusId,
-  recordIdOf,
-  stepElementOf,
-  waitInfo,
-  type RunModel,
-} from './run-model';
+import { ancestors, failFocusId, recordIdOf, stepElementOf, waitInfo } from './run-model';
 import {
   LOGS,
-  NARROW_LOGS,
-  SPLIT,
+  DEBUG_KEY,
+  NARROW_PAGE,
+  PANE,
   clearPercent,
   parseRunView,
   runViewSearch,
@@ -43,6 +44,7 @@ import { ApiRequestError } from '@/api/client';
 import { StateBlock } from '@/components/state/StateBlock';
 import { Segmented } from '@/components/ui/segmented';
 import { copyText } from '@/lib/clipboard';
+import { readString, writeString } from '@/lib/storage';
 import { useCopy } from '@/lib/copy';
 import { isTypingTarget, modalOpen } from '@/lib/shortcuts';
 import { shortCode } from '@/lib/short-code';
@@ -66,15 +68,8 @@ interface RunViewProps {
   data: RunData;
   onRetry: () => void;
   onRunAgain: () => void;
-}
-
-function frontierOf(model: RunModel): string {
-  const fail = failFocusId(model);
-  if (fail) return fail;
-  const wait = waitInfo(model);
-  if (wait) return wait.focus;
-  const last = model.events[model.events.length - 1];
-  return !model.terminal && last ? elementOfEvent(model, last).id : 'run';
+  /** Whether the step map fits beside the details pane with full cards. */
+  onGraphFit?: (fits: boolean) => void;
 }
 
 /** An element's width, observed from the moment it mounts (it may mount after a loading state). */
@@ -102,6 +97,7 @@ export function RunView({
   data,
   onRetry,
   onRunAgain,
+  onGraphFit,
 }: RunViewProps) {
   const copy = useCopy();
   const { search } = useLocation();
@@ -128,21 +124,46 @@ export function RunView({
   const [logsPct, setLogsPct] = useState(() =>
     storedPercent(LOGS.key, LOGS.min, LOGS.max, LOGS.fallback),
   );
-  const [splitPct, setSplitPct] = useState(() =>
-    storedPercent(SPLIT.key, SPLIT.min, SPLIT.max, SPLIT.fallback),
+  // The details pane is the reading area, resized from its left edge like the
+  // Editor's side panel; Trace and Events sit in a debug drawer that starts closed.
+  const [paneW, setPaneW] = useState<number | null>(() => {
+    const n = Number.parseInt(readString('local', PANE.key) ?? '', 10);
+    return Number.isFinite(n) ? n : null;
+  });
+  // An address that names a logs view opens the drawer; otherwise the last choice holds.
+  const [debugOpen, setDebugOpen] = useState(
+    () => ui.view !== null || readString('local', DEBUG_KEY) === '1',
   );
+  const showDebug = (on: boolean) => {
+    setDebugOpen(on);
+    writeString('local', DEBUG_KEY, on ? '1' : null);
+  };
   const [rowFocus, setRowFocus] = useState({ id: '', n: 0 });
   const [titleFocus, setTitleFocus] = useState(0);
   const traceSearch = useRef<HTMLInputElement>(null);
   const eventSearch = useRef<HTMLInputElement>(null);
   const viewRef = useRef<HTMLElement>(null);
-  const [splitWidth, splitNode, splitRef] = useWidth<HTMLDivElement>();
+  const [rowWidth, , rowRef] = useWidth<HTMLDivElement>();
   const [leftWidth, leftNode, leftRef] = useWidth<HTMLDivElement>();
-  const narrow = splitWidth > 0 && splitWidth < NARROW_LOGS;
+  const narrow = rowWidth > 0 && rowWidth < NARROW_PAGE;
+  const paneMax = Math.max(PANE.min, Math.round(rowWidth * 0.6));
+  // Until someone sets the pane's width, it leaves the step map the room its cards need at
+  // the zoom floor; the floor itself never lowers.
+  const [graphNeed, setGraphNeed] = useState(0);
+  const paneDefault =
+    graphNeed && rowWidth ? Math.min(PANE.fallback, rowWidth - graphNeed) : PANE.fallback;
+  const paneWidth = Math.max(PANE.min, Math.min(paneMax, paneW ?? paneDefault));
+  const onFit = useCallback(
+    (fits: boolean, needed: number) => {
+      setGraphNeed(needed);
+      onGraphFit?.(fits);
+    },
+    [onGraphFit],
+  );
 
-  const frontier = model ? frontierOf(model) : 'run';
   const following = ui.el === null;
-  const selectedId = model && ui.el && model.byId.has(ui.el) ? ui.el : frontier;
+  // Nothing selected reads the run itself.
+  const selectedId = model && ui.el && model.byId.has(ui.el) ? ui.el : (model?.root.id ?? 'run');
   const selected = model?.byId.get(selectedId) ?? model?.root ?? null;
   const failure = useMemo(
     () => (model ? failureOf(model, registry.tools) : null),
@@ -172,6 +193,7 @@ export function RunView({
 
   const setView = (v: LogsView, focus = false) => {
     storeView(v);
+    showDebug(true);
     update({ view: v });
     if (focus) {
       window.requestAnimationFrame(() => {
@@ -321,21 +343,27 @@ export function RunView({
     target.addEventListener('pointermove', move);
     target.addEventListener('pointerup', up);
   };
-  const dragSplit = (e: PointerEvent<HTMLDivElement>) => {
-    const box = splitNode?.getBoundingClientRect();
-    if (!box || e.button !== 0) return;
+  const setPane = (w: number, save: boolean) => {
+    const v = Math.max(PANE.min, Math.min(paneMax, Math.round(w)));
+    setPaneW(v);
+    if (save) writeString('local', PANE.key, String(v));
+  };
+  const dragPane = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
     e.preventDefault();
     const target = e.currentTarget;
     target.setPointerCapture(e.pointerId);
-    let last = splitPct;
+    const x0 = e.clientX;
+    const w0 = paneWidth;
+    let last = w0;
     const move = (ev: globalThis.PointerEvent) => {
-      last = Math.max(SPLIT.min, Math.min(SPLIT.max, ((ev.clientX - box.left) / box.width) * 100));
-      setSplitPct(last);
+      last = w0 - (ev.clientX - x0);
+      setPane(last, false);
     };
     const up = () => {
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', up);
-      storePercent(SPLIT.key, last);
+      setPane(last, true);
     };
     target.addEventListener('pointermove', move);
     target.addEventListener('pointerup', up);
@@ -522,154 +550,190 @@ export function RunView({
           data.reconnect();
         }}
       />
-      <RunGraph
-        model={model}
-        selectedId={selectedId}
-        onSelect={(id) => {
-          select(id);
-        }}
-      />
-      <Splitter
-        orientation="horizontal"
-        label={copy.runs.logs.resize}
-        value={logsPct}
-        min={LOGS.min}
-        max={LOGS.max}
-        onDrag={dragLogs}
-        onReset={() => {
-          clearPercent(LOGS.key);
-          setLogsPct(LOGS.fallback);
-        }}
-        onKey={(e) => {
-          keyResize(e, ['ArrowDown', 'ArrowUp'], logsPct, 4, LOGS, setLogsPct);
-        }}
-        className="-my-0.5"
-      />
-      <section
-        aria-label={copy.runs.logs.view}
-        style={{ height: `${logsPct.toFixed(2)}%` }}
-        className="flex min-h-0 shrink-0 flex-col bg-surface"
-      >
-        <div ref={splitRef} className="relative flex min-h-0 flex-1">
-          <div
-            ref={leftRef}
-            style={{ width: narrow ? '100%' : `${splitPct.toFixed(2)}%` }}
-            // The drawer covers part of the trace, so what it covers is set aside until it closes.
-            inert={covered}
-            aria-hidden={covered ? true : undefined}
-            className="flex min-w-0 flex-col bg-surface"
-          >
-            {view === 'trace' ? (
-              <TracePanel
-                model={model}
-                viewSwitch={viewSwitch}
-                selectedId={selectedId}
-                isOpen={isOpen}
-                onToggle={(id, open) => {
-                  const el = model.byId.get(id);
-                  const onPath = el && selected ? ancestors(selected).includes(el) : false;
-                  setOpened((o) => {
-                    const n = new Set(o);
-                    if (open) n.add(id);
-                    else n.delete(id);
-                    return n;
-                  });
-                  setClosed((c) => {
-                    const n = new Set(c);
-                    if (!open && onPath) n.add(id);
-                    else n.delete(id);
-                    return n;
-                  });
+      <div ref={rowRef} className="relative flex min-h-0 flex-1">
+        <div
+          ref={leftRef}
+          // The drawer covers part of the page, so what it covers is set aside until it closes.
+          inert={covered}
+          aria-hidden={covered ? true : undefined}
+          className="flex min-w-0 flex-1 flex-col"
+        >
+          <RunGraph
+            model={model}
+            onFit={onFit}
+            selectedId={selectedId}
+            onSelect={(id) => {
+              select(id);
+            }}
+          />
+          {debugOpen ? (
+            <>
+              <Splitter
+                orientation="horizontal"
+                label={copy.runs.logs.resize}
+                value={logsPct}
+                min={LOGS.min}
+                max={LOGS.max}
+                onDrag={dragLogs}
+                onReset={() => {
+                  clearPercent(LOGS.key);
+                  setLogsPct(LOGS.fallback);
                 }}
-                onExpandAll={() => {
-                  setOpened(
-                    new Set(
-                      [...model.byId.values()].filter((x) => x.children.length).map((x) => x.id),
-                    ),
-                  );
-                  setClosed(new Set());
+                onKey={(e) => {
+                  keyResize(e, ['ArrowDown', 'ArrowUp'], logsPct, 4, LOGS, setLogsPct);
                 }}
-                onCollapseAll={() => {
-                  setOpened(new Set());
-                  setClosed(
-                    new Set(
-                      [...model.byId.values()].filter((x) => x.kind === 'step').map((x) => x.id),
-                    ),
-                  );
-                }}
-                onSelect={(id) => {
-                  select(id);
-                }}
-                filter={{ query: ui.tq, failuresOnly: ui.fails }}
-                onFilter={(f) => {
-                  update({ tq: f.query, fails: f.failuresOnly });
-                }}
-                bars={bars}
-                onBars={(on) => {
-                  setBars(on);
-                  storeBars(on);
-                }}
-                width={leftWidth}
-                focusSignal={rowFocus}
-                searchRef={traceSearch}
+                className="-my-0.5"
               />
-            ) : (
-              <EventsPanel
-                model={model}
-                viewSwitch={viewSwitch}
-                selected={selected}
-                filter={{ group: ui.group, query: ui.q, only: ui.only }}
-                onFilter={(f) => {
-                  update({ group: f.group, q: f.query, only: f.only });
+              <section
+                aria-label={copy.runs.logs.view}
+                style={{ height: `${logsPct.toFixed(2)}%` }}
+                className="flex min-h-0 shrink-0 flex-col bg-surface"
+              >
+                {view !== 'events' ? (
+                  <TracePanel
+                    model={model}
+                    viewSwitch={viewSwitch}
+                    selectedId={selectedId}
+                    isOpen={isOpen}
+                    onToggle={(id, open) => {
+                      const el = model.byId.get(id);
+                      const onPath = el && selected ? ancestors(selected).includes(el) : false;
+                      setOpened((o) => {
+                        const n = new Set(o);
+                        if (open) n.add(id);
+                        else n.delete(id);
+                        return n;
+                      });
+                      setClosed((c) => {
+                        const n = new Set(c);
+                        if (!open && onPath) n.add(id);
+                        else n.delete(id);
+                        return n;
+                      });
+                    }}
+                    onExpandAll={() => {
+                      setOpened(
+                        new Set(
+                          [...model.byId.values()]
+                            .filter((x) => x.children.length)
+                            .map((x) => x.id),
+                        ),
+                      );
+                      setClosed(new Set());
+                    }}
+                    onCollapseAll={() => {
+                      setOpened(new Set());
+                      setClosed(
+                        new Set(
+                          [...model.byId.values()]
+                            .filter((x) => x.kind === 'step')
+                            .map((x) => x.id),
+                        ),
+                      );
+                    }}
+                    onSelect={(id) => {
+                      select(id);
+                    }}
+                    filter={{ query: ui.tq, failuresOnly: ui.fails }}
+                    onFilter={(f) => {
+                      update({ tq: f.query, fails: f.failuresOnly });
+                    }}
+                    bars={bars}
+                    onBars={(on) => {
+                      setBars(on);
+                      storeBars(on);
+                    }}
+                    width={leftWidth}
+                    focusSignal={rowFocus}
+                    searchRef={traceSearch}
+                    only={ui.only}
+                    onOnly={(on) => {
+                      update({ only: on });
+                    }}
+                  />
+                ) : (
+                  <EventsPanel
+                    model={model}
+                    viewSwitch={viewSwitch}
+                    selected={selected}
+                    filter={{ group: ui.group, query: ui.q, only: ui.only }}
+                    onFilter={(f) => {
+                      update({ group: f.group, q: f.query, only: f.only });
+                    }}
+                    onSelectEvent={(id) => {
+                      update({ el: id, tab: id === selectedId ? ui.tab : null, only: false });
+                      if (narrow) {
+                        setDrawerOpen(true);
+                        setTitleFocus((n) => n + 1);
+                      }
+                    }}
+                    searchRef={eventSearch}
+                  />
+                )}
+              </section>
+            </>
+          ) : null}
+          <div className="flex h-row-table shrink-0 items-center gap-2 border-t border-border-subtle bg-surface px-2">
+            <button
+              type="button"
+              aria-expanded={debugOpen}
+              onClick={() => {
+                showDebug(!debugOpen);
+              }}
+              className="inline-flex h-control-xs cursor-pointer items-center gap-1.5 rounded-sm border-0 bg-transparent px-2 text-sm text-fg-secondary hover:bg-surface-hover hover:text-fg"
+            >
+              {debugOpen ? (
+                <ChevronDown aria-hidden="true" className="size-icon-sm" />
+              ) : (
+                <ChevronUp aria-hidden="true" className="size-icon-sm" />
+              )}
+              {copy.runs.logs.drawer}
+              <span className="text-fg-muted tabular-nums">{model.events.length}</span>
+            </button>
+            {selected !== model.root ? (
+              <span className="text-sm text-fg-muted">
+                {copy.runs.logs.forElement(crumbLabel(selected))}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        {covered ? (
+          <div aria-hidden="true" onClick={closeDrawer} className="absolute inset-0 z-drawer" />
+        ) : null}
+        {showDetails ? (
+          <aside
+            data-details
+            aria-label={copy.runs.details.label}
+            style={narrow ? { width: 'min(420px, 100%)' } : { width: paneWidth }}
+            className={cn(
+              'relative flex min-w-0 shrink-0 flex-col border-l border-border-subtle bg-surface',
+              narrow && 'absolute inset-y-0 right-0 z-drawer border-border shadow-2',
+            )}
+          >
+            {narrow ? null : (
+              <Splitter
+                orientation="vertical"
+                label={copy.runs.logs.resizeSplit}
+                value={paneWidth}
+                min={PANE.min}
+                max={paneMax}
+                onDrag={dragPane}
+                onReset={() => {
+                  setPaneW(null);
+                  writeString('local', PANE.key, null);
                 }}
-                onSelectEvent={(id) => {
-                  update({ el: id, tab: id === selectedId ? ui.tab : null, only: false });
-                  if (narrow) {
-                    setDrawerOpen(true);
-                    setTitleFocus((n) => n + 1);
-                  }
+                onKey={(e) => {
+                  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                  e.preventDefault();
+                  setPane(paneWidth + (e.key === 'ArrowLeft' ? 24 : -24), true);
                 }}
-                searchRef={eventSearch}
+                className="absolute inset-y-0 -left-0.5"
               />
             )}
-          </div>
-          {narrow ? null : (
-            <Splitter
-              orientation="vertical"
-              label={copy.runs.logs.resizeSplit}
-              value={splitPct}
-              min={SPLIT.min}
-              max={SPLIT.max}
-              onDrag={dragSplit}
-              onReset={() => {
-                clearPercent(SPLIT.key);
-                setSplitPct(SPLIT.fallback);
-              }}
-              onKey={(e) => {
-                keyResize(e, ['ArrowLeft', 'ArrowRight'], splitPct, 2, SPLIT, setSplitPct);
-              }}
-            />
-          )}
-          {covered ? (
-            <div aria-hidden="true" onClick={closeDrawer} className="absolute inset-0 z-drawer" />
-          ) : null}
-          {showDetails ? (
-            <aside
-              data-details
-              aria-label={copy.runs.details.label}
-              style={narrow ? { width: 'min(420px, 100%)' } : undefined}
-              className={cn(
-                'flex min-w-0 flex-col bg-surface',
-                narrow
-                  ? 'absolute inset-y-0 right-0 z-drawer border-l border-border shadow-2'
-                  : 'flex-1',
-              )}
-            >
-              {details}
-            </aside>
-          ) : null}
-        </div>
-      </section>
+            {details}
+          </aside>
+        ) : null}
+      </div>
     </main>
   );
 }

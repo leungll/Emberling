@@ -63,6 +63,8 @@ interface FieldProps {
   optional?: boolean;
   /** Marks a required field with an asterisk read as "required". */
   required?: boolean;
+  /** What the value is for, under the label and before the control. */
+  description?: ReactNode;
   /** Why, what format, or what an empty value does; one sentence under the control. */
   hint?: ReactNode;
   error?: string | null;
@@ -88,6 +90,7 @@ export function Field({
   label,
   optional,
   required,
+  description,
   hint,
   error,
   aside,
@@ -95,9 +98,16 @@ export function Field({
   className,
 }: FieldProps) {
   const id = useId();
+  const descriptionId = `${id}-description`;
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
-  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ');
+  const describedBy = [
+    description ? descriptionId : null,
+    hint ? hintId : null,
+    error ? errorId : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       <div className="flex items-baseline gap-2">
@@ -120,6 +130,11 @@ export function Field({
         </label>
         {aside ? <div className="ml-auto">{aside}</div> : null}
       </div>
+      {description ? (
+        <p id={descriptionId} className="m-0 text-sm text-fg-muted">
+          {description}
+        </p>
+      ) : null}
       {children(
         {
           id,

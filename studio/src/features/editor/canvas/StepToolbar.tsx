@@ -67,7 +67,11 @@ export function StepToolbar({
         q.y < bottom &&
         q.y + q.h > top,
     );
-  const x = v.x + cx * v.zoom;
+  const centre = v.x + cx * v.zoom;
+  // Centred on the selection, but kept inside the canvas when the selection runs past its
+  // edge, so the toolbar never widens the canvas.
+  const half = box.w / 2 + 4;
+  const x = Math.min(Math.max(centre, half), Math.max(half, area.w - half));
   const aboveY = v.y + y0 * v.zoom - 8;
   const belowY = v.y + y1 * v.zoom + 8;
   let side: 'above' | 'below' | 'inside';
@@ -75,7 +79,7 @@ export function StepToolbar({
   else if (!hits(y1, y1 + bh) && belowY + box.h < area.h - FLOAT_H) side = 'below';
   else side = 'inside';
   const y = side === 'above' ? aboveY : side === 'below' ? belowY : v.y + y0 * v.zoom + 4;
-  if (x < -40 || x > area.w + 40 || y < 0 || y > area.h) return null;
+  if (centre < -40 || centre > area.w + 40 || y < 0 || y > area.h) return null;
   const one = shown.length === 1 ? shown[0] : undefined;
 
   return (

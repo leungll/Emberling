@@ -5,6 +5,7 @@ import type { JsonObject, Node, NodeMetadata } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { useCopy } from '@/lib/copy';
 import { useEditor } from '@/features/editor/editor-context';
+import { useEditorStore } from '@/features/editor/editor-store';
 import { issuesFor } from '@/features/editor/model/checks';
 import {
   imageToolsOf,
@@ -16,14 +17,20 @@ import { RunPreview } from './RunPreview';
 import { Disclosure, Section } from './Section';
 import { Connections, HowItRuns, SettingField } from './StepSections';
 import { ToolPicker } from './ToolsField';
+import { ReportResult } from '@/components/values/ReportResult';
+import { hasReport, lastReport } from '@/lib/agent-report';
+import { agentToolFlow } from '@/lib/agent-tools';
+import { AgentRules, HowItWorks } from './AgentGuide';
 
-const DISCLOSURES = ['formats', 'behavior', 'api'] as const;
+// Instructions, tools and limits fold into Advanced on an Agent whose tools are all registered.
+const DISCLOSURES = ['formats', 'behavior', 'api', 'instructions', 'tools', 'limits'] as const;
 type DisclosureId = (typeof DISCLOSURES)[number];
 
+/** The settings that say what a run must give an input step, in the order they are read. */
 const INPUT_FIELDS: Record<string, readonly string[]> = {
-  text_input: ['label', 'required', 'textLength'],
-  task_input: ['label', 'required', 'schema'],
-  image_input: ['label', 'required', 'acceptedMediaTypes', 'maxSizeBytes'],
+  text_input: ['required', 'textLength'],
+  task_input: ['schema', 'required'],
+  image_input: ['required', 'acceptedMediaTypes', 'maxSizeBytes'],
   media_brief: [],
 };
 const OUTPUT_TYPES = ['text_output', 'media_output', 'media_result'];
@@ -42,7 +49,8 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
   const copy = useCopy();
   const t = copy.editor.panel;
   const s = t.sections;
-  const { registry, issues, focusRequest } = useEditor();
+  const { registry, issues, focusRequest, lastRun } = useEditor();
+  const doc = useEditorStore((st) => st.doc);
   const [opened, setOpened] = useState<Partial<Record<DisclosureId, boolean>>>({});
   // Null on mount, so a request that selected this step (an issue, a link from a run) also
   // opens its disclosure: the focus below runs on mount for the same request.
@@ -95,20 +103,26 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
   );
 
   const parts: ReactNode[] = [];
+  // Sections that follow Data flow.
+  const tail: ReactNode[] = [];
   const c = node.config;
   const tools = toolNames(node);
-  const modelSection = () => {
+  const modelSection = (hint?: ReactNode) => {
     const showImage =
       node.type === 'agent' &&
       (imageToolsOf(node, registry.tools).length > 0 || c.imageModelId !== undefined);
     const showReview =
       node.type === 'agent' &&
       (reviewToolsOf(node, registry.tools).length > 0 || c.reviewModelId !== undefined);
-    return section('model', [
-      field('modelId'),
-      showImage ? field('imageModelId') : null,
-      showReview ? field('reviewModelId') : null,
-    ]);
+    return section(
+      'model',
+      [
+        field('modelId'),
+        showImage ? field('imageModelId') : null,
+        showReview ? field('reviewModelId') : null,
+      ],
+      hint ? { hint, title: s.models } : undefined,
+    );
   };
   const behaviorSection = () => {
     const model = typeof c.modelId === 'string' ? registry.models.get(c.modelId) : undefined;
@@ -140,6 +154,87 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
     case 'agent': {
       const counts = tools.some((x) => registry.tools.get(x)?.countsTowardGenerationLimit);
       const formats = ['contextSchema', 'stateSchema', 'outputSchema'];
+      const guide = agentToolFlow(node, registry.tools);
+      if (guide) {
+        const limitFields = ['maxTurns', 'timeoutMs', 'maxGenerationCalls'];
+        const minutes = typeof c.timeoutMs === 'number' ? Math.round(c.timeoutMs / 60000) : null;
+        parts.push(
+          section('how', <HowItWorks steps={guide} />),
+          section('rules', <AgentRules steps={guide} config={c} />),
+          modelSection(
+            tools.some((x) => registry.tools.get(x)?.requiresReviewModel)
+              ? copy.editor.guide.reviewNote
+              : undefined,
+          ),
+        );
+        tail.push(
+          <div key="advanced" className="px-5 pt-4 pb-1">
+            <h3 className="m-0 text-sm font-semibold text-fg">{s.advanced}</h3>
+          </div>,
+          <Disclosure
+            key="instructions"
+            id="instructions"
+            title={s.instructions}
+            open={isOpen('instructions', ['instructions'])}
+            onOpen={setOpen('instructions')}
+          >
+            {field('instructions')}
+          </Disclosure>,
+          <Disclosure
+            key="tools"
+            id="tools"
+            title={s.toolDetails}
+            meta={t.toolDetailsMeta(tools.length)}
+            open={isOpen('tools', ['allowedTools'])}
+            onOpen={setOpen('tools')}
+          >
+            <div className="mb-3 flex justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                data-open-picker
+                onClick={() => setPicker(true)}
+              >
+                <Plus aria-hidden="true" />
+                {copy.editor.fields.addTool}
+              </Button>
+            </div>
+            {field('allowedTools')}
+          </Disclosure>,
+          <Disclosure
+            key="limits"
+            id="limits"
+            title={s.limits}
+            meta={[
+              typeof c.maxTurns === 'number' ? copy.editor.guide.turns(c.maxTurns) : null,
+              minutes !== null ? copy.editor.guide.minutes(minutes) : null,
+            ]
+              .filter(Boolean)
+              .join(', ')}
+            open={isOpen('limits', limitFields)}
+            onOpen={setOpen('limits')}
+          >
+            <p className="m-0 mb-3 text-sm text-fg-muted">{t.limitsHint}</p>
+            {field('maxTurns')}
+            {field('timeoutMs')}
+            {counts || c.maxGenerationCalls !== undefined ? field('maxGenerationCalls') : null}
+          </Disclosure>,
+          <Disclosure
+            key="formats"
+            id="formats"
+            title={s.formats}
+            optional
+            meta={t.formatsMeta(formats.filter((k) => c[k] !== undefined).length)}
+            open={isOpen('formats', formats)}
+            onOpen={setOpen('formats')}
+          >
+            <p className="m-0 mb-3 text-sm text-fg-muted">{t.formatsHint}</p>
+            {formats.map(field)}
+          </Disclosure>,
+          behaviorSection(),
+        );
+        break;
+      }
       parts.push(
         section('instructions', field('instructions')),
         modelSection(),
@@ -199,19 +294,20 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
     case 'text_input':
     case 'task_input':
     case 'image_input':
-    case 'media_brief':
+    case 'media_brief': {
+      // What a run needs, how it looks in the run form, then the names the API and the form
+      // use, which most people never change.
+      const brief = node.type === 'media_brief';
       parts.push(
         section(
-          'runField',
-          <>
-            <RunPreview node={node} />
-            {(INPUT_FIELDS[node.type] ?? []).map(field)}
-            {node.type === 'media_brief' ? (
-              <p className="m-0 text-sm text-fg-muted">{copy.editor.fields.briefHint}</p>
-            ) : null}
-          </>,
-          { hint: t.runFieldHint },
+          'needs',
+          brief ? (
+            <p className="m-0 text-sm text-fg-muted">{copy.editor.fields.briefHint}</p>
+          ) : (
+            (INPUT_FIELDS[node.type] ?? []).map(field)
+          ),
         ),
+        section('runField', <RunPreview node={node} />, { hint: t.runFieldHint }),
         <Disclosure
           key="api"
           id="api"
@@ -219,13 +315,19 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
           meta={
             typeof c.inputKey === 'string' ? <span className="font-mono">{c.inputKey}</span> : null
           }
-          open={isOpen('api', ['inputKey'])}
+          open={isOpen('api', ['label', 'inputKey'])}
           onOpen={setOpen('api')}
         >
+          {brief ? (
+            <p className="m-0 mb-3 text-sm text-fg-muted">{copy.editor.fields.briefLabelHint}</p>
+          ) : (
+            field('label')
+          )}
           {field('inputKey')}
         </Disclosure>,
       );
       break;
+    }
     default:
       if (OUTPUT_TYPES.includes(node.type) || !meta.uiSchema.fields.length) {
         parts.push(
@@ -236,6 +338,9 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
             </p>,
           ),
         );
+        // What this output showed in the last run, through its Agent's report format.
+        const report = lastReport(doc.nodes, doc.edges, node, lastRun.byNode.get(node.id));
+        if (hasReport(report)) parts.push(section('lastResult', <ReportResult report={report} />));
       } else {
         const fields = [...meta.uiSchema.fields]
           .sort((a, b) => a.order - b.order)
@@ -243,7 +348,7 @@ export function StepSettings({ node, meta }: { node: Node; meta: NodeMetadata })
         parts.push(section('settings', fields.map(field)));
       }
   }
-  parts.push(<Connections key="connections" node={node} meta={meta} />);
+  parts.push(<Connections key="connections" node={node} meta={meta} />, ...tail);
 
   return (
     <div ref={body}>

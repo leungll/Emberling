@@ -44,12 +44,13 @@ export function groupOf(meta: NodeMetadata | undefined, type: string): GroupId {
   return byCat ? byCat.id : 'transform';
 }
 
-export function purposeOf(type: string): string {
-  return t.purpose[type] ?? '';
+/** What a step type does: its registered description, else the built-in sentence. */
+export function purposeOf(meta: Pick<NodeMetadata, 'type' | 'description'>): string {
+  return meta.description ?? t.purpose[meta.type] ?? '';
 }
 
-export function portLabel(port: Pick<PortMetadata, 'name'>): string {
-  return t.ports[port.name] ?? t.cap(port.name);
+export function portLabel(port: Pick<PortMetadata, 'name' | 'title'>): string {
+  return port.title ?? t.ports[port.name] ?? t.cap(port.name);
 }
 
 export function typeWord(type: string): string {

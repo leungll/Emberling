@@ -122,6 +122,39 @@ export const en = {
     required: 'required',
   },
 
+  /** The fields of an object schema: what kind of value each one takes. */
+  schemaFields: {
+    oneOf: (options: readonly string[]) => `One of: ${options.join(', ')}`,
+    text: (min: number | undefined, max: number | undefined) => {
+      const n = (x: number) => x.toLocaleString('en-US');
+      if (min !== undefined && max !== undefined && min === max) {
+        return `Text, exactly ${plural(min, 'character')}`;
+      }
+      if (min !== undefined && min > 1 && max !== undefined) {
+        return `Text, ${n(min)} to ${n(max)} characters`;
+      }
+      if (max !== undefined) return `Text, up to ${plural(max, 'character')}`;
+      if (min !== undefined && min > 1) return `Text, at least ${plural(min, 'character')}`;
+      return 'Text';
+    },
+    number: (integer: boolean, min: number | undefined, max: number | undefined) => {
+      const word = integer ? 'Whole number' : 'Number';
+      const n = (x: number) => x.toLocaleString('en-US');
+      if (min !== undefined && max !== undefined) return `${word}, ${n(min)} to ${n(max)}`;
+      if (min !== undefined) return `${word}, ${n(min)} or more`;
+      if (max !== undefined) return `${word}, ${n(max)} or less`;
+      return word;
+    },
+    yesNo: 'Yes/no',
+    object: 'JSON object',
+    list: 'JSON list',
+    empty: 'Empty (null)',
+    anyValue: 'Any JSON value',
+    required: 'Required',
+    optional: 'Optional',
+    choose: 'Choose a value',
+  },
+
   techDetails: 'Technical details',
   close: 'Close',
   done: 'Done',
@@ -197,6 +230,25 @@ export const en = {
     assetIdLabel: 'asset ID',
     artifactIdLabel: 'artifact ID',
     json: 'JSON',
+    video: 'Video',
+    play: (title: string) => `Play ${title}`,
+    openImage: (title: string) => `Open ${title}`,
+    videoFacts: (seconds: string, shape: string) => `${seconds} s, ${shape}`,
+    shape: { vertical: 'vertical', horizontal: 'horizontal', square: 'square' },
+    dimensions: (w: number, h: number) => `${w} × ${h}`,
+  },
+
+  /** Values of any run laid out by shape: a report, a task, a step's output. */
+  values: {
+    yes: 'Yes',
+    no: 'No',
+    passed: 'Passed',
+    passedPhotos: (passed: number, total: number) => `${passed} of ${plural(total, 'photo')}`,
+    didNotPass: 'Did not pass',
+    checksPassed: (passed: number, total: number) =>
+      `${passed} of ${plural(total, 'check')} passed`,
+    completionChecksPassed: (passed: number, total: number) =>
+      `${passed} of ${total} completion ${total === 1 ? 'check' : 'checks'} passed`,
   },
 
   lists: {
@@ -246,6 +298,10 @@ export const en = {
   },
 
   status: {
+    /** What an incomplete goal still lacks, in plain words; the raw code stays in the Data tab. */
+    completionMissing: {
+      FINAL_RESPONSE_MISSING: 'The agent didn’t hand back a final report.',
+    } as Record<string, string>,
     run: {
       RUNNING: { short: 'Running', long: 'Running', help: 'At least one step is running.' },
       PAUSED: {
@@ -716,6 +772,16 @@ export const en = {
     fixJson: 'Fix the JSON to show it as fields.',
     isRequired: (label: string) => `${label} is required.`,
     isNumber: (label: string) => `${label} must be a number.`,
+    isWhole: (label: string) => `${label} must be a whole number.`,
+    isOneOf: (label: string, options: readonly string[]) =>
+      `${label} must be one of: ${options.join(', ')}.`,
+    isObject: (label: string) => `${label} must be a JSON object.`,
+    lengthExactly: (label: string, n: number) =>
+      `${label} must be exactly ${plural(n, 'character')}.`,
+    lengthAtLeast: (label: string, n: number) =>
+      `${label} must be at least ${plural(n, 'character')}.`,
+    lengthAtMost: (label: string, n: number) =>
+      `${label} must be at most ${plural(n, 'character')}.`,
     jsonAt: (line: number, col: number, msg: string) => `Line ${line}, column ${col}: ${msg}`,
     jsonEnds: 'the JSON ends before it is complete',
     starting: 'Starting…',
