@@ -17,8 +17,16 @@ import { Words } from './Words';
 import type { JsonValue, ToolReviewTrace, ToolSettingsTrace, WithheldToolField } from '@/api/types';
 import { FactList, TechnicalDetails } from '@/components/facts/FactList';
 import { JsonViewer } from '@/components/json/JsonViewer';
-import type { MediaRef } from '@/components/media/media-ref';
+import { MediaRow } from '@/components/media/MediaValue';
+import { mediaTypeOf, type MediaField } from '@/components/media/media-field';
+import {
+  resolveMediaUrl,
+  type MediaRef,
+  type MediaResolutionContext,
+} from '@/components/media/media-ref';
+import { useMediaSource } from '@/components/media/media-source';
 import { Gallery, ThumbSet } from '@/components/media/Thumbs';
+import { humanize } from '@/lib/value-reading';
 import { copy as words, useCopy } from '@/lib/copy';
 
 function Sub({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
@@ -79,10 +87,32 @@ function ReviewBlock({ model, value }: { model: RunModel; value: JsonValue }) {
   );
 }
 
+/** How deep a value is searched for served media: a task object inside the run input. */
+const SERVED_DEPTH = 2;
+
 /**
- * A returned value: its images first, as thumbnails with captions, then the review a media
- * result reported, with the JSON one click away. A value without images keeps the JSON
- * viewer as its main view.
+ * The string members of a value that the served media lists or a schema would place as
+ * media, each titled by its key; a nested object is searched one level down.
+ */
+function servedMedia(value: JsonValue | null, source: MediaResolutionContext): MediaField[] {
+  const out: MediaField[] = [];
+  const walk = (v: JsonValue | null, depth: number) => {
+    if (typeof v !== 'object' || v === null || Array.isArray(v) || depth > SERVED_DEPTH) return;
+    for (const [key, member] of Object.entries(v)) {
+      const mediaType = mediaTypeOf(member, undefined, source);
+      if (mediaType && typeof member === 'string' && resolveMediaUrl(member, mediaType, source)) {
+        out.push({ key, title: humanize(key), value: member, mediaType });
+      } else walk(member, depth + 1);
+    }
+  };
+  walk(value, 0);
+  return out;
+}
+
+/**
+ * A returned value: its images first, as thumbnails with captions, the media the run serves
+ * for its values, then the review a media result reported, with the JSON one click away. A
+ * value without media keeps the JSON viewer as its main view.
  */
 export function ValueView({
   ctx,
@@ -97,10 +127,16 @@ export function ValueView({
 }) {
   const copy = useCopy();
   const refs = imagesIn(ctx.model, value);
-  if (!refs.length || value === null) return <JsonViewer value={value} root={root} />;
+  const served = servedMedia(value, useMediaSource());
+  if ((!refs.length && !served.length) || value === null) {
+    return <JsonViewer value={value} root={root} />;
+  }
   return (
     <>
       <Gallery items={mediaItems(ctx.model, refs)} />
+      {served.map((f) => (
+        <MediaRow key={f.key} media={f} />
+      ))}
       <ReviewBlock model={ctx.model} value={value} />
       <TechnicalDetails storageKey={`json-${storageKey}`} label={copy.media.json}>
         <JsonViewer value={value} root={root} />

@@ -1,4 +1,3 @@
-import type { AgentTraceMedia } from '@/api/agent-types';
 import { API_BASE } from '@/api/client';
 import { copy } from '@/lib/copy';
 import { bytes } from '@/lib/time';
@@ -137,9 +136,21 @@ export interface ResolvedMedia {
   mediaType: string | null;
 }
 
-/** What a media value is resolved against: the Agent Trace's media list and the Run input. */
+/** One served media reference: the Run's and the Agent Trace's lists share this shape. */
+export interface ServedMediaItem {
+  ref: string | null;
+  url: string | null;
+  mediaType: string | null;
+}
+
+export interface ServedMedia {
+  items: readonly ServedMediaItem[];
+  truncated: boolean;
+}
+
+/** What a media value is resolved against: the served media lists and the Run input. */
 export interface MediaResolutionContext {
-  media?: AgentTraceMedia | null;
+  media?: ServedMedia | null;
   runInput?: unknown;
 }
 
