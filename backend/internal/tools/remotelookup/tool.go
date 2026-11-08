@@ -96,6 +96,7 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Remote look up",
 			Description:   "Read a deterministic record through an asynchronous Provider task",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),

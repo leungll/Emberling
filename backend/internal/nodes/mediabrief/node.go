@@ -53,11 +53,18 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Media Brief",
+			Description:   "Asks for a photo set and combines it with the incoming brief.",
 			Category:      domain.NodeCategoryInput,
 			ExecutionKind: domain.NodeExecutionSync,
-			Inputs:        []domain.PortMetadata{{Name: briefPort, DataType: domain.PortTypeText, Required: true}},
-			Outputs:       []domain.PortMetadata{{Name: textPort, DataType: domain.PortTypeText, Required: true}},
-			ConfigSchema:  json.RawMessage(configSchema),
+			Inputs: []domain.PortMetadata{{
+				Name: briefPort, DataType: domain.PortTypeText, Required: true,
+				Description: "The creative brief to pair with the photos.",
+			}},
+			Outputs: []domain.PortMetadata{{
+				Name: textPort, DataType: domain.PortTypeText, Required: true,
+				Description: "The brief together with the photo set.",
+			}},
+			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "inputKey", Order: 10, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},
 			}},

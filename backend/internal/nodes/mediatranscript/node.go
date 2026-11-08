@@ -119,13 +119,26 @@ func Registration(ports Ports) (registry.NodeRegistration, error) {
 		Metadata: domain.NodeMetadata{
 			Type:          NodeType,
 			DisplayName:   "Media Transcript",
+			Description:   "Turns the source video into timed sentences.",
 			Category:      domain.NodeCategoryPromptAndModel,
 			ExecutionKind: domain.NodeExecutionAsync,
-			Inputs:        []domain.PortMetadata{{Name: TaskPort, DataType: domain.PortTypeJSON, Required: true}},
+			Inputs: []domain.PortMetadata{{
+				Name: TaskPort, DataType: domain.PortTypeJSON, Required: true,
+				Description: "The request and the source video.",
+			}},
 			Outputs: []domain.PortMetadata{
-				{Name: TranscriptPort, DataType: domain.PortTypeJSON, Required: true},
-				{Name: TaskPort, DataType: domain.PortTypeJSON, Required: true},
-				{Name: AssignmentPort, DataType: domain.PortTypeJSON, Required: true},
+				{
+					Name: TranscriptPort, DataType: domain.PortTypeJSON, Required: true,
+					Description: "Only the timed sentences.",
+				},
+				{
+					Name: TaskPort, DataType: domain.PortTypeJSON, Required: true,
+					Description: "The request and video, unchanged.",
+				},
+				{
+					Name: AssignmentPort, DataType: domain.PortTypeJSON, Required: true,
+					Title: "Task + transcript", Description: "The request and video, plus the transcript. The Agent reads this.",
+				},
 			},
 			ConfigSchema: json.RawMessage(configSchema),
 			// Transcription is deterministic for one source, so repeating the task would be

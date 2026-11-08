@@ -130,6 +130,7 @@ func Registration(generators map[string]ImageGenerator, photos PhotoReader, arti
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Generate image",
 			Description:   "Generate an image asset from one photo of the Run's photo set and a settings object",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),

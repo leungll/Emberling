@@ -209,6 +209,10 @@ export interface PortMetadata {
   name: string;
   dataType: PortDataType;
   required: boolean;
+  /** Optional display name of the handle; omitted when the registration declares none. */
+  title?: string;
+  /** Optional one-line English note on what the handle carries; omitted when none. */
+  description?: string;
 }
 
 export type ExecutionKind = 'SYNC' | 'ASYNC' | 'MANAGED_AGENT';
@@ -286,6 +290,8 @@ export interface FactRequirement {
 export interface NodeMetadata {
   type: string;
   displayName: string;
+  /** Optional plain sentence saying what the step does; omitted when the registration declares none. */
+  description?: string;
   category: string;
   executionKind: ExecutionKind;
   inputs: PortMetadata[];
@@ -311,6 +317,8 @@ export interface ModelMetadata {
 
 export interface ToolMetadata {
   name: string;
+  /** Optional short display name for Studio; omitted when none. `description` stays model-facing. */
+  title?: string;
   description: string;
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;

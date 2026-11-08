@@ -90,6 +90,7 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:                        ToolName,
+			Title:                       "Deploy",
 			Description:                 "Deploy a reviewed patch on a base commit to one service environment",
 			InputSchema:                 json.RawMessage(inputSchema),
 			OutputSchema:                json.RawMessage(outputSchema),

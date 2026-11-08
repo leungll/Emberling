@@ -144,6 +144,7 @@ func Registration(artifacts ArtifactTextStore) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Create change request",
 			Description:   "Create the change request for the workspace's current, verified patch: summary, impact, rollback plan and the decision basis linked to the turns' context manifests",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),

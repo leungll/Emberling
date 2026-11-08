@@ -108,6 +108,7 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Deploy change",
 			Description:   "Release an approved change request to the workspace's deploy target and confirm the deployed version",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(OutputSchema),

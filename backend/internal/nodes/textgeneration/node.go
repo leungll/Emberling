@@ -47,11 +47,18 @@ func Registration(resolver ModelResolver) registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Text Generation",
+			Description:   "Writes text from a prompt with a model.",
 			Category:      domain.NodeCategoryPromptAndModel,
 			ExecutionKind: domain.NodeExecutionSync,
-			Inputs:        []domain.PortMetadata{{Name: "prompt", DataType: domain.PortTypeText, Required: true}},
-			Outputs:       []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
-			ConfigSchema:  json.RawMessage(configSchema),
+			Inputs: []domain.PortMetadata{{
+				Name: "prompt", DataType: domain.PortTypeText, Required: true,
+				Description: "The prompt sent to the model.",
+			}},
+			Outputs: []domain.PortMetadata{{
+				Name: "text", DataType: domain.PortTypeText, Required: true,
+				Description: "The text the model wrote.",
+			}},
+			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "modelId", Order: 10, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityTextGeneration},
 				{Path: "modelConfig", Order: 20, Group: domain.UIGroupModelParameters, Widget: domain.UIWidgetDefault},

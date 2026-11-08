@@ -77,6 +77,7 @@ func Registration(ports Ports) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:            ToolName,
+			Title:           "Read material",
 			Description:     "Read a range of lines of a text artifact of this run",
 			InputSchema:     json.RawMessage(inputSchema),
 			OutputSchema:    json.RawMessage(outputSchema),

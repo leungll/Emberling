@@ -121,13 +121,13 @@ func TestImageGenerationNode_Metadata_MatchesInterfaceSpec(t *testing.T) {
 		t.Fatalf("SideEffect = %+v, want %+v", meta.SideEffect, wantSideEffect)
 	}
 	wantInputs := []domain.PortMetadata{
-		{Name: "prompt", DataType: domain.PortTypeText, Required: true},
-		{Name: "reference", DataType: domain.PortTypeImage, Required: false},
+		{Name: "prompt", DataType: domain.PortTypeText, Required: true, Description: "The prompt sent to the model."},
+		{Name: "reference", DataType: domain.PortTypeImage, Required: false, Title: "Reference image", Description: "An optional image the model follows."},
 	}
 	if len(meta.Inputs) != len(wantInputs) || meta.Inputs[0] != wantInputs[0] || meta.Inputs[1] != wantInputs[1] {
 		t.Fatalf("Inputs = %+v, want %+v", meta.Inputs, wantInputs)
 	}
-	wantOutput := domain.PortMetadata{Name: "image", DataType: domain.PortTypeImage, Required: true}
+	wantOutput := domain.PortMetadata{Name: "image", DataType: domain.PortTypeImage, Required: true, Description: "The generated image."}
 	if len(meta.Outputs) != 1 || meta.Outputs[0] != wantOutput {
 		t.Fatalf("Outputs = %+v, want [%+v]", meta.Outputs, wantOutput)
 	}

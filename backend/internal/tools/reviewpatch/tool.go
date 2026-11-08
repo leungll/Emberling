@@ -146,6 +146,7 @@ func Registration(ports Ports) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Review patch",
 			Description:   "Review the workspace's current patch with the node's independent review model against the repository's rules and advisories; the opinion is kept as a text artifact",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),
