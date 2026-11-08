@@ -31,6 +31,31 @@ func TestParseModelDecision_ToolCallMissingArguments_Fails(t *testing.T) {
 	}
 }
 
+func TestParseModelDecision_InvalidEnvelope_NamesTheBoundedTool(t *testing.T) {
+	_, err := ParseModelDecision(DecisionEnvelope{Kind: domain.DecisionToolCall, ToolName: toolName("generate_image")})
+	if err == nil || !strings.Contains(err.Error(), `"generate_image"`) {
+		t.Fatalf("ParseModelDecision() error = %v, want it to name the tool", err)
+	}
+
+	long := strings.Repeat("x", domain.ManifestLabelMaxRunes*4)
+	_, err = ParseModelDecision(DecisionEnvelope{Kind: domain.DecisionToolCall, ToolName: toolName(long)})
+	if err == nil || strings.Contains(err.Error(), long) {
+		t.Fatalf("ParseModelDecision() error = %v, want the tool name bounded", err)
+	}
+}
+
+// A JSON-encoded null reaches the shape check as a present value; only its absence is the
+// missing-arguments failure, and the Tool's InputSchema rejects the null at execution.
+func TestParseModelDecision_ArgumentsEncodingNull_PassesShapeCheck(t *testing.T) {
+	decision, err := ParseModelDecision(DecisionEnvelope{Kind: domain.DecisionToolCall, ToolName: toolName("lookup"), Arguments: json.RawMessage(`null`)})
+	if err != nil {
+		t.Fatalf("ParseModelDecision() error = %v, want the shape check to pass", err)
+	}
+	if string(decision.Arguments) != "null" {
+		t.Fatalf("decision.Arguments = %q, want the null value kept", decision.Arguments)
+	}
+}
+
 func TestParseModelDecision_FinalWithToolFields_Fails(t *testing.T) {
 	_, err := ParseModelDecision(DecisionEnvelope{
 		Kind:      domain.DecisionFinal,

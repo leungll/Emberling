@@ -219,6 +219,43 @@ func (r *agentTurnRepository) MarkFailed(ctx context.Context, turnID string, now
 	return nil
 }
 
+// MarkFailedWithResponse conditionally moves a RUNNING Turn to FAILED and keeps what the
+// Provider answered and charged. Requiring RUNNING means the charge is written once, by the
+// transaction that won the model call.
+func (r *agentTurnRepository) MarkFailedWithResponse(ctx context.Context, turnID string, now time.Time, execErr domain.ExecutionError, response json.RawMessage, usage *domain.TokenUsage, cost *domain.Cost) error {
+	errPayload, err := marshalExecutionError(&execErr)
+	if err != nil {
+		return fmt.Errorf("store/postgres agent_turns.MarkFailedWithResponse: turn=%s: %w", turnID, err)
+	}
+	tokenUsage, err := marshalTokenUsage(usage)
+	if err != nil {
+		return fmt.Errorf("store/postgres agent_turns.MarkFailedWithResponse: turn=%s: %w", turnID, err)
+	}
+	amount, currency, source, err := costParams(cost)
+	if err != nil {
+		return fmt.Errorf("store/postgres agent_turns.MarkFailedWithResponse: turn=%s: %w", turnID, err)
+	}
+
+	const update = `
+		UPDATE agent_turns
+		   SET status = 'FAILED', error = $2, completed_at = $3, response = $4, token_usage = $5,
+		       cost_amount = $6::numeric, cost_currency = $7, cost_source = $8
+		 WHERE id = $1 AND status = 'RUNNING'`
+	affected, err := affectedRows(ctx, r.conn, "agent_turns.MarkFailedWithResponse", update,
+		turnID, errPayload, now, nullableJSON(response), tokenUsage, amount, currency, source)
+	if err != nil {
+		return err
+	}
+	switch {
+	case affected == 0:
+		return fmt.Errorf("store/postgres agent_turns.MarkFailedWithResponse: turn=%s RUNNING -> FAILED: %w",
+			turnID, domain.ErrStaleClaim)
+	case affected > 1:
+		return errUnexpectedRows("agent_turns.MarkFailedWithResponse", turnID, affected)
+	}
+	return nil
+}
+
 // MarkTimedOut conditionally fails a Turn that is still READY or RUNNING. The wider
 // predicate belongs to the Agent timeout transaction alone: an expired deadline ends the
 // current round whether the model call was ever claimed (RUNNING) or the round was only
