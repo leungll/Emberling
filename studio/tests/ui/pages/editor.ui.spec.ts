@@ -12,6 +12,10 @@ import { errorBody } from '../support/server';
 const canvasReady = async (page: Page) => {
   await expect(page.locator('[data-step-card]').first()).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Side panel' })).toBeVisible();
+  // Both side panels are open on arrival, however little room the steps have.
+  await expect(
+    page.getByRole('complementary', { name: 'Steps' }).getByPlaceholder('Search steps'),
+  ).toBeVisible();
 };
 
 const card = (page: Page, name: string) =>

@@ -1,5 +1,5 @@
 import { useReactFlow } from '@xyflow/react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 
 import type { Bounds, PlaceMap } from '@/features/editor/model/layout';
 import {
@@ -47,14 +47,11 @@ export function useCanvasViewport({
   areaRef,
   bounds,
   ready,
-  onOverflow,
 }: {
   areaRef: RefObject<HTMLDivElement | null>;
   bounds: Bounds;
   /** The steps have their measured sizes, so the opening view can be chosen. */
   ready: boolean;
-  /** The opening view doesn't fit every step. */
-  onOverflow: () => void;
 }) {
   const rf = useReactFlow();
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -62,7 +59,6 @@ export function useCanvasViewport({
   const [minimapAuto, setMinimapAuto] = useState(false);
   // 'auto' keeps the opening view; 'fit' keeps Fit view; 'user' leaves the view alone.
   const [mode, setMode] = useState<'auto' | 'fit' | 'user'>('auto');
-  const overflowed = useRef(false);
   const rect0 = safeRect(
     size.w,
     size.h,
@@ -98,19 +94,15 @@ export function useCanvasViewport({
     if (mode === 'auto') {
       const open = openTarget(rect(), bounds);
       // The editor opens with every step in view at full-card zoom rather than at
-      // reading zoom; when that still overflows, the steps palette collapses to make room.
+      // reading zoom.
       const fit = fitTarget(rect(), bounds);
       const v = open.overflow ? { ...fit, overflow: open.overflow } : open;
-      if (v.overflow && !overflowed.current) {
-        overflowed.current = true;
-        onOverflow();
-      }
       void rf.setViewport({ x: v.x, y: v.y, zoom: v.zoom });
     } else if (mode === 'fit') {
       const v = fitTarget(rect(), bounds);
       void rf.setViewport({ x: v.x, y: v.y, zoom: v.zoom });
     }
-  }, [ready, size, bounds, rect, rf, onOverflow, mode]);
+  }, [ready, size, bounds, rect, rf, mode]);
 
   const animate = useCallback(
     (v: Viewport, next: 'fit' | 'user' = 'user') => {
@@ -173,7 +165,6 @@ export function useCanvasViewport({
   /** Starts over with the opening view, for a newly loaded workflow. */
   const reset = useCallback(() => {
     setMode('auto');
-    overflowed.current = false;
   }, []);
 
   return {
