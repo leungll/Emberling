@@ -372,6 +372,41 @@ type agentRunDTO struct {
 	// Completion is the goal-based completion verdict: null while the Agent Run runs and
 	// for an Agent Run without a goal, which is never evaluated.
 	Completion *agentCompletionDTO `json:"completion"`
+	// LatestState is the State value the Agent Run's current State pointer names.
+	LatestState *latestStateDTO `json:"latestState"`
+}
+
+// latestStateDTO projects the Agent Run's latest State Version. Value is the saved JSON,
+// compacted, when its canonical encoding fits the Trace field bound; otherwise it is null
+// and Withheld says why. The value is never truncated: a cut JSON document would read as
+// a different State.
+type latestStateDTO struct {
+	Version  int             `json:"version"`
+	Value    json.RawMessage `json:"value"`
+	Withheld string          `json:"withheld,omitempty"`
+}
+
+// toLatestStateDTO decides what of the latest State Version the Trace shows. A State
+// Version with no saved value is the empty object the State chain starts from.
+func toLatestStateDTO(version domain.AgentStateVersion, maxFieldBytes int) *latestStateDTO {
+	dto := &latestStateDTO{Version: version.Version, Value: json.RawMessage(`{}`)}
+	if len(version.Value) == 0 {
+		return dto
+	}
+	var decoded any
+	if err := json.Unmarshal(version.Value, &decoded); err != nil {
+		return dto
+	}
+	canonical, err := json.Marshal(decoded)
+	if err != nil {
+		return dto
+	}
+	if len(canonical) > maxFieldBytes {
+		dto.Value, dto.Withheld = json.RawMessage(`null`), withheldTooLarge
+		return dto
+	}
+	dto.Value = canonical
+	return dto
 }
 
 // agentCompletionDTO projects the completion verdict: the task result, every check with
@@ -577,6 +612,7 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			TerminatedAt:          utcTimePtr(trace.AgentRun.TerminatedAt),
 			Error:                 trace.AgentRun.Error,
 			Completion:            toAgentCompletionDTO(trace.Completion),
+			LatestState:           toLatestStateDTO(trace.LatestState, maxFieldBytes),
 		},
 		Turns: turns,
 		Facts: toAgentTraceFactsDTO(trace.Facts),

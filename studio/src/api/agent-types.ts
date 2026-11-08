@@ -162,6 +162,20 @@ export interface AgentRunTrace {
    * without a goal, which the Backend never evaluates.
    */
   completion: AgentCompletion | null;
+  /** The State value the Agent Run's current State pointer names (what the Agent wrote). */
+  latestState: AgentLatestState;
+}
+
+/**
+ * The Agent Run's latest saved State. `value` is the saved JSON while its canonical encoding
+ * fits the Backend's Trace field bound; above it `value` is `null` and `withheld` says why.
+ * The Backend never truncates the value. Version 0 is the empty object.
+ */
+export interface AgentLatestState {
+  version: number;
+  /** The saved JSON value, or `null` when withheld. */
+  value: unknown;
+  withheld?: 'TOO_LARGE';
 }
 
 /**
