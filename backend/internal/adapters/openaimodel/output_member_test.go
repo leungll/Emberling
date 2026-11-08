@@ -1,6 +1,7 @@
 package openaimodel_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -380,5 +381,83 @@ func TestProvider_Generate_StopReasons_AreDistinguishableFromEnvelopeMismatch(t 
 	}
 	if strings.Contains(mismatch, refusedText) || strings.Contains(mismatch, truncatedText) {
 		t.Errorf("envelope mismatch error = %q, must not read as a refusal or truncation", mismatch)
+	}
+}
+
+// annotatedOutputSchema is an object-form Schema whose string members carry
+// contentMediaType at several depths: a top-level property, an array item and a nested
+// object's property.
+const annotatedOutputSchema = `{
+  "type": "object",
+  "properties": {
+    "poster": {"type": ["string", "null"], "contentMediaType": "image/png", "description": "Cover."},
+    "frames": {"type": "array", "items": {"type": "string", "contentMediaType": "image/*"}},
+    "audio": {
+      "type": "object",
+      "properties": {"track": {"type": "string", "contentMediaType": "audio/mpeg"}},
+      "required": ["track"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["poster", "frames", "audio"],
+  "additionalProperties": false
+}`
+
+// containsKey reports whether key appears anywhere in a decoded JSON value.
+func containsKey(value any, key string) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if _, present := typed[key]; present {
+			return true
+		}
+		for _, member := range typed {
+			if containsKey(member, key) {
+				return true
+			}
+		}
+	case []any:
+		for _, member := range typed {
+			if containsKey(member, key) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// contentMediaType is a display annotation for Studio, not a Provider instruction: the
+// request strips it at every depth from both the strict Decision schema and the system
+// prompt, and leaves everything else of the Schema in place.
+func TestProvider_Generate_ContentMediaType_StrippedFromRequest(t *testing.T) {
+	original := []byte(annotatedOutputSchema)
+	sent := append([]byte(nil), original...)
+	body := sendWithOutputSchema(t, sent)
+	schema := body.ResponseFormat.JSONSchema.Schema
+
+	properties, _ := schemaProperties(t, schema)
+	output := decode(t, properties["output"])
+	if containsKey(output, "contentMediaType") {
+		t.Errorf("strict Decision schema output member still carries contentMediaType:\n%s", properties["output"])
+	}
+	want := decode(t, original).(map[string]any)
+	want["type"] = []any{"object", "null"}
+	wantProperties := want["properties"].(map[string]any)
+	delete(wantProperties["poster"].(map[string]any), "contentMediaType")
+	delete(wantProperties["frames"].(map[string]any)["items"].(map[string]any), "contentMediaType")
+	delete(wantProperties["audio"].(map[string]any)["properties"].(map[string]any)["track"].(map[string]any), "contentMediaType")
+	if diff := cmp.Diff(any(want), output); diff != "" {
+		t.Errorf("output member mismatch (-want +got):\n%s", diff)
+	}
+	assertEnvelopeUnchanged(t, schema)
+
+	system := systemContent(t, body)
+	if strings.Contains(system, "contentMediaType") {
+		t.Errorf("system prompt still carries contentMediaType:\n%s", system)
+	}
+	if !strings.Contains(system, `"track"`) || !strings.Contains(system, `"Cover."`) {
+		t.Errorf("system prompt lost part of the final output Schema:\n%s", system)
+	}
+	if !bytes.Equal(sent, original) {
+		t.Errorf("the request mutated the caller's FinalOutputSchema")
 	}
 }

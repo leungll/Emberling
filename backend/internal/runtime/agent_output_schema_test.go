@@ -219,3 +219,133 @@ func TestParseAgentNodeConfig_SchemaNeitherForm_Rejected(t *testing.T) {
 		})
 	}
 }
+
+// mediaOutputSchema wraps member as the single property "media" of an object-form Schema.
+func mediaOutputSchema(member string) string {
+	return `{"type":"object","properties":{"media":` + member + `},"required":["media"],"additionalProperties":false}`
+}
+
+// A string member may carry contentMediaType as a display-only annotation: the subset
+// accepts it on a plain string and on a nullable string, and it constrains nothing.
+func TestParseAgentNodeConfig_ContentMediaTypeOnStringMember_Accepted(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		member string
+	}{
+		{"string", `{"type":"string","contentMediaType":"image/png"}`},
+		{"nullable string", `{"type":["string","null"],"contentMediaType":"image/png"}`},
+		{"null-first nullable string", `{"type":["null","string"],"contentMediaType":"video/mp4"}`},
+		{"wildcard subtype", `{"type":"string","contentMediaType":"image/*"}`},
+		{"structured suffix", `{"type":"string","contentMediaType":"application/ld+json"}`},
+		{"vendor tree", `{"type":"string","contentMediaType":"application/vnd.ms-excel"}`},
+		{"string with enum and description", `{"type":"string","enum":["a","b"],"description":"d","contentMediaType":"text/plain"}`},
+		{"inside array items", `{"type":"array","items":{"type":"string","contentMediaType":"image/jpeg"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := parseWithOutputSchema(mediaOutputSchema(tc.member))
+			if err != nil {
+				t.Fatalf("ParseAgentNodeConfig() error = %v, want contentMediaType accepted on a string member", err)
+			}
+			if cfg.OutputForm != AgentOutputObject {
+				t.Errorf("OutputForm = %q, want %q", cfg.OutputForm, AgentOutputObject)
+			}
+		})
+	}
+}
+
+func TestParseAgentNodeConfig_ContentMediaTypeOutsideStringMember_Rejected(t *testing.T) {
+	const marker = "secret-author-value"
+	for _, tc := range []struct {
+		name    string
+		member  string
+		pointer string
+		rule    string
+	}{
+		{"object member", `{"type":"object","contentMediaType":"image/png","properties":{"a":{"type":"string"}},"required":["a"],"additionalProperties":false}`,
+			`"/properties/media/contentMediaType"`, "string"},
+		{"array member", `{"type":"array","contentMediaType":"image/png","items":{"type":"string"}}`,
+			`"/properties/media/contentMediaType"`, "string"},
+		{"integer member", `{"type":"integer","contentMediaType":"image/png"}`,
+			`"/properties/media/contentMediaType"`, "string"},
+		{"nullable integer member", `{"type":["integer","null"],"contentMediaType":"image/png"}`,
+			`"/properties/media/contentMediaType"`, "string"},
+		{"non-string value", `{"type":"string","contentMediaType":7}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"array value", `{"type":"string","contentMediaType":["image/png"]}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"no slash", `{"type":"string","contentMediaType":"image"}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"empty subtype", `{"type":"string","contentMediaType":"image/"}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"empty type", `{"type":"string","contentMediaType":"/png"}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"two slashes", `{"type":"string","contentMediaType":"image/png/x"}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"space", `{"type":"string","contentMediaType":"image/ png"}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"parameters", `{"type":"string","contentMediaType":"text/plain; charset=utf-8"}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"wildcard type", `{"type":"string","contentMediaType":"*/png"}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+		{"too long", `{"type":"string","contentMediaType":"image/` + strings.Repeat("x", 128) + `"}`,
+			`"/properties/media/contentMediaType"`, "128"},
+		{"contentEncoding", `{"type":"string","contentEncoding":"base64"}`,
+			`"/properties/media/contentEncoding"`, "outside the strict output subset"},
+		{"contentEncoding beside contentMediaType", `{"type":"string","contentMediaType":"image/png","contentEncoding":"base64"}`,
+			`"/properties/media/contentEncoding"`, "outside the strict output subset"},
+		{"non-string value echoes nothing", `{"type":"string","contentMediaType":"` + marker + `"}`,
+			`"/properties/media/contentMediaType"`, "type/subtype"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ace := outputSchemaRejection(t, mediaOutputSchema(tc.member))
+			if !strings.Contains(ace.Message, tc.pointer) {
+				t.Errorf("message = %q, want JSON Pointer %s", ace.Message, tc.pointer)
+			}
+			if !strings.Contains(ace.Message, tc.rule) {
+				t.Errorf("message = %q, want it to name the violated rule (%q)", ace.Message, tc.rule)
+			}
+			if strings.Contains(ace.Error(), marker) || strings.Contains(ace.Error(), "image/png") {
+				t.Errorf("error = %q repeats the Schema's content", ace.Error())
+			}
+		})
+	}
+}
+
+// contentMediaType is never enforced against the FINAL value: a string that is not media
+// still satisfies the frozen Schema, so the keyword can only ever change how Studio shows it.
+func TestValidateFinalOutput_ContentMediaType_NotEnforced(t *testing.T) {
+	schema := json.RawMessage(mediaOutputSchema(`{"type":"string","contentMediaType":"image/png"}`))
+	if _, err := parseWithOutputSchema(string(schema)); err != nil {
+		t.Fatalf("ParseAgentNodeConfig() error = %v", err)
+	}
+	for _, output := range []string{
+		`{"media":"not an image at all"}`,
+		`{"media":"https://example.test/picture.png"}`,
+		`{"media":""}`,
+	} {
+		if err := ValidateFinalOutput(json.RawMessage(output), schema); err != nil {
+			t.Errorf("ValidateFinalOutput(%s) error = %v, want contentMediaType ignored", output, err)
+		}
+	}
+	if err := ValidateFinalOutput(json.RawMessage(`{"media":7}`), schema); err == nil {
+		t.Errorf("ValidateFinalOutput(non-string media) error = nil, want the string type still enforced")
+	}
+}
+
+// contextSchema and stateSchema are compiled, not checked against the strict subset, and
+// the compiler asserts nothing about content: the keyword is accepted and never enforced.
+func TestParseAgentNodeConfig_ContextAndStateSchemaWithContentMediaType_Accepted(t *testing.T) {
+	raw := `{"modelId":"text-model-v1","maxTurns":4,"timeoutMs":120000,` +
+		`"contextSchema":{"type":"object","properties":{"poster":{"type":"string","contentMediaType":"image/png"}}},` +
+		`"stateSchema":{"type":"object","properties":{"clip":{"type":"string","contentMediaType":"video/mp4"}}}}`
+	cfg, err := ParseAgentNodeConfig(json.RawMessage(raw))
+	if err != nil {
+		t.Fatalf("ParseAgentNodeConfig() error = %v, want contentMediaType accepted in contextSchema and stateSchema", err)
+	}
+	if err := validateAgainstSchema(cfg.ContextSchema, json.RawMessage(`{"poster":"plain words"}`)); err != nil {
+		t.Errorf("contextSchema enforced contentMediaType: %v", err)
+	}
+	if err := validateAgainstSchema(cfg.StateSchema, json.RawMessage(`{"clip":"plain words"}`)); err != nil {
+		t.Errorf("stateSchema enforced contentMediaType: %v", err)
+	}
+}

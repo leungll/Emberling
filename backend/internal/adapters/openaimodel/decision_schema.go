@@ -302,20 +302,91 @@ func (s strictDecision) encode(output any) (json.RawMessage, error) {
 // Every other request, a text-form Agent with or without a Schema and Text Generation's
 // string Schema alike, gets a nullable string whose value is the answer text itself, not a
 // JSON encoding of it, described by description.
+//
+// The member is a copy of the Schema with every display annotation removed (see
+// stripDisplayAnnotations); the caller's Schema is never modified.
 func outputMember(finalOutputSchema json.RawMessage, description string) any {
 	plain := map[string]any{"type": []string{"string", "null"}, "description": description}
-	if !present(finalOutputSchema) {
+	root, ok := decodeSchemaObject(finalOutputSchema)
+	if !ok || root["type"] != "object" {
 		return plain
 	}
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(finalOutputSchema, &root); err != nil {
-		return plain
+	stripped := stripDisplayAnnotations(root)
+	stripped["type"] = []string{"object", "null"}
+	return stripped
+}
+
+// displayAnnotationKeywords are Schema keywords that exist for Studio's display of a
+// value and carry no instruction for the Provider: contentMediaType marks a string member
+// as media. They are removed from every Schema sent to the Provider, so the Provider is
+// constrained by exactly what the Runtime validates and sees no keyword its strict mode
+// may reject.
+var displayAnnotationKeywords = []string{"contentMediaType"}
+
+// providerFinalOutputSchema is the final output Schema as the system prompt shows it: the
+// caller's Schema with display annotations stripped at every depth, or the Schema
+// unchanged when it is not a JSON object.
+func providerFinalOutputSchema(finalOutputSchema json.RawMessage) json.RawMessage {
+	root, ok := decodeSchemaObject(finalOutputSchema)
+	if !ok {
+		return finalOutputSchema
 	}
-	if !bytes.Equal(bytes.TrimSpace(root["type"]), []byte(`"object"`)) {
-		return plain
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(stripDisplayAnnotations(root)); err != nil {
+		return finalOutputSchema
 	}
-	root["type"] = json.RawMessage(`["object","null"]`)
-	return root
+	return bytes.TrimSpace(buf.Bytes())
+}
+
+// decodeSchemaObject decodes a Schema that is a JSON object, keeping number literals as
+// the author wrote them.
+func decodeSchemaObject(raw json.RawMessage) (map[string]any, bool) {
+	if !present(raw) {
+		return nil, false
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var document any
+	if err := decoder.Decode(&document); err != nil {
+		return nil, false
+	}
+	root, ok := document.(map[string]any)
+	return root, ok
+}
+
+// stripDisplayAnnotations returns a copy of schema without display annotations, walking
+// the Schema's own structure: each `properties` member and the `items` Schema. Only
+// keyword positions are touched, so a property that happens to be named like an
+// annotation is kept.
+func stripDisplayAnnotations(schema map[string]any) map[string]any {
+	stripped := make(map[string]any, len(schema))
+	for keyword, value := range schema {
+		if slices.Contains(displayAnnotationKeywords, keyword) {
+			continue
+		}
+		switch keyword {
+		case "properties":
+			if properties, ok := value.(map[string]any); ok {
+				copied := make(map[string]any, len(properties))
+				for name, member := range properties {
+					if memberSchema, ok := member.(map[string]any); ok {
+						copied[name] = stripDisplayAnnotations(memberSchema)
+					} else {
+						copied[name] = member
+					}
+				}
+				value = copied
+			}
+		case "items":
+			if itemSchema, ok := value.(map[string]any); ok {
+				value = stripDisplayAnnotations(itemSchema)
+			}
+		}
+		stripped[keyword] = value
+	}
+	return stripped
 }
 
 // parse turns the model's message content into a normalised Decision. Content that is not
