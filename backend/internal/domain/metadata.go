@@ -72,11 +72,15 @@ func (t PortType) IsCompatibleWith(target PortType) bool {
 }
 
 // PortMetadata is one typed handle. Name is the handle identifier used by Edge
-// sourceHandle and targetHandle.
+// sourceHandle and targetHandle. Title and Description are optional display text Studio
+// shows for the handle, bounded by ValidateDisplayLine; empty means none and is omitted on
+// the wire. The Compiler and the Runtime never read them.
 type PortMetadata struct {
-	Name     string   `json:"name"`
-	DataType PortType `json:"dataType"`
-	Required bool     `json:"required"`
+	Name        string   `json:"name"`
+	DataType    PortType `json:"dataType"`
+	Required    bool     `json:"required"`
+	Title       string   `json:"title,omitempty"`
+	Description string   `json:"description,omitempty"`
 }
 
 // UIGroup places a config field in one Properties Panel section.
@@ -151,10 +155,13 @@ const (
 	NodeCategoryOutput         = "Output"
 )
 
-// NodeMetadata is the registered description of one Node Type.
+// NodeMetadata is the registered description of one Node Type. Description is an optional
+// plain sentence saying what the step does, shown by Studio and bounded by
+// ValidateDisplayLine; empty means none and is omitted on the wire.
 type NodeMetadata struct {
 	Type          string            `json:"type"`
 	DisplayName   string            `json:"displayName"`
+	Description   string            `json:"description,omitempty"`
 	Category      string            `json:"category"`
 	ExecutionKind NodeExecutionKind `json:"executionKind"`
 	Inputs        []PortMetadata    `json:"inputs"`
@@ -189,6 +196,9 @@ func (m NodeMetadata) Validate() error {
 	}
 	if !m.ExecutionKind.IsValid() {
 		errs = append(errs, fmt.Errorf("executionKind %q is not a registered execution kind", m.ExecutionKind))
+	}
+	if err := ValidateDisplayLine(m.Description, MaxDisplayDescriptionLength); err != nil {
+		errs = append(errs, fmt.Errorf("description: %w", err))
 	}
 	errs = append(errs, validatePorts("input", m.Inputs)...)
 	errs = append(errs, validatePorts("output", m.Outputs)...)
@@ -290,8 +300,13 @@ func (k ToolExecutionKind) IsValid() bool {
 // ToolMetadata is the registered description of one stable Tool Name. It is the only
 // source of the Tool's schemas, execution mode and side effect policy; the Runtime never
 // infers them from an Executor's Go type or from a returned result.
+//
+// Description is model-facing: it is what the model reads about the Tool in every request.
+// Title is an optional short display name for Studio only, bounded by ValidateDisplayLine
+// and omitted on the wire when empty; it never reaches a model request.
 type ToolMetadata struct {
 	Name          string            `json:"name"`
+	Title         string            `json:"title,omitempty"`
 	Description   string            `json:"description"`
 	InputSchema   json.RawMessage   `json:"inputSchema"`
 	OutputSchema  json.RawMessage   `json:"outputSchema"`
@@ -456,6 +471,9 @@ func (m ToolMetadata) Validate() error {
 	if !m.ExecutionKind.IsValid() {
 		errs = append(errs, fmt.Errorf("executionKind %q is not a registered execution kind", m.ExecutionKind))
 	}
+	if err := ValidateDisplayLine(m.Title, MaxDisplayTitleLength); err != nil {
+		errs = append(errs, fmt.Errorf("title: %w", err))
+	}
 	if err := validateSchemaField("inputSchema", m.InputSchema); err != nil {
 		errs = append(errs, err)
 	}
@@ -576,6 +594,12 @@ func validatePorts(direction string, ports []PortMetadata) []error {
 		}
 		if !port.DataType.IsValid() {
 			errs = append(errs, fmt.Errorf("%s port %s: dataType %q is not a supported port type", direction, label, port.DataType))
+		}
+		if err := ValidateDisplayLine(port.Title, MaxDisplayTitleLength); err != nil {
+			errs = append(errs, fmt.Errorf("%s port %q: title %w", direction, label, err))
+		}
+		if err := ValidateDisplayLine(port.Description, MaxDisplayDescriptionLength); err != nil {
+			errs = append(errs, fmt.Errorf("%s port %q: description %w", direction, label, err))
 		}
 	}
 	return errs
