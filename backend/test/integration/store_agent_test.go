@@ -412,6 +412,47 @@ func listTurnsOfAgentRun(ctx context.Context, t *testing.T, uow store.UnitOfWork
 	return turns
 }
 
+func TestAgentTurnStore_MarkFailedWithResponse_OnlyFromRunning(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Open(t)
+	uow := postgres.NewUnitOfWork(pool)
+
+	f := seedRun(ctx, t, uow)
+	createAgentRun(ctx, t, uow, newAgentRun("ar_1", f.nodeRunID))
+	createAgentTurn(ctx, t, uow, newAgentTurn("turn_1", "ar_1", 1))
+	execErr := domain.ExecutionError{Code: "INVALID_ACTION", Message: "unusable answer"}
+	usage := &domain.TokenUsage{InputTokens: 3, OutputTokens: 2, TotalTokens: 5}
+	cost := &domain.Cost{Amount: "0.06", Currency: domain.CurrencyUSD, Source: "model-1"}
+	markFailed := func() error {
+		return uow.WithinTx(ctx, func(ctx context.Context, tx store.Tx) error {
+			return tx.AgentTurns().MarkFailedWithResponse(ctx, "turn_1", fixtureTime, execErr,
+				json.RawMessage(`{"kind":"TOOL_CALL","responseSha256":"abc"}`), usage, cost)
+		})
+	}
+
+	if err := markFailed(); !errors.Is(err, domain.ErrStaleClaim) {
+		t.Fatalf("MarkFailedWithResponse on a READY Turn: want domain.ErrStaleClaim, got %v", err)
+	}
+	if turn := getAgentTurn(ctx, t, uow, "turn_1"); len(turn.Response) != 0 || turn.TokenUsage != nil || turn.Cost != nil {
+		t.Fatalf("a stale claim wrote response=%q usage=%+v cost=%+v", turn.Response, turn.TokenUsage, turn.Cost)
+	}
+
+	claimTurn(ctx, t, uow, f.runID, "turn_1")
+	if err := markFailed(); err != nil {
+		t.Fatalf("MarkFailedWithResponse on the claimed Turn: %v", err)
+	}
+	turn := getAgentTurn(ctx, t, uow, "turn_1")
+	if turn.Status != domain.AgentTurnFailed || len(turn.Response) == 0 ||
+		turn.TokenUsage == nil || turn.TokenUsage.TotalTokens != 5 || turn.Cost == nil {
+		t.Fatalf("failed Turn = %+v, want FAILED with its response, usage and Cost", turn)
+	}
+
+	// A second writer loses, so the charge is recorded once.
+	if err := markFailed(); !errors.Is(err, domain.ErrStaleClaim) {
+		t.Fatalf("second MarkFailedWithResponse: want domain.ErrStaleClaim, got %v", err)
+	}
+}
+
 func TestAgentTurnStore_MarkCompleted_NotRunning_StaleClaim(t *testing.T) {
 	ctx := context.Background()
 	pool := testdb.Open(t)

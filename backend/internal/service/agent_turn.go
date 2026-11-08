@@ -38,7 +38,7 @@ type agentFailedPayload struct {
 }
 
 // agentTurnResponse is the bounded record of what the Provider answered, written on the
-// Turn together with its COMPLETED status (AgentTurn.Response).
+// Turn together with its terminal status (AgentTurn.Response).
 // It is the normalised response summary and nothing else: no Provider-private response
 // structure, no credential or header, and not a second copy of the Decision, which is its
 // own immutable row.
@@ -116,7 +116,7 @@ func (s *ExecutionService) AdvanceAgentTurn(ctx context.Context, turnID string, 
 		const code = "MODEL_ERROR"
 		s.logExecutionFailure(ctx, "agent model call failed", code, genErr,
 			"run_id", call.runID, "agent_run_id", call.agentRunID, "turn_id", call.turnID)
-		return s.failAgentTurn(ctx, *call, domain.TerminationModelError, boundedExecutionError(code, genErr))
+		return s.failAgentTurn(ctx, *call, domain.TerminationModelError, boundedExecutionError(code, genErr), nil)
 	}
 
 	decision, parseErr := runtime.ParseModelDecision(runtime.DecisionEnvelope{
@@ -132,7 +132,7 @@ func (s *ExecutionService) AdvanceAgentTurn(ctx context.Context, turnID string, 
 		// committed Action executes.
 		return s.failAgentTurn(ctx, *call, domain.TerminationInvalidAction, domain.ExecutionError{
 			Code: "INVALID_ACTION", Message: parseErr.Error(),
-		})
+		}, &response)
 	}
 
 	return s.commitAgentDecision(ctx, *call, decision, response)
@@ -355,14 +355,9 @@ func (s *ExecutionService) commitAgentDecision(ctx context.Context, call agentMo
 		}
 		now := s.deps.Clock.Now()
 
-		responseBytes, err := json.Marshal(agentTurnResponse{
-			Kind:              decision.Kind,
-			ProviderRequestID: response.ResponseSummary.ProviderRequestID,
-			FinishReason:      response.ResponseSummary.FinishReason,
-			ResponseSHA256:    response.ResponseSummary.ResponseSHA256,
-		})
+		responseBytes, err := encodeAgentTurnResponse(decision.Kind, response.ResponseSummary)
 		if err != nil {
-			return fmt.Errorf("execution: encode agent turn response: %w", err)
+			return err
 		}
 
 		// MarkCompleted is conditional on the Turn still being RUNNING: it is what decides
@@ -446,8 +441,10 @@ func (s *ExecutionService) commitAgentDecision(ctx context.Context, call agentMo
 // (MODEL_ERROR) and an unusable decision envelope (INVALID_ACTION). Both commit the same
 // facts: the Turn fails, the Agent Run records why it stopped, the Agent NodeRun fails and
 // the Run re-aggregates -- with no Decision and no Action, because neither was ever a
-// committed fact.
-func (s *ExecutionService) failAgentTurn(ctx context.Context, call agentModelCall, termination domain.AgentTermination, execError domain.ExecutionError) error {
+// committed fact. answer is the Provider's response when the call answered and the answer
+// was unusable, nil when there is none: a charged call keeps its summary, usage and Cost
+// even though it produced no Decision.
+func (s *ExecutionService) failAgentTurn(ctx context.Context, call agentModelCall, termination domain.AgentTermination, execError domain.ExecutionError, answer *registry.ModelResponse) error {
 	var notifyRunID string
 	var lastSeq int64
 
@@ -466,7 +463,12 @@ func (s *ExecutionService) failAgentTurn(ctx context.Context, call agentModelCal
 		}
 		now := s.deps.Clock.Now()
 
-		if err := s.terminateAgentLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, termination, execError, now); err != nil {
+		if answer == nil {
+			err = s.terminateAgentLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, termination, execError, now)
+		} else {
+			err = s.terminateAnsweredAgentTurnLocked(ctx, tx, lock, nodeRun, agentRun, call.turnID, termination, execError, *answer, now)
+		}
+		if err != nil {
 			return err
 		}
 		notifyRunID = call.runID
@@ -483,6 +485,53 @@ func (s *ExecutionService) failAgentTurn(ctx context.Context, call agentModelCal
 		s.postCommit(notifyRunID, lastSeq)
 	}
 	return nil
+}
+
+// terminateAnsweredAgentTurnLocked is terminateAgentLocked for a Turn whose model call
+// answered: the same terminal facts, with the answer's record written on the failed Turn.
+// The Turn is updated first, so the Agent NodeRun's usage total counts this call.
+func (s *ExecutionService) terminateAnsweredAgentTurnLocked(
+	ctx context.Context,
+	tx store.Tx,
+	lock *store.RunLock,
+	nodeRun domain.NodeRun,
+	agentRun domain.AgentRun,
+	turnID string,
+	termination domain.AgentTermination,
+	execError domain.ExecutionError,
+	answer registry.ModelResponse,
+	now time.Time,
+) error {
+	// The kind is unvalidated model output on this path, so only a known value is kept.
+	kind := domain.DecisionKind(answer.Decision.Kind)
+	if !kind.IsValid() {
+		kind = ""
+	}
+	responseBytes, err := encodeAgentTurnResponse(kind, answer.ResponseSummary)
+	if err != nil {
+		return err
+	}
+	if err := tx.AgentTurns().MarkFailedWithResponse(ctx, turnID, now, execError, responseBytes, answer.TokenUsage, answer.Cost); err != nil {
+		if errors.Is(err, domain.ErrStaleClaim) {
+			return errAgentTurnSuperseded
+		}
+		return err
+	}
+	return s.terminateAgentRunLocked(ctx, tx, lock, nodeRun, agentRun, turnID, termination, execError, now)
+}
+
+// encodeAgentTurnResponse builds the bounded record stored on a Turn.
+func encodeAgentTurnResponse(kind domain.DecisionKind, summary registry.ModelResponseSummary) (json.RawMessage, error) {
+	encoded, err := json.Marshal(agentTurnResponse{
+		Kind:              kind,
+		ProviderRequestID: summary.ProviderRequestID,
+		FinishReason:      summary.FinishReason,
+		ResponseSHA256:    summary.ResponseSHA256,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("execution: encode agent turn response: %w", err)
+	}
+	return encoded, nil
 }
 
 // terminateAgentLocked writes one Agent Run's terminal facts inside a transaction whose

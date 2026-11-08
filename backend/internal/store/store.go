@@ -536,6 +536,12 @@ type AgentTurnRepository interface {
 	// completed_at. A failed Turn may have no Decision and no Action.
 	MarkFailed(ctx context.Context, turnID string, now time.Time, execErr domain.ExecutionError) error
 
+	// MarkFailedWithResponse is MarkFailed for a model call that did answer but whose
+	// answer cannot become a Decision: the bounded response, the reported token usage and
+	// the reported Cost (nil when none) are written with the failure. It returns
+	// domain.ErrStaleClaim when the Turn is not RUNNING.
+	MarkFailedWithResponse(ctx context.Context, turnID string, now time.Time, execErr domain.ExecutionError, response json.RawMessage, usage *domain.TokenUsage, cost *domain.Cost) error
+
 	// MarkTimedOut conditionally fails a Turn that is still READY or RUNNING. It exists
 	// for the Agent timeout transaction alone: the deadline ends the current
 	// Turn whether or not anyone ever claimed it, which is the one case in which a Turn

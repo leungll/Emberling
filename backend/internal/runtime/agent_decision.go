@@ -57,7 +57,7 @@ func ParseModelDecision(envelope DecisionEnvelope) (domain.AgentDecision, error)
 	// domain.AgentDecision.Validate is the same rule the agent_decisions CHECK constraint
 	// enforces; reusing it keeps the pre-commit check and the persisted invariant single.
 	if err := decision.Validate(); err != nil {
-		return domain.AgentDecision{}, &InvalidActionError{Subject: "decision", Message: "model decision has an invalid envelope shape", Err: err}
+		return domain.AgentDecision{}, &InvalidActionError{Subject: "decision", Message: invalidEnvelopeMessage(envelope.ToolName), Err: err}
 	}
 
 	switch decision.Kind {
@@ -80,6 +80,16 @@ func ParseModelDecision(envelope DecisionEnvelope) (domain.AgentDecision, error)
 		}
 	}
 	return decision, nil
+}
+
+// invalidEnvelopeMessage names the Tool the model chose, when it chose one, because no
+// Decision row will exist to show it. The name is model output, so it is quoted and bounded.
+func invalidEnvelopeMessage(toolName *string) string {
+	const message = "model decision has an invalid envelope shape"
+	if toolName == nil {
+		return message
+	}
+	return fmt.Sprintf("%s for tool %q", message, truncateManifestLabel(*toolName))
 }
 
 // ValidateToolCall is the execution-time check of a committed TOOL_CALL Decision:

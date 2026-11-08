@@ -341,6 +341,65 @@ func TestAgentDecision_BasicShapeInvalid_TerminatesInvalidActionNoDecisionRow(t 
 	assertAgentTerminated(t, h, run.ID, outcome, domain.TerminationInvalidAction)
 }
 
+// TestAgentDecision_BasicShapeInvalid_KeepsTheAnsweredCall covers what an unusable decision
+// envelope leaves behind. The Provider did answer and charge for the call, so the failed
+// Turn keeps the bounded response summary, the token usage and the Cost, and the Agent
+// NodeRun's usage total counts it, while no Decision or Action is committed.
+func TestAgentDecision_BasicShapeInvalid_KeepsTheAnsweredCall(t *testing.T) {
+	h := newAgentHarness(t, agentHarnessOptions{})
+	h.provider.Script = func(registry.ModelRequest) *mockmodel.Scenario {
+		return &mockmodel.Scenario{Kind: mockmodel.ScenarioInvalidDecision}
+	}
+	def := h.saveDefinition(agentLoopDefinition("wf-agent-invalid-decision-record"))
+	run := h.createRun(def.WorkflowID, def.Version, `{"question":"`+agentQuestion+`"}`)
+	outcome := h.claimAgentNode(run.ID)
+
+	h.execute(outcome)
+
+	assertAgentTerminated(t, h, run.ID, outcome, domain.TerminationInvalidAction)
+	turn := getAgentTurn(h.ctx, t, h.uow, outcome.AgentTurnID)
+	var response struct {
+		Kind           string `json:"kind"`
+		ResponseSHA256 string `json:"responseSha256"`
+	}
+	if err := json.Unmarshal(turn.Response, &response); err != nil {
+		t.Fatalf("failed turn response %q: %v", turn.Response, err)
+	}
+	if response.Kind != string(domain.DecisionToolCall) || response.ResponseSHA256 == "" {
+		t.Errorf("failed turn response = %+v, want the TOOL_CALL kind and a response hash", response)
+	}
+	if turn.TokenUsage == nil || turn.TokenUsage.TotalTokens == 0 {
+		t.Fatalf("failed turn token usage = %+v, want the usage the Provider reported", turn.TokenUsage)
+	}
+	if turn.Cost == nil {
+		t.Errorf("failed turn records no Cost, want the charge the Provider reported")
+	}
+	nodeRun := agentNodeRun(h.ctx, t, h.uow, run.ID)
+	if nodeRun.TokenUsage == nil || nodeRun.TokenUsage.TotalTokens != turn.TokenUsage.TotalTokens {
+		t.Errorf("node run token usage = %+v, want the failed turn's %+v", nodeRun.TokenUsage, turn.TokenUsage)
+	}
+}
+
+// TestAgentModelError_RecordsNoResponse is the boundary of the rule above: a Provider call
+// that produced no usable answer has no summary, usage or Cost to keep.
+func TestAgentModelError_RecordsNoResponse(t *testing.T) {
+	h := newAgentHarness(t, agentHarnessOptions{})
+	h.provider.Script = func(registry.ModelRequest) *mockmodel.Scenario {
+		return &mockmodel.Scenario{Kind: mockmodel.ScenarioFail}
+	}
+	def := h.saveDefinition(agentLoopDefinition("wf-agent-model-error-record"))
+	run := h.createRun(def.WorkflowID, def.Version, `{"question":"`+agentQuestion+`"}`)
+	outcome := h.claimAgentNode(run.ID)
+
+	h.execute(outcome)
+
+	assertAgentTerminated(t, h, run.ID, outcome, domain.TerminationModelError)
+	turn := getAgentTurn(h.ctx, t, h.uow, outcome.AgentTurnID)
+	if len(turn.Response) != 0 || turn.TokenUsage != nil || turn.Cost != nil {
+		t.Errorf("model error turn response=%q usage=%+v cost=%+v, want none recorded", turn.Response, turn.TokenUsage, turn.Cost)
+	}
+}
+
 // assertAgentTerminated is the shared assertion of the two model-result failure paths:
 // both commit the same facts and differ only in the recorded termination reason (every
 // non-FINAL_RESPONSE termination fails the Agent NodeRun).
