@@ -210,6 +210,7 @@ export function agentTrace(
       terminatedAt: null,
       error: null,
       completion: null,
+      latestState: { version: 1, value: {} },
       ...extra,
     },
     turns,

@@ -252,11 +252,13 @@ func (d Deps) getNodeRunDetail(w http.ResponseWriter, r *http.Request) {
 //
 // The DTOs below are deliberately narrower than the domain entities they project. An
 // Agent Run's frozen Instructions, Model config and Schemas, a Turn's model request and
-// response, a Decision's arguments, output and response summary, and a Tool Attempt's
-// input and result are all execution payloads, and the Tool Attempt's callback token hash
-// is a Secret: none of them is a field here, so no future change to a domain
-// struct can leak one through this response. The only Tool input and result members
-// shown are the named, type-checked ones agent_trace_tool_view.go selects.
+// response, a Decision's arguments, state patch, output and response summary, a Tool
+// Attempt's input and result, and the Context version chain are all execution payloads,
+// and the Tool Attempt's callback token hash is a Secret: none of them is a field here, so
+// no future change to a domain struct can leak one through this response. The only Tool
+// input and result members shown are the named, type-checked ones
+// agent_trace_tool_view.go selects, and the only State content shown is the Agent Run's
+// latest State value, bounded by the Trace field bound and withheld above it.
 
 // agentTraceResponse is the whole projection: the Agent Run, its Turns in persisted
 // order, the execution facts it recorded, and its generation budget.
@@ -370,6 +372,41 @@ type agentRunDTO struct {
 	// Completion is the goal-based completion verdict: null while the Agent Run runs and
 	// for an Agent Run without a goal, which is never evaluated.
 	Completion *agentCompletionDTO `json:"completion"`
+	// LatestState is the State value the Agent Run's current State pointer names.
+	LatestState *latestStateDTO `json:"latestState"`
+}
+
+// latestStateDTO projects the Agent Run's latest State Version. Value is the saved JSON,
+// compacted, when its canonical encoding fits the Trace field bound; otherwise it is null
+// and Withheld says why. The value is never truncated: a cut JSON document would read as
+// a different State.
+type latestStateDTO struct {
+	Version  int             `json:"version"`
+	Value    json.RawMessage `json:"value"`
+	Withheld string          `json:"withheld,omitempty"`
+}
+
+// toLatestStateDTO decides what of the latest State Version the Trace shows. A State
+// Version with no saved value is the empty object the State chain starts from.
+func toLatestStateDTO(version domain.AgentStateVersion, maxFieldBytes int) *latestStateDTO {
+	dto := &latestStateDTO{Version: version.Version, Value: json.RawMessage(`{}`)}
+	if len(version.Value) == 0 {
+		return dto
+	}
+	var decoded any
+	if err := json.Unmarshal(version.Value, &decoded); err != nil {
+		return dto
+	}
+	canonical, err := json.Marshal(decoded)
+	if err != nil {
+		return dto
+	}
+	if len(canonical) > maxFieldBytes {
+		dto.Value, dto.Withheld = json.RawMessage(`null`), withheldTooLarge
+		return dto
+	}
+	dto.Value = canonical
+	return dto
 }
 
 // agentCompletionDTO projects the completion verdict: the task result, every check with
@@ -575,6 +612,7 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			TerminatedAt:          utcTimePtr(trace.AgentRun.TerminatedAt),
 			Error:                 trace.AgentRun.Error,
 			Completion:            toAgentCompletionDTO(trace.Completion),
+			LatestState:           toLatestStateDTO(trace.LatestState, maxFieldBytes),
 		},
 		Turns: turns,
 		Facts: toAgentTraceFactsDTO(trace.Facts),

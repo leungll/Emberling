@@ -200,6 +200,10 @@ type AgentTrace struct {
 	// Completion is the goal-based completion verdict, nil while the Agent Run has not
 	// terminated and for an Agent Run that froze no goal.
 	Completion *domain.AgentCompletion
+	// LatestState is the State Version the Agent Run's current State pointer names, read
+	// in the same transaction. State Versions are immutable and committed before the
+	// pointer moves to them, so this is the value the next Turn would read.
+	LatestState domain.AgentStateVersion
 }
 
 // AgentTraceTurn is one round: the Turn, the single Decision and Action it committed (both
@@ -374,8 +378,12 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		if err != nil {
 			return err
 		}
+		latestState, err := tx.AgentStateVersions().GetByRunAndVersion(ctx, agentRun.ID, agentRun.CurrentStateVersion)
+		if err != nil {
+			return err
+		}
 		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget,
-			Workspace: workspace, ChangeRequests: changeRequests, Completion: completion}
+			Workspace: workspace, ChangeRequests: changeRequests, Completion: completion, LatestState: latestState}
 		return nil
 	})
 	if err != nil {
