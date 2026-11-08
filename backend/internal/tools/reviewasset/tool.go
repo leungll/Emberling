@@ -124,6 +124,11 @@ func Registration(ports Ports) registry.ToolRegistration {
 			}},
 			UsesReviewModel:       true,
 			ReviewModelCapability: domain.ModelCapabilityVisionInput,
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/styleRequirement", Title: "Style requirement"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/reasons", Title: "Reasons"},
+			},
 		},
 		Executor: Executor{ports: ports},
 	}

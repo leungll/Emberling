@@ -131,6 +131,12 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 			UsesWorkspace:               true,
 			Reconcilable:                true,
 			OccupiesReleaseTarget:       true,
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/changeRequestId", Title: "Change request"},
+				{Source: domain.FactPointerResult, Pointer: "/version", Title: "Version"},
+				{Source: domain.FactPointerResult, Pointer: "/healthy", Title: "Healthy"},
+				{Source: domain.FactPointerResult, Pointer: "/reason", Title: "Reason"},
+			},
 		},
 		Executor: New(baseURL, client),
 	}

@@ -1,3 +1,4 @@
+import type { AgentTraceMedia } from '@/api/agent-types';
 import { API_BASE } from '@/api/client';
 import { copy } from '@/lib/copy';
 import { bytes } from '@/lib/time';
@@ -128,4 +129,72 @@ export function mediaMeta(ref: MediaRef): string {
   return [mediaFormat(ref), ref.sizeBytes !== null ? bytes(ref.sizeBytes) : '']
     .filter(Boolean)
     .join(', ');
+}
+
+/** A media value resolved to the address that serves it, with the media type it is known by. */
+export interface ResolvedMedia {
+  url: string;
+  mediaType: string | null;
+}
+
+/** What a media value is resolved against: the Agent Trace's media list and the Run input. */
+export interface MediaResolutionContext {
+  media?: AgentTraceMedia | null;
+  runInput?: unknown;
+}
+
+/**
+ * Where a media value (an artifact id, a digest, a URL a Tool returned) is loaded from. A
+ * value resolves only through a fact the Backend served: first the Trace `media` item whose
+ * `ref` equals it exactly, whose `url` is then the address (a withheld `url` resolves to
+ * nothing, not to a guess); otherwise an AssetRef of the Run input whose `assetId` equals
+ * it, served by the asset content route. Anything else is not an address, and the caller
+ * shows the value as text. The media type comes from the matching fact when it names one.
+ */
+export function resolveMediaUrl(
+  value: string,
+  mediaType: string | null,
+  ctx: MediaResolutionContext,
+): ResolvedMedia | null {
+  if (value === '') return null;
+  const item = ctx.media?.items.find((candidate) => candidate.ref === value);
+  if (item) {
+    return item.url === null ? null : { url: item.url, mediaType: item.mediaType ?? mediaType };
+  }
+  const asset = runInputAssets(ctx.runInput).find((candidate) => candidate.assetId === value);
+  if (asset) {
+    return {
+      url: `${API_BASE}/assets/${encodeURIComponent(asset.assetId)}/content`,
+      mediaType: asset.mediaType ?? mediaType,
+    };
+  }
+  return null;
+}
+
+interface RunInputAsset {
+  assetId: string;
+  mediaType: string | null;
+}
+
+/** Every AssetRef-shaped object in the Run input (an `assetId` with its media type), once each. */
+function runInputAssets(runInput: unknown): RunInputAsset[] {
+  const out: RunInputAsset[] = [];
+  const seen = new Set<string>();
+  const walk = (raw: unknown, depth: number) => {
+    if (depth > MAX_DEPTH || raw === null || raw === undefined) return;
+    const v = parseJsonText(raw);
+    if (Array.isArray(v)) {
+      for (const x of v) walk(x, depth + 1);
+      return;
+    }
+    if (!isObj(v)) return;
+    const assetId = str(v.assetId);
+    if (assetId && !seen.has(assetId)) {
+      seen.add(assetId);
+      out.push({ assetId, mediaType: str(v.mediaType) });
+    }
+    for (const x of Object.values(v)) walk(x, depth + 1);
+  };
+  walk(runInput, 0);
+  return out;
 }

@@ -399,6 +399,7 @@ func (r *ToolRegistry) Register(reg ToolRegistration) error {
 	}
 	if len(reg.Metadata.InputSchema) > 0 && len(reg.Metadata.OutputSchema) > 0 {
 		errs = append(errs, validateToolFactPointers(reg.Metadata)...)
+		errs = append(errs, validateToolDisplayPointers(reg.Metadata)...)
 	}
 	if reg.Executor == nil {
 		errs = append(errs, fmt.Errorf("tool %q: executor is missing", reg.Metadata.Name))

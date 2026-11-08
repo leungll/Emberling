@@ -204,6 +204,12 @@ type AgentTrace struct {
 	// in the same transaction. State Versions are immutable and committed before the
 	// pointer moves to them, so this is the value the next Turn would read.
 	LatestState domain.AgentStateVersion
+	// Media lists the media the SUCCEEDED Tool Attempts above produced, as the Tools'
+	// registered media links declare them, read from the same committed results.
+	Media AgentTraceMedia
+	// ToolDisplay holds, per Tool Name with an Attempt above, the members the Registry
+	// currently declares for display, so the projection shows only declared members.
+	ToolDisplay map[string][]domain.ToolDisplayField
 }
 
 // AgentTraceTurn is one round: the Turn, the single Decision and Action it committed (both
@@ -383,7 +389,8 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 			return err
 		}
 		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget,
-			Workspace: workspace, ChangeRequests: changeRequests, Completion: completion, LatestState: latestState}
+			Workspace: workspace, ChangeRequests: changeRequests, Completion: completion, LatestState: latestState,
+			Media: agentTraceMedia(rounds, s.deps.Tools), ToolDisplay: agentTraceToolDisplay(rounds, s.deps.Tools)}
 		return nil
 	})
 	if err != nil {

@@ -98,6 +98,12 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 			ExecutionKind:               domain.ToolExecutionSync,
 			Requires:                    []domain.FactRequirement{},
 			CountsTowardGenerationLimit: false,
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/target/service", Title: "Service"},
+				{Source: domain.FactPointerArguments, Pointer: "/target/environment", Title: "Environment"},
+				{Source: domain.FactPointerArguments, Pointer: "/baseCommit", Title: "Base commit"},
+				{Source: domain.FactPointerResult, Pointer: "/version", Title: "Version"},
+			},
 		},
 		Executor: New(baseURL, client),
 	}

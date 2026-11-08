@@ -391,6 +391,37 @@ export interface ToolMetadata {
    * calls are refused before any Attempt exists. Empty when the Tool is never bounded.
    */
   countedFailedFacts: string[];
+  /**
+   * Where a successful result carries each media reference and the URL that serves it.
+   * The Agent Trace `media` list is built from these; Studio resolves a reference to a URL
+   * only through that list, never by building one. Absent when the Tool produces none.
+   */
+  mediaLinks?: ToolMediaLink[];
+  /**
+   * The members of a call's arguments and result shown on its run card, each under a
+   * title; the Agent Trace `shown` member of a Tool Attempt is built from these. Absent
+   * when the Tool declares none.
+   */
+  display?: ToolDisplayField[];
+}
+
+/**
+ * One media link of a Tool result. `refPointer` and `urlPointer` are JSON Pointers into the
+ * result; exactly one of `mediaTypePointer` (a result member) or `mediaType` (a literal) is
+ * present.
+ */
+export interface ToolMediaLink {
+  refPointer: string;
+  urlPointer: string;
+  mediaTypePointer?: string;
+  mediaType?: string;
+}
+
+/** One declared run-card member: which document, which member, and the title shown. */
+export interface ToolDisplayField {
+  source: FactPointerSource;
+  pointer: string;
+  title: string;
 }
 
 export type ToolAuthorizationRisk = 'LOW' | 'PRODUCTION';
