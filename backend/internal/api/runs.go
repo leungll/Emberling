@@ -252,11 +252,13 @@ func (d Deps) getNodeRunDetail(w http.ResponseWriter, r *http.Request) {
 //
 // The DTOs below are deliberately narrower than the domain entities they project. An
 // Agent Run's frozen Instructions, Model config and Schemas, a Turn's model request and
-// response, a Decision's arguments, output and response summary, and a Tool Attempt's
-// input and result are all execution payloads, and the Tool Attempt's callback token hash
-// is a Secret: none of them is a field here, so no future change to a domain
-// struct can leak one through this response. The only Tool input and result members
-// shown are the named, type-checked ones agent_trace_tool_view.go selects.
+// response, a Decision's arguments, state patch, output and response summary, a Tool
+// Attempt's input and result, and the Context version chain are all execution payloads,
+// and the Tool Attempt's callback token hash is a Secret: none of them is a field here, so
+// no future change to a domain struct can leak one through this response. The only Tool
+// input and result members shown are the named, type-checked ones
+// agent_trace_tool_view.go selects, and the only State content shown is the Agent Run's
+// latest State value, bounded by the Trace field bound and withheld above it.
 
 // agentTraceResponse is the whole projection: the Agent Run, its Turns in persisted
 // order, the execution facts it recorded, and its generation budget.
