@@ -290,7 +290,7 @@ function ToolsSection({ step, ctx }: { step: Step; ctx: DetailContext }) {
           const meta = ctx.tools.find((t) => t.name === n);
           return (
             <div key={n} className="flex flex-col gap-1 border-t border-border-subtle py-2">
-              <ToolName name={n} className="text-fg" />
+              <ToolName name={n} tools={ctx.tools} className="text-fg" />
               <p className="m-0 text-sm text-fg-muted">{meta ? meta.description : d.notOnServer}</p>
             </div>
           );

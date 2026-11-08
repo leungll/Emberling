@@ -153,7 +153,7 @@ export function AttemptOverview({ el, ctx }: { el: TraceElement; ctx: DetailCont
         <FactList
           compact
           facts={[
-            { label: f.tool, value: <ToolName name={a.toolName} /> },
+            { label: f.tool, value: <ToolName name={a.toolName} tools={ctx.tools} /> },
             { label: f.attempt, value: <span className="tabular-nums">{a.attemptNo}</span> },
             { label: f.started, value: <RunOffset model={ctx.model} iso={a.startedAt} /> },
             a.dispatchedAt

@@ -72,7 +72,11 @@ export function TurnOverview({ el, ctx }: { el: TraceElement; ctx: DetailContext
                   label: f.action,
                   value: (
                     <SelectLink id={action.id} onSelect={ctx.onSelect}>
-                      {final ? copy.runs.trace.finalAnswer : <ToolName name={tool} />}
+                      {final ? (
+                        copy.runs.trace.finalAnswer
+                      ) : (
+                        <ToolName name={tool} tools={ctx.tools} />
+                      )}
                     </SelectLink>
                   ),
                 }
@@ -216,7 +220,7 @@ export function ActionOverview({ el, ctx }: { el: TraceElement; ctx: DetailConte
               label: f.tool,
               value: (
                 <span className="flex flex-col">
-                  <ToolName name={tool} />
+                  <ToolName name={tool} tools={ctx.tools} />
                   {meta ? <span className="text-fg-muted">{meta.description}</span> : null}
                 </span>
               ),
