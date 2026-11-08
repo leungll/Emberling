@@ -4,7 +4,7 @@ import type { JsonValue } from '@/api/types';
 import { FactList } from '@/components/facts/FactList';
 import { ImageGroup, ImageRow } from '@/components/media/ImageValues';
 import { MediaRow, MediaValue, StackedFact } from '@/components/media/MediaValue';
-import type { MediaField } from '@/components/media/media-field';
+import { mediaTypeOf as mediaTypeIn, type MediaField } from '@/components/media/media-field';
 import { resolveMediaUrl } from '@/components/media/media-ref';
 import { useMediaSource } from '@/components/media/media-source';
 import { asData, imagesOf, reviewIn, useRunImages } from '@/components/media/value-media';
@@ -59,10 +59,8 @@ export function ShapedValues({
   const all = Object.keys(props).length ? Object.keys(props) : Object.keys(data);
   const present = all.filter((k) => data[k] !== null && data[k] !== undefined && data[k] !== '');
   const title = (k: string) => fieldTitle(k, data[k], props[k]?.title);
-  const mediaTypeOf = (k: string): string | null => {
-    const t = props[k]?.contentMediaType;
-    return typeof t === 'string' && typeof data[k] === 'string' ? t : null;
-  };
+  // Media by its schema's media type, or by a Trace media reference equal to the value.
+  const mediaTypeOf = (k: string): string | null => mediaTypeIn(data[k], props[k], source);
   const mediaKeys = present.filter((k) => mediaTypeOf(k) !== null);
   const mediaKey = mediaKeys.find((k) =>
     resolveMediaUrl(data[k] as string, mediaTypeOf(k) ?? '', source),

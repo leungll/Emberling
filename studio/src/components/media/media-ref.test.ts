@@ -7,6 +7,7 @@ import {
   mediaSrc,
   mediaWord,
   resolveMediaUrl,
+  tracedMediaType,
 } from './media-ref';
 
 const ARTIFACT_ID = `artifact_${'a'.repeat(32)}`;
@@ -174,5 +175,44 @@ describe('resolveMediaUrl', () => {
 
   it('treats a trace item whose url was withheld as unresolved rather than falling back', () => {
     expect(resolveMediaUrl('sha256:withheld', 'video/mp4', { media, runInput })).toBeNull();
+  });
+});
+
+describe('tracedMediaType', () => {
+  const media = {
+    items: [
+      {
+        ref: 'sha256:clip',
+        url: '/api/runs/run_1/artifacts/a/content',
+        mediaType: 'video/mp4',
+        toolAttemptId: 'ta_1',
+      },
+      {
+        ref: 'sha256:held',
+        url: null,
+        mediaType: 'video/mp4',
+        toolAttemptId: 'ta_2',
+        withheld: 'UNSAFE_URL' as const,
+      },
+      {
+        ref: 'sha256:untyped',
+        url: '/api/runs/run_1/artifacts/b/content',
+        mediaType: null,
+        toolAttemptId: 'ta_3',
+      },
+    ],
+    truncated: false,
+  };
+
+  it('reads a value equal to a served trace reference as that media, with no schema', () => {
+    expect(tracedMediaType('sha256:clip', { media })).toBe('video/mp4');
+    expect(tracedMediaType('sha256:untyped', { media })).toBe('application/octet-stream');
+  });
+
+  it('reads nothing for a withheld, unlisted or empty value', () => {
+    expect(tracedMediaType('sha256:held', { media })).toBeNull();
+    expect(tracedMediaType('sha256:other', { media })).toBeNull();
+    expect(tracedMediaType('', { media })).toBeNull();
+    expect(tracedMediaType('sha256:clip', {})).toBeNull();
   });
 });

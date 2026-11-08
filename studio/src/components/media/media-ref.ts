@@ -171,6 +171,16 @@ export function resolveMediaUrl(
   return null;
 }
 
+/**
+ * The media type of the Trace media item whose `ref` equals the value exactly and whose URL
+ * is served, or null. A value the Trace lists this way is media even when no schema says so.
+ */
+export function tracedMediaType(value: string, ctx: MediaResolutionContext): string | null {
+  if (value === '') return null;
+  const item = ctx.media?.items.find((candidate) => candidate.ref === value);
+  return item && item.url !== null ? (item.mediaType ?? 'application/octet-stream') : null;
+}
+
 interface RunInputAsset {
   assetId: string;
   mediaType: string | null;

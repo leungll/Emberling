@@ -269,7 +269,6 @@ export const runs = {
     didNotPass: 'Did not pass',
     savedResults: 'Saved results',
     callResult: (what: string) => `${what}.`,
-    shownFact: (title: string, value: string) => `${title}: ${value}`,
     callResultGap: 'The full result isn’t in the trace; this is what the trace keeps of it.',
     video: 'Video',
     photoOf: (n: number, of: number) => `Photo ${String(n)} of ${String(of)}`,

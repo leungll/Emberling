@@ -120,21 +120,6 @@ function shownOf(attempt: ToolAttemptTrace, source: 'ARGUMENTS' | 'RESULT'): Sho
   return (attempt.shown ?? []).filter((s) => s.source === source);
 }
 
-/** "Verdict: passed": the first declared result member with a short value the trace shows. */
-function shownLine(attempt: ToolAttemptTrace): CardLine | null {
-  const short = (v: unknown): string | null =>
-    typeof v === 'string' && v.length <= 80 && !v.includes('\n')
-      ? v
-      : typeof v === 'number'
-        ? v.toLocaleString('en-US')
-        : null;
-  for (const field of shownOf(attempt, 'RESULT')) {
-    const value = field.withheld ? null : short(field.value);
-    if (value !== null) return line(copy.runs.media.shownFact(field.title, value));
-  }
-  return null;
-}
-
 /** What one finished tool call returned: the results it saved, else its projected result. */
 export function callResult(model: RunModel, step: Step, turn: AgentTurnTrace): CardLine | null {
   const attempt = turn.toolAttempts[turn.toolAttempts.length - 1];
@@ -158,7 +143,7 @@ export function callResult(model: RunModel, step: Step, turn: AgentTurnTrace): C
   if (deployed) return deployed;
   if (attempt.video) return line(c().videoReady);
   if (withheld(attempt, VIDEO_URL)) return line(c().videoReadyLinkWithheld);
-  return shownLine(attempt);
+  return null;
 }
 
 /** Tools whose saved image or review a Turns row already lists under the call. */

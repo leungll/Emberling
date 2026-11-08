@@ -1,5 +1,7 @@
 import type { JsonValue } from '@/api/types';
 import { MediaValue } from '@/components/media/MediaValue';
+import { mediaTypeOf } from '@/components/media/media-field';
+import { useMediaSource } from '@/components/media/media-source';
 import { Scalar } from '@/components/values/Scalar';
 import { findBySchema, schemaObj, type ReportSchema } from '@/lib/agent-report';
 import { humanize } from '@/lib/value-reading';
@@ -23,6 +25,7 @@ export function Values({
   data: Obj;
   nested?: boolean;
 }) {
+  const source = useMediaSource();
   const keys = schema?.properties ? Object.keys(schema.properties) : Object.keys(data);
   const rows = keys.filter((k) => data[k] !== null && data[k] !== undefined);
   return (
@@ -32,6 +35,7 @@ export function Values({
       {rows.map((k) => {
         const sub = schema?.properties?.[k] ?? null;
         const v = data[k] as JsonValue;
+        const mediaType = mediaTypeOf(v, sub ?? undefined, source);
         return (
           <div key={k} className="flex min-w-0 flex-col">
             <dt title={sub?.description ?? k} className="text-fg-muted">
@@ -48,13 +52,13 @@ export function Values({
                     </li>
                   ))}
                 </ul>
-              ) : typeof v === 'string' && sub?.contentMediaType ? (
+              ) : typeof v === 'string' && mediaType ? (
                 <MediaValue
                   media={{
                     key: k,
-                    title: sub.title ?? humanize(k),
+                    title: sub?.title ?? humanize(k),
                     value: v,
-                    mediaType: sub.contentMediaType,
+                    mediaType,
                   }}
                   height={160}
                   caption=""

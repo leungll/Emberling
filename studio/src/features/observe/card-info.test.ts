@@ -576,3 +576,26 @@ describe('a tool call’s arguments and result in the details pane', () => {
     expect(turnResult(img, s2, t2)).toBeNull();
   });
 });
+
+describe('the members a tool declares for its run card', () => {
+  it('never become the step card’s line; the card keeps the step’s outcome', () => {
+    const m = model({
+      snapshot: snapshot('COMPLETED', [nodeRun('agent', 'agent', { output: { text: 'Done.' } })]),
+      definition: FLOW,
+      traces: {
+        nr_agent: agentTrace([
+          turn(1, 'deploy', 1, {
+            attempts: [
+              toolAttempt('ta_1', 'deploy', {
+                shown: [{ title: 'Version', source: 'RESULT', pointer: '/version', value: 'v53' }],
+              }),
+            ],
+          }),
+        ]),
+      },
+    });
+    const c = info(m, 'agent');
+    expect(c.line.text).not.toContain('Version');
+    expect(c.line.text).toBe('Finished with an answer');
+  });
+});

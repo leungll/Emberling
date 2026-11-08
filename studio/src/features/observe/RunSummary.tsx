@@ -254,27 +254,34 @@ function StepOutputBody({
     return { p, v, rel: relation(copy, v, inputs) };
   });
   if (!rows.length) return null;
-  if (rows.every((r) => r.rel === s.sameAsInput))
-    return <p className="m-0 text-sm text-fg">{s.sameAsInput}</p>;
-  if (rows.every((r) => !r.rel)) {
+  // A pass-through still shows the value; that it equals the input is a note under it.
+  const passThrough = rows.every((r) => r.rel === s.sameAsInput);
+  if (passThrough || rows.every((r) => !r.rel)) {
+    const note = passThrough ? <p className="m-0 text-sm text-fg-muted">{s.sameAsInput}</p> : null;
     const only = rows.length === 1 ? rows[0] : undefined;
+    const valued = (value: ReactNode) => (
+      <div className="flex flex-col gap-2">
+        {value}
+        {note}
+      </div>
+    );
     if (only && isObj(only.v) && !imagesOf(images, only.v))
-      return <ShapedValues schema={null} data={only.v} />;
+      return valued(<ShapedValues schema={null} data={only.v} />);
     if (only && typeof only.v === 'string')
-      return isTechnical(only.v) ? null : (
-        <p className="m-0 text-sm whitespace-pre-wrap text-fg">{only.v}</p>
-      );
+      return isTechnical(only.v)
+        ? note
+        : valued(<p className="m-0 text-sm whitespace-pre-wrap text-fg">{only.v}</p>);
     // Each output by its registered title, laid out as one value set.
     const schema = {
       properties: Object.fromEntries(
         rows.map((r) => [r.p.name, { title: r.p.title ?? humanize(r.p.name) }]),
       ),
     };
-    return (
+    return valued(
       <ShapedValues
         schema={schema}
         data={Object.fromEntries(rows.map((r) => [r.p.name, r.v ?? null]))}
-      />
+      />,
     );
   }
   return (

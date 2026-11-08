@@ -31,7 +31,43 @@ const withAsset = {
   runInput: { source: { assetId: 'asset_clip', mediaType: 'video/mp4' } },
 };
 
+const digest = 'sha256:' + 'b'.repeat(64);
+const traced = {
+  media: {
+    items: [
+      {
+        ref: digest,
+        url: '/api/runs/run_1/artifacts/artifact_1/content',
+        mediaType: 'video/mp4',
+        toolAttemptId: 'ta_1',
+      },
+    ],
+    truncated: false,
+  },
+};
+
 describe('ShapedValues', () => {
+  it('shows a value the trace media lists as media when no schema annotates it', () => {
+    const plain: Obj = { properties: { clip: { title: 'Clip', type: 'string' } } };
+    render(
+      <MediaSourceContext.Provider value={traced}>
+        <ShapedValues schema={plain} data={{ clip: digest, note: 'done' }} />
+      </MediaSourceContext.Provider>,
+    );
+    expect(screen.getByRole('button', { name: 'Play Clip' })).toBeInTheDocument();
+    expect(screen.queryByText(digest)).not.toBeInTheDocument();
+  });
+
+  it('never plays a digest the trace does not list; it stays a technical value', () => {
+    const { container } = render(
+      <MediaSourceContext.Provider value={{ media: { items: [], truncated: false } }}>
+        <ShapedValues schema={null} data={{ clip: digest }} />
+      </MediaSourceContext.Provider>,
+    );
+    expect(container.querySelector('video')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Play/ })).not.toBeInTheDocument();
+  });
+
   it('lays values out by shape and keeps technical values for the Data tab', () => {
     render(<ShapedValues schema={schema} data={data} />);
     expect(screen.getByText('Clip duration')).toBeInTheDocument();
