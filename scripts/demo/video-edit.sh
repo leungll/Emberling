@@ -191,12 +191,38 @@ fi
 [[ "$(jq -r '.sha256' <<<"$source")" == "$SOURCE_SHA256" ]] || die "the media service answered a different digest: $source"
 duration_ms=$(jq '.durationMs' <<<"$source")
 
-log "creating a Definition from $fixture_name with script $script"
+# Each story keeps one Workflow, found by its name, so repeated demos add Runs (and, when
+# the fixture changed, a new version) instead of a new Workflow every time. A saved
+# version is reused only when its graph equals the one this story would save; a Run
+# stays bound to the version it was created with either way. The Backend fills defaults
+# (a model temperature, for one) when it saves, so "equal" means every value this story
+# sets is saved unchanged and the Nodes and Edges are the same ones.
 definition=$(build_definition)
-created=$(curl -fsS -X POST -H 'Content-Type: application/json' \
-  --data-binary "$definition" "$BACKEND_URL/api/definitions")
-workflow_id=$(jq -r '.workflowId' <<<"$created")
-version=$(jq -r '.version' <<<"$created")
+definition_name=$(jq -r '.name' <<<"$definition")
+workflow_id=$(curl -fsS "$BACKEND_URL/api/definitions" |
+  jq -r --arg name "$definition_name" '[.items[] | select(.name == $name)] | sort_by(.updatedAt) | last | .workflowId // empty')
+if [[ -z "$workflow_id" ]]; then
+  log "creating a Definition from $fixture_name with script $script"
+  saved=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+    --data-binary "$definition" "$BACKEND_URL/api/definitions")
+else
+  latest=$(curl -fsS "$BACKEND_URL/api/definitions/$workflow_id")
+  if jq -e --argjson want "$definition" '
+    . as $saved
+    | ($want | {name, description, nodes, edges}) as $w
+    | ([$w.nodes[].id, "|", $w.edges[].id] == [$saved.nodes[].id, "|", $saved.edges[].id])
+      and ([$w | paths(scalars)] | all(. as $p | ($w | getpath($p)) == ($saved | getpath($p))))' \
+    <<<"$latest" >/dev/null; then
+    log "reusing $workflow_id, its latest version matches $fixture_name with script $script"
+    saved=$latest
+  else
+    log "saving a new version of $workflow_id from $fixture_name with script $script"
+    saved=$(jq --argjson base "$(jq '.version' <<<"$latest")" '. + {baseVersion: $base}' <<<"$definition" |
+      curl -fsS -X PUT -H 'Content-Type: application/json' --data-binary @- "$BACKEND_URL/api/definitions/$workflow_id")
+  fi
+fi
+workflow_id=$(jq -r '.workflowId' <<<"$saved")
+version=$(jq -r '.version' <<<"$saved")
 log "definition $workflow_id version $version"
 
 task=$(jq -cn --arg sourceId "$SOURCE_ID" --arg sha "$SOURCE_SHA256" --argjson duration "$duration_ms" \
