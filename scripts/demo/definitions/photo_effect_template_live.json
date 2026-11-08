@@ -31,30 +31,32 @@
           "type": "object",
           "properties": {
             "examples": {
+              "title": "Examples",
               "type": "array",
               "description": "Exactly one example per input photo",
               "items": {
                 "type": "object",
                 "properties": {
-                  "photoAssetId": {"type": "string"},
-                  "assetRef": {"type": "string"}
+                  "photoAssetId": {"title": "Photo", "contentMediaType": "image/*", "type": "string"},
+                  "assetRef": {"title": "Generated image", "contentMediaType": "image/*", "type": "string"}
                 },
                 "required": ["photoAssetId", "assetRef"],
                 "additionalProperties": false
               }
             },
             "settings": {
+              "title": "Settings",
               "type": "object",
               "description": "The settings object of the last round, exactly as passed to generate_image",
               "properties": {
-                "prompt": {"type": "string"},
-                "aspectRatio": {"type": "string", "enum": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"]},
-                "resolution": {"type": "string", "enum": ["1K"]}
+                "prompt": {"title": "Prompt", "type": "string"},
+                "aspectRatio": {"title": "Aspect ratio", "type": "string", "enum": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"]},
+                "resolution": {"title": "Resolution", "type": "string", "enum": ["1K"]}
               },
               "required": ["prompt", "aspectRatio", "resolution"],
               "additionalProperties": false
             },
-            "settingsDigest": {"type": "string"}
+            "settingsDigest": {"title": "Settings digest", "type": "string"}
           },
           "required": ["examples", "settings", "settingsDigest"],
           "additionalProperties": false
