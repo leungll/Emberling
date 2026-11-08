@@ -73,13 +73,11 @@ test('the trace keeps step names on a few lines beside the details', async ({ pa
 
   const names = rows.locator('> [role="gridcell"]:first-child');
   for (const w of await widths(names)) expect(w).toBeGreaterThanOrEqual(NAME_MIN);
-  // Every row is open, the deepest ones indented furthest: a name wrapped onto two lines
-  // above its type word is the most a row may take. A name broken one letter per line
-  // makes its row many lines tall.
+  // A name broken one letter per line makes its row many lines tall.
   const heights = await rows.evaluateAll((els) =>
     els.map((el) => Math.round(el.getBoundingClientRect().height)),
   );
-  for (const h of heights) expect(h).toBeLessThanOrEqual(100);
+  for (const h of heights) expect(h).toBeLessThanOrEqual(80);
   await noPageScroll(page);
 });
 

@@ -59,13 +59,22 @@ describe('rowMatches', () => {
 });
 
 describe('openState', () => {
-  it('opens every row the viewer did not close, the run always', () => {
-    const isOpen = openState(new Set(['turn_2']));
+  const el = (id: string) => m.byId.get(id) ?? m.root;
+
+  it('opens the run and its steps by default, showing turn rows that stay closed', () => {
+    const isOpen = openState(new Set(), new Set());
     expect(isOpen(m.root)).toBe(true);
-    expect(isOpen(m.byId.get('agent') ?? m.root)).toBe(true);
-    expect(isOpen(m.byId.get('turn_1') ?? m.root)).toBe(true);
-    expect(isOpen(m.byId.get('turn_2') ?? m.root)).toBe(false);
-    expect(isOpen(m.byId.get('in') ?? m.root)).toBe(true);
-    expect(openState(new Set([m.root.id]))(m.root)).toBe(true);
+    expect(isOpen(el('agent'))).toBe(true);
+    expect(isOpen(el('in'))).toBe(true);
+    expect(isOpen(el('turn_1'))).toBe(false);
+    expect(isOpen(el('turn_2'))).toBe(false);
+  });
+
+  it('lets the viewer open a turn and close a step, never the run', () => {
+    const isOpen = openState(new Set(['turn_2']), new Set(['agent', m.root.id]));
+    expect(isOpen(m.root)).toBe(true);
+    expect(isOpen(el('agent'))).toBe(false);
+    expect(isOpen(el('turn_2'))).toBe(true);
+    expect(isOpen(el('turn_1'))).toBe(false);
   });
 });
