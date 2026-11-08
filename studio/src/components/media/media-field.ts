@@ -1,5 +1,6 @@
 import type { JsonValue } from '@/api/types';
-import { resolveMediaUrl, type MediaResolutionContext } from './media-ref';
+import { humanize } from '@/lib/value-reading';
+import { resolveMediaUrl, tracedMediaType, type MediaResolutionContext } from './media-ref';
 
 /**
  * A value whose schema declares a media type (JSON Schema `contentMediaType`), and the shape
@@ -19,21 +20,38 @@ export interface MediaSchema {
   contentMediaType?: string;
 }
 
-/** The first field of `data` whose schema declares a media type and that resolves. */
+/**
+ * The media type a string value is read as: the one its schema declares, else the one the
+ * Trace media list gives a reference equal to it; null when it is neither.
+ */
+export function mediaTypeOf(
+  value: JsonValue | undefined,
+  schema: MediaSchema | undefined,
+  ctx: MediaResolutionContext,
+): string | null {
+  if (typeof value !== 'string') return null;
+  if (typeof schema?.contentMediaType === 'string') return schema.contentMediaType;
+  return tracedMediaType(value, ctx);
+}
+
+/**
+ * The first field of `data` that is media and resolves: its schema declares a media type,
+ * or the Trace media list names its value. Schema order first, then the rest of the data.
+ */
 export function findMedia(
   schema: MediaSchema | null,
   data: Record<string, JsonValue> | null,
   ctx: MediaResolutionContext,
 ): MediaField | null {
-  if (!schema?.properties || !data) return null;
-  for (const [key, sub] of Object.entries(schema.properties)) {
+  if (!data) return null;
+  const props = schema?.properties ?? {};
+  const keys = [...Object.keys(props), ...Object.keys(data).filter((k) => !(k in props))];
+  for (const key of keys) {
     const v = data[key];
-    if (
-      typeof sub.contentMediaType === 'string' &&
-      typeof v === 'string' &&
-      resolveMediaUrl(v, sub.contentMediaType, ctx)
-    )
-      return { key, title: sub.title ?? key, value: v, mediaType: sub.contentMediaType };
+    const mediaType = mediaTypeOf(v, props[key], ctx);
+    if (mediaType && typeof v === 'string' && resolveMediaUrl(v, mediaType, ctx)) {
+      return { key, title: props[key]?.title ?? humanize(key), value: v, mediaType };
+    }
   }
   return null;
 }
