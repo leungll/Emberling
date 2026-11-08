@@ -59,15 +59,10 @@ export function visibleRows(
 }
 
 /**
- * Open rows: the run, every row the viewer opened, and the ancestors of the selection
- * unless the viewer closed them.
+ * Open rows: every row starts open, including one that arrives later (an Agent's turns load
+ * after its step's records), so the viewer never meets a collapsed row they did not close.
+ * Only the rows the viewer closed are shut; the run itself cannot be.
  */
-export function openState(
-  opened: ReadonlySet<string>,
-  closed: ReadonlySet<string>,
-  selected: TraceElement | null,
-): (el: TraceElement) => boolean {
-  const onPath = new Set(selected ? ancestors(selected).map((a) => a.id) : []);
-  return (el) =>
-    !closed.has(el.id) && (el.kind === 'run' || opened.has(el.id) || onPath.has(el.id));
+export function openState(closed: ReadonlySet<string>): (el: TraceElement) => boolean {
+  return (el) => el.kind === 'run' || !closed.has(el.id);
 }

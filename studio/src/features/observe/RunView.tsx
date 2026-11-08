@@ -119,7 +119,7 @@ export function RunView({
   };
 
   const [bars, setBars] = useState(storedBars);
-  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  // Trace rows start open; `closed` holds the rows the reader shut on this page.
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [logsPct, setLogsPct] = useState(() =>
@@ -172,7 +172,7 @@ export function RunView({
     [model, registry.tools],
   );
   const wait = useMemo(() => (model ? waitInfo(model) : null), [model]);
-  const isOpen = openState(opened, closed, selected);
+  const isOpen = openState(closed);
 
   const select = (id: string, opts: { tab?: DetailTab; drawer?: boolean } = {}) => {
     if (!model?.byId.has(id)) return;
@@ -600,33 +600,17 @@ export function RunView({
                     selectedId={selectedId}
                     isOpen={isOpen}
                     onToggle={(id, open) => {
-                      const el = model.byId.get(id);
-                      const onPath = el && selected ? ancestors(selected).includes(el) : false;
-                      setOpened((o) => {
-                        const n = new Set(o);
-                        if (open) n.add(id);
-                        else n.delete(id);
-                        return n;
-                      });
                       setClosed((c) => {
                         const n = new Set(c);
-                        if (!open && onPath) n.add(id);
-                        else n.delete(id);
+                        if (open) n.delete(id);
+                        else n.add(id);
                         return n;
                       });
                     }}
                     onExpandAll={() => {
-                      setOpened(
-                        new Set(
-                          [...model.byId.values()]
-                            .filter((x) => x.children.length)
-                            .map((x) => x.id),
-                        ),
-                      );
                       setClosed(new Set());
                     }}
                     onCollapseAll={() => {
-                      setOpened(new Set());
                       setClosed(
                         new Set(
                           [...model.byId.values()]

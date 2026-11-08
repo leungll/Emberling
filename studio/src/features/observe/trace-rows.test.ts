@@ -59,12 +59,13 @@ describe('rowMatches', () => {
 });
 
 describe('openState', () => {
-  it('opens the selection’s ancestors unless the viewer closed them', () => {
-    const selected = m.byId.get('act_2') ?? null;
-    const isOpen = openState(new Set(), new Set(['turn_2']), selected);
+  it('opens every row the viewer did not close, the run always', () => {
+    const isOpen = openState(new Set(['turn_2']));
     expect(isOpen(m.root)).toBe(true);
     expect(isOpen(m.byId.get('agent') ?? m.root)).toBe(true);
+    expect(isOpen(m.byId.get('turn_1') ?? m.root)).toBe(true);
     expect(isOpen(m.byId.get('turn_2') ?? m.root)).toBe(false);
-    expect(isOpen(m.byId.get('in') ?? m.root)).toBe(false);
+    expect(isOpen(m.byId.get('in') ?? m.root)).toBe(true);
+    expect(openState(new Set([m.root.id]))(m.root)).toBe(true);
   });
 });
