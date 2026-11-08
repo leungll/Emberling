@@ -260,6 +260,37 @@ func TestOnCallback_Succeeded_StoresMaterialAndPublishesReferenceOnly(t *testing
 	}
 }
 
+// TestOnCallback_ResultNamesTheServedSource_PublishesSourceURLAndMediaType: a result that
+// says where the source is served carries that into the transcript port, after the fixed
+// members; a result without it (an older service) publishes the port unchanged.
+func TestOnCallback_ResultNamesTheServedSource_PublishesSourceURLAndMediaType(t *testing.T) {
+	executor := newExecutor(t, &fakeTasks{}, &fakeArtifacts{})
+	state := asyncState(map[string]json.RawMessage{"task": taskJSON})
+	payload := succeededPayload(map[string]any{"url": "https://media.example/v1/sources/" + sourceID + "/content", "mediaType": "video/webm"})
+	output, err := executor.OnCallback(context.Background(), state, payload)
+	if err != nil {
+		t.Fatalf("OnCallback: %v", err)
+	}
+	var transcript mediatranscript.Transcript
+	if err := json.Unmarshal(output.Ports["transcript"], &transcript); err != nil {
+		t.Fatalf("decode transcript port: %v", err)
+	}
+	if transcript.SourceURL != "https://media.example/v1/sources/"+sourceID+"/content" || transcript.SourceMediaType != "video/webm" {
+		t.Fatalf("transcript = %+v, want the served source URL and media type from the result", transcript)
+	}
+	if !strings.HasSuffix(string(output.Ports["transcript"]), `,"sourceSha256":"`+sourceSHA+`","sourceUrl":"https://media.example/v1/sources/`+sourceID+`/content","sourceMediaType":"video/webm"}`) {
+		t.Fatalf("transcript port = %s, want the source URL and media type after the fixed members", output.Ports["transcript"])
+	}
+
+	output, err = executor.OnCallback(context.Background(), state, succeededPayload(nil))
+	if err != nil {
+		t.Fatalf("OnCallback (older result): %v", err)
+	}
+	if strings.Contains(string(output.Ports["transcript"]), "sourceUrl") || strings.Contains(string(output.Ports["transcript"]), "sourceMediaType") {
+		t.Fatalf("transcript port = %s, want no source URL members when the result carries none", output.Ports["transcript"])
+	}
+}
+
 func TestOnCallback_Failed_ReportsProviderFailure(t *testing.T) {
 	executor := newExecutor(t, &fakeTasks{}, &fakeArtifacts{})
 	for name, tc := range map[string]struct{ payload, code, message string }{
