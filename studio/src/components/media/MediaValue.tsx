@@ -3,8 +3,8 @@ import { useState, type ReactNode } from 'react';
 
 import { Dialog } from '@/components/ui/dialog';
 import { useCopy } from '@/lib/copy';
-import { THUMB, shapeOf, type MediaField, type Shape } from './media-field';
-import { resolveMediaUrl, type ResolvedMedia } from './media-ref';
+import { THUMB, mediaKindOf, shapeOf, type MediaField, type Shape } from './media-field';
+import { resolveMediaUrl } from './media-ref';
 import { useMediaSource } from './media-source';
 
 /**
@@ -113,14 +113,11 @@ export function MediaValue({
   caption?: string | null;
 }) {
   const copy = useCopy();
-  const resolved: ResolvedMedia | null = resolveMediaUrl(
-    media.value,
-    media.mediaType,
-    useMediaSource(),
-  );
+  const resolved = resolveMediaUrl(media.value, media.mediaType, useMediaSource());
   const [line, , onMeta] = useVideoLine();
   if (!resolved) return null;
-  if (resolved.kind === 'image')
+  const kind = mediaKindOf(resolved.mediaType ?? media.mediaType);
+  if (kind === 'image')
     return (
       <img
         src={resolved.url}
@@ -130,7 +127,7 @@ export function MediaValue({
         className="rounded-md border border-border-subtle"
       />
     );
-  if (resolved.kind !== 'video') return null;
+  if (kind !== 'video') return null;
   return (
     <div className="flex items-center gap-3">
       <VideoThumb media={media} url={resolved.url} size={{ height }} onMeta={onMeta} />
@@ -165,13 +162,14 @@ export function MediaRow({
   const [imageShape, setImageShape] = useState<Shape | null>(null);
   const [imageLine, setImageLine] = useState<string | null>(null);
   if (!resolved) return <>{children}</>;
-  const shape = resolved.kind === 'video' ? videoShape : imageShape;
-  const line = resolved.kind === 'video' ? videoLine : imageLine;
+  const kind = mediaKindOf(resolved.mediaType ?? media.mediaType);
+  const shape = kind === 'video' ? videoShape : imageShape;
+  const line = kind === 'video' ? videoLine : imageLine;
   const width = THUMB[wide ? 'wide' : 'narrow'][shape ?? 'horizontal'];
   const thumb =
-    resolved.kind === 'video' ? (
+    kind === 'video' ? (
       <VideoThumb media={media} url={resolved.url} size={{ width }} onMeta={onMeta} />
-    ) : resolved.kind === 'image' ? (
+    ) : kind === 'image' ? (
       <img
         src={resolved.url}
         alt={media.title}

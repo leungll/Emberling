@@ -137,6 +137,11 @@ func Registration(ports Ports) registry.ToolRegistration {
 			ReviewModelCapability:       domain.ModelCapabilityStructuredDecision,
 			RequiresReviewModel:         true,
 			CountedFailedFacts:          []string{FactType},
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/requirement", Title: "Requirement"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/issues", Title: "Issues"},
+			},
 		},
 		Executor: New(ports),
 	}

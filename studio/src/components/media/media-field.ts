@@ -1,5 +1,5 @@
 import type { JsonValue } from '@/api/types';
-import { resolveMediaUrl, type MediaUrlContext } from './media-ref';
+import { resolveMediaUrl, type MediaResolutionContext } from './media-ref';
 
 /**
  * A value whose schema declares a media type (JSON Schema `contentMediaType`), and the shape
@@ -23,7 +23,7 @@ export interface MediaSchema {
 export function findMedia(
   schema: MediaSchema | null,
   data: Record<string, JsonValue> | null,
-  ctx: MediaUrlContext,
+  ctx: MediaResolutionContext,
 ): MediaField | null {
   if (!schema?.properties || !data) return null;
   for (const [key, sub] of Object.entries(schema.properties)) {
@@ -36,6 +36,15 @@ export function findMedia(
       return { key, title: sub.title ?? key, value: v, mediaType: sub.contentMediaType };
   }
   return null;
+}
+
+export type MediaKindWord = 'image' | 'video' | 'other';
+
+/** What renders a media type: an image, a video, or neither. */
+export function mediaKindOf(mediaType: string | null): MediaKindWord {
+  if (mediaType?.startsWith('image/')) return 'image';
+  if (mediaType?.startsWith('video/')) return 'video';
+  return 'other';
 }
 
 export type Shape = 'vertical' | 'horizontal' | 'square';

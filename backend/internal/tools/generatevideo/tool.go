@@ -124,6 +124,14 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 				RequireVerdict:  &requirePassed,
 			}},
 			CostSource: CostSource,
+			// The result names the video only by its Provider URL, so the URL is both the
+			// reference a final output quotes and the address; the Provider serves MP4 and
+			// reports no media type, hence the literal.
+			MediaLinks: []domain.ToolMediaLink{{RefPointer: "/videoUrl", URLPointer: "/videoUrl", MediaType: "video/mp4"}},
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/assetRef", Title: "Image"},
+				{Source: domain.FactPointerArguments, Pointer: "/photoAssetId", Title: "Photo"},
+			},
 		},
 		Executor: New(baseURL, client),
 	}

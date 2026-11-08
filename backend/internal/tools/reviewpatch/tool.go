@@ -169,6 +169,15 @@ func Registration(ports Ports) registry.ToolRegistration {
 			RequiresReviewModel:         true,
 			UsesWorkspace:               true,
 			WorkspacePatchDigestPath:    "/patchDigest",
+			// The findings themselves are the opinion Artifact's content; the card shows
+			// the verdict, the counts and the bounded summary.
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/patchDigest", Title: "Patch digest"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/blocking", Title: "Blocking findings"},
+				{Source: domain.FactPointerResult, Pointer: "/findingCount", Title: "Findings"},
+				{Source: domain.FactPointerResult, Pointer: "/summary", Title: "Summary"},
+			},
 		},
 		Executor: New(ports),
 	}

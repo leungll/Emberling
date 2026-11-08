@@ -149,6 +149,13 @@ func ReadFileRegistration(repos Repositories) registry.ToolRegistration {
 			Requires:      []domain.FactRequirement{},
 			Records:       []domain.ToolRecordKind{},
 			UsesWorkspace: true,
+			// The file content is never a run-card member.
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/path", Title: "Path"},
+				{Source: domain.FactPointerResult, Pointer: "/kind", Title: "Kind"},
+				{Source: domain.FactPointerResult, Pointer: "/sizeBytes", Title: "Size (bytes)"},
+				{Source: domain.FactPointerResult, Pointer: "/truncated", Title: "Truncated"},
+			},
 		},
 		Executor: &readFileExecutor{repos: repos},
 	}
@@ -169,6 +176,11 @@ func ListFilesRegistration(repos Repositories) registry.ToolRegistration {
 			Requires:      []domain.FactRequirement{},
 			Records:       []domain.ToolRecordKind{},
 			UsesWorkspace: true,
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/dir", Title: "Directory"},
+				{Source: domain.FactPointerResult, Pointer: "/kind", Title: "Kind"},
+				{Source: domain.FactPointerResult, Pointer: "/truncated", Title: "Truncated"},
+			},
 		},
 		Executor: &listFilesExecutor{repos: repos},
 	}
@@ -192,6 +204,14 @@ func WriteFileRegistration(repos Repositories) registry.ToolRegistration {
 			Records:            []domain.ToolRecordKind{domain.ToolRecordWorkspacePatch},
 			UsesWorkspace:      true,
 			WorkspaceWritePath: "/path",
+			// The written content and the patch text stay out; the card shows what was
+			// written and the patch it produced.
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/path", Title: "Path"},
+				{Source: domain.FactPointerResult, Pointer: "/bytesWritten", Title: "Bytes written"},
+				{Source: domain.FactPointerResult, Pointer: "/patchDigest", Title: "Patch digest"},
+				{Source: domain.FactPointerResult, Pointer: "/touchedPaths", Title: "Touched paths"},
+			},
 		},
 		Executor: &writeFileExecutor{repos: repos},
 	}

@@ -8,7 +8,6 @@ import { MediaSourceContext } from './media-source';
 const image = { key: 'cover', title: 'Cover', value: 'asset_cover', mediaType: 'image/png' };
 const video = { key: 'clip', title: 'Clip', value: 'asset_clip', mediaType: 'video/mp4' };
 const source = {
-  runId: 'run_1',
   runInput: {
     photos: [
       { assetId: 'asset_cover', mediaType: 'image/png' },
@@ -75,5 +74,43 @@ describe('findMedia', () => {
     expect(findMedia(schema, { clip: 'asset_clip', note: 'x' }, source)?.title).toBe('Clip');
     expect(findMedia(schema, { clip: 'asset_unknown' }, source)).toBeNull();
     expect(findMedia(null, { clip: 'asset_clip' }, source)).toBeNull();
+  });
+});
+
+describe('MediaValue through the trace media list', () => {
+  const digest = 'sha256:' + 'a'.repeat(64);
+  const traced = {
+    media: {
+      items: [
+        {
+          ref: digest,
+          url: '/api/runs/run_1/artifacts/artifact_1/content',
+          mediaType: 'video/mp4',
+          toolAttemptId: 'ta_1',
+        },
+      ],
+      truncated: false,
+    },
+  };
+  const clip = { key: 'clip', title: 'Clip', value: digest, mediaType: 'video/mp4' };
+
+  it('plays a clip digest the trace lists, from the address the trace gives', () => {
+    const { container } = render(
+      <MediaSourceContext.Provider value={traced}>
+        <MediaValue media={clip} />
+      </MediaSourceContext.Provider>,
+    );
+    expect(container.querySelector('video')?.getAttribute('src')).toBe(
+      '/api/runs/run_1/artifacts/artifact_1/content#t=1',
+    );
+  });
+
+  it('renders nothing for a clip digest the trace does not list', () => {
+    const { container } = render(
+      <MediaSourceContext.Provider value={{ media: { items: [], truncated: false } }}>
+        <MediaValue media={clip} />
+      </MediaSourceContext.Provider>,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

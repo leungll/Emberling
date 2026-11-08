@@ -28,7 +28,6 @@ const data: Obj = {
   timing: { language: 'en', lineCount: 36 },
 };
 const withAsset = {
-  runId: 'run_1',
   runInput: { source: { assetId: 'asset_clip', mediaType: 'video/mp4' } },
 };
 

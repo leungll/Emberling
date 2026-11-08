@@ -269,6 +269,7 @@ export const runs = {
     didNotPass: 'Did not pass',
     savedResults: 'Saved results',
     callResult: (what: string) => `${what}.`,
+    shownFact: (title: string, value: string) => `${title}: ${value}`,
     callResultGap: 'The full result isn’t in the trace; this is what the trace keeps of it.',
     video: 'Video',
     photoOf: (n: number, of: number) => `Photo ${String(n)} of ${String(of)}`,
@@ -301,6 +302,12 @@ export const runs = {
       'review.reasons': 'review’s reason list',
     } as Record<string, string | undefined>,
     withheldOther: (field: string) => `value ${field}`,
+    /** A declared run-card member the trace left out, as the fact's value. */
+    notShown: {
+      TOO_LARGE: 'Not shown: too long to show.',
+      UNSAFE_URL: 'Not shown: the link could carry a password or token.',
+    } as Record<string, string | undefined>,
+    notShownPlain: 'Not shown.',
   },
 
   logs: {

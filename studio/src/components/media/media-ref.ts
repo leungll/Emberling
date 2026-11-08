@@ -1,3 +1,4 @@
+import type { AgentTraceMedia } from '@/api/agent-types';
 import { API_BASE } from '@/api/client';
 import { copy } from '@/lib/copy';
 import { bytes } from '@/lib/time';
@@ -114,61 +115,6 @@ export function mediaSrc(ref: MediaRef, runId: string | null): string | null {
   return ref.id;
 }
 
-/** The run a media-typed value is read against: its id and its input as submitted. */
-export interface MediaUrlContext {
-  runId: string | null;
-  /** The run's input, where an uploaded asset is named by its AssetRef. */
-  runInput: unknown;
-}
-
-export type MediaKindWord = 'image' | 'video' | 'other';
-
-export interface ResolvedMedia {
-  url: string;
-  /** What to render it with, from the schema's media type. */
-  kind: MediaKindWord;
-}
-
-function kindOf(mediaType: string): MediaKindWord {
-  if (mediaType.startsWith('image/')) return 'image';
-  if (mediaType.startsWith('video/')) return 'video';
-  return 'other';
-}
-
-/**
- * Where a value whose schema declares a media type (JSON Schema `contentMediaType`) loads
- * from, or null when Studio has no authoritative route for it. Only an uploaded asset
- * resolves: the value must equal, exactly, the `assetId` of an AssetRef in the run's input,
- * and it loads through the asset content route. A Provider's own id, a digest or an address
- * found in a Tool output has no URL here and shows as the reference it is; nothing is ever
- * resolved through a guessed address.
- */
-export function resolveMediaUrl(
-  value: string,
-  mediaType: string,
-  ctx: MediaUrlContext,
-): ResolvedMedia | null {
-  if (!value) return null;
-  const found = assetRefNamed(ctx.runInput, value, 0);
-  if (!found) return null;
-  const url = mediaSrc(found, ctx.runId);
-  return url ? { url, kind: kindOf(mediaType) } : null;
-}
-
-/** The uploaded-asset reference in a value whose id is exactly `assetId`, or null. */
-function assetRefNamed(raw: unknown, assetId: string, depth: number): MediaRef | null {
-  if (depth > MAX_DEPTH || raw === null || raw === undefined) return null;
-  const v = parseJsonText(raw);
-  const r = mediaRefOf(v);
-  if (r) return r.kind === 'ASSET' && r.id === assetId ? r : null;
-  const children = Array.isArray(v) ? v : isObj(v) ? Object.values(v) : [];
-  for (const x of children) {
-    const hit = assetRefNamed(x, assetId, depth + 1);
-    if (hit) return hit;
-  }
-  return null;
-}
-
 /** "Uploaded image", "Generated image" or "Linked image". */
 export function mediaWord(ref: MediaRef): string {
   return copy.media.kind[ref.kind];
@@ -183,4 +129,72 @@ export function mediaMeta(ref: MediaRef): string {
   return [mediaFormat(ref), ref.sizeBytes !== null ? bytes(ref.sizeBytes) : '']
     .filter(Boolean)
     .join(', ');
+}
+
+/** A media value resolved to the address that serves it, with the media type it is known by. */
+export interface ResolvedMedia {
+  url: string;
+  mediaType: string | null;
+}
+
+/** What a media value is resolved against: the Agent Trace's media list and the Run input. */
+export interface MediaResolutionContext {
+  media?: AgentTraceMedia | null;
+  runInput?: unknown;
+}
+
+/**
+ * Where a media value (an artifact id, a digest, a URL a Tool returned) is loaded from. A
+ * value resolves only through a fact the Backend served: first the Trace `media` item whose
+ * `ref` equals it exactly, whose `url` is then the address (a withheld `url` resolves to
+ * nothing, not to a guess); otherwise an AssetRef of the Run input whose `assetId` equals
+ * it, served by the asset content route. Anything else is not an address, and the caller
+ * shows the value as text. The media type comes from the matching fact when it names one.
+ */
+export function resolveMediaUrl(
+  value: string,
+  mediaType: string | null,
+  ctx: MediaResolutionContext,
+): ResolvedMedia | null {
+  if (value === '') return null;
+  const item = ctx.media?.items.find((candidate) => candidate.ref === value);
+  if (item) {
+    return item.url === null ? null : { url: item.url, mediaType: item.mediaType ?? mediaType };
+  }
+  const asset = runInputAssets(ctx.runInput).find((candidate) => candidate.assetId === value);
+  if (asset) {
+    return {
+      url: `${API_BASE}/assets/${encodeURIComponent(asset.assetId)}/content`,
+      mediaType: asset.mediaType ?? mediaType,
+    };
+  }
+  return null;
+}
+
+interface RunInputAsset {
+  assetId: string;
+  mediaType: string | null;
+}
+
+/** Every AssetRef-shaped object in the Run input (an `assetId` with its media type), once each. */
+function runInputAssets(runInput: unknown): RunInputAsset[] {
+  const out: RunInputAsset[] = [];
+  const seen = new Set<string>();
+  const walk = (raw: unknown, depth: number) => {
+    if (depth > MAX_DEPTH || raw === null || raw === undefined) return;
+    const v = parseJsonText(raw);
+    if (Array.isArray(v)) {
+      for (const x of v) walk(x, depth + 1);
+      return;
+    }
+    if (!isObj(v)) return;
+    const assetId = str(v.assetId);
+    if (assetId && !seen.has(assetId)) {
+      seen.add(assetId);
+      out.push({ assetId, mediaType: str(v.mediaType) });
+    }
+    for (const x of Object.values(v)) walk(x, depth + 1);
+  };
+  walk(runInput, 0);
+  return out;
 }
