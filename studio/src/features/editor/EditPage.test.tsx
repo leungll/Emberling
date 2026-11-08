@@ -128,6 +128,23 @@ describe('EditPage', () => {
     expect(screen.queryByRole('textbox', { name: 'Workflow name' })).toBeNull();
   });
 
+  it('opens with both side panels shown, even in a window narrower than a desktop', async () => {
+    vi.stubGlobal('innerWidth', 1000);
+    renderAt('/workflows/wf_123');
+
+    expect(await screen.findByRole('searchbox', { name: 'Search steps' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Side panel' })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps a side panel closed once the user has closed it', async () => {
+    localStorage.setItem('emb.editor.palette', '1');
+    renderAt('/workflows/wf_123');
+
+    await screen.findByRole('complementary', { name: 'Side panel' });
+    expect(screen.queryByRole('searchbox', { name: 'Search steps' })).toBeNull();
+  });
+
   it('names the tab after the workflow', async () => {
     renderAt('/workflows/wf_123');
 

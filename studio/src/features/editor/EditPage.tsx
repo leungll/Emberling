@@ -166,15 +166,10 @@ export function EditPage() {
   const [quick, setQuick] = useState<QuickAddRequest | null>(null);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const [paletteChoice, setPaletteChoice] = useState(() => readString('local', PALETTE_KEY));
-  const [paletteAuto, setPaletteAuto] = useState(() => window.innerWidth < 1280);
-  // The side panel hides itself once the canvas has not fit with it open and nothing is
-  // selected; a choice to hide or show it wins, and selecting a step always shows it.
+  // Both side panels start open at every window size, so neither is easy to miss; only the
+  // user's own choice to close one keeps it closed.
   const [panelChoice, setPanelChoice] = useState(() => readString('local', PANEL_KEY));
-  const [panelAuto, setPanelAuto] = useState(false);
-  const hasSelection = useEditorStore(
-    (s) => s.selection.ids.length > 0 || s.selection.edge !== null,
-  );
-  const panelHidden = panelChoice === '1' || (panelChoice === null && panelAuto && !hasSelection);
+  const panelHidden = panelChoice === '1';
   const geometry = useRef<Geometry>(NO_GEOMETRY);
   const onGeometry = useCallback((g: Geometry) => {
     geometry.current = g;
@@ -409,7 +404,7 @@ export function EditPage() {
     );
   }
 
-  const paletteCollapsed = paletteChoice === null ? paletteAuto : paletteChoice === '1';
+  const paletteCollapsed = paletteChoice === '1';
 
   return (
     <EditorContext.Provider value={ctx}>
@@ -453,10 +448,6 @@ export function EditPage() {
                 <main aria-label={t.canvas.label} className="relative flex min-w-0 flex-1 flex-col">
                   <EditorCanvas
                     inserting={quick?.link?.kind === 'insert' ? quick.link.edgeId : null}
-                    onOverflow={() => {
-                      setPaletteAuto(true);
-                      setPanelAuto(true);
-                    }}
                     onGeometry={onGeometry}
                   />
                 </main>

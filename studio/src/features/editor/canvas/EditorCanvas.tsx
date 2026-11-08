@@ -120,12 +120,11 @@ interface CanvasProps {
   /** The link a step is being inserted into, while quick add is open for it. */
   inserting: string | null;
   /** The opening view can't show every step: the steps sidebar may collapse to make room. */
-  onOverflow: () => void;
   /** Receives where things are drawn, for edits that place steps and for focus moves. */
   onGeometry: (g: Geometry) => void;
 }
 
-function Canvas({ inserting, onOverflow, onGeometry }: CanvasProps) {
+function Canvas({ inserting, onGeometry }: CanvasProps) {
   const copy = useCopy();
   const t = copy.editor;
   const ctx = useEditor();
@@ -195,7 +194,7 @@ function Canvas({ inserting, onOverflow, onGeometry }: CanvasProps) {
   );
   const ready = registry.loaded && nodes.every((n) => measured[n.id]);
 
-  const vp = useCanvasViewport({ areaRef, bounds, ready, onOverflow });
+  const vp = useCanvasViewport({ areaRef, bounds, ready });
   const narrow = vp.size.w > 0 && vp.size.w <= NARROW;
 
   // Any edit leaves the view where the user put it.
