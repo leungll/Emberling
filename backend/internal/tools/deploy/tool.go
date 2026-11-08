@@ -90,6 +90,7 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:                        ToolName,
+			Title:                       "Deploy",
 			Description:                 "Deploy a reviewed patch on a base commit to one service environment",
 			InputSchema:                 json.RawMessage(inputSchema),
 			OutputSchema:                json.RawMessage(outputSchema),
@@ -97,6 +98,12 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 			ExecutionKind:               domain.ToolExecutionSync,
 			Requires:                    []domain.FactRequirement{},
 			CountsTowardGenerationLimit: false,
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/target/service", Title: "Service"},
+				{Source: domain.FactPointerArguments, Pointer: "/target/environment", Title: "Environment"},
+				{Source: domain.FactPointerArguments, Pointer: "/baseCommit", Title: "Base commit"},
+				{Source: domain.FactPointerResult, Pointer: "/version", Title: "Version"},
+			},
 		},
 		Executor: New(baseURL, client),
 	}

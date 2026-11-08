@@ -8,8 +8,11 @@ describe('formatCost', () => {
     expect(formatCost({ amount: '2', currency: 'USD' })).toBe('$2.00');
   });
 
-  it('keeps every reported digit of a tiny charge instead of rounding it to free', () => {
-    expect(formatCost({ amount: '0.000032', currency: 'USD' })).toBe('$0.000032');
+  it('rounds to cents and shows a tiny charge as less than a cent, never as free', () => {
+    expect(formatCost({ amount: '0.024396', currency: 'USD' })).toBe('$0.02');
+    expect(formatCost({ amount: '0.005', currency: 'USD' })).toBe('$0.01');
+    expect(formatCost({ amount: '0.000032', currency: 'USD' })).toBe('<$0.01');
+    expect(formatCost({ amount: '0.0049', currency: 'USD' })).toBe('<$0.01');
   });
 
   it('shows a reported zero as a price, distinct from no price at all', () => {
@@ -27,7 +30,7 @@ describe('formatCost', () => {
         { amount: '1.5', currency: 'EUR' },
         { amount: '0.084032', currency: 'USD' },
       ]),
-    ).toBe('€1.50 + $0.084032');
+    ).toBe('€1.50 + $0.08');
     expect(formatCostTotals([])).toBe('');
   });
 });

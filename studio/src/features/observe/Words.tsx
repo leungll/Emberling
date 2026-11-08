@@ -1,10 +1,28 @@
+import type { ToolMetadata } from '@/api/types';
 import { Fragment, type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
 /** A registered tool's name, in the code face. */
-export function ToolName({ name, className }: { name: string; className?: string }) {
-  return <code className={cn('font-mono text-xs text-inherit', className)}>{name}</code>;
+/**
+ * A Tool as a label: its catalog title when the catalog has one, else its registered name.
+ * The name stays in the tooltip, and a long label wraps at a word.
+ */
+export function ToolName({
+  name,
+  tools,
+  className,
+}: {
+  name: string;
+  tools?: readonly ToolMetadata[];
+  className?: string;
+}) {
+  const title = tools?.find((t) => t.name === name)?.title;
+  return (
+    <span title={name} className={cn('min-w-0 wrap-break-word text-inherit', className)}>
+      {title ?? name}
+    </span>
+  );
 }
 
 function marked(text: string, query: string, key: string): ReactNode {

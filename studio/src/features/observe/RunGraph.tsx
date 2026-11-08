@@ -11,11 +11,12 @@ import {
 
 import { cardInfo, type CardInfo } from './card-info';
 import { ElementTime } from './RunFacts';
-import { mediaItems } from './run-media';
 import { Words } from './Words';
 import { stepIcon } from '@/components/step/step-icons';
 import {
   CARD_H,
+  PAD,
+  ZOOM_FULL,
   CARD_W,
   GAP_Y,
   ZOOM_MAX,
@@ -33,7 +34,6 @@ import {
 import { stepElementOf, type RunModel, type Step } from './run-model';
 import { statusInfo } from '@/components/status/status-info';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
-import { ThumbSet } from '@/components/media/Thumbs';
 import { IconButton } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useCopy } from '@/lib/copy';
@@ -50,6 +50,11 @@ interface RunGraphProps {
   model: RunModel;
   selectedId: string;
   onSelect: (nodeId: string) => void;
+  /**
+   * Whether the whole graph fits its width with full cards, and the width it would need to,
+   * reported on resize.
+   */
+  onFit?: (fits: boolean, needed: number) => void;
 }
 
 interface ViewState extends View {
@@ -67,8 +72,8 @@ function metaText(info: CardInfo, step: Step): string {
 
 /**
  * A full card's body: the activity line (a text preview clamped to two lines, its full
- * text in the tooltip and the step's Output tab), the muted turn and time, then up to four
- * thumbnails with the rest behind "+N".
+ * text in the tooltip and the step's Data tab), then the muted turn and time. Run cards carry
+ * no thumbnails; a step's images are in the details pane.
  */
 function CardBody({ model, step, info }: { model: RunModel; step: Step; info: CardInfo }) {
   const el = model.byId.get(step.node.id);
@@ -96,20 +101,11 @@ function CardBody({ model, step, info }: { model: RunModel; step: Step; info: Ca
           {time}
         </span>
       ) : null}
-      {info.refs.length ? (
-        <ThumbSet
-          items={mediaItems(model, info.refs)}
-          max={4}
-          label={info.refsLabel ?? undefined}
-          tabbable={false}
-          className="pl-8"
-        />
-      ) : null}
     </>
   );
 }
 
-export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
+export function RunGraph({ model, selectedId, onSelect, onFit }: RunGraphProps) {
   const copy = useCopy();
   const g = copy.runs.graph;
   const def = model.definition;
@@ -138,6 +134,12 @@ export function RunGraph({ model, selectedId, onSelect }: RunGraphProps) {
       ro.disconnect();
     };
   }, []);
+
+  const needed = Math.ceil(layout.width * ZOOM_FULL + PAD * 2);
+  const fits = !size.w || needed <= size.w;
+  useEffect(() => {
+    if (size.w) onFit?.(fits, needed);
+  }, [fits, needed, size.w, onFit]);
 
   const shown: View = view.user || !size.w ? view : fitView(layout, size.w, size.h);
   const level = zoomLevel(shown.z);

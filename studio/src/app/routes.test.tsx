@@ -29,6 +29,7 @@ const RUN = {
     completedAt: '2026-08-03T12:00:05Z',
   },
   nodeRuns: [],
+  media: { items: [], truncated: false },
   lastSeq: 3,
 };
 

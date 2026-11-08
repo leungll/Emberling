@@ -50,6 +50,7 @@ func RenderTimelineSpec() Spec {
 	return Spec{
 		Metadata: domain.ToolMetadata{
 			Name:         RenderTimelineToolName,
+			Title:        "Render timeline",
 			Description:  "Render the clip of a timeline that passed its checks, named by the timeline digest a check returned",
 			InputSchema:  json.RawMessage(renderTimelineInputSchema),
 			OutputSchema: json.RawMessage(renderTimelineOutputSchema),
@@ -70,6 +71,15 @@ func RenderTimelineSpec() Spec {
 			ReturnUnmetRequirement: true,
 			Records:                []domain.ToolRecordKind{},
 			CountedFailedFacts:     mediaCountedFailedFacts(),
+			// The clip is referenced by its digest, served at the URL the media service
+			// returned, in the media type the service reported.
+			MediaLinks: []domain.MediaLink{{RefPointer: "/clipSha256", URLPointer: "/clipUrl", MediaTypePointer: "/mediaType"}},
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/timelineSha256", Title: "Timeline"},
+				{Source: domain.FactPointerResult, Pointer: "/durationMs", Title: "Duration (ms)"},
+				{Source: domain.FactPointerResult, Pointer: "/mediaType", Title: "Media type"},
+				{Source: domain.FactPointerResult, Pointer: "/sizeBytes", Title: "Size (bytes)"},
+			},
 		},
 		TaskType:  TaskTypeRender,
 		MapInput:  renderTimelineInput,

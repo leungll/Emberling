@@ -21,6 +21,28 @@ export const editor = {
   loadFailed: 'Couldn’t load this workflow.',
   catalogFailed: 'Couldn’t load the step types. The canvas shows saved steps only.',
 
+  /** What flows out of an Agent: its final report. A declared report format may title it. */
+  reportPort: 'Final report',
+
+  /** The Agent guide: how its tools work together and the rules the Runtime enforces. */
+  guide: {
+    retriesText: (n: number) => `up to ${n} ${n === 1 ? 'retry' : 'retries'}`,
+    reviewNote: 'A different model reviews, so the agent never grades its own work.',
+    reportsBackLater: (tools: string, one: boolean) =>
+      one
+        ? `${tools} runs outside Emberling and reports back when finished.`
+        : `${tools} run outside Emberling and report back when finished.`,
+    onlyAfter: (tool: string, after: string) => `${tool} only after ${after} passes.`,
+    onlyAfterShort: (after: string) => `only after ${after} passes`,
+    retriesAfterFailure: (tool: string, retries: string) => `${tool}: ${retries} after a failure.`,
+    retriesShort: (retries: string) => `${retries} after a failure`,
+    turns: (n: number) => plural(n, 'turn'),
+    minutes: (n: number) => `${n} min`,
+    stopsAfter: (limits: string) => `Stops after ${limits}.`,
+    failedStops: 'A failed tool call stops the agent. Nothing is resent.',
+    toolTip: (name: string, description: string) => `${name}: ${description}`,
+  },
+
   header: {
     nameLabel: 'Workflow name',
     idKind: 'Workflow ID',
@@ -184,6 +206,8 @@ export const editor = {
     brief: 'Brief',
     image: 'Image',
     caption: 'Caption',
+    transcript: 'Transcript',
+    task: 'Task',
   } as Record<string, string>,
   portTip: (type: string, required: boolean) =>
     `${cap(type)} input, ${required ? 'required' : 'optional'}`,
@@ -198,9 +222,9 @@ export const editor = {
 
   /** One-line purpose per step type. The registry carries no description yet. */
   purpose: {
-    text_input: 'Asks for text when a run starts.',
-    task_input: 'Asks for a task object when a run starts.',
-    image_input: 'Asks for an image when a run starts.',
+    text_input: 'Asks for a piece of text each time a run starts.',
+    task_input: 'Each run starts with this task. You fill in its fields when you start the run.',
+    image_input: 'Asks for an image each time a run starts.',
     media_brief: 'Asks for a photo set and combines it with the incoming brief.',
     prompt_template: 'Inserts incoming text into a fixed prompt.',
     text_generation: 'Writes text from a prompt with a model.',
@@ -260,7 +284,9 @@ export const editor = {
     asksFor: 'Asks for',
     optional: '(optional)',
     photoSet: 'Asks for a photo set',
-    taskObject: 'A JSON object',
+    taskFields: (labels: readonly string[]) =>
+      `${plural(labels.length, 'field')}: ${labels.join(', ')}`,
+    taskAny: 'Any JSON object',
     lastRunLabel: 'Last run',
     lastRunTip: (status: string, took: string | null, tokens: number | null) =>
       `Last run: ${status}${took ? ` in ${took}` : ''}${tokens ? `, ${tokens.toLocaleString('en-US')} tokens` : ''}.`,
@@ -387,19 +413,28 @@ export const editor = {
       model: 'Model',
       tools: 'Tools',
       limits: 'Limits',
-      formats: 'Data formats',
+      formats: 'Input, notes and report',
       behavior: 'Model behavior',
       systemPrompt: 'System prompt',
       size: 'Size',
       template: 'Template',
-      runField: 'Run form field',
-      api: 'Key in run input',
+      needs: 'What a run needs',
+      runField: 'In the run form',
+      api: 'API and form label',
       settings: 'Settings',
       howItRuns: 'How it runs',
-      connections: 'Connections',
+      connections: 'Data flow',
+      about: 'What it does',
+      how: 'How it works',
+      rules: 'Rules the Runtime enforces',
+      advanced: 'Advanced',
+      toolDetails: 'Tool details',
+      lastResult: 'Last run result',
+      models: 'Models',
     },
+    toolDetailsMeta: (n: number) => `${n} tools, effects and recorded facts`,
     limitsHint: 'The agent stops when it reaches any of these.',
-    runFieldHint: 'How this input looks when someone starts a run.',
+    runFieldHint: 'What someone sees when they start a run.',
     connectionsHint: 'Drag between the dots on the canvas to connect steps.',
     noSettings: {
       text_output: 'No settings. Whatever is connected here becomes the run’s result.',
@@ -412,10 +447,19 @@ export const editor = {
     connTo: 'to',
     connOut: (port: string) => `${port} out`,
     notUsed: 'Not used yet',
-    formatsHint: 'Describe the data as JSON Schema. A format left out accepts any shape.',
+    // Grouped connections with a plain description of what each port carries.
+    connIn: 'In',
+    connOutGroup: 'Out',
+    connSpare: 'Unused',
+    lastRunSample: 'Last run:',
+    notConnected: 'Not connected',
+    formatsHint:
+      'What the agent receives, the notes it keeps between turns and the report it hands back. The Runtime rejects any that don’t match their format.',
     formatsMeta: (n: number) => (n ? `${plural(n, 'format')} defined` : 'None defined'),
     behaviorMeta: (n: number) => (n ? `${plural(n, 'setting')} changed` : 'Model defaults'),
     optional: '(optional)',
+    outputShowsReport: (agent: string) =>
+      `Shows ${agent || 'the agent'}’s final report as the run’s result.`,
   },
 
   fields: {
@@ -429,7 +473,7 @@ export const editor = {
     reviewModel: 'Review model',
     reviewModelHint: (tools: string, required: boolean) =>
       required
-        ? `Used when the agent calls ${tools}. Required, and it must differ from the agent's model. Saving checks that it supports what each tool needs.`
+        ? `Used for ${tools}. Must differ from the agent's model.`
         : `Used when the agent calls ${tools}. Saving checks that it supports what each tool needs. Without one, reviews use the mock policy.`,
     reviewModelNone: 'Mock review policy',
     chooseModel: 'Choose a model',
@@ -463,7 +507,7 @@ export const editor = {
     timeLimitHint: 'Includes time spent waiting for tools.',
     timeLimitMinutes: 'Time limit in minutes',
     min: 'min',
-    generationCalls: 'Generation calls',
+    generationCalls: 'Max generation calls',
     calls: 'calls',
     noLimit: 'No limit',
     generationHint: (tools: string) => `Counts calls to ${tools}.`,
@@ -494,10 +538,13 @@ export const editor = {
     mbPerFile: 'MB per file',
     key: 'Key in run input',
     keyHint: 'Use this key when you start a run through the API.',
-    example: 'Example run input',
-    briefHint: 'The field uses the step name as its label. A run can’t start without photos.',
-    previewType: (label: string) => `Type ${label.toLowerCase()}`,
-    previewTypeHere: 'Type here',
+    example: 'Example run input for this step',
+    exampleAssetHint:
+      'An image is given as the asset reference its upload returns. Upload the file first.',
+    briefHint: 'A run can’t start without photos.',
+    briefLabelHint: 'The run form labels this field with the step name.',
+    previewJson: 'A JSON object',
+    taskNoFields: 'No fields set. A run can give any JSON object.',
     previewDrop: (multi: boolean) => `Drop ${multi ? 'photos' : 'an image'} or`,
     previewChoose: (multi: boolean) => `choose ${multi ? 'files' : 'a file'}`,
     previewAddPhotos: 'Add photos',
@@ -538,21 +585,25 @@ export const editor = {
     mockScenarioHelp:
       'Which recorded scenario the mock model replays. Real models don’t have this setting.',
     mockOnly: 'Mock model only',
+    formatNotDefined: 'No format, so any data is accepted.',
+    lastRunWrote: 'In the last run:',
+    lastRunNotes: (v: number) => `In the last run, version ${v}:`,
+    lastRunNotesWithheld: 'The last run’s notes are too large to show here.',
+    editFormat: 'Edit format',
     schema: {
-      contextSchema: ['Starting data', 'The shape of the input the agent starts with.'],
+      contextSchema: ['What it receives', 'The data the agent starts with.'],
       stateSchema: [
-        'Notes between turns',
-        'The shape of the notes the agent keeps from one turn to the next.',
+        'Its notes',
+        'Saved after every turn, so a restarted agent picks up where it left off.',
       ],
-      outputSchema: ['Final answer format', 'The shape of the agent’s final answer.'],
+      outputSchema: ['Its final report', 'What the agent must hand back to finish.'],
       taskSchema: [
-        'Task shape',
-        'A JSON Schema the task object must match. Leave it empty to accept any object.',
+        'Fields',
+        'The fields as JSON Schema. Each property is one field; add a title and a description to explain it. Leave it empty to accept any JSON object.',
       ],
     },
     schemaAny: 'Any shape',
     schemaFields: (n: number, keys: string) => `${plural(n, 'field')}: ${keys}`,
-    schemaMore: (shown: string, more: number) => `${shown} and ${more} more`,
     schemaDefined: 'Defined, no fields listed',
     schemaType: {
       object: 'Any object',
@@ -599,7 +650,8 @@ export const editor = {
     nothingNeeded: 'Nothing. Runs start without input.',
     noOutput: 'No output step yet.',
     noSteps: 'No steps yet.',
-    kind: { text: 'Text', image: 'Image', photos: 'Photo set', task: 'JSON object' } as Record<
+    taskFields: (n: number) => `Task with ${plural(n, 'field')}`,
+    kind: { text: 'Text', image: 'Image', photos: 'Photo set', task: 'Any JSON object' } as Record<
       string,
       string
     >,
@@ -610,6 +662,10 @@ export const editor = {
     agent: (model: string, tools: readonly string[], limits: string) =>
       `Uses ${model}${tools.length ? ` with ${names(tools)}` : ' without tools'}. ${limits}.`,
     asks: (label: string) => `Asks for “${label}” when a run starts.`,
+    asksFields: (fields: string) => `Asks for ${fields} when a run starts.`,
+    usesTools: (model: string, tools: string, limits: string) =>
+      `Uses ${model} to ${tools}. ${limits}.`,
+    agentReport: 'The agent’s final report',
     brief: (from: string) =>
       `Asks for a photo set and adds it to ${from ? `the brief from ${from}` : 'the brief'}.`,
     template: (from: string) =>

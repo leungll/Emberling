@@ -72,11 +72,15 @@ func (t PortType) IsCompatibleWith(target PortType) bool {
 }
 
 // PortMetadata is one typed handle. Name is the handle identifier used by Edge
-// sourceHandle and targetHandle.
+// sourceHandle and targetHandle. Title and Description are optional display text Studio
+// shows for the handle, bounded by ValidateDisplayLine; empty means none and is omitted on
+// the wire. The Compiler and the Runtime never read them.
 type PortMetadata struct {
-	Name     string   `json:"name"`
-	DataType PortType `json:"dataType"`
-	Required bool     `json:"required"`
+	Name        string   `json:"name"`
+	DataType    PortType `json:"dataType"`
+	Required    bool     `json:"required"`
+	Title       string   `json:"title,omitempty"`
+	Description string   `json:"description,omitempty"`
 }
 
 // UIGroup places a config field in one Properties Panel section.
@@ -151,10 +155,13 @@ const (
 	NodeCategoryOutput         = "Output"
 )
 
-// NodeMetadata is the registered description of one Node Type.
+// NodeMetadata is the registered description of one Node Type. Description is an optional
+// plain sentence saying what the step does, shown by Studio and bounded by
+// ValidateDisplayLine; empty means none and is omitted on the wire.
 type NodeMetadata struct {
 	Type          string            `json:"type"`
 	DisplayName   string            `json:"displayName"`
+	Description   string            `json:"description,omitempty"`
 	Category      string            `json:"category"`
 	ExecutionKind NodeExecutionKind `json:"executionKind"`
 	Inputs        []PortMetadata    `json:"inputs"`
@@ -175,6 +182,12 @@ type NodeMetadata struct {
 	// declares none is never governed by Provider capacity. It is a registration fact
 	// for the Runtime, not part of the catalogue Studio reads, so it stays off the wire.
 	DispatchModelPath string `json:"-"`
+	// MediaLinks says which output port values are media references and where the URL
+	// that serves each and its media type are read from, so the Run can list the media
+	// its steps produced and Studio can match a reference to its URL instead of building
+	// one from a value. Empty means the Node Type produces no addressable media. Omitted
+	// on the wire when empty.
+	MediaLinks []MediaLink `json:"mediaLinks,omitempty"`
 }
 
 // Validate checks the structural rules a registration must satisfy before the Backend can
@@ -190,6 +203,9 @@ func (m NodeMetadata) Validate() error {
 	if !m.ExecutionKind.IsValid() {
 		errs = append(errs, fmt.Errorf("executionKind %q is not a registered execution kind", m.ExecutionKind))
 	}
+	if err := ValidateDisplayLine(m.Description, MaxDisplayDescriptionLength); err != nil {
+		errs = append(errs, fmt.Errorf("description: %w", err))
+	}
 	errs = append(errs, validatePorts("input", m.Inputs)...)
 	errs = append(errs, validatePorts("output", m.Outputs)...)
 	if err := validateSchemaField("configSchema", m.ConfigSchema); err != nil {
@@ -199,6 +215,7 @@ func (m NodeMetadata) Validate() error {
 	errs = append(errs, validateSideEffect(m.SideEffect)...)
 	errs = append(errs, validatePollPolicy(m.Poll, m.ExecutionKind == NodeExecutionAsync)...)
 	errs = append(errs, validateFactInputs(m.FactInputs)...)
+	errs = append(errs, validateNodeMediaLinks(m.MediaLinks, m.Outputs)...)
 
 	if len(errs) == 0 {
 		return nil
@@ -290,8 +307,13 @@ func (k ToolExecutionKind) IsValid() bool {
 // ToolMetadata is the registered description of one stable Tool Name. It is the only
 // source of the Tool's schemas, execution mode and side effect policy; the Runtime never
 // infers them from an Executor's Go type or from a returned result.
+//
+// Description is model-facing: it is what the model reads about the Tool in every request.
+// Title is an optional short display name for Studio only, bounded by ValidateDisplayLine
+// and omitted on the wire when empty; it never reaches a model request.
 type ToolMetadata struct {
 	Name          string            `json:"name"`
+	Title         string            `json:"title,omitempty"`
 	Description   string            `json:"description"`
 	InputSchema   json.RawMessage   `json:"inputSchema"`
 	OutputSchema  json.RawMessage   `json:"outputSchema"`
@@ -387,6 +409,16 @@ type ToolMetadata struct {
 	// never by Tool Name. Empty means the Tool returns no material. Omitted on the wire
 	// when undeclared.
 	MaterialPointer string `json:"materialPointer,omitempty"`
+	// MediaLinks says where a successful result carries each media reference and the URL
+	// that serves it, so the Agent Trace can list the media a call produced and Studio can
+	// match a reference to its URL instead of building one from a value. Empty means the
+	// Tool produces no addressable media. Omitted on the wire when empty.
+	MediaLinks []MediaLink `json:"mediaLinks,omitempty"`
+	// Display lists the members of a call's arguments and result that Studio shows on a run
+	// card, each under a title. Only these members are projected into the Agent Trace; the
+	// whole arguments and result never are. Empty means the call shows no member. Omitted
+	// on the wire when empty.
+	Display []ToolDisplayField `json:"display,omitempty"`
 }
 
 // ToolAuthorizationRisk is the declared risk class of a Tool's calls.
@@ -456,6 +488,9 @@ func (m ToolMetadata) Validate() error {
 	if !m.ExecutionKind.IsValid() {
 		errs = append(errs, fmt.Errorf("executionKind %q is not a registered execution kind", m.ExecutionKind))
 	}
+	if err := ValidateDisplayLine(m.Title, MaxDisplayTitleLength); err != nil {
+		errs = append(errs, fmt.Errorf("title: %w", err))
+	}
 	if err := validateSchemaField("inputSchema", m.InputSchema); err != nil {
 		errs = append(errs, err)
 	}
@@ -504,6 +539,8 @@ func (m ToolMetadata) Validate() error {
 			errs = append(errs, errors.New("materialPointer must be a JSON Pointer starting with \"/\""))
 		}
 	}
+	errs = append(errs, validateToolMediaLinks(m.MediaLinks)...)
+	errs = append(errs, validateToolDisplay(m.Display)...)
 
 	if len(errs) == 0 {
 		return nil
@@ -576,6 +613,12 @@ func validatePorts(direction string, ports []PortMetadata) []error {
 		}
 		if !port.DataType.IsValid() {
 			errs = append(errs, fmt.Errorf("%s port %s: dataType %q is not a supported port type", direction, label, port.DataType))
+		}
+		if err := ValidateDisplayLine(port.Title, MaxDisplayTitleLength); err != nil {
+			errs = append(errs, fmt.Errorf("%s port %q: title %w", direction, label, err))
+		}
+		if err := ValidateDisplayLine(port.Description, MaxDisplayDescriptionLength); err != nil {
+			errs = append(errs, fmt.Errorf("%s port %q: description %w", direction, label, err))
 		}
 	}
 	return errs

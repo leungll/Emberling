@@ -16,3 +16,9 @@ export interface DetailContext {
   selectedId: string;
   onSelect: (id: string, tab?: string) => void;
 }
+
+/** A model's display name, else its ID as given. */
+export function modelName(ctx: DetailContext, id: unknown): string {
+  const m = typeof id === 'string' ? ctx.models.find((x) => x.id === id) : undefined;
+  return m ? m.displayName : typeof id === 'string' ? id : '';
+}

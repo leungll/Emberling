@@ -11,6 +11,7 @@ import type {
   CallbackBindingSummary,
   Cost,
   ExecutionError,
+  FactPointerSource,
   JsonValue,
   TokenUsage,
 } from './types';
@@ -162,6 +163,20 @@ export interface AgentRunTrace {
    * without a goal, which the Backend never evaluates.
    */
   completion: AgentCompletion | null;
+  /** The State value the Agent Run's current State pointer names (what the Agent wrote). */
+  latestState: AgentLatestState;
+}
+
+/**
+ * The Agent Run's latest saved State. `value` is the saved JSON while its canonical encoding
+ * fits the Backend's Trace field bound; above it `value` is `null` and `withheld` says why.
+ * The Backend never truncates the value. Version 0 is the empty object.
+ */
+export interface AgentLatestState {
+  version: number;
+  /** The saved JSON value, or `null` when withheld. */
+  value: unknown;
+  withheld?: 'TOO_LARGE';
 }
 
 /**
@@ -391,6 +406,25 @@ export interface ToolAttemptTrace {
   video?: ToolVideoTrace;
   /** Members left out of this Attempt's projection, and why. */
   withheld?: WithheldToolField[];
+  /**
+   * The members the Tool's registration declares for its run card, in declaration order,
+   * for any Tool. A result member appears only once the Attempt `SUCCEEDED`. Absent when
+   * the Tool declares none or none of them is present on this Attempt.
+   */
+  shown?: ShownToolField[];
+}
+
+/**
+ * One declared run-card member. `value` is the member's JSON as persisted, or `null` when
+ * `withheld` says why it was left out: over the Trace field bound (`TOO_LARGE`, never cut)
+ * or a URL in it carries userinfo, a query or a fragment (`UNSAFE_URL`).
+ */
+export interface ShownToolField {
+  title: string;
+  source: FactPointerSource;
+  pointer: string;
+  value: unknown;
+  withheld?: 'TOO_LARGE' | 'UNSAFE_URL';
 }
 
 /**
@@ -539,6 +573,36 @@ export interface AgentTrace {
   workspace: AgentWorkspaceTrace | null;
   /** The change requests the Agent Run recorded, oldest first, without their content. */
   changeRequests: AgentTraceChangeRequests;
+  /**
+   * The media the SUCCEEDED Tool calls produced, as the Tools' registered media links
+   * declare them. A reference resolves to a URL only through this list or the Run input's
+   * assets; Studio never builds a URL from a value.
+   */
+  media: AgentTraceMedia;
+}
+
+/**
+ * The bounded media list. `truncated` means the Agent Run produced more media than `items`
+ * shows; the stored results are never cut.
+ */
+export interface AgentTraceMedia {
+  items: AgentTraceMediaItem[];
+  truncated: boolean;
+}
+
+/**
+ * One media reference with the URL that serves it and its media type. A member the Backend
+ * may not serve is `null` and `withheld` says why: a URL carrying userinfo, a query or a
+ * fragment, or outside the Backend's own `/api/` routes, is `UNSAFE_URL` while `ref` stays
+ * visible as text; a member over the Trace field bound is `TOO_LARGE`, and an oversized
+ * `ref` or `mediaType` withholds the whole item.
+ */
+export interface AgentTraceMediaItem {
+  ref: string | null;
+  url: string | null;
+  mediaType: string | null;
+  toolAttemptId: string;
+  withheld?: 'TOO_LARGE' | 'UNSAFE_URL';
 }
 
 /**

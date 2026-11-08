@@ -33,7 +33,7 @@ def create_app(
     data = DataDir(settings.data_dir)
     ffmpeg = FFmpeg(settings.ffmpeg_bin, settings.ffprobe_bin)
     transcriber = transcriber or Transcriber(settings.whisper_model, ffmpeg)
-    sources = SourceStore(data, ffmpeg)
+    sources = SourceStore(data, ffmpeg, settings.public_url)
     transcripts = TranscriptStore(data)
     timelines = TimelineStore(data)
     renderer = Renderer(data, ffmpeg, sources, transcripts, timelines, settings.public_url)

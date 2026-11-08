@@ -20,6 +20,7 @@ import {
   type TraceElement,
 } from './run-model';
 import { filtering, visibleRows, type TraceFilter } from './trace-rows';
+import { elementPath } from './run-events';
 import { StateBlock } from '@/components/state/StateBlock';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { IconButton } from '@/components/ui/button';
@@ -55,6 +56,9 @@ interface TracePanelProps {
   /** Bumped (with the id) to move focus to a row. */
   focusSignal: { id: string; n: number };
   searchRef: RefObject<HTMLInputElement | null>;
+  /** Show the selected element's rows only, as the Events view does. */
+  only: boolean;
+  onOnly: (on: boolean) => void;
 }
 
 // The name column keeps room for an indented name beside its step type at every depth;
@@ -262,6 +266,11 @@ export function TraceToolbar({
   onBars,
   onExpandAll,
   onCollapseAll,
+  model,
+  scopeEl,
+  canOnly,
+  only,
+  onOnly,
 }: {
   filter: TraceFilter;
   onFilter: (f: TraceFilter) => void;
@@ -271,6 +280,11 @@ export function TraceToolbar({
   onBars: (on: boolean) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  model: RunModel;
+  scopeEl: TraceElement | null;
+  canOnly: boolean;
+  only: boolean;
+  onOnly: (on: boolean) => void;
 }) {
   const copy = useCopy();
   const t = copy.runs.trace;
@@ -306,6 +320,32 @@ export function TraceToolbar({
         />
         <span>{t.failuresOnly}</span>
       </label>
+      <Tooltip
+        content={
+          canOnly && scopeEl
+            ? copy.runs.events.selectedOnlyTip(elementPath(model, scopeEl))
+            : copy.runs.events.selectFirst
+        }
+      >
+        <label
+          aria-disabled={canOnly ? undefined : true}
+          className={cn(
+            'inline-flex min-h-control-sm shrink-0 items-center gap-1.5 text-sm whitespace-nowrap',
+            canOnly ? 'cursor-pointer text-fg-secondary' : 'cursor-default text-fg-placeholder',
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={only}
+            disabled={!canOnly}
+            onChange={(e) => {
+              onOnly(e.target.checked);
+            }}
+            className="m-0 accent-accent"
+          />
+          <span>{copy.runs.events.selectedOnly}</span>
+        </label>
+      </Tooltip>
       <span className="flex-1" />
       <Menu>
         <MenuTrigger asChild>
@@ -353,6 +393,8 @@ export function TracePanel({
   width,
   focusSignal,
   searchRef,
+  only: onlyWanted,
+  onOnly,
 }: TracePanelProps) {
   const copy = useCopy();
   const t = copy.runs.trace;
@@ -360,7 +402,10 @@ export function TracePanel({
   const [focusId, setFocusId] = useState<string | null>(null);
   const [pending, setPending] = useState<{ id: string; n: number } | null>(null);
 
-  const { rows, hits } = visibleRows(model, isOpen, filter);
+  const scopeEl = model.byId.get(selectedId) ?? null;
+  const canOnly = !!scopeEl && scopeEl !== model.root;
+  const only = canOnly && onlyWanted;
+  const { rows, hits } = visibleRows(model, isOpen, filter, only && scopeEl ? scopeEl : model.root);
   const filtered = filtering(filter);
   const showBars = bars && width >= NARROW_TRACE;
   const axis = showBars ? axisOf(model) : null;
@@ -446,6 +491,11 @@ export function TracePanel({
         onBars={onBars}
         onExpandAll={onExpandAll}
         onCollapseAll={onCollapseAll}
+        model={model}
+        scopeEl={scopeEl}
+        canOnly={canOnly}
+        only={only}
+        onOnly={onOnly}
       />
     </div>
   );

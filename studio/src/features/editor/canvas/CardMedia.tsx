@@ -1,6 +1,7 @@
 import { ImageIcon, Upload, X } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 
+import { LoadedImage } from '@/components/media/LoadedImage';
 import type { Node } from '@/api/types';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { RelativeTime } from '@/components/time/Time';
@@ -88,12 +89,12 @@ export function CardMedia({ node }: { node: Node }) {
       )}
     >
       {it.src ? (
-        <img
+        <LoadedImage
           src={it.src}
           alt=""
           loading="lazy"
-          draggable={false}
-          className="block size-full object-contain"
+          className="size-full object-contain"
+          placeholder={t.unavailable}
         />
       ) : (
         <span className="flex flex-col items-center gap-1 p-2 text-center text-sm text-fg-muted">

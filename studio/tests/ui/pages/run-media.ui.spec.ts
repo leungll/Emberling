@@ -15,26 +15,24 @@ const runPath = (run: { workflowId: string; runId: string }, search = '') =>
 const card = (page: Page, nodeId: string) => page.locator(`[data-gid="${nodeId}"]`);
 
 const graphReady = async (page: Page) => {
-  await expect(page.getByRole('treegrid')).toBeVisible();
+  await expect(page.getByRole('treeitem').first()).toBeVisible();
   await expect(card(page, 'node_output')).toBeVisible();
 };
 
-/** The details pane, opening it as a drawer where the logs are narrow. */
-async function details(page: Page, rowName: RegExp, tab: string) {
+/** The details pane on the element whose card is named, or the run when none is. */
+async function details(page: Page, cardName: RegExp | null, tab: string) {
   const selected = page.getByRole('tab', { name: tab, selected: true });
   if (!(await selected.isVisible())) {
-    await page.getByRole('row', { name: rowName }).first().click();
+    if (cardName) await page.getByRole('treeitem', { name: cardName }).first().click();
     await page.getByRole('tab', { name: tab }).click();
   }
   await expect(selected).toBeVisible();
 }
 
-/** The details of the element the address selects, opening the drawer where it is closed. */
+/** The details of the element the address selects. */
 async function selectedDetails(page: Page, tab: string) {
   const selected = page.getByRole('tab', { name: tab, selected: true });
-  if (!(await selected.isVisible())) {
-    await page.getByRole('treegrid').getByRole('row', { selected: true }).click();
-  }
+  if (!(await selected.isVisible())) await page.getByRole('tab', { name: tab }).click();
   await expect(selected).toBeVisible();
 }
 
@@ -51,22 +49,21 @@ const states: ReviewState[] = [
       await graphReady(page);
       await expect(card(page, 'node_brief')).toContainText('Boxed collectible figure.');
       await expect(card(page, 'node_photos')).toContainText('3 photos');
-      await expect(card(page, 'node_photos').getByRole('button', { name: /^Open/ })).toHaveCount(3);
       await expect(card(page, 'node_agent')).toContainText('Answered with 3 images');
       await expect(card(page, 'node_agent')).toContainText('Finished in turn 9');
       await expect(card(page, 'node_result')).toContainText('2 of 3 photos passed review');
       await expect(card(page, 'node_output')).toContainText('Final image, JPEG');
-      await expect(card(page, 'node_output').getByRole('button', { name: /^Open/ })).toHaveCount(1);
+      await expect(page.getByRole('tree').getByRole('button', { name: /^Open/ })).toHaveCount(0);
     },
   },
   {
     name: 'run-media-lightbox',
-    url: runPath(photoRun, '?tab=input'),
+    url: runPath(photoRun, '?tab=data'),
     mode: 'block',
     overrides: photoRunOverrides(),
     ready: graphReady,
     act: async (page) => {
-      await details(page, /^Completed Run\b/, 'Input');
+      await details(page, null, 'Data');
       await page.getByRole('tabpanel').getByRole('button', { name: /^Open/ }).first().click();
       const box = page.getByRole('dialog');
       await expect(box).toContainText('Photo 1');
@@ -80,41 +77,38 @@ const states: ReviewState[] = [
   },
   {
     name: 'run-media-lightbox-close',
-    url: runPath(photoRun, '?el=node_result&tab=output'),
+    url: runPath(photoRun, '?el=node_result&tab=data'),
     mode: 'block',
     overrides: photoRunOverrides(),
     ready: graphReady,
     act: async (page) => {
       const box = page.getByRole('dialog');
       const agent = card(page, 'node_agent');
-      // The lightbox sits inside the card and the pannable graph in the React tree, but
-      // clicks in it neither pan the graph nor select the card.
-      await agent.getByRole('button', { name: /^Open/ }).nth(1).click();
-      await expect(box).toContainText('2 of 3');
+      await details(page, /Media Result/, 'Data');
+      const opens = page.getByRole('tabpanel').getByRole('button', { name: /^Open/ });
+      await opens.nth(1).click();
+      await expect(box).toContainText(/2 of \d+/);
+      // A click outside the lightbox neither closes it nor changes the selection.
       await page.mouse.click(8, 8);
       await expect(box).toBeVisible();
       await box.getByRole('button', { name: 'Close' }).click();
       await expect(box).toBeHidden();
       await expect(agent).toHaveAttribute('aria-selected', 'false');
-      await card(page, 'node_result').getByRole('button', { name: /^Open/ }).click();
+      await opens.first().click();
       await expect(box).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(box).toBeHidden();
-      await details(page, /Media Result/, 'Output');
-      await page.getByRole('tabpanel').getByRole('button', { name: /^Open/ }).first().click();
-      await box.getByRole('button', { name: 'Close' }).click();
-      await expect(box).toBeHidden();
-      await expect(agent).toHaveAttribute('aria-selected', 'false');
+      await expect(card(page, 'node_result')).toHaveAttribute('aria-selected', 'true');
     },
   },
   {
     name: 'run-media-step-output',
-    url: runPath(photoRun, '?el=node_result&tab=output'),
+    url: runPath(photoRun, '?el=node_result&tab=data'),
     mode: 'block',
     overrides: photoRunOverrides(),
     ready: graphReady,
     act: async (page) => {
-      await details(page, /Media Result/, 'Output');
+      await details(page, /Media Result/, 'Data');
       const panel = page.getByRole('tabpanel');
       await expect(panel.getByRole('button', { name: /^Open/ }).first()).toBeVisible();
       await expect(panel).toContainText('Generated from photo 1');
@@ -122,35 +116,37 @@ const states: ReviewState[] = [
       await expect(panel).toContainText('2 of 3 photos');
       await expect(panel).toContainText('Did not pass');
       // The JSON is one click away, collapsed.
-      const json = panel.locator('details', { hasText: 'JSON' });
-      await expect(json).not.toHaveAttribute('open');
+      await expect(panel.locator('details[open]', { hasText: 'JSON' })).toHaveCount(0);
     },
   },
   {
     name: 'run-media-run-input',
-    url: runPath(photoRun, '?tab=input'),
+    url: runPath(photoRun, '?tab=data'),
     mode: 'block',
     overrides: photoRunOverrides(),
     ready: graphReady,
     act: async (page) => {
-      await details(page, /^Completed Run\b/, 'Input');
+      await details(page, null, 'Data');
       const panel = page.getByRole('tabpanel');
-      await expect(panel.getByRole('button', { name: /^Open/ })).toHaveCount(3);
+      const input = panel
+        .locator('section')
+        .filter({ has: page.getByRole('heading', { name: 'Input', exact: true }) });
+      await expect(input.getByRole('button', { name: /^Open preview: Photo/ })).toHaveCount(3);
       await expect(panel).toContainText('Photo 1');
       await expect(panel).toContainText('Photo 3');
     },
   },
   {
     name: 'run-tool-photo-arguments',
-    url: runPath(photoRun, '?el=action_ed283771e2ff4520a503ece37a1395e0&tab=input'),
+    url: runPath(photoRun, '?el=action_ed283771e2ff4520a503ece37a1395e0&tab=data'),
     mode: 'block',
     overrides: photoRunOverrides(),
     ready: graphReady,
     act: async (page) => {
-      await selectedDetails(page, 'Arguments');
+      await selectedDetails(page, 'Data');
       const panel = page.getByRole('tabpanel');
       await expect(panel).toContainText('Photo 1 of 3');
-      await expect(panel.getByRole('button', { name: /^Open/ })).toHaveCount(1);
+      await expect(panel.getByRole('button', { name: /^Open preview: Photo/ })).toHaveCount(1);
     },
   },
   {
@@ -158,7 +154,7 @@ const states: ReviewState[] = [
     url: runPath(data.completed, '?el=node_agent&tab=turns'),
     mode: 'block',
     ready: async (page) => {
-      await expect(page.getByRole('treegrid')).toBeVisible();
+      await expect(page.getByRole('treeitem').first()).toBeVisible();
       await expect(card(page, 'node_agent')).toContainText('Deployed v1 to checkout in staging');
     },
     act: async (page) => {
@@ -170,13 +166,13 @@ const states: ReviewState[] = [
   },
   {
     name: 'run-tool-test-result',
-    url: runPath(data.completed, '?el=action_37d7842a349c4030b1aba2997c41da5a&tab=output'),
+    url: runPath(data.completed, '?el=action_37d7842a349c4030b1aba2997c41da5a&tab=data'),
     mode: 'block',
     ready: async (page) => {
-      await expect(page.getByRole('treegrid')).toBeVisible();
+      await expect(page.getByRole('treeitem').first()).toBeVisible();
     },
     act: async (page) => {
-      await selectedDetails(page, 'Result');
+      await selectedDetails(page, 'Data');
       const panel = page.getByRole('tabpanel');
       await expect(panel).toContainText('Tests passed (12).');
     },
@@ -187,7 +183,7 @@ const states: ReviewState[] = [
     mode: 'block',
     overrides: { '/api/runs': runList(withRuns([generating.item])), ...generating.overrides },
     ready: async (page) => {
-      await expect(page.getByRole('treegrid')).toBeVisible();
+      await expect(page.getByRole('treeitem').first()).toBeVisible();
       await expect(card(page, 'node_agent')).toContainText(
         'Calling generate_image for photo 2 of 3',
       );

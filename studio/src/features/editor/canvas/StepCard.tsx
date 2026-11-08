@@ -12,6 +12,7 @@ import { duration } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useEditor } from '@/features/editor/editor-context';
 import { useEditorStore } from '@/features/editor/editor-store';
+import { contentLabel } from '@/lib/port-content';
 import { issuesFor } from '@/features/editor/model/checks';
 import { CARD_W } from '@/features/editor/model/layout';
 import { groupOf, portLabel } from '@/features/editor/model/steps';
@@ -124,6 +125,7 @@ function StepCardInner({ data, selected }: NodeProps<StepFlowNode>) {
   const view = useCanvasView();
   const node = useEditorStore((s) => s.doc.nodes.find((n) => n.id === data.nodeId));
   const edges = useEditorStore((s) => s.doc.edges);
+  const nodes = useEditorStore((s) => s.doc.nodes);
   const headRef = useRef<HTMLDivElement>(null);
   const [lodSize, setLodSize] = useState<{ w: number; h: number; wrap: boolean } | null>(null);
 
@@ -344,9 +346,14 @@ function StepCardInner({ data, selected }: NodeProps<StepFlowNode>) {
               {outputs.map((p) => (
                 <span
                   key={p.name}
-                  className="relative flex min-h-control-xs items-center text-sm text-fg-secondary"
+                  className={cn(
+                    'relative flex min-h-control-xs items-center text-sm text-fg-secondary',
+                    // A step with several outputs shows the unused ones only while
+                    // a link is dragged; the settings panel lists and explains all of them.
+                    outputs.length > 1 && outFree(p.name) && !view.dragging && 'hidden',
+                  )}
                 >
-                  {portLabel(p)}
+                  {(node && contentLabel(nodes, edges, node, 'out', p.name)) ?? portLabel(p)}
                   <OutPort
                     nodeId={node.id}
                     nodeName={node.name}

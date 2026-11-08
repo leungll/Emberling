@@ -146,6 +146,7 @@ func Registration(ports Ports) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Review patch",
 			Description:   "Review the workspace's current patch with the node's independent review model against the repository's rules and advisories; the opinion is kept as a text artifact",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),
@@ -168,6 +169,15 @@ func Registration(ports Ports) registry.ToolRegistration {
 			RequiresReviewModel:         true,
 			UsesWorkspace:               true,
 			WorkspacePatchDigestPath:    "/patchDigest",
+			// The findings themselves are the opinion Artifact's content; the card shows
+			// the verdict, the counts and the bounded summary.
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/patchDigest", Title: "Patch digest"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/blocking", Title: "Blocking findings"},
+				{Source: domain.FactPointerResult, Pointer: "/findingCount", Title: "Findings"},
+				{Source: domain.FactPointerResult, Pointer: "/summary", Title: "Summary"},
+			},
 		},
 		Executor: New(ports),
 	}

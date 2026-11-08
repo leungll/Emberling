@@ -6,15 +6,19 @@ import { ObjectFields } from './ObjectFields';
 import {
   buildInput,
   checkField,
+  isObjectDraft,
   parseObject,
   runFields,
   runStartError,
   seedValues,
+  subFieldErrors,
+  switchObjectView,
   type FieldValue,
   type FormValues,
   type RunField,
 } from './run-form';
 import type { AssetRef, JsonObject, RunInputSchema } from '@/api/types';
+import { SchemaObjectFields } from '@/components/schema/SchemaObjectFields';
 import { StateBlock } from '@/components/state/StateBlock';
 import { Callout } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -137,8 +141,10 @@ export function RunInputDialog({
     if (touched[f.key]) setError(f, checkField(f, values[f.key] ?? null));
   };
 
-  const focusField = (key: string) => {
-    const el = formRef.current?.querySelector(`[data-field="${CSS.escape(key)}"]`);
+  /** Focuses a field's control, or one sub-field's control of an object field. */
+  const focusField = (key: string, sub?: string) => {
+    const field = formRef.current?.querySelector(`[data-field="${CSS.escape(key)}"]`);
+    const el = sub ? field?.querySelector(`[data-subfield="${CSS.escape(sub)}"]`) : field;
     const target = el?.querySelector<HTMLElement>(
       'textarea:not([hidden]), input:not([type=file]), button:not([disabled]), [role=radio][data-state=checked]',
     );
@@ -184,7 +190,12 @@ export function RunInputDialog({
     setSummary(bad.length);
     const first = bad[0];
     if (first) {
-      focusField(first.key);
+      const v = values[first.key];
+      const sub =
+        first.kind === 'object' && isObjectDraft(v)
+          ? Object.keys(subFieldErrors(first, v))[0]
+          : undefined;
+      focusField(first.key, sub);
       return;
     }
     onSubmit(buildInput(fields, values));
@@ -227,6 +238,23 @@ export function RunInputDialog({
           }}
           onUploadingChange={(busy) => {
             setUploading((prev) => ({ ...prev, [f.key]: busy }));
+          }}
+        />
+      );
+    }
+    if (f.kind === 'object' && isObjectDraft(v)) {
+      return (
+        <SchemaObjectFields
+          idPrefix={c.id}
+          labelledBy={labelId}
+          fields={f.fields ?? []}
+          values={v.values}
+          errors={errors[f.key] ? subFieldErrors(f, v) : undefined}
+          onChange={(key, next) => {
+            setValue(f, { ...v, values: { ...v.values, [key]: next } });
+          }}
+          onBlur={() => {
+            onBlur(f);
           }}
         />
       );
@@ -274,13 +302,39 @@ export function RunInputDialog({
           onBlur={() => {
             onBlur(f);
           }}
-          className={f.kind === 'json' || obj ? 'font-mono text-sm' : undefined}
+          className={
+            f.kind === 'json' || f.kind === 'object' || obj ? 'font-mono text-sm' : undefined
+          }
         />
       </>
     );
   };
 
+  const objectSwitch = (f: RunField) => {
+    const v = values[f.key];
+    return (
+      <Segmented<View>
+        label={`${r.showAs} ${f.label}`}
+        value={isObjectDraft(v) ? 'fields' : 'json'}
+        options={[
+          { value: 'fields', label: r.fields },
+          { value: 'json', label: r.json },
+        ]}
+        onValueChange={(view) => {
+          const next = switchObjectView(f, v, view);
+          if (next === null) {
+            setError(f, r.fixJson);
+            return;
+          }
+          setValues((prev) => ({ ...prev, [f.key]: next }));
+          setErrors((prev) => ({ ...prev, [f.key]: null }));
+        }}
+      />
+    );
+  };
+
   const viewSwitch = (f: RunField) => {
+    if (f.kind === 'object') return objectSwitch(f);
     if (f.kind !== 'text') return null;
     const text = values[f.key];
     const obj = typeof text === 'string' ? parseObject(text) : null;
@@ -343,7 +397,8 @@ export function RunInputDialog({
                 <Field
                   label={f.label}
                   required={f.required}
-                  error={errors[f.key]}
+                  // An object shown as sub-fields places each error under its own control.
+                  error={f.kind === 'object' && isObjectDraft(values[f.key]) ? null : errors[f.key]}
                   aside={viewSwitch(f)}
                 >
                   {(c, { labelId }) => control(f, c, labelId)}

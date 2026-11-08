@@ -1,7 +1,9 @@
+import type { AgentTraceMedia } from '@/api/agent-types';
 import type {
   AgentTurnTrace,
   ExecutionFactTrace,
   JsonValue,
+  ShownToolField,
   ToolAttemptTrace,
   ToolDeploymentTrace,
   ToolPhotoTrace,
@@ -113,6 +115,11 @@ function withheld(attempt: ToolAttemptTrace, field: string): WithheldToolField |
   return attempt.withheld?.find((w) => w.field === field);
 }
 
+/** The members a Tool declares for its run card, from one document of the call. */
+function shownOf(attempt: ToolAttemptTrace, source: 'ARGUMENTS' | 'RESULT'): ShownToolField[] {
+  return (attempt.shown ?? []).filter((s) => s.source === source);
+}
+
 /** What one finished tool call returned: the results it saved, else its projected result. */
 export function callResult(model: RunModel, step: Step, turn: AgentTurnTrace): CardLine | null {
   const attempt = turn.toolAttempts[turn.toolAttempts.length - 1];
@@ -158,6 +165,10 @@ export interface CallSaved {
   videoUrl: string | null;
   /** Result members the trace left out, and why. */
   withheld: WithheldToolField[];
+  /** The result members the Tool declares for its run card; shown before any named view. */
+  shown: ShownToolField[];
+  /** The media the Agent's trace lists, which a declared member's value may name. */
+  media: AgentTraceMedia | null;
 }
 
 /** What a tool call saved and returned; null when the trace holds neither. */
@@ -173,8 +184,9 @@ export function callSaved(model: RunModel, el: TraceElement): CallSaved | null {
   const videoUrl = done ? (attempt?.video?.videoUrl ?? null) : null;
   const review = done ? (attempt?.review ?? null) : null;
   const left = done && attempt ? (attempt.withheld ?? []) : [];
-  return facts.length || result || review || left.length
-    ? { facts, result, review, videoUrl, withheld: left }
+  const shown = done && attempt ? shownOf(attempt, 'RESULT') : [];
+  return facts.length || result || review || left.length || shown.length
+    ? { facts, result, review, videoUrl, withheld: left, shown, media: step.trace.media }
     : null;
 }
 
@@ -185,6 +197,9 @@ export interface CallArguments {
   /** "checkout in staging". */
   target: string | null;
   withheld: WithheldToolField[];
+  /** The argument members the Tool declares for its run card; shown before any named view. */
+  shown: ShownToolField[];
+  media: AgentTraceMedia | null;
 }
 
 /** The arguments the trace projects for a tool call; null when it projects none. */
@@ -197,8 +212,10 @@ export function callArguments(el: TraceElement): CallArguments | null {
   const settings = attempt.settings ?? null;
   const target = targetOf(attempt.deployment);
   const left = (attempt.withheld ?? []).filter((w) => !RESULT_ONLY.includes(w.field));
-  return photo || settings || target || left.length
-    ? { photo, settings, target, withheld: left }
+  const shown = shownOf(attempt, 'ARGUMENTS');
+  const media = el.step?.trace?.media ?? null;
+  return photo || settings || target || left.length || shown.length
+    ? { photo, settings, target, withheld: left, shown, media }
     : null;
 }
 
@@ -275,7 +292,8 @@ function agentRunningLine(step: Step): CardLine {
 
 function textPreview(text: string): Pick<CardInfo, 'line' | 'clamp' | 'full'> {
   const v = parseJsonText(text);
-  if (isObj(v)) return { line: line(c().jsonWith(Object.keys(v))), clamp: false, full: null };
+  // A JSON object reads as the step's status: a card never lists the object's keys.
+  if (isObj(v)) return { line: line(c().succeeded), clamp: false, full: null };
   const flat = text.replace(/\s+/g, ' ').trim();
   return { line: line(flat), clamp: true, full: flat };
 }

@@ -75,7 +75,7 @@ test('Reference Image upload creates a Run whose Image Input output previews the
   // uploaded Asset's ID.
   await expect(stepCard(page, 'Reference')).toHaveAccessibleName(/, Succeeded,/);
   await stepCard(page, 'Reference').click();
-  await details(page).getByRole('tab', { name: 'Output' }).click();
+  await details(page).getByRole('tab', { name: 'Data' }).click();
   // The image is captioned with the Asset's short code; the full ID is its tooltip.
   const figure = details(page).getByRole('figure').filter({ hasText: 'Uploaded image' });
   const code = assetId.slice(assetId.lastIndexOf('_') + 1).slice(0, 8);

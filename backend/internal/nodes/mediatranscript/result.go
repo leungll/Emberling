@@ -56,7 +56,8 @@ type terminalPayload struct {
 
 // transcribeResult is the result object of a SUCCEEDED TRANSCRIBE task. Material is the
 // whole transcript, one line per sentence; it is written to artifact storage and never
-// copied anywhere else.
+// copied anywhere else. URL and MediaType say where the service serves the source video
+// and what it is; a service that predates them reports neither.
 type transcribeResult struct {
 	SourceID         string `json:"sourceId"`
 	SourceSHA256     string `json:"sourceSha256"`
@@ -67,6 +68,8 @@ type transcribeResult struct {
 	DurationMs       int64  `json:"durationMs"`
 	Model            string `json:"model"`
 	Material         string `json:"material"`
+	URL              string `json:"url"`
+	MediaType        string `json:"mediaType"`
 }
 
 // Transcript is the `transcript` output port: a reference to the material and its
@@ -84,6 +87,12 @@ type Transcript struct {
 	DurationMs   int64  `json:"durationMs"`
 	SourceID     string `json:"sourceId"`
 	SourceSHA256 string `json:"sourceSha256"`
+	// SourceURL and SourceMediaType are where the service serves the source video and
+	// what it is, copied from the task result so the Run can show the input the task
+	// names by SourceID. Both are omitted when the service reported neither, so a
+	// result from an older service still publishes the transcript reference.
+	SourceURL       string `json:"sourceUrl,omitempty"`
+	SourceMediaType string `json:"sourceMediaType,omitempty"`
 }
 
 // interpret turns a terminal payload into the node's output, a *registry.ProviderFailure
@@ -145,15 +154,17 @@ func (e *Executor) publish(ctx context.Context, state registry.NodeAsyncState, r
 	}
 
 	transcript, err := json.Marshal(Transcript{
-		ArtifactID:    ref.ArtifactID,
-		SHA256:        ref.SHA256,
-		LineCount:     result.LineCount,
-		SentenceCount: result.SentenceCount,
-		SizeBytes:     int64(len(result.Material)),
-		Language:      result.Language,
-		DurationMs:    result.DurationMs,
-		SourceID:      result.SourceID,
-		SourceSHA256:  result.SourceSHA256,
+		ArtifactID:      ref.ArtifactID,
+		SHA256:          ref.SHA256,
+		LineCount:       result.LineCount,
+		SentenceCount:   result.SentenceCount,
+		SizeBytes:       int64(len(result.Material)),
+		Language:        result.Language,
+		DurationMs:      result.DurationMs,
+		SourceID:        result.SourceID,
+		SourceSHA256:    result.SourceSHA256,
+		SourceURL:       result.URL,
+		SourceMediaType: result.MediaType,
 	})
 	if err != nil {
 		return registry.NodeOutput{}, fmt.Errorf("media_transcript: encode transcript output: %w", err)

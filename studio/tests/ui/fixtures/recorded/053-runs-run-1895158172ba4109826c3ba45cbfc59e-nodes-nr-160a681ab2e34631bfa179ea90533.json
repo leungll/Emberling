@@ -753,5 +753,9 @@
   "generationBudget": {
     "maxGenerationCalls": 12,
     "generationCallsUsed": 6
+  },
+  "media": {
+    "items": [],
+    "truncated": false
   }
 }

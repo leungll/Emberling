@@ -22,8 +22,8 @@ const runPath = (run: { workflowId: string; runId: string }, search = '') =>
   `/workflows/${run.workflowId}/runs/${run.runId}${search}`;
 
 const runReady = async (page: Page) => {
-  await expect(page.getByRole('treegrid')).toBeVisible();
-  await expect(page.getByRole('listbox', { name: /runs/i })).toBeVisible();
+  await expect(page.getByRole('treeitem').first()).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Runs' })).toBeVisible();
 };
 
 /**
@@ -147,10 +147,11 @@ const states: ReviewState[] = [
     mode: 'block',
     ready: runReady,
     act: async (page) => {
-      // Where the logs are narrow the details open as a drawer when a row is chosen.
+      // Where the page is narrow the details open as a drawer when a card is chosen.
       const turns = page.getByRole('tab', { name: 'Turns', selected: true });
       if (!(await turns.isVisible())) {
-        await page.getByRole('row', { name: /Effect Template Agent/ }).click();
+        await page.getByRole('treeitem', { name: /Effect Template Agent/ }).click();
+        await page.getByRole('tab', { name: 'Turns' }).click();
       }
       await expect(turns).toBeVisible();
       await page.getByRole('button', { name: /^Show each of the/ }).click();

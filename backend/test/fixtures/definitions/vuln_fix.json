@@ -14,9 +14,9 @@
         "required": true,
         "schema": {
           "properties": {
-            "advisory": {"type": "string", "minLength": 1},
-            "goal": {"type": "string", "enum": ["PREPARE_ONLY", "FIX_AND_DEPLOY"]},
-            "service": {"type": "string"}
+            "advisory": {"title": "Advisory", "type": "string", "minLength": 1},
+            "goal": {"title": "Goal", "type": "string", "enum": ["PREPARE_ONLY", "FIX_AND_DEPLOY"]},
+            "service": {"title": "Service", "type": "string"}
           },
           "required": ["advisory", "goal"]
         }

@@ -17,25 +17,36 @@
         "required": true,
         "schema": {
           "properties": {
+            "requirement": {
+              "title": "Requirement",
+              "description": "What the clip should be about and how long it should be, in plain words.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
             "sourceId": {
+              "title": "Source video",
+              "contentMediaType": "video/webm",
+              "description": "The media service's id of the talk to cut.",
               "type": "string",
               "minLength": 1
             },
             "sourceSha256": {
+              "title": "Source video SHA-256",
+              "description": "The SHA-256 of the source video file, as the media service reports it.",
               "type": "string",
               "minLength": 64,
               "maxLength": 64
             },
             "durationMs": {
+              "title": "Source duration (ms)",
+              "description": "Length of the source video in milliseconds.",
               "type": "integer",
               "minimum": 0
             },
-            "requirement": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 2000
-            },
             "goal": {
+              "title": "Goal",
+              "description": "What counts as done. DELIVER_CLIP: hand over a checked clip.",
               "type": "string",
               "enum": [
                 "DELIVER_CLIP"
@@ -43,10 +54,10 @@
             }
           },
           "required": [
+            "requirement",
             "sourceId",
             "sourceSha256",
             "durationMs",
-            "requirement",
             "goal"
           ]
         }
@@ -131,6 +142,7 @@
           "type": "object",
           "properties": {
             "outcome": {
+              "title": "Outcome",
               "type": "string",
               "enum": [
                 "DELIVERED",
@@ -139,6 +151,8 @@
               "description": "DELIVERED when a checked clip is handed over; CANNOT_SATISFY when the material cannot meet the requirement without distorting it."
             },
             "clipSha256": {
+              "title": "Clip",
+              "contentMediaType": "video/mp4",
               "type": [
                 "string",
                 "null"
@@ -146,6 +160,7 @@
               "description": "The digest render_timeline returned for the delivered clip; null when nothing is delivered."
             },
             "selectionReason": {
+              "title": "Why these sentences",
               "type": [
                 "string",
                 "null"
@@ -153,6 +168,7 @@
               "description": "Which sentences were chosen and why; null when nothing is delivered."
             },
             "cannotSatisfyReason": {
+              "title": "Why it can't be done",
               "type": [
                 "string",
                 "null"

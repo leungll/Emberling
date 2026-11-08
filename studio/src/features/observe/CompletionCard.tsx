@@ -53,8 +53,7 @@ export function CompletionCard({ completion }: { completion: AgentCompletion }) 
             <ul className="m-0 flex list-disc flex-col gap-1 pl-5">
               {completion.missing.map((item) => (
                 <li key={item.code}>
-                  {item.description}{' '}
-                  <code className="font-mono text-xs text-fg-muted">{item.code}</code>
+                  {copy.status.completionMissing[item.code] ?? item.description}
                 </li>
               ))}
             </ul>

@@ -38,6 +38,8 @@ describe('a generate_image call’s settings in its Arguments tab', () => {
           settings: { prompt: 'Clay look, keep the face', aspectRatio: '3:4', resolution: '1K' },
           target: null,
           withheld: [],
+          shown: [],
+          media: null,
         }}
       />,
     );
@@ -58,6 +60,8 @@ describe('a generate_image call’s settings in its Arguments tab', () => {
           settings: { prompt: 'Clay look', promptTruncated: true },
           target: null,
           withheld: [],
+          shown: [],
+          media: null,
         }}
       />,
     );
@@ -76,6 +80,8 @@ describe('a generate_image call’s settings in its Arguments tab', () => {
           settings: { resolution: '1K' },
           target: null,
           withheld: [{ field: 'settings.prompt', reason: 'TOO_LARGE' }],
+          shown: [],
+          media: null,
         }}
       />,
     );
@@ -95,6 +101,8 @@ describe('a review_asset call’s verdict in its Result tab', () => {
           review: { passed: false, reasons: ['Face lost its likeness', 'Background is flat'] },
           videoUrl: null,
           withheld: [],
+          shown: [],
+          media: null,
         }}
       />,
     );
@@ -112,7 +120,15 @@ describe('a review_asset call’s verdict in its Result tab', () => {
     wrap(
       <CallResultView
         ctx={ctx()}
-        saved={{ facts: [], result: null, review: { passed: true }, videoUrl: null, withheld: [] }}
+        saved={{
+          facts: [],
+          result: null,
+          review: { passed: true },
+          videoUrl: null,
+          withheld: [],
+          shown: [],
+          media: null,
+        }}
       />,
     );
 
@@ -130,10 +146,109 @@ describe('a review_asset call’s verdict in its Result tab', () => {
           review: { passed: false },
           videoUrl: null,
           withheld: [{ field: 'review.reasons', reason: 'TOO_LARGE' }],
+          shown: [],
+          media: null,
         }}
       />,
     );
 
     expect(screen.getByText('The review’s reason list is too long to show.')).toBeInTheDocument();
+  });
+});
+
+describe('the members a Tool declares for its run card', () => {
+  const media = {
+    items: [
+      {
+        ref: 'https://media.example/v1/clips/c1.mp4',
+        url: 'https://media.example/v1/clips/c1.mp4',
+        mediaType: 'video/mp4',
+        toolAttemptId: 'ta_1',
+      },
+    ],
+    truncated: false,
+  };
+
+  it('shows each declared argument under its title before any named view', () => {
+    wrap(
+      <CallArgumentsView
+        ctx={ctx()}
+        args={{
+          photo: null,
+          settings: { prompt: 'Clay look', aspectRatio: '3:4' },
+          target: null,
+          withheld: [],
+          shown: [
+            { title: 'Brief', source: 'ARGUMENTS', pointer: '/brief', value: 'Warm and quiet' },
+            { title: 'Length', source: 'ARGUMENTS', pointer: '/seconds', value: 12 },
+          ],
+          media: null,
+        }}
+      />,
+    );
+    expect(screen.getByText('Brief')).toBeInTheDocument();
+    expect(screen.getByText('Warm and quiet')).toBeInTheDocument();
+    expect(screen.getByText('Length')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument();
+  });
+
+  it('reads a withheld member as a plain fact', () => {
+    wrap(
+      <CallResultView
+        ctx={ctx()}
+        saved={{
+          facts: [],
+          result: null,
+          review: null,
+          videoUrl: null,
+          withheld: [],
+          shown: [
+            { title: 'Log', source: 'RESULT', pointer: '/log', value: null, withheld: 'TOO_LARGE' },
+          ],
+          media: null,
+        }}
+      />,
+    );
+    expect(screen.getByText('Log')).toBeInTheDocument();
+    expect(screen.getByText('Not shown: too long to show.')).toBeInTheDocument();
+  });
+
+  it('plays a result member only through the trace media that serves it', () => {
+    const served = 'https://media.example/v1/clips/c1.mp4';
+    const { container, unmount } = wrap(
+      <CallResultView
+        ctx={ctx()}
+        saved={{
+          facts: [],
+          result: null,
+          review: null,
+          videoUrl: null,
+          withheld: [],
+          shown: [{ title: 'Clip', source: 'RESULT', pointer: '/url', value: served }],
+          media,
+        }}
+      />,
+    );
+    expect(container.querySelector('video')?.getAttribute('src')).toBe(served);
+    unmount();
+
+    const other = 'https://media.example/v1/clips/c2.mp4';
+    const second = wrap(
+      <CallResultView
+        ctx={ctx()}
+        saved={{
+          facts: [],
+          result: null,
+          review: null,
+          videoUrl: null,
+          withheld: [],
+          shown: [{ title: 'Clip', source: 'RESULT', pointer: '/url', value: other }],
+          media,
+        }}
+      />,
+    );
+    expect(second.container.querySelector('video')).toBeNull();
+    expect(screen.getByText(other)).toBeInTheDocument();
   });
 });

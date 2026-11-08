@@ -114,7 +114,8 @@ var errTooLarge = errors.New("material exceeds the review bound")
 func Registration(ports Ports) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
-			Name: ToolName,
+			Name:  ToolName,
+			Title: "Review artifact",
 			Description: "Review a timeline's selected sentences, with their context in the transcript, against the user's requirement " +
 				"with the node's independent review model; a review that does not pass returns its issues",
 			InputSchema:   json.RawMessage(inputSchema),
@@ -136,6 +137,11 @@ func Registration(ports Ports) registry.ToolRegistration {
 			ReviewModelCapability:       domain.ModelCapabilityStructuredDecision,
 			RequiresReviewModel:         true,
 			CountedFailedFacts:          []string{FactType},
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/requirement", Title: "Requirement"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/issues", Title: "Issues"},
+			},
 		},
 		Executor: New(ports),
 	}

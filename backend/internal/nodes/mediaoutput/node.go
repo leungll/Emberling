@@ -41,11 +41,18 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Media Output",
+			Description:   "Shows an image and a caption as the run’s result.",
 			Category:      domain.NodeCategoryOutput,
 			ExecutionKind: domain.NodeExecutionSync,
 			Inputs: []domain.PortMetadata{
-				{Name: imagePort, DataType: domain.PortTypeImage, Required: true},
-				{Name: captionPort, DataType: domain.PortTypeText, Required: true},
+				{
+					Name: imagePort, DataType: domain.PortTypeImage, Required: true,
+					Description: "The image shown as the result.",
+				},
+				{
+					Name: captionPort, DataType: domain.PortTypeText, Required: true,
+					Description: "The caption shown with the image.",
+				},
 			},
 			ConfigSchema: json.RawMessage(configSchema),
 			SideEffect:   domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},

@@ -77,12 +77,22 @@ func Registration(ports Ports) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:            ToolName,
+			Title:           "Read material",
 			Description:     "Read a range of lines of a text artifact of this run",
 			InputSchema:     json.RawMessage(inputSchema),
 			OutputSchema:    json.RawMessage(outputSchema),
 			SideEffect:      domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
 			ExecutionKind:   domain.ToolExecutionSync,
 			MaterialPointer: materialPointer,
+			// The range read is shown; the text itself is material the Context Manifest
+			// accounts for and never a run-card member.
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/artifactId", Title: "Material"},
+				{Source: domain.FactPointerArguments, Pointer: "/startLine", Title: "Start line"},
+				{Source: domain.FactPointerArguments, Pointer: "/lineCount", Title: "Line count"},
+				{Source: domain.FactPointerResult, Pointer: "/material/totalLines", Title: "Total lines"},
+				{Source: domain.FactPointerResult, Pointer: "/truncated", Title: "Truncated"},
+			},
 		},
 		Executor: Executor{ports: ports},
 	}

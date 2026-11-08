@@ -38,11 +38,16 @@ func NewQueryService(deps Deps) *QueryService {
 // same read, nil when none carries usage. It is never persisted and never feeds the Run
 // status, which stays derived from NodeRun state alone. An Agent's Turns reach it once,
 // through the Agent NodeRun's own sum.
+//
+// Media is the read-time list of the media the SUCCEEDED NodeRuns of this same read
+// produced, by the media links their Node Types declare; it is a projection, never
+// persisted.
 type RunSnapshot struct {
 	Run        domain.Run
 	NodeRuns   []domain.NodeRun
 	LastSeq    int64
 	TokenUsage *domain.TokenUsage
+	Media      RunMedia
 }
 
 // NodeRunDetail is one NodeRun together with its Attempts, ordered by AttemptNo.
@@ -97,6 +102,7 @@ func (s *QueryService) Snapshot(ctx context.Context, runID string) (RunSnapshot,
 			NodeRuns:   nodeRuns,
 			LastSeq:    run.LastSeq,
 			TokenUsage: runtime.SumTokenUsage(usages...),
+			Media:      runMedia(nodeRuns, s.deps.Nodes),
 		}
 		return nil
 	})
@@ -200,6 +206,16 @@ type AgentTrace struct {
 	// Completion is the goal-based completion verdict, nil while the Agent Run has not
 	// terminated and for an Agent Run that froze no goal.
 	Completion *domain.AgentCompletion
+	// LatestState is the State Version the Agent Run's current State pointer names, read
+	// in the same transaction. State Versions are immutable and committed before the
+	// pointer moves to them, so this is the value the next Turn would read.
+	LatestState domain.AgentStateVersion
+	// Media lists the media the SUCCEEDED Tool Attempts above produced, as the Tools'
+	// registered media links declare them, read from the same committed results.
+	Media AgentTraceMedia
+	// ToolDisplay holds, per Tool Name with an Attempt above, the members the Registry
+	// currently declares for display, so the projection shows only declared members.
+	ToolDisplay map[string][]domain.ToolDisplayField
 }
 
 // AgentTraceTurn is one round: the Turn, the single Decision and Action it committed (both
@@ -374,8 +390,13 @@ func (s *QueryService) AgentTrace(ctx context.Context, runID, nodeRunID string) 
 		if err != nil {
 			return err
 		}
+		latestState, err := tx.AgentStateVersions().GetByRunAndVersion(ctx, agentRun.ID, agentRun.CurrentStateVersion)
+		if err != nil {
+			return err
+		}
 		trace = AgentTrace{AgentRun: agentRun, RunInput: run.Input, Turns: rounds, Facts: facts, Budget: budget,
-			Workspace: workspace, ChangeRequests: changeRequests, Completion: completion}
+			Workspace: workspace, ChangeRequests: changeRequests, Completion: completion, LatestState: latestState,
+			Media: agentTraceMedia(rounds, s.deps.Tools), ToolDisplay: agentTraceToolDisplay(rounds, s.deps.Tools)}
 		return nil
 	})
 	if err != nil {

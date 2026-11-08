@@ -119,13 +119,26 @@ func Registration(ports Ports) (registry.NodeRegistration, error) {
 		Metadata: domain.NodeMetadata{
 			Type:          NodeType,
 			DisplayName:   "Media Transcript",
+			Description:   "Turns the source video into timed sentences.",
 			Category:      domain.NodeCategoryPromptAndModel,
 			ExecutionKind: domain.NodeExecutionAsync,
-			Inputs:        []domain.PortMetadata{{Name: TaskPort, DataType: domain.PortTypeJSON, Required: true}},
+			Inputs: []domain.PortMetadata{{
+				Name: TaskPort, DataType: domain.PortTypeJSON, Required: true,
+				Description: "The request and the source video.",
+			}},
 			Outputs: []domain.PortMetadata{
-				{Name: TranscriptPort, DataType: domain.PortTypeJSON, Required: true},
-				{Name: TaskPort, DataType: domain.PortTypeJSON, Required: true},
-				{Name: AssignmentPort, DataType: domain.PortTypeJSON, Required: true},
+				{
+					Name: TranscriptPort, DataType: domain.PortTypeJSON, Required: true,
+					Description: "Only the timed sentences.",
+				},
+				{
+					Name: TaskPort, DataType: domain.PortTypeJSON, Required: true,
+					Description: "The request and video, unchanged.",
+				},
+				{
+					Name: AssignmentPort, DataType: domain.PortTypeJSON, Required: true,
+					Title: "Task + transcript", Description: "The request and video, plus the transcript. The Agent reads this.",
+				},
 			},
 			ConfigSchema: json.RawMessage(configSchema),
 			// Transcription is deterministic for one source, so repeating the task would be
@@ -134,6 +147,13 @@ func Registration(ports Ports) (registry.NodeRegistration, error) {
 			Poll:       &domain.PollPolicy{IntervalMs: pollIntervalMs, MaxPolls: maxPolls},
 			// No DispatchModelPath: the node calls no model and is not governed by
 			// Provider capacity.
+			// The transcript names the source video it belongs to by sourceId, the value
+			// the task object and the Agent's final output use for it, and the service's
+			// result says where that video is served; the Run lists it as media by this
+			// declaration, never by composing a URL from the id.
+			MediaLinks: []domain.MediaLink{{
+				Port: TranscriptPort, RefPointer: "/sourceId", URLPointer: "/sourceUrl", MediaTypePointer: "/sourceMediaType",
+			}},
 		},
 		Binding: registry.ExecutorBinding{Executor: &Executor{
 			tasks: ports.Tasks, artifacts: ports.Artifacts, providerID: providerID,

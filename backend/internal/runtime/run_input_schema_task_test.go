@@ -95,3 +95,27 @@ func TestRunInputSchema_TaskInput_KeySharedWithTextInput_FailsOnBoth(t *testing.
 		t.Fatalf("duplicate-key errors on %v, want both nodes", nodes)
 	}
 }
+
+// TestRunInputSchema_TaskInput_ContentMediaTypeSurvivesAndIsNotEnforced pins that a
+// task schema may annotate a string member with contentMediaType: the keyword is carried
+// into the frozen runInputSchema for Studio to read, and run input validation never
+// checks a value against it.
+func TestRunInputSchema_TaskInput_ContentMediaTypeSurvivesAndIsNotEnforced(t *testing.T) {
+	config := `{"inputKey":"task","required":true,"schema":{"required":["poster"],"properties":{"poster":{"type":"string","contentMediaType":"image/png"}}}}`
+	schema, errs := buildRunInputSchema(taskInputDefinition(config))
+	if len(errs) > 0 {
+		t.Fatalf("buildRunInputSchema() errors = %+v, want none", errs)
+	}
+	want := `{"type":"object","additionalProperties":false,"properties":{"task":{` +
+		`"properties":{"poster":{"contentMediaType":"image/png","type":"string"}},` +
+		`"required":["poster"],"type":"object"}},"required":["task"]}`
+	if got := string(schema); got != want {
+		t.Fatalf("RunInputSchema =\n%s\nwant\n%s", got, want)
+	}
+	if errs := ValidateRunInput(schema, json.RawMessage(`{"task":{"poster":"not media"}}`)); len(errs) > 0 {
+		t.Errorf("ValidateRunInput(non-media string) errors = %+v, want contentMediaType ignored", errs)
+	}
+	if errs := ValidateRunInput(schema, json.RawMessage(`{"task":{"poster":12}}`)); len(errs) == 0 {
+		t.Errorf("ValidateRunInput(non-string poster) errors = none, want the string type still enforced")
+	}
+}

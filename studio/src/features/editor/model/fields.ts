@@ -1,5 +1,6 @@
-import type { JsonObject, JsonValue, Node, ToolMetadata } from '@/api/types';
+import type { JsonObject, JsonSchema, JsonValue, Node, ToolMetadata } from '@/api/types';
 import { editor as t } from '@/lib/copy/editor';
+import { exampleObject, orderedKeys } from '@/lib/schema-fields';
 
 /**
  * How each known config key is presented: its label, control and the side panel section it
@@ -40,6 +41,8 @@ export interface FieldSpec {
   optional?: boolean;
   hideLabel?: boolean;
   expand?: boolean;
+  /** A schema shown as the list of fields a run fills in, not as a one-line summary. */
+  fieldList?: boolean;
 }
 
 const f = t.fields;
@@ -66,7 +69,6 @@ export const FIELD_SPEC: Record<string, FieldSpec> = {
     label: f.maxTurns,
     widget: 'int',
     section: 'limits',
-    before: f.upTo,
     unit: f.turns,
     min: 1,
     hint: f.maxTurnsHint,
@@ -83,7 +85,6 @@ export const FIELD_SPEC: Record<string, FieldSpec> = {
     widget: 'int',
     section: 'limits',
     optional: true,
-    before: f.upTo,
     unit: f.calls,
     min: 1,
     placeholder: f.noLimit,
@@ -146,33 +147,34 @@ export const FIELD_SPEC: Record<string, FieldSpec> = {
     section: 'template',
     hideLabel: true,
   },
-  'text_input.label': { label: f.fieldLabel, widget: 'label', section: 'runField' },
-  'text_input.required': { label: f.required, widget: 'required', section: 'runField' },
+  'text_input.required': { label: f.required, widget: 'required', section: 'needs' },
   'text_input.textLength': {
     label: f.textLength,
     widget: 'lengthRange',
-    section: 'runField',
+    section: 'needs',
     keys: ['minLength', 'maxLength'],
   },
+  'text_input.label': { label: f.fieldLabel, widget: 'label', section: 'api' },
   'text_input.inputKey': { label: f.key, widget: 'key', section: 'api' },
-  'task_input.label': { label: f.fieldLabel, widget: 'label', section: 'runField' },
-  'task_input.required': { label: f.required, widget: 'required', section: 'runField' },
   'task_input.schema': {
     label: f.schema.taskSchema[0],
     widget: 'schema',
-    section: 'runField',
+    section: 'needs',
     help: f.schema.taskSchema[1],
+    fieldList: true,
   },
+  'task_input.required': { label: f.required, widget: 'required', section: 'needs' },
+  'task_input.label': { label: f.fieldLabel, widget: 'label', section: 'api' },
   'task_input.inputKey': { label: f.key, widget: 'key', section: 'api' },
-  'image_input.label': { label: f.fieldLabel, widget: 'label', section: 'runField' },
-  'image_input.required': { label: f.required, widget: 'required', section: 'runField' },
+  'image_input.required': { label: f.required, widget: 'required', section: 'needs' },
   'image_input.acceptedMediaTypes': {
     label: f.formats,
     widget: 'formats',
-    section: 'runField',
+    section: 'needs',
     hint: f.formatsHint,
   },
-  'image_input.maxSizeBytes': { label: f.maxSize, widget: 'sizeMB', section: 'runField' },
+  'image_input.maxSizeBytes': { label: f.maxSize, widget: 'sizeMB', section: 'needs' },
+  'image_input.label': { label: f.fieldLabel, widget: 'label', section: 'api' },
   'image_input.inputKey': { label: f.key, widget: 'key', section: 'api' },
   'media_brief.inputKey': { label: f.key, widget: 'key', section: 'api' },
 };
@@ -283,20 +285,44 @@ export const SCHEMA_EXAMPLE: Record<string, JsonObject> = {
   },
 };
 
-/** A data format in a few words: its fields, its type, or that it accepts any shape. */
+/** A config value that is a JSON Schema object, or undefined. */
+export function schemaOf(v: JsonValue | undefined): JsonSchema | undefined {
+  return v !== null && typeof v === 'object' && !Array.isArray(v) ? v : undefined;
+}
+
+/**
+ * A data format in a few words: all its fields, required ones first, its type, or that it
+ * accepts any shape. Never shortened: a hidden field is one nobody can check.
+ */
 export function schemaSummary(v: JsonValue | undefined): string {
   if (v === undefined || v === null) return f.schemaAny;
-  if (typeof v !== 'object' || Array.isArray(v)) return f.schemaDefined;
-  const props = v.properties;
-  const keys =
-    props && typeof props === 'object' && !Array.isArray(props) ? Object.keys(props) : [];
-  if (keys.length) {
-    const shown =
-      keys.length > 3
-        ? f.schemaMore(keys.slice(0, 3).join(', '), keys.length - 3)
-        : keys.join(', ');
-    return f.schemaFields(keys.length, shown);
-  }
-  if (typeof v.type === 'string') return f.schemaType[v.type] ?? f.schemaTypeOther;
+  const schema = schemaOf(v);
+  if (!schema) return f.schemaDefined;
+  const keys = orderedKeys(schema);
+  if (keys.length) return f.schemaFields(keys.length, keys.join(', '));
+  if (typeof schema.type === 'string') return f.schemaType[schema.type] ?? f.schemaTypeOther;
   return f.schemaDefined;
+}
+
+/**
+ * This step's part of the run input, with placeholder values in the shape the Backend
+ * accepts: text as text, a task with every required field of its schema, an image as a
+ * complete asset reference.
+ */
+export function inputExample(node: Node): JsonObject {
+  const c = node.config;
+  const key = typeof c.inputKey === 'string' && c.inputKey ? c.inputKey : 'key';
+  const accepted = Array.isArray(c.acceptedMediaTypes) ? c.acceptedMediaTypes : [];
+  const mediaType = typeof accepted[0] === 'string' ? accepted[0] : 'image/png';
+  const ref: JsonObject = { assetId: 'asset_…', mediaType, sizeBytes: 0, sha256: '…' };
+  switch (node.type) {
+    case 'image_input':
+      return { [key]: ref };
+    case 'media_brief':
+      return { [key]: [ref] };
+    case 'task_input':
+      return { [key]: exampleObject(schemaOf(c.schema)) };
+    default:
+      return { [key]: '…' };
+  }
 }

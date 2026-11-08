@@ -235,7 +235,9 @@ export function inspectPage(options: InspectOptions): InspectResult {
     for (let n = el.parentElement; n; n = n.parentElement) {
       const s = getComputedStyle(n);
       if (s.position === 'fixed') break;
-      if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+      // Paint containment clips like overflow hidden does.
+      const paints = /\b(paint|strict|content)\b/.test(s.contain);
+      if (s.overflowX === 'visible' && s.overflowY === 'visible' && !paints) continue;
       const c = n.getBoundingClientRect();
       box = {
         left: Math.max(box.left, c.left),
@@ -437,7 +439,14 @@ export function inspectPage(options: InspectOptions): InspectResult {
     document.querySelectorAll(
       'a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="menuitem"], [role="option"], [tabindex="0"]',
     ),
-  ).filter((el) => visible(el) && !visuallyHidden(el) && !el.closest('[aria-hidden="true"]'));
+  ).filter(
+    (el) =>
+      visible(el) &&
+      !visuallyHidden(el) &&
+      !el.closest('[aria-hidden="true"]') &&
+      // The content of a closed disclosure keeps layout boxes it never paints.
+      !el.closest('details:not([open]) > :not(summary)'),
+  );
   const rects = interactive.map((el) => el.getBoundingClientRect());
   // What a scrolling or clipping ancestor leaves on screen; overlaps are measured there, and
   // an element scrolled out of view overlaps nothing. Its target size is still checked.

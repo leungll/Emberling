@@ -287,7 +287,7 @@ function TurnBlock({
       ? (copy.errors as Record<string, { short: string } | undefined>)[errorCode]?.short
       : undefined) ?? t.notAllowed;
   return (
-    <li className="relative rounded-lg border border-border bg-surface">
+    <li data-turn-id={turn.id} className="relative rounded-lg border border-border bg-surface">
       {TURN_EDGE[tel.tone] ? (
         <span
           aria-hidden="true"
@@ -330,7 +330,7 @@ function TurnBlock({
             icon={final ? ArrowRightFromLine : Wrench}
             meta={<ElementTime model={ctx.model} el={act} />}
           >
-            {final ? copy.runs.trace.finalAnswer : <ToolName name={tool} />}
+            {final ? copy.runs.trace.finalAnswer : <ToolName name={tool} tools={ctx.tools} />}
             <StatusIndicator status={act.status} />
           </Item>
         ) : null}
@@ -445,7 +445,7 @@ function GroupBlock({
             <div key={`${tool}-${String(i)}`} className="contents">
               {target ? (
                 <Item id={target} ctx={ctx} icon={Wrench}>
-                  <ToolName name={tool} />
+                  <ToolName name={tool} tools={ctx.tools} />
                   <span className="text-fg-muted tabular-nums">{t.times(mine.length)}</span>
                   <span className="text-sm text-st-succeeded-fg">
                     {mine.length > 1 ? t.allSucceeded : t.succeeded}

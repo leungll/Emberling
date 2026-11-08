@@ -1,8 +1,8 @@
 // Package nodes has no production code of its own; it only proves that every built-in
-// Node registers cleanly together against one NodeRegistry; nodes/textinput, .../
-// prompttemplate, .../textgeneration, .../textoutput, .../mediaoutput, .../imageinput,
-// .../mediabrief, .../mediaresult, .../mediatranscript and .../imagegeneration each still own their
-// focused, per-node tests.
+// Node registers cleanly together against one NodeRegistry and carries the display text
+// Studio shows; nodes/textinput, .../prompttemplate, .../textgeneration, .../textoutput,
+// .../mediaoutput, .../imageinput, .../mediabrief, .../mediaresult, .../mediatranscript,
+// .../imagegeneration and .../agent each still own their focused, per-node tests.
 package nodes
 
 import (
@@ -12,6 +12,7 @@ import (
 	"github.com/leungll/Emberling/backend/internal/adapters/externaltask"
 	"github.com/leungll/Emberling/backend/internal/adapters/mocktask"
 	"github.com/leungll/Emberling/backend/internal/asset"
+	"github.com/leungll/Emberling/backend/internal/nodes/agent"
 	"github.com/leungll/Emberling/backend/internal/nodes/imagegeneration"
 	"github.com/leungll/Emberling/backend/internal/nodes/imageinput"
 	"github.com/leungll/Emberling/backend/internal/nodes/mediabrief"
@@ -39,11 +40,11 @@ func (noopModelResolver) ProviderID(string) (string, error) {
 	return "", registry.ErrModelNotRegistered
 }
 
-// TestNodeRegistry_Registrations_PassStartupValidation covers every built-in Node
-// registered so far: the synchronous text Nodes and the asynchronous image_generation
-// share one startup check rather than a second, parallel list.
-func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
-	r := registry.NewNodeRegistry()
+// builtinRegistrations returns every built-in Node registration, wired to inert ports:
+// nothing here dispatches, so the list only has to be complete. A new built-in Node is
+// added here and in the type list of the startup test.
+func builtinRegistrations(t *testing.T) []registry.NodeRegistration {
+	t.Helper()
 	transcript, err := mediatranscript.Registration(mediatranscript.Ports{
 		Tasks:     externaltask.New("http://media-service.test", nil),
 		Artifacts: asset.NewArtifactStore(t.TempDir(), 1<<20),
@@ -51,7 +52,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mediatranscript.Registration() error = %v", err)
 	}
-	registrations := []registry.NodeRegistration{
+	return []registry.NodeRegistration{
 		textinput.Registration(),
 		transcript,
 		taskinput.Registration(),
@@ -63,7 +64,16 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 		mediaoutput.Registration(),
 		mediaresult.Registration(),
 		imagegeneration.Registration(noopModelResolver{}, mocktask.New("http://mock-provider.test", nil)),
+		agent.Registration(),
 	}
+}
+
+// TestNodeRegistry_Registrations_PassStartupValidation covers every built-in Node
+// registered so far: the synchronous text Nodes, the asynchronous image_generation and
+// the managed agent share one startup check rather than a second, parallel list.
+func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
+	r := registry.NewNodeRegistry()
+	registrations := builtinRegistrations(t)
 	for _, reg := range registrations {
 		if err := r.Register(reg); err != nil {
 			t.Fatalf("Register(%q) error = %v, want nil", reg.Metadata.Type, err)
@@ -86,6 +96,7 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 		"media_result":     false,
 		"image_generation": false,
 		"media_transcript": false,
+		"agent":            false,
 	}
 	for _, meta := range list {
 		if _, known := wantTypes[meta.Type]; !known {
@@ -96,6 +107,28 @@ func TestNodeRegistry_Registrations_PassStartupValidation(t *testing.T) {
 	for typ, seen := range wantTypes {
 		if !seen {
 			t.Fatalf("ListMetadata() is missing built-in node type %q", typ)
+		}
+	}
+}
+
+// TestNodeRegistrations_CarryDisplayText proves that Studio can describe every built-in
+// step and every one of its handles without a per-type fallback table: each Node has a
+// description and each input and output port has one too. A port title stays optional.
+func TestNodeRegistrations_CarryDisplayText(t *testing.T) {
+	for _, reg := range builtinRegistrations(t) {
+		meta := reg.Metadata
+		if meta.Description == "" {
+			t.Errorf("node %q has no description", meta.Type)
+		}
+		for _, port := range meta.Inputs {
+			if port.Description == "" {
+				t.Errorf("node %q input port %q has no description", meta.Type, port.Name)
+			}
+		}
+		for _, port := range meta.Outputs {
+			if port.Description == "" {
+				t.Errorf("node %q output port %q has no description", meta.Type, port.Name)
+			}
 		}
 	}
 }

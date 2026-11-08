@@ -40,6 +40,15 @@ describe('visibleRows', () => {
     expect(rows.map((r) => r.id)).toContain('act_2');
     expect(rows.map((r) => r.id)).not.toContain('in');
   });
+
+  it('shows only the selected element and its rows when scoped to it', () => {
+    const agent = m.byId.get('agent');
+    if (!agent) throw new Error('fixture has no agent step');
+    const scoped = visibleRows(m, (el) => el.kind === 'run', none, agent);
+    expect(scoped.rows.map((r) => r.id)).toEqual(['agent', 'turn_1', 'turn_2']);
+    const hit = visibleRows(m, () => false, { query: 'deploy', failuresOnly: false }, agent);
+    expect(hit.rows.map((r) => r.id)).toEqual(['agent', 'turn_2', 'dec:turn_2', 'act_2']);
+  });
 });
 
 describe('rowMatches', () => {
@@ -50,12 +59,22 @@ describe('rowMatches', () => {
 });
 
 describe('openState', () => {
-  it('opens the selection’s ancestors unless the viewer closed them', () => {
-    const selected = m.byId.get('act_2') ?? null;
-    const isOpen = openState(new Set(), new Set(['turn_2']), selected);
+  const el = (id: string) => m.byId.get(id) ?? m.root;
+
+  it('opens the run and its steps by default, showing turn rows that stay closed', () => {
+    const isOpen = openState(new Set(), new Set());
     expect(isOpen(m.root)).toBe(true);
-    expect(isOpen(m.byId.get('agent') ?? m.root)).toBe(true);
-    expect(isOpen(m.byId.get('turn_2') ?? m.root)).toBe(false);
-    expect(isOpen(m.byId.get('in') ?? m.root)).toBe(false);
+    expect(isOpen(el('agent'))).toBe(true);
+    expect(isOpen(el('in'))).toBe(true);
+    expect(isOpen(el('turn_1'))).toBe(false);
+    expect(isOpen(el('turn_2'))).toBe(false);
+  });
+
+  it('lets the viewer open a turn and close a step, never the run', () => {
+    const isOpen = openState(new Set(['turn_2']), new Set(['agent', m.root.id]));
+    expect(isOpen(m.root)).toBe(true);
+    expect(isOpen(el('agent'))).toBe(false);
+    expect(isOpen(el('turn_2'))).toBe(true);
+    expect(isOpen(el('turn_1'))).toBe(false);
   });
 });

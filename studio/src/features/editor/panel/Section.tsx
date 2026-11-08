@@ -70,6 +70,7 @@ export function Disclosure({
     <section
       id={`sec-${id}`}
       data-section={id}
+      aria-labelledby={`sec-${id}-title`}
       className="border-b border-border-subtle px-5 py-2 last:border-b-0"
     >
       <button
@@ -86,7 +87,7 @@ export function Disclosure({
             open && 'rotate-90',
           )}
         />
-        <span className="flex-1 text-sm font-semibold">
+        <span id={`sec-${id}-title`} className="flex-1 text-sm font-semibold">
           {title}
           {optional ? (
             <span className="font-normal text-fg-muted"> {copy.editor.panel.optional}</span>

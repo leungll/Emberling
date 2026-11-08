@@ -3,6 +3,8 @@ import { TriangleAlert } from 'lucide-react';
 import type { Node, NodeMetadata } from '@/api/types';
 import { FactList, type Fact } from '@/components/facts/FactList';
 import { Button } from '@/components/ui/button';
+import { contentLabel } from '@/lib/port-content';
+import { shapeSummary } from '@/lib/shape-summary';
 import { useCopy } from '@/lib/copy';
 import { duration } from '@/lib/time';
 import { useEditor } from '@/features/editor/editor-context';
@@ -171,62 +173,129 @@ export function HowItRuns({ node, meta }: { node: Node; meta: NodeMetadata }) {
 export function Connections({ node, meta }: { node: Node; meta: NodeMetadata }) {
   const copy = useCopy();
   const t = copy.editor;
-  const { openSettings, issues } = useEditor();
+  const { openSettings, issues, lastRun } = useEditor();
   const nodes = useEditorStore((s) => s.doc.nodes);
   const edges = useEditorStore((s) => s.doc.edges);
   if (!meta.inputs.length && !meta.outputs.length) return null;
+  const stepLink = (s: Node) => (
+    <Button
+      variant="link"
+      size="sm"
+      onClick={() => openSettings(s.id)}
+      className="min-h-control-xs"
+    >
+      {s.name}
+    </Button>
+  );
   const links = (list: Node[], word: string) => (
     <span className="inline-flex flex-wrap items-baseline gap-x-1">
       <span className="text-fg-muted">{word}</span>
       {list.map((s, i) => (
         <span key={s.id}>
-          <Button
-            variant="link"
-            size="sm"
-            onClick={() => openSettings(s.id)}
-            className="min-h-control-xs"
-          >
-            {s.name}
-          </Button>
+          {stepLink(s)}
           {i < list.length - 1 ? ',' : null}
         </span>
       ))}
     </span>
   );
-  const facts: Fact[] = [
-    ...meta.inputs.map((p) => {
-      const from = sourcesOf(nodes, edges, node.id, p.name);
-      return {
-        label: portLabel(p),
-        value: from.length ? (
-          links(from, t.panel.connFrom)
-        ) : p.required ? (
-          <span className="inline-flex items-center gap-1 text-danger-fg">
-            <TriangleAlert aria-hidden="true" className="size-icon-sm" />
-            {t.canvas.notConnected}
-          </span>
-        ) : (
-          <span className="text-fg-muted">{t.canvas.notConnectedOptional}</span>
-        ),
-      };
-    }),
-    ...meta.outputs.map((p) => {
-      const to = targetsOf(nodes, edges, node.id, p.name);
-      return {
-        label: t.panel.connOut(portLabel(p)),
-        value: to.length ? (
-          links(to, t.panel.connTo)
-        ) : (
-          <span className="text-fg-muted">{t.panel.notUsed}</span>
-        ),
-      };
-    }),
-  ];
+  // The panel shows where the data flows,
+  // each connected port with what it carries and what it carried in the last run, and the
+  // spare outputs last and quiet.
+  const run = lastRun.byNode.get(node.id);
+  const carried = (side: 'input' | 'output', port: string) => {
+    const v = run?.[side];
+    return v && typeof v === 'object' && !Array.isArray(v) ? shapeSummary(v[port]) : null;
+  };
+  interface Row {
+    key: string;
+    dot: string;
+    label: string;
+    hint?: string;
+    sample: string | null;
+    value: React.ReactNode;
+  }
+  const takes: Row[] = meta.inputs.map((p) => {
+    const from = sourcesOf(nodes, edges, node.id, p.name);
+    return {
+      key: p.name,
+      dot: p.dataType,
+      label: contentLabel(nodes, edges, node, 'in', p.name) ?? portLabel(p),
+      hint: p.description,
+      sample: from.length ? carried('input', p.name) : null,
+      value: from.length ? (
+        links(from, t.panel.connFrom)
+      ) : p.required ? (
+        <span className="inline-flex items-center gap-1 text-danger-fg">
+          <TriangleAlert aria-hidden="true" className="size-icon-sm" />
+          {t.canvas.notConnected}
+        </span>
+      ) : (
+        <span className="text-fg-muted">{t.canvas.notConnectedOptional}</span>
+      ),
+    };
+  });
+  const gives: Row[] = [];
+  const spare: { key: string; label: string; hint?: string }[] = [];
+  for (const p of meta.outputs) {
+    const to = targetsOf(nodes, edges, node.id, p.name);
+    if (!to.length && meta.outputs.length > 1) {
+      spare.push({ key: p.name, label: portLabel(p), hint: p.description });
+      continue;
+    }
+    gives.push({
+      key: p.name,
+      dot: p.dataType,
+      label: contentLabel(nodes, edges, node, 'out', p.name) ?? portLabel(p),
+      hint: p.description,
+      sample: to.length ? carried('output', p.name) : null,
+      value: to.length ? (
+        links(to, t.panel.connTo)
+      ) : (
+        <span className="text-fg-muted">{t.panel.notConnected}</span>
+      ),
+    });
+  }
+  // One grid: a quiet In / Out label column, then each port on a line with where it goes,
+  // what it carries and, when known, what it carried in the last run.
+  const rowsOf = (side: string, rows: Row[]) =>
+    rows.length ? (
+      <div className="flex flex-col gap-2">
+        <span className="text-sm text-fg-muted">{side}</span>
+        {rows.map((r) => (
+          <div key={r.key} className="flex flex-col">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-fg">{r.label}</span>
+              <span className="text-sm">{r.value}</span>
+            </div>
+            {r.hint ? <span className="text-sm text-fg-secondary">{r.hint}</span> : null}
+            {r.sample ? (
+              <span className="text-sm text-fg-muted">
+                {t.panel.lastRunSample} {r.sample}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    ) : null;
   const errors = issuesFor(issues, node.id).filter((i) => i.section === 'connections');
   return (
     <Section id="connections" title={t.panel.sections.connections} hint={t.panel.connectionsHint}>
-      <div data-field="connections">
-        <FactList facts={facts} compact />
+      <div data-field="connections" className="flex flex-col">
+        <div className="flex flex-col gap-4">
+          {rowsOf(t.panel.connIn, takes)}
+          {rowsOf(t.panel.connOutGroup, gives)}
+          {spare.length ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-fg-muted">{t.panel.connSpare}</span>
+              {spare.map((r) => (
+                <span key={r.key} className="flex gap-2 text-sm text-fg-muted">
+                  <span className="text-fg-secondary">{r.label}</span>
+                  {r.hint ? <span>{r.hint}</span> : null}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
         {errors.map((e) => (
           <p key={e.text} className="m-0 mt-1 text-sm text-danger-fg">
             {e.text}
