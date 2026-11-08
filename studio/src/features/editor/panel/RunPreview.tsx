@@ -1,6 +1,7 @@
-import { Upload } from 'lucide-react';
+import { ImageIcon, Upload } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 
+import { LoadedImage } from '@/components/media/LoadedImage';
 import type { Node } from '@/api/types';
 import { SchemaObjectFields } from '@/components/schema/SchemaObjectFields';
 import { Button } from '@/components/ui/button';
@@ -122,7 +123,11 @@ export function RunPreview({ node }: { node: Node }) {
                 onClick={() => setViewing(i)}
                 className="flex aspect-square cursor-zoom-in items-center justify-center overflow-hidden rounded-md border border-border-subtle bg-surface p-0"
               >
-                <img src={it.src ?? undefined} alt="" className="block size-full object-cover" />
+                {it.src ? (
+                  <LoadedImage src={it.src} alt="" className="size-full object-cover" />
+                ) : (
+                  <ImageIcon aria-hidden="true" className="size-icon-md text-fg-muted" />
+                )}
               </button>
             ))}
           </div>
