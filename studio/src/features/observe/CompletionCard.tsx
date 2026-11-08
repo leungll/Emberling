@@ -18,6 +18,8 @@ const TONE: Record<CompletionOutcome, { icon: typeof CircleCheck; bg: string; fg
   DEPLOYED_CHECK_FAILED: { icon: TriangleAlert, bg: 'bg-st-waiting-bg', fg: 'text-st-waiting-fg' },
   RELEASE_UNKNOWN: { icon: CircleHelp, bg: 'bg-st-waiting-bg', fg: 'text-st-waiting-fg' },
   INCOMPLETE: { icon: CircleAlert, bg: 'bg-st-failed-bg', fg: 'text-st-failed-fg' },
+  CLIP_DELIVERED: { icon: CircleCheck, bg: 'bg-st-succeeded-bg', fg: 'text-st-succeeded-fg' },
+  CANNOT_SATISFY: { icon: CircleHelp, bg: 'bg-st-waiting-bg', fg: 'text-st-waiting-fg' },
 };
 
 export function CompletionCard({ completion }: { completion: AgentCompletion }) {
@@ -51,8 +53,7 @@ export function CompletionCard({ completion }: { completion: AgentCompletion }) 
             <ul className="m-0 flex list-disc flex-col gap-1 pl-5">
               {completion.missing.map((item) => (
                 <li key={item.code}>
-                  {item.description}{' '}
-                  <code className="font-mono text-xs text-fg-muted">{item.code}</code>
+                  {copy.status.completionMissing[item.code] ?? item.description}
                 </li>
               ))}
             </ul>

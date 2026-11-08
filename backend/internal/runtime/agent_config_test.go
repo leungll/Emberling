@@ -136,6 +136,45 @@ func TestAgentNodeConfig_Parse_MaxGenerationCallsOne_Passes(t *testing.T) {
 	}
 }
 
+func TestAgentNodeConfig_Parse_MaxFailedFacts_ZeroAllowedAndAbsentMeansUnbounded(t *testing.T) {
+	cfg, err := parseWithMaxGenerationCalls(t, `, "maxFailedFacts": {"media_checked": 3, "content_reviewed": 0}`)
+	if err != nil {
+		t.Fatalf("ParseAgentNodeConfig() error = %v", err)
+	}
+	if len(cfg.MaxFailedFacts) != 2 || cfg.MaxFailedFacts["media_checked"] != 3 || cfg.MaxFailedFacts["content_reviewed"] != 0 {
+		t.Errorf("MaxFailedFacts = %v, want media_checked 3 and content_reviewed 0", cfg.MaxFailedFacts)
+	}
+	cfg, err = parseWithMaxGenerationCalls(t, "")
+	if err != nil {
+		t.Fatalf("ParseAgentNodeConfig() error = %v", err)
+	}
+	if cfg.MaxFailedFacts != nil {
+		t.Errorf("MaxFailedFacts = %v, want nil (no fact type bounded)", cfg.MaxFailedFacts)
+	}
+}
+
+func TestAgentNodeConfig_Parse_MaxFailedFactsInvalid_Fails(t *testing.T) {
+	cases := map[string]string{
+		"negative":   `, "maxFailedFacts": {"media_checked": -1}`,
+		"fractional": `, "maxFailedFacts": {"media_checked": 1.5}`,
+		"string":     `, "maxFailedFacts": {"media_checked": "three"}`,
+		"array":      `, "maxFailedFacts": [3]`,
+		"emptyType":  `, "maxFailedFacts": {"": 3}`,
+	}
+	for name, fragment := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := parseWithMaxGenerationCalls(t, fragment)
+			var ace *AgentConfigError
+			if !errors.As(err, &ace) {
+				t.Fatalf("expected *AgentConfigError, got %T: %v", err, err)
+			}
+			if ace.Field != "maxFailedFacts" {
+				t.Errorf("Field = %q, want maxFailedFacts", ace.Field)
+			}
+		})
+	}
+}
+
 func TestAgentNodeConfig_Parse_MaxGenerationCallsInvalid_Fails(t *testing.T) {
 	cases := map[string]string{
 		"zero":       `, "maxGenerationCalls": 0`,

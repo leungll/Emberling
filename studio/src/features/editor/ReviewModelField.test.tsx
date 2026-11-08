@@ -112,9 +112,7 @@ describe('Agent review model', () => {
     renderAgent({ allowedTools: ['review_patch'] });
 
     expect(
-      await screen.findByText(
-        "Used when the agent calls review_patch. Required, and it must differ from the agent's model. Saving checks that it supports what each tool needs.",
-      ),
+      await screen.findByText("Used for review_patch. Must differ from the agent's model."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/mock policy\.$/)).toBeNull();
   });

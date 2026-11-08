@@ -15,11 +15,11 @@ import (
 )
 
 // manifestItemKeys is the member set of Studio's ManifestItem type, sorted.
-var manifestItemKeys = []string{"included", "kind", "label", "length", "omittedReason", "ref", "sha256", "version"}
+var manifestItemKeys = []string{"included", "kind", "label", "length", "omittedReason", "range", "ref", "sha256", "version"}
 
 var manifestItemKinds = map[string]bool{
 	"INSTRUCTIONS": true, "TASK_INPUT": true, "STATE": true,
-	"TOOL_RESULT": true, "WORKSPACE_FILE": true, "ARTIFACT": true,
+	"TOOL_RESULT": true, "WORKSPACE_FILE": true, "ARTIFACT": true, "MATERIAL_RANGE": true,
 }
 
 // TestAgentTrace_Manifest_ShapeMatchesStudioType drives the two-round loop and checks the
@@ -104,6 +104,9 @@ func TestAgentTrace_Manifest_ShapeMatchesStudioType(t *testing.T) {
 				t.Errorf("turns[%d].manifest[%d] is included but carries omittedReason %v", i, j, reason)
 			case !included && reason != "REFERENCE_ONLY":
 				t.Errorf("turns[%d].manifest[%d] is omitted with reason %v, want REFERENCE_ONLY", i, j, reason)
+			}
+			if kind != "MATERIAL_RANGE" && item["range"] != nil {
+				t.Errorf("turns[%d].manifest[%d] is a %s but carries range %v", i, j, kind, item["range"])
 			}
 		}
 	}

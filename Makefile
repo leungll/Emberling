@@ -24,10 +24,12 @@ GOLANGCI_LINT         := $(TOOLS_BIN)/golangci-lint
 
 BACKEND := backend
 STUDIO  := studio
+MEDIA   := services/media
 
 .PHONY: bootstrap dev test test-integration test-e2e test-ui lint check check-fast \
         check-go-version check-node-version fmt-check lint-go lint-studio install-golangci-lint check-doc-refs \
-        check-migrations migrations-checksum check-file-size test-engineering studio-build whitespace-check
+        check-migrations migrations-checksum check-file-size test-engineering studio-build whitespace-check \
+        media-test media-dev
 
 ## bootstrap: verify toolchain versions and install dependencies. Starts no service.
 bootstrap: check-go-version check-node-version install-golangci-lint
@@ -135,6 +137,20 @@ test-e2e:
 	else \
 		echo "studio: not present, skipped"; \
 	fi
+
+## media-test: the media service's pytest suite. FFmpeg runs for real and transcription
+## uses the tiny.en model, which is downloaded on first use. Dependencies come from the
+## uv lockfile; MEDIA_FFMPEG_BIN and MEDIA_FFPROBE_BIN select the binaries, as for the
+## service itself. Not part of `check`: the Go tests use a fake media service instead.
+media-test:
+	@echo "==> media: pytest (real FFmpeg, tiny.en)"
+	@cd $(MEDIA) && uv run --frozen pytest
+
+## media-dev: run the media service locally from the lockfile. Configure it with
+## MEDIA_DATA_DIR, MEDIA_WHISPER_MODEL, MEDIA_FFMPEG_BIN, MEDIA_FFPROBE_BIN, MEDIA_PORT and
+## MEDIA_PUBLIC_URL.
+media-dev:
+	@cd $(MEDIA) && uv run --frozen python -m app
 
 ## lint: formatting check, golangci-lint (which includes go vet) and Studio lint.
 lint: fmt-check lint-go lint-studio
@@ -252,7 +268,16 @@ check:
 check-fast:
 	@MAKE='$(MAKE)' sh scripts/run-phases.sh $(CHECK_FAST_PHASES)
 
-.PHONY: demo demo-studio demo-down
+.PHONY: evals-test
+
+## evals-test: self-tests of the video-editing evaluation tooling (Python, uv-locked).
+## They run against in-process fake services and need neither Emberling nor the media
+## service to be running.
+evals-test:
+	@echo "==> evals: video_editing self-tests"
+	@cd evals/video_editing && uv run --frozen pytest
+
+.PHONY: demo demo-studio demo-down video-demo video-evidence
 
 ## demo: fault-injection, photo-set, software-delivery and serving demo on the Compose
 ## stack. Builds and starts postgres, the Mock Provider, the mock production service, the
@@ -374,3 +399,42 @@ demo-studio:
 ## the three mock services.
 demo-down:
 	@bash scripts/demo/demo.sh down
+
+## video-demo: the video-editing stories against the real media service, with the Agent's
+## decisions scripted by the mock decision model: the transcript, timeline checks, render
+## and clip check are real work of the media service. Each story saves a fixture Definition,
+## uploads the source talk once (idempotent by digest), runs it to the end and checks the
+## Run, its facts, its committed Decisions and the delivered clip through the public API,
+## then prints the clip URL. EMBERLING_DEMO_VIDEO_STORY selects pass (default), too-long or
+## review-fail; EMBERLING_DEMO_VIDEO_STORY=all runs the three in turn.
+## EMBERLING_DEMO_VIDEO_STORY=restart is the fault-injection story: the pass trajectory,
+## SIGKILL of the backend once the render is dispatched and running at the media service,
+## then a restart; it checks that the same Tool Attempt and media task finish, that no
+## Decision is made twice and that the Events replay in order, and ends with the evidence
+## report of its Run under deploy/.demo/video-evidence (or
+## EMBERLING_DEMO_VIDEO_EVIDENCE_DIR).
+## Starts postgres, the backend and the media service (compose profile media; the first
+## start downloads the transcription model) and keeps them running. EMBERLING_DEMO_MEDIA_URL
+## points the backend at a media service elsewhere instead, for example
+## http://host.docker.internal:9201 for one on the host, with EMBERLING_DEMO_MEDIA_HOST_URL
+## (default http://localhost:9201) as the address this host reaches it at.
+## EMBERLING_DEMO_VIDEO_SOURCE names the source file to upload when the media service lacks
+## it. See scripts/demo/video-edit.sh for the stories and their checks.
+## Needs Docker, curl, jq and shasum; deliberately not part of `check`.
+video-demo:
+	@case "$${EMBERLING_DEMO_VIDEO_STORY:-pass}" in \
+	  all) for story in pass too-long review-fail; do bash scripts/demo/video-edit.sh "$$story" || exit 1; done ;; \
+	  *) bash scripts/demo/video-edit.sh "$${EMBERLING_DEMO_VIDEO_STORY:-pass}" ;; \
+	esac
+
+## video-evidence: the evidence report of finished video-editing Runs, read through the
+## public API alone: RUNS="run_a run_b" names the Runs (or RUNS_FILE=path, one id per line).
+## Writes each Run's Snapshot, Agent Trace, Events, Definition version, completion verdict,
+## facts and per-Turn Context Manifests plus report.md under deploy/.demo/video-evidence
+## (or EMBERLING_DEMO_VIDEO_EVIDENCE_DIR); the clip URLs use EMBERLING_DEMO_MEDIA_HOST_URL.
+## Needs the backend reachable at EMBERLING_DEMO_BACKEND_URL (default http://localhost:8080),
+## curl and jq; deliberately not part of `check`.
+video-evidence:
+	@test -n "$(RUNS)$(RUNS_FILE)" || { echo 'usage: make video-evidence RUNS="run_a run_b" (or RUNS_FILE=path)'; exit 2; }
+	@bash scripts/demo/video-evidence-report.sh --out "$${EMBERLING_DEMO_VIDEO_EVIDENCE_DIR:-deploy/.demo/video-evidence}" \
+	  $(if $(RUNS_FILE),--file "$(RUNS_FILE)",) $(RUNS)

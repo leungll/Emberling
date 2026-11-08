@@ -11,6 +11,7 @@ import type {
   CallbackBindingSummary,
   Cost,
   ExecutionError,
+  FactPointerSource,
   JsonValue,
   TokenUsage,
 } from './types';
@@ -153,6 +154,8 @@ export interface AgentRunTrace {
   pausedAt: string | null;
   pauseReason: AgentPauseReason | null;
   goal: AgentGoal | null;
+  /** The frozen revision limit per fact type; `null` when the node bounds none. */
+  maxFailedFacts: Record<string, number> | null;
   terminatedAt: string | null;
   error: ExecutionError | null;
   /**
@@ -160,14 +163,35 @@ export interface AgentRunTrace {
    * without a goal, which the Backend never evaluates.
    */
   completion: AgentCompletion | null;
+  /** The State value the Agent Run's current State pointer names (what the Agent wrote). */
+  latestState: AgentLatestState;
 }
 
 /**
- * The task result the Backend decided for an Agent Run with a frozen goal. The first three
- * outcomes succeed the Agent's step; INCOMPLETE and RELEASE_UNKNOWN fail it.
+ * The Agent Run's latest saved State. `value` is the saved JSON while its canonical encoding
+ * fits the Backend's Trace field bound; above it `value` is `null` and `withheld` says why.
+ * The Backend never truncates the value. Version 0 is the empty object.
+ */
+export interface AgentLatestState {
+  version: number;
+  /** The saved JSON value, or `null` when withheld. */
+  value: unknown;
+  withheld?: 'TOO_LARGE';
+}
+
+/**
+ * The task result the Backend decided for an Agent Run with a frozen goal. INCOMPLETE and
+ * RELEASE_UNKNOWN fail the Agent's step; every other outcome succeeds it, CANNOT_SATISFY
+ * included (a clip task ended with a reason instead of a clip).
  */
 export type CompletionOutcome =
-  'READY_FOR_APPROVAL' | 'DEPLOYED' | 'DEPLOYED_CHECK_FAILED' | 'RELEASE_UNKNOWN' | 'INCOMPLETE';
+  | 'READY_FOR_APPROVAL'
+  | 'DEPLOYED'
+  | 'DEPLOYED_CHECK_FAILED'
+  | 'RELEASE_UNKNOWN'
+  | 'INCOMPLETE'
+  | 'CLIP_DELIVERED'
+  | 'CANNOT_SATISFY';
 
 /** One item the completion check went through; `refs` name the records it rested on. */
 export interface CompletionCheck {
@@ -382,6 +406,25 @@ export interface ToolAttemptTrace {
   video?: ToolVideoTrace;
   /** Members left out of this Attempt's projection, and why. */
   withheld?: WithheldToolField[];
+  /**
+   * The members the Tool's registration declares for its run card, in declaration order,
+   * for any Tool. A result member appears only once the Attempt `SUCCEEDED`. Absent when
+   * the Tool declares none or none of them is present on this Attempt.
+   */
+  shown?: ShownToolField[];
+}
+
+/**
+ * One declared run-card member. `value` is the member's JSON as persisted, or `null` when
+ * `withheld` says why it was left out: over the Trace field bound (`TOO_LARGE`, never cut)
+ * or a URL in it carries userinfo, a query or a fragment (`UNSAFE_URL`).
+ */
+export interface ShownToolField {
+  title: string;
+  source: FactPointerSource;
+  pointer: string;
+  value: unknown;
+  withheld?: 'TOO_LARGE' | 'UNSAFE_URL';
 }
 
 /**
@@ -452,7 +495,20 @@ export interface WithheldToolField {
 
 /** What kind of material one Context Manifest item records. */
 export type ManifestItemKind =
-  'INSTRUCTIONS' | 'TASK_INPUT' | 'STATE' | 'TOOL_RESULT' | 'WORKSPACE_FILE' | 'ARTIFACT';
+  | 'INSTRUCTIONS'
+  | 'TASK_INPUT'
+  | 'STATE'
+  | 'TOOL_RESULT'
+  | 'WORKSPACE_FILE'
+  | 'ARTIFACT'
+  | 'MATERIAL_RANGE';
+
+/** The lines a `MATERIAL_RANGE` item carried, numbered from 1, with the artifact's line count. */
+export interface ManifestRange {
+  startLine: number;
+  lineCount: number;
+  totalLines: number;
+}
 
 /** Why an item's content was left out of the model request. */
 export type ManifestOmission = 'REFERENCE_ONLY';
@@ -461,7 +517,9 @@ export type ManifestOmission = 'REFERENCE_ONLY';
  * One material of a Turn's model request: an identifier, a version, a digest and a
  * length, never the material itself. For an included item `sha256` and `length` are those
  * of the request bytes; for an omitted `ARTIFACT` they describe the referenced content and
- * `ref` is the Artifact ID the artifact content route takes.
+ * `ref` is the Artifact ID the artifact content route takes. For a `MATERIAL_RANGE` they
+ * describe the material text the tool message carried, `ref` is the Artifact ID,
+ * `version` is a prefix of its content digest and `range` says which lines.
  */
 export interface ManifestItem {
   kind: ManifestItemKind;
@@ -474,6 +532,8 @@ export interface ManifestItem {
   included: boolean;
   /** `null` for an included item. */
   omittedReason: ManifestOmission | null;
+  /** `null` for every kind but `MATERIAL_RANGE`. */
+  range: ManifestRange | null;
 }
 
 /** One Turn with its Decision, Action and Tool Attempts, as persisted. */
@@ -513,6 +573,36 @@ export interface AgentTrace {
   workspace: AgentWorkspaceTrace | null;
   /** The change requests the Agent Run recorded, oldest first, without their content. */
   changeRequests: AgentTraceChangeRequests;
+  /**
+   * The media the SUCCEEDED Tool calls produced, as the Tools' registered media links
+   * declare them. A reference resolves to a URL only through this list or the Run input's
+   * assets; Studio never builds a URL from a value.
+   */
+  media: AgentTraceMedia;
+}
+
+/**
+ * The bounded media list. `truncated` means the Agent Run produced more media than `items`
+ * shows; the stored results are never cut.
+ */
+export interface AgentTraceMedia {
+  items: AgentTraceMediaItem[];
+  truncated: boolean;
+}
+
+/**
+ * One media reference with the URL that serves it and its media type. A member the Backend
+ * may not serve is `null` and `withheld` says why: a URL carrying userinfo, a query or a
+ * fragment, or outside the Backend's own `/api/` routes, is `UNSAFE_URL` while `ref` stays
+ * visible as text; a member over the Trace field bound is `TOO_LARGE`, and an oversized
+ * `ref` or `mediaType` withholds the whole item.
+ */
+export interface AgentTraceMediaItem {
+  ref: string | null;
+  url: string | null;
+  mediaType: string | null;
+  toolAttemptId: string;
+  withheld?: 'TOO_LARGE' | 'UNSAFE_URL';
 }
 
 /**

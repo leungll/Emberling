@@ -96,11 +96,13 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Remote look up",
 			Description:   "Read a deterministic record through an asynchronous Provider task",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),
 			SideEffect:    domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
 			ExecutionKind: domain.ToolExecutionAsync,
+			Display:       []domain.ToolDisplayField{{Source: domain.FactPointerArguments, Pointer: "/key", Title: "Key"}},
 		},
 		Executor: New(baseURL, client),
 	}

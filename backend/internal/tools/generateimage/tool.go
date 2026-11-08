@@ -130,6 +130,7 @@ func Registration(generators map[string]ImageGenerator, photos PhotoReader, arti
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Generate image",
 			Description:   "Generate an image asset from one photo of the Run's photo set and a settings object",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),
@@ -148,6 +149,20 @@ func Registration(generators map[string]ImageGenerator, photos PhotoReader, arti
 			Requires:                    []domain.FactRequirement{},
 			CountsTowardGenerationLimit: true,
 			UsesImageModel:              true,
+			// The generated image is addressed by its artifact id and served by the
+			// Run-scoped content route the result names; its media type is the sniffed one
+			// recorded on the artifact.
+			MediaLinks: []domain.MediaLink{{
+				RefPointer: "/assetRef", URLPointer: "/imageUrl", MediaTypePointer: "/artifact/mediaType",
+			}},
+			// The prompt is shown by the named settings view alone, cut at its bound, so it
+			// is not declared here.
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/settings/aspectRatio", Title: "Aspect ratio"},
+				{Source: domain.FactPointerArguments, Pointer: "/settings/resolution", Title: "Resolution"},
+				{Source: domain.FactPointerArguments, Pointer: "/photoAssetId", Title: "Photo"},
+				{Source: domain.FactPointerResult, Pointer: "/model", Title: "Model"},
+			},
 		},
 		Executor: New(generators, photos, artifacts),
 	}

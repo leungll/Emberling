@@ -59,15 +59,28 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Media Result",
+			Description:   "Combines the agent’s text and the brief into an image and a caption.",
 			Category:      domain.NodeCategoryOutput,
 			ExecutionKind: domain.NodeExecutionSync,
 			Inputs: []domain.PortMetadata{
-				{Name: textPort, DataType: domain.PortTypeText, Required: true},
-				{Name: briefPort, DataType: domain.PortTypeText, Required: true},
+				{
+					Name: textPort, DataType: domain.PortTypeText, Required: true,
+					Description: "The agent’s report.",
+				},
+				{
+					Name: briefPort, DataType: domain.PortTypeText, Required: true,
+					Description: "The brief the run started with.",
+				},
 			},
 			Outputs: []domain.PortMetadata{
-				{Name: imagePort, DataType: domain.PortTypeImage, Required: true},
-				{Name: captionPort, DataType: domain.PortTypeText, Required: true},
+				{
+					Name: imagePort, DataType: domain.PortTypeImage, Required: true,
+					Description: "The chosen image.",
+				},
+				{
+					Name: captionPort, DataType: domain.PortTypeText, Required: true,
+					Description: "A caption for the image.",
+				},
 			},
 			ConfigSchema: json.RawMessage(configSchema),
 			SideEffect:   domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},

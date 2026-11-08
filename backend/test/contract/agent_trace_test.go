@@ -5,9 +5,11 @@
 // each Turn's committed Decision and Action, and every Tool Attempt, in persisted order.
 //
 // Everything here is asserted through the HTTP response only: the projection is read-only,
-// so what it must NOT carry (model request/response bodies, Tool input/result, Context and
-// State contents, Decision arguments, storage keys, callback token hashes, Provider
-// credentials) is as much part of the contract as what it must carry.
+// so what it must NOT carry (model request/response bodies, Tool input/result, Context
+// contents, State history, Decision arguments, storage keys, callback token hashes,
+// Provider credentials) is as much part of the contract as what it must carry. The one
+// piece of State the Trace does carry is the Agent Run's latest State value, bounded by
+// the Trace field bound and withheld above it, so Studio can show the Agent's own notes.
 package contract
 
 import (
@@ -338,8 +340,10 @@ func TestAgentTrace_NodeRunOfOtherRun_404(t *testing.T) {
 
 // TestAgentTrace_ResponseCarriesNoSecretsOrPayloads is the negative half of the contract
 // (Trace projection and operational redaction rules): the projection never carries model
-// request/response bodies, Tool input or result, Context or State contents, Decision
-// arguments, a storage key, a callback token hash or a Provider credential.
+// request/response bodies, Tool input or result, Context contents, State history or
+// patches, Decision arguments, a storage key, a callback token hash or a Provider
+// credential. The bounded latest State value is the one allowed State member; the Decision
+// still shows only whether it carried a patch, never the patch itself.
 func TestAgentTrace_ResponseCarriesNoSecretsOrPayloads(t *testing.T) {
 	env := newTestEnv(t)
 	runID, snapshot := runCompletedAgentLoop(t, env)

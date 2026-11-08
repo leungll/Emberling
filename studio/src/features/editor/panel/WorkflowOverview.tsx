@@ -109,8 +109,8 @@ export function WorkflowOverview() {
   const description = useEditorStore((s) => s.doc.description);
   const definition = useMemo(() => ({ nodes, edges, description }), [nodes, edges, description]);
   const summaryRegistry = useMemo(
-    () => ({ nodeTypes: registry.catalog, models: registry.models }),
-    [registry.catalog, registry.models],
+    () => ({ nodeTypes: registry.catalog, models: registry.models, tools: registry.tools }),
+    [registry.catalog, registry.models, registry.tools],
   );
   return (
     <div>

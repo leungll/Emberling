@@ -154,6 +154,39 @@ func (r *executionFactRepository) ListByRunAndType(ctx context.Context, runID, f
 	return facts, nil
 }
 
+func (r *executionFactRepository) CountFailedByAgentRun(ctx context.Context, agentRunID string, factTypes []string) (map[string]int, error) {
+	counts := map[string]int{}
+	if len(factTypes) == 0 {
+		return counts, nil
+	}
+
+	const query = `
+		SELECT fact_type, count(*)
+		  FROM execution_facts
+		 WHERE agent_run_id = $1
+		   AND fact_type = ANY($2)
+		   AND verdict = FALSE
+		 GROUP BY fact_type`
+
+	rows, err := r.conn.Query(ctx, query, agentRunID, factTypes)
+	if err != nil {
+		return nil, mapError("execution_facts.CountFailedByAgentRun", err, agentRunID)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var factType string
+		var count int
+		if err := rows.Scan(&factType, &count); err != nil {
+			return nil, mapError("execution_facts.CountFailedByAgentRun", err, agentRunID)
+		}
+		counts[factType] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapError("execution_facts.CountFailedByAgentRun", err, agentRunID)
+	}
+	return counts, nil
+}
+
 func (r *executionFactRepository) Get(ctx context.Context, factID string) (domain.ExecutionFact, error) {
 	const query = `SELECT ` + executionFactColumns + ` FROM execution_facts WHERE id = $1`
 

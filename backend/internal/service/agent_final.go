@@ -240,7 +240,7 @@ func (s *ExecutionService) CompleteAgentFinal(ctx context.Context, actionID stri
 		// recorded: the Agent Run ended with FINAL_RESPONSE whatever the verdict says, and
 		// the verdict decides only how its NodeRun ends. An Agent without a goal has no
 		// check and publishes its answer as before.
-		completion, err := s.evaluateAgentCompletionLocked(ctx, tx, lock, nodeRun, agentRun, domain.TerminationFinalResponse, now)
+		completion, err := s.evaluateAgentCompletionLocked(ctx, tx, lock, nodeRun, agentRun, domain.TerminationFinalResponse, decision.Output, now)
 		if err != nil {
 			return err
 		}

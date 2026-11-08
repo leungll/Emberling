@@ -46,10 +46,14 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Image Input",
+			Description:   "Asks for an image each time a run starts.",
 			Category:      domain.NodeCategoryInput,
 			ExecutionKind: domain.NodeExecutionSync,
-			Outputs:       []domain.PortMetadata{{Name: imagePort, DataType: domain.PortTypeImage, Required: true}},
-			ConfigSchema:  json.RawMessage(configSchema),
+			Outputs: []domain.PortMetadata{{
+				Name: imagePort, DataType: domain.PortTypeImage, Required: true,
+				Description: "The uploaded image.",
+			}},
+			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "inputKey", Order: 10, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},
 				{Path: "label", Order: 20, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},

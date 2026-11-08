@@ -21,7 +21,7 @@ const agentRunColumns = `id, node_run_id, instructions, model_id, model_config, 
 	context_schema, state_schema, output_schema, max_turns, current_turn_no,
 	current_context_version, current_state_version, started_at, deadline,
 	terminated_at, termination, error, max_generation_calls, image_model_id, review_model_id,
-	goal, paused_at, pause_reason`
+	goal, paused_at, pause_reason, max_failed_facts`
 
 // Create inserts the Agent Run with its frozen configuration. UNIQUE (node_run_id) is
 // what enforces "one Agent NodeRun has at most one Agent Run": a duplicated
@@ -35,11 +35,15 @@ func (r *agentRunRepository) Create(ctx context.Context, run domain.AgentRun) er
 	if err != nil {
 		return fmt.Errorf("store/postgres agent_runs.Create: agent_run=%s: %w", run.ID, err)
 	}
+	maxFailedFacts, err := marshalMaxFailedFacts(run.MaxFailedFacts)
+	if err != nil {
+		return fmt.Errorf("store/postgres agent_runs.Create: agent_run=%s: %w", run.ID, err)
+	}
 
 	const insert = `
 		INSERT INTO agent_runs (` + agentRunColumns + `)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
-		        $22, $23, $24)`
+		        $22, $23, $24, $25)`
 	if _, err := r.conn.Exec(ctx, insert,
 		run.ID, run.NodeRunID, run.Instructions, run.ModelID, run.ModelConfig, allowedTools,
 		run.ContextSchema, run.StateSchema, run.OutputSchema, run.MaxTurns, run.CurrentTurnNo,
@@ -47,6 +51,7 @@ func (r *agentRunRepository) Create(ctx context.Context, run domain.AgentRun) er
 		run.TerminatedAt, nullableTermination(run.Termination), errPayload, run.MaxGenerationCalls,
 		run.ImageModelID, run.ReviewModelID,
 		nullableString((*string)(run.Goal)), run.PausedAt, nullableString((*string)(run.PauseReason)),
+		maxFailedFacts,
 	); err != nil {
 		return mapError("agent_runs.Create", err, run.ID, run.NodeRunID)
 	}
@@ -241,6 +246,7 @@ func scanAgentRuns(rows pgx.Rows) ([]domain.AgentRun, error) {
 			errPayload   []byte
 			goal         *string
 			pauseReason  *string
+			maxFailed    []byte
 		)
 		if err := rows.Scan(
 			&run.ID, &run.NodeRunID, &run.Instructions, &run.ModelID, &run.ModelConfig, &allowedTools,
@@ -248,9 +254,14 @@ func scanAgentRuns(rows pgx.Rows) ([]domain.AgentRun, error) {
 			&run.CurrentContextVersion, &run.CurrentStateVersion, &run.StartedAt, &run.Deadline,
 			&run.TerminatedAt, &termination, &errPayload, &run.MaxGenerationCalls,
 			&run.ImageModelID, &run.ReviewModelID,
-			&goal, &run.PausedAt, &pauseReason,
+			&goal, &run.PausedAt, &pauseReason, &maxFailed,
 		); err != nil {
 			return nil, err
+		}
+		if len(maxFailed) > 0 {
+			if err := json.Unmarshal(maxFailed, &run.MaxFailedFacts); err != nil {
+				return nil, fmt.Errorf("agent_run=%s: unmarshal max failed facts: %w", run.ID, err)
+			}
 		}
 		if goal != nil {
 			value := domain.AgentGoal(*goal)
@@ -276,6 +287,20 @@ func scanAgentRuns(rows pgx.Rows) ([]domain.AgentRun, error) {
 		out = append(out, run)
 	}
 	return out, rows.Err()
+}
+
+// marshalMaxFailedFacts maps the frozen revision limits to the JSONB column: NULL when
+// the Agent Run bounds no fact type, otherwise the object from fact type to limit. An
+// empty map is stored as NULL too, so "no limits" has one persisted form.
+func marshalMaxFailedFacts(limits map[string]int) (any, error) {
+	if len(limits) == 0 {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(limits)
+	if err != nil {
+		return nil, fmt.Errorf("marshal max failed facts: %w", err)
+	}
+	return encoded, nil
 }
 
 // nullableString maps an absent optional text column to SQL NULL.

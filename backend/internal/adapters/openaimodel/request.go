@@ -195,7 +195,7 @@ func systemPrompt(request registry.ModelRequest) (string, error) {
 
 	if present(request.FinalOutputSchema) {
 		b.WriteString("\n\n## Final output schema\n")
-		b.Write(compact(request.FinalOutputSchema))
+		b.Write(compact(providerFinalOutputSchema(request.FinalOutputSchema)))
 	}
 	if present(request.State) {
 		b.WriteString("\n\n## Current state\n")

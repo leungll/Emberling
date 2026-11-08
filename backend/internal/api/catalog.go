@@ -75,6 +75,9 @@ func toolMetadataForResponse(metadata domain.ToolMetadata) domain.ToolMetadata {
 	records := make([]domain.ToolRecordKind, len(metadata.Records))
 	copy(records, metadata.Records)
 	metadata.Records = records
+	counted := make([]string, len(metadata.CountedFailedFacts))
+	copy(counted, metadata.CountedFailedFacts)
+	metadata.CountedFailedFacts = counted
 	if metadata.Produces != nil {
 		produces := *metadata.Produces
 		if produces.BindArguments == nil {

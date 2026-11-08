@@ -1,4 +1,5 @@
-import { History, Play, RotateCw } from 'lucide-react';
+import { ChevronDown, History, Play, RotateCw } from 'lucide-react';
+import { useState } from 'react';
 
 import { Words } from './Words';
 import type { Failure } from './run-diagnosis';
@@ -13,6 +14,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { useCopy } from '@/lib/copy';
 import { absoluteTime, duration } from '@/lib/time';
 import { useNow } from '@/lib/use-now';
+import { cn } from '@/lib/utils';
 import { useTimeZone } from '@/stores/prefs-store';
 
 /**
@@ -77,15 +79,7 @@ export function RunHeader({
             <span className="text-sm text-fg-muted">{v.runId}</span>
             <IdChip id={run.id} label={copy.runs.page.runIdLabel} size="md" />
           </span>
-          {externalTasks(model).map((t) => {
-            const name = copy.runs.providerCap(t.provider);
-            return (
-              <span key={t.id} className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                <span className="text-sm text-fg-muted">{v.taskOf(name)}</span>
-                <IdChip id={t.id} label={v.taskIdLabel(name)} size="md" />
-              </span>
-            );
-          })}
+          <ExternalTaskList model={model} />
           {newer ? (
             <Tooltip content={v.olderVersionTip(newer)}>
               <span
@@ -230,4 +224,45 @@ export function RunBanner({
     );
   }
   return null;
+}
+
+/**
+ * The external task ids collapse into one item per service that opens to the
+ * list, so six media-service tasks no longer take two header rows.
+ */
+function ExternalTaskList({ model }: { model: RunModel }) {
+  const copy = useCopy();
+  const v = copy.runs.view;
+  const [open, setOpen] = useState(false);
+  const tasks = externalTasks(model);
+  if (!tasks.length) return null;
+  const name = copy.runs.providerCap(tasks[0]?.provider);
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((o) => !o);
+        }}
+        className="inline-flex min-h-control-xs items-center gap-1 rounded-sm px-1 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg"
+      >
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('size-icon-sm transition-transform', !open && '-rotate-90')}
+        />
+        {v.tasksOf(name)}
+        <span className="rounded-sm bg-surface-hover px-1.5 font-medium text-fg-secondary tabular-nums">
+          {tasks.length}
+        </span>
+      </button>
+      {open ? (
+        <span className="absolute top-full left-0 z-popover mt-1 flex flex-col gap-1 rounded-md border border-border bg-surface p-2 shadow-2">
+          {tasks.map((t) => (
+            <IdChip key={t.id} id={t.id} label={v.taskIdLabel(name)} size="md" />
+          ))}
+        </span>
+      ) : null}
+    </span>
+  );
 }

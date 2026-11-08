@@ -11,13 +11,13 @@ import {
 
 import type { DetailContext } from './detail-context';
 import { stepIcon } from '@/components/step/step-icons';
-import { eventsFor } from './run-events';
 import type { TraceElement } from './run-model';
 import { copy as words } from '@/lib/copy';
 
 /** The details pane's tabs, kind words and path labels per element. */
 
-export type DetailTab = 'overview' | 'turns' | 'input' | 'output' | 'facts' | 'events' | 'raw';
+export type DetailTab =
+  'overview' | 'turns' | 'data' | 'input' | 'output' | 'facts' | 'events' | 'raw';
 
 interface TabDef {
   value: DetailTab;
@@ -25,49 +25,18 @@ interface TabDef {
   count?: number;
 }
 
-export function tabsFor(el: TraceElement, ctx: DetailContext): TabDef[] {
+/**
+ * At most three tabs. Overview reads the element; Turns lists an Agent's turns;
+ * Data holds its input, output, saved results and raw records.
+ */
+export function tabsFor(el: TraceElement, _ctx: DetailContext): TabDef[] {
   const t = words.runs.details.tabs;
   const overview: TabDef = { value: 'overview', label: t.overview };
-  const raw: TabDef = { value: 'raw', label: t.raw };
-  switch (el.kind) {
-    case 'run':
-      return [
-        overview,
-        { value: 'input', label: t.input },
-        { value: 'output', label: t.output },
-        raw,
-      ];
-    case 'step': {
-      const step = el.step;
-      if (!step?.nodeRun) return [overview, raw];
-      const tabs: TabDef[] = [overview];
-      if (step.trace) tabs.push({ value: 'turns', label: t.turns, count: step.trace.turns.length });
-      tabs.push({ value: 'input', label: t.input }, { value: 'output', label: t.output });
-      const facts = step.trace?.facts.items.length ?? 0;
-      if (facts) tabs.push({ value: 'facts', label: t.facts, count: facts });
-      const events = eventsFor(ctx.model, el).length;
-      if (events) tabs.push({ value: 'events', label: t.events, count: events });
-      tabs.push(raw);
-      return tabs;
-    }
-    case 'attempt':
-      return el.nodeAttempt
-        ? [overview, { value: 'input', label: t.input }, { value: 'output', label: t.result }, raw]
-        : [overview, raw];
-    case 'action':
-      return el.turn?.decision?.kind === 'FINAL'
-        ? [overview, { value: 'output', label: t.output }, raw]
-        : [
-            overview,
-            { value: 'input', label: t.arguments },
-            { value: 'output', label: t.result },
-            raw,
-          ];
-    case 'group':
-      return [overview];
-    default:
-      return [overview, raw];
-  }
+  const data: TabDef = { value: 'data', label: t.data };
+  if (el.kind === 'group') return [overview];
+  if (el.kind === 'step' && el.step?.trace)
+    return [overview, { value: 'turns', label: t.turns, count: el.step.trace.turns.length }, data];
+  return [overview, data];
 }
 
 export function kindOf(el: TraceElement): { icon: LucideIcon; word: string } {

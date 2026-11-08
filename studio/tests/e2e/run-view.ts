@@ -24,18 +24,46 @@ export function details(page: Page): Locator {
   return page.getByRole('complementary', { name: 'Details' });
 }
 
-/** The trace with every row open. */
+/** The trace and events drawer, opened when the reader's remembered choice closed it. */
+export async function openDrawer(page: Page): Promise<void> {
+  const toggle = page.getByRole('button', { name: /^Trace and events/ });
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+}
+
+/**
+ * The trace with every row open. Rows that arrive after "Expand all" (an Agent's trace is
+ * read after its step's records) stay closed, so the expansion is repeated until no row
+ * is left closed.
+ */
 export async function expandedTrace(page: Page): Promise<Locator> {
-  await page.getByRole('button', { name: 'Trace options' }).click();
-  await page.getByRole('menuitem', { name: 'Expand all' }).click();
-  return page.getByRole('treegrid', { name: 'Trace' });
+  await openDrawer(page);
+  await page.getByRole('radio', { name: /^Trace/ }).click();
+  const grid = page.getByRole('treegrid', { name: 'Trace' });
+  await expect(grid).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        await page.getByRole('button', { name: 'Trace options' }).click();
+        await page.getByRole('menuitem', { name: 'Expand all' }).click();
+        return grid.locator('[role="row"][aria-expanded="false"]').count();
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(0);
+  return grid;
 }
 
 /** The Events view's list. */
 export async function eventList(page: Page): Promise<Locator> {
+  await openDrawer(page);
   await page.getByRole('radio', { name: /^Events/ }).click();
   const grid = page.getByRole('grid', { name: 'Events' });
   await expect(grid).toBeVisible();
+  // The whole run's log: the view narrows to the selected element when a step is selected.
+  const only = page.getByRole('checkbox', { name: 'Selected element only' });
+  if ((await only.isEnabled()) && (await only.isChecked())) await only.uncheck();
   return grid;
 }
 

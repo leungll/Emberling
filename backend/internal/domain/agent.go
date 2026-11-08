@@ -30,6 +30,11 @@ type AgentRun struct {
 	// MaxGenerationCalls is the optional generation limit; nil means unlimited. The
 	// calls already made are derived from persisted Tool Attempts, never counted here.
 	MaxGenerationCalls *int `json:"maxGenerationCalls"`
+	// MaxFailedFacts optionally bounds, per fact type, how many failed verdicts of that
+	// type the Agent may collect before a Tool whose calls are bounded by it is refused;
+	// nil means no fact type is bounded. The failures already collected are derived from
+	// the committed facts under the Run lock, never counted here.
+	MaxFailedFacts map[string]int `json:"maxFailedFacts"`
 	// ImageModelID is the image Model ID the Agent node selected for Tools that use an
 	// image model; nil when the node selected none. Claims of such a Tool resolve this
 	// frozen value, never the Definition's current one.

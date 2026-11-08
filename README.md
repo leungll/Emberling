@@ -37,12 +37,13 @@ An agent must act repeatedly on feedback, sometimes across hours of external exe
 
 ![Five Agent Infra domains: Business and Applications, Agent Construction and Orchestration, Production Runtime, Governance and Control, and Observability and Optimization.](./assets/readme/agent-infra-panorama.svg)
 
-Starting with a durable execution core, Emberling develops these capabilities through two progressively demanding scenarios:
+Starting with a durable execution core, Emberling develops these capabilities through three progressively demanding scenarios:
 
 | Scenario | Focus | Problems to solve |
 |---|---|---|
 | **AIGC generation service**<br>Keep work running reliably | Construction and orchestration · Production runtime | How do generation rounds connect? How does work continue after a long wait? How do results reconnect after an interruption? |
 | **Vulnerability repair and release**<br>Keep delivery controlled | Extend the runtime foundation with governance, control and result verification | Has the patch passed its checks? Was the release approved? Does the deployed result meet the goal? |
+| **Video-editing Agent**<br>Keep the result honest | Construction and orchestration · Governance and control · Observability and evaluation | Does the clip keep the speaker’s meaning? Was it checked before rendering? Is “delivered” backed by facts? |
 
 <a id="aigc"></a>
 
@@ -161,12 +162,38 @@ A deployment may take effect even if its API response is lost. Resending the req
 
 **Bounded repairs. Evidence-backed verification. Approved releases. Confirmed outcomes.**
 
+<a id="video-editing"></a>
+
+## Scenario 3: a video-editing Agent
+
+**In development**
+
+Cutting a talk into a short vertical clip is creative work with a verifiable core. The clip must play, fit the target length and carry subtitles, but it must also keep what the speaker meant. The agent chooses which sentences to keep and revises on check and review results. Emberling makes the checks mandatory, bounds the revisions and decides completion from recorded facts.
+
+### 01 A cut that passes the checks can still twist the meaning
+
+A sentence lifted out of a talk can say the opposite of what the speaker said. “This approach does not work” is a clean cut on a sentence boundary, but the next sentence is “unless the sample is large enough.” Technical checks cannot see this. Emberling adds a semantic review: a review model, different from the agent’s own decision model, reads the selected sentences with their surrounding context and judges two things: whether the selection meets the request, and whether any sentence standing alone distorts the original meaning. A review that does not pass returns its issues with the sentences concerned, so the agent can add the second half or choose a passage that states the point in full. The verdict is recorded as a fact about the exact timeline that was reviewed.
+
+### 02 No rendering before the timeline passes its check
+
+Rendering is the slow step, and it is where an unchecked mistake gets baked in. The agent selects sentences, not timecodes. The media service resolves them to exact times, applies versioned rules (every sentence exists, segments do not overlap, cuts land on sentence boundaries, the duration is within range) and records the verdict against the timeline’s digest. The render tool accepts nothing but a timeline digest and requires a passed check for it: a timeline that was never checked, or whose newest check failed, is refused before any call reaches the service, with the reason returned to the agent. Failed technical checks and failed semantic reviews are counted separately, each against its own limit frozen with the run. Once a limit is passed, further calls of that kind are refused and the refusal names the limit.
+
+### 03 Saying “delivered” proves nothing
+
+An agent’s final message is a claim, not evidence. When the agent declares a clip delivered, Emberling checks the declared clip digest against committed facts: the clip was rendered from a checked timeline, the newest check of that clip passed and, when the agent could request a review, the newest review of that timeline passed. A claim without the facts behind it is recorded as incomplete, with what is missing named. Some requests cannot be met honestly: the material has no clearly controversial point, or the full meaning does not fit the target length. The agent may then end with “cannot satisfy” and a reason, without a clip. That is a legitimate outcome, recorded as such. It must not invent a controversy or drop a qualifier in order to deliver.
+
+### 04 Transcription takes minutes. The service restarts. The task continues.
+
+Transcribing and rendering real media runs for minutes on an external media service. Emberling records the task association before the work is dispatched. After a restart, the new process recovers the wait from that record and completes the same attempt from the callback or from a status query, whichever arrives. The agent’s committed decision is not asked again, and the task is not resubmitted. Transcripts and timelines stay outside the model’s context as artifacts the agent reads by range, and each turn records what it read.
+
+**A second model reviews the meaning. Checks before rendering. Completion from facts. Work that survives restarts.**
+
 <a id="runtime"></a>
 <a id="capability-map"></a>
 
 ## How Emberling is being built
 
-From sustained AIGC generation to controlled software releases, both scenarios share one execution foundation. **Emberling centers on a durable, AI-native Execution Runtime: workflows organize the process, while agents act on feedback.**
+From sustained AIGC generation, through video editing that must keep the speaker’s meaning, to controlled software releases, all three scenarios share one execution foundation. **Emberling centers on a durable, AI-native Execution Runtime: workflows organize the process, while agents act on feedback.**
 
 Around that core, the platform progressively develops orchestration, state and artifacts, governance, verification, observability and evaluation. Interfaces connect models, tools and execution environments into Agent Infra for Cloud Agent Workloads.
 
@@ -236,6 +263,16 @@ EMBERLING_DEMO_VARIANT=serving-crash-waiting make demo-studio
 ```
 
 Requires Docker, `curl` and `jq`. Run `make demo-down` when finished. It stops the demo and removes simulated-service request records, while preserving PostgreSQL and artifact volumes.
+
+### Run the video-editing demo
+
+The media service transcribes, checks and renders real media and needs FFmpeg. See the [media service guide](./services/media/README.md) for `make media-dev` and the Compose profile. The evaluation batch, blind human scoring and judge calibration are described in the [evaluation guide](./evals/video_editing/README.md).
+
+```bash
+make video-demo
+```
+
+`make video-demo` starts PostgreSQL, the Backend and the media service, uploads one source talk, runs the scripted editing story to the end and checks the Run, its facts and the delivered clip through the public API. `EMBERLING_DEMO_VIDEO_STORY=all` runs the three stories: a clean pass, a timeline that is too long and gets revised, and a review that fails before the missing half of a sentence is added. These runs use a scripted mock model, so they show the enforcement path, not a real model's choices.
 
 ### Explore further
 

@@ -144,6 +144,7 @@ func Registration(artifacts ArtifactTextStore) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Create change request",
 			Description:   "Create the change request for the workspace's current, verified patch: summary, impact, rollback plan and the decision basis linked to the turns' context manifests",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),
@@ -160,6 +161,14 @@ func Registration(artifacts ArtifactTextStore) registry.ToolRegistration {
 			UsesWorkspace:               true,
 			WorkspacePatchDigestPath:    "/patchDigest",
 			ReturnUnmetRequirement:      true,
+			// The summary, impact, rollback plan and decision basis are the change request's
+			// content, read through its Artifact; only the identifiers are shown.
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/patchDigest", Title: "Patch digest"},
+				{Source: domain.FactPointerResult, Pointer: "/changeRequestId", Title: "Change request"},
+				{Source: domain.FactPointerResult, Pointer: "/basisCount", Title: "Decision basis items"},
+				{Source: domain.FactPointerResult, Pointer: "/existing", Title: "Already recorded"},
+			},
 		},
 		Executor: New(artifacts),
 	}

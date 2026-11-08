@@ -396,3 +396,19 @@ func TestNodeInput_IdempotencyKey_ZeroValueIsEmpty(t *testing.T) {
 		t.Fatalf("NodeInput{}.IdempotencyKey = %q, want empty", in.IdempotencyKey)
 	}
 }
+
+// TestNodeRegistry_Register_MediaLinkOnUndeclaredPortRejected: a Node media link that
+// names no declared output port fails registration, so a typo in a declaration stops the
+// process at startup instead of silently listing no media.
+func TestNodeRegistry_Register_MediaLinkOnUndeclaredPortRejected(t *testing.T) {
+	reg := validSyncNodeRegistration()
+	reg.Metadata.MediaLinks = []domain.MediaLink{{Port: "video", RefPointer: "/ref", URLPointer: "/url", MediaType: "video/mp4"}}
+	err := NewNodeRegistry().Register(reg)
+	if err == nil || !strings.Contains(err.Error(), `mediaLinks[0].port "video" is not a declared output port`) {
+		t.Fatalf("Register() = %v, want the undeclared port rejected", err)
+	}
+	reg.Metadata.MediaLinks[0].Port = "text"
+	if err := NewNodeRegistry().Register(reg); err != nil {
+		t.Fatalf("Register() with the link on a declared port = %v, want nil", err)
+	}
+}

@@ -18,10 +18,22 @@ func TestAgentTraceResponse_NoFactsAndNoLimit_RendersEmptyLedgerAndNullLimit(t *
 	for _, want := range []string{
 		`"facts":{"items":[],"truncated":false}`,
 		`"generationBudget":{"maxGenerationCalls":null,"generationCallsUsed":0}`,
+		`"maxFailedFacts":null`,
 	} {
 		if !strings.Contains(string(body), want) {
 			t.Errorf("response %s lacks %s", body, want)
 		}
+	}
+}
+
+func TestAgentTraceResponse_FrozenRevisionLimits_RenderPerFactType(t *testing.T) {
+	trace := service.AgentTrace{AgentRun: domain.AgentRun{MaxFailedFacts: map[string]int{"media_checked": 3, "content_reviewed": 1}}}
+	body, err := json.Marshal(toAgentTraceResponse(trace, defaultTraceMaxFieldBytes))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if want := `"maxFailedFacts":{"content_reviewed":1,"media_checked":3}`; !strings.Contains(string(body), want) {
+		t.Errorf("response %s lacks %s", body, want)
 	}
 }
 

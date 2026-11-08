@@ -378,6 +378,10 @@ func (s *ExecutionService) interpretNodeCallback(
 	if err != nil {
 		return registry.NodeOutput{}, nil, err
 	}
+	ports, err := decodeAttemptPorts(attempt)
+	if err != nil {
+		return registry.NodeOutput{}, nil, err
+	}
 	output, cbErr := executor.OnCallback(ctx, registry.NodeAsyncState{
 		RunID:     run.ID,
 		NodeRunID: nodeRun.ID,
@@ -387,6 +391,7 @@ func (s *ExecutionService) interpretNodeCallback(
 			ExternalTaskID: binding.ExternalTaskID,
 		},
 		Config: config,
+		Ports:  ports,
 	}, req.Payload)
 	if cbErr == nil {
 		return output, nil, nil
@@ -397,6 +402,22 @@ func (s *ExecutionService) interpretNodeCallback(
 		return registry.NodeOutput{}, &failure, nil
 	}
 	return registry.NodeOutput{}, nil, &CallbackPayloadRejectedError{ExternalTaskID: req.ExternalTaskID, Err: cbErr}
+}
+
+// decodeAttemptPorts restores the input ports a Node Attempt was dispatched with from its
+// immutable input, which the claim transaction wrote as the resolved port map.
+func decodeAttemptPorts(attempt domain.NodeAttempt) (map[string]json.RawMessage, error) {
+	if len(attempt.Input) == 0 {
+		return map[string]json.RawMessage{}, nil
+	}
+	var ports map[string]json.RawMessage
+	if err := json.Unmarshal(attempt.Input, &ports); err != nil {
+		return nil, fmt.Errorf("execution: decode input of attempt %s: %w", attempt.ID, err)
+	}
+	if ports == nil {
+		ports = map[string]json.RawMessage{}
+	}
+	return ports, nil
 }
 
 // checkPollRoute enforces that a poll result reaches only the Attempt it was taken for,

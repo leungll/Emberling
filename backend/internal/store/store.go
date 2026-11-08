@@ -137,11 +137,17 @@ type ArtifactRepository interface {
 	// domain.ErrConflict rather than being ignored.
 	LinkToToolAttempt(ctx context.Context, link ToolAttemptArtifact) error
 
+	// LinkToNodeAttempt records that a Node Attempt of a Run declared an Execution
+	// Artifact with its output, under the same rules as LinkToToolAttempt: it belongs to
+	// the node's result transaction, the artifact's row must already exist in it, and a
+	// second link of the same Attempt and artifact yields domain.ErrConflict.
+	LinkToNodeAttempt(ctx context.Context, link NodeAttemptArtifact) error
+
 	// GetForRun returns the Metadata and storage key of an Execution Artifact that a
-	// SUCCEEDED Tool Attempt of runID declared, or domain.ErrNotFound when the Run does
-	// not exist, no such link exists, or the artifact has no row. The three cases are
-	// deliberately indistinguishable, so a Run reveals nothing about another Run's
-	// artifacts.
+	// SUCCEEDED Tool Attempt or a SUCCEEDED Node Attempt of runID declared, or
+	// domain.ErrNotFound when the Run does not exist, no such link exists, or the
+	// artifact has no row. The cases are deliberately indistinguishable, so a Run
+	// reveals nothing about another Run's artifacts.
 	GetForRun(ctx context.Context, runID, artifactID string) (ArtifactRecord, error)
 }
 
@@ -149,6 +155,15 @@ type ArtifactRepository interface {
 // declared which Execution Artifact.
 type ToolAttemptArtifact struct {
 	ToolAttemptID string
+	ArtifactID    string
+	RunID         string
+	CreatedAt     time.Time
+}
+
+// NodeAttemptArtifact is one node_attempt_artifacts row: which Node Attempt of which Run
+// declared which Execution Artifact.
+type NodeAttemptArtifact struct {
+	NodeAttemptID string
 	ArtifactID    string
 	RunID         string
 	CreatedAt     time.Time
@@ -887,6 +902,14 @@ type ExecutionFactRepository interface {
 	// (created_at then id, ascending), for the facts a Node Type declares it reads. A
 	// non-positive limit is an error rather than an unbounded read.
 	ListByRunAndType(ctx context.Context, runID, factType string, limit int) ([]domain.ExecutionFact, error)
+
+	// CountFailedByAgentRun counts, per fact type in factTypes, the facts of one Agent Run
+	// whose verdict is false: every such fact, not only the newest per subject, because a
+	// failed check of a revised timeline is one more revision whatever it was about. A
+	// type with no failed fact is absent from the result. The caller holds the Run lock
+	// so concurrent claims cannot both see one free revision. An empty factTypes counts
+	// nothing.
+	CountFailedByAgentRun(ctx context.Context, agentRunID string, factTypes []string) (map[string]int, error)
 
 	// Get returns one fact by id, or domain.ErrNotFound. A record that names a fact it
 	// rests on is checked against the stored row through it.

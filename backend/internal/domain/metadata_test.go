@@ -241,6 +241,18 @@ func TestToolMetadata_Validate_RejectsInvalidRegistration(t *testing.T) {
 		{"required review model without the review model", func(m *ToolMetadata) {
 			m.RequiresReviewModel = true
 		}, `requiresReviewModel is only allowed`},
+		{"empty counted failed fact type", func(m *ToolMetadata) {
+			m.CountedFailedFacts = []string{"media_checked", ""}
+		}, `countedFailedFacts: fact type is empty`},
+		{"duplicate counted failed fact type", func(m *ToolMetadata) {
+			m.CountedFailedFacts = []string{"media_checked", "media_checked"}
+		}, `countedFailedFacts: duplicate fact type "media_checked"`},
+		{"material pointer without a pointer", func(m *ToolMetadata) {
+			m.MaterialPointer = "material"
+		}, `materialPointer must be a JSON Pointer`},
+		{"material pointer with a malformed escape", func(m *ToolMetadata) {
+			m.MaterialPointer = "/material~2"
+		}, `materialPointer must be a JSON Pointer`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -355,17 +367,18 @@ func TestModelMetadata_JSON_RoundTripsWireNames(t *testing.T) {
 }
 
 func TestToolMetadata_JSON_RoundTripsWireNames(t *testing.T) {
-	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"requiresReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
+	const wire = `{"name":"lookup","description":"Read a deterministic record","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"NONE","idempotency":"SAFE"},"executionKind":"SYNC","requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"requiresReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false,"countedFailedFacts":[]}`
 
 	fixture := ToolMetadata{
-		Name:          "lookup",
-		Description:   "Read a deterministic record",
-		InputSchema:   json.RawMessage(`{}`),
-		OutputSchema:  json.RawMessage(`{}`),
-		SideEffect:    SideEffectPolicy{Kind: SideEffectNone, Idempotency: IdempotencySafe},
-		ExecutionKind: ToolExecutionSync,
-		Requires:      []FactRequirement{},
-		Records:       []ToolRecordKind{},
+		Name:               "lookup",
+		Description:        "Read a deterministic record",
+		InputSchema:        json.RawMessage(`{}`),
+		OutputSchema:       json.RawMessage(`{}`),
+		SideEffect:         SideEffectPolicy{Kind: SideEffectNone, Idempotency: IdempotencySafe},
+		ExecutionKind:      ToolExecutionSync,
+		Requires:           []FactRequirement{},
+		Records:            []ToolRecordKind{},
+		CountedFailedFacts: []string{},
 	}
 	encoded, err := json.Marshal(fixture)
 	if err != nil {
@@ -466,17 +479,18 @@ func TestMetadata_PollPolicyOnNonAsyncKind_Rejected(t *testing.T) {
 
 func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
 	tool := ToolMetadata{
-		Name:          "remote_lookup",
-		Description:   "Look up a record asynchronously",
-		InputSchema:   json.RawMessage(`{}`),
-		OutputSchema:  json.RawMessage(`{}`),
-		SideEffect:    SideEffectPolicy{Kind: SideEffectExternal, Idempotency: IdempotencyKeyed},
-		ExecutionKind: ToolExecutionAsync,
-		Poll:          &PollPolicy{IntervalMs: 2000, MaxPolls: 10},
-		Requires:      []FactRequirement{},
-		Records:       []ToolRecordKind{},
+		Name:               "remote_lookup",
+		Description:        "Look up a record asynchronously",
+		InputSchema:        json.RawMessage(`{}`),
+		OutputSchema:       json.RawMessage(`{}`),
+		SideEffect:         SideEffectPolicy{Kind: SideEffectExternal, Idempotency: IdempotencyKeyed},
+		ExecutionKind:      ToolExecutionAsync,
+		Poll:               &PollPolicy{IntervalMs: 2000, MaxPolls: 10},
+		Requires:           []FactRequirement{},
+		Records:            []ToolRecordKind{},
+		CountedFailedFacts: []string{},
 	}
-	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"requiresReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false}`
+	const wantTool = `{"name":"remote_lookup","description":"Look up a record asynchronously","inputSchema":{},"outputSchema":{},"sideEffect":{"kind":"EXTERNAL","idempotency":"KEYED"},"executionKind":"ASYNC","poll":{"intervalMs":2000,"maxPolls":10},"requires":[],"countsTowardGenerationLimit":false,"usesImageModel":false,"usesReviewModel":false,"requiresReviewModel":false,"records":[],"usesWorkspace":false,"reconcilable":false,"returnUnmetRequirement":false,"countedFailedFacts":[]}`
 	encoded, err := json.Marshal(tool)
 	if err != nil {
 		t.Fatalf("Marshal() error: %v", err)
@@ -509,5 +523,29 @@ func TestMetadata_PollPolicyJSON_SerialisedOnlyWhenDeclared(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), `"poll"`) {
 		t.Fatalf("Marshal() = %s, want no poll key for an undeclared policy", encoded)
+	}
+}
+
+// TestToolMetadata_MaterialPointer_AcceptedAndOffTheWireWhenEmpty: a Tool that returns
+// material by range declares where its result names the material; the declaration is a
+// JSON Pointer and is omitted from the catalogue when undeclared.
+func TestToolMetadata_MaterialPointer_AcceptedAndOffTheWireWhenEmpty(t *testing.T) {
+	metadata := ToolMetadata{
+		Name: "read_material", Description: "Read lines", InputSchema: json.RawMessage(`{"type":"object"}`),
+		OutputSchema: json.RawMessage(`{"type":"object"}`), ExecutionKind: ToolExecutionSync,
+		SideEffect:      SideEffectPolicy{Kind: SideEffectNone, Idempotency: IdempotencySafe},
+		MaterialPointer: "/material",
+	}
+	if err := metadata.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want nil", err)
+	}
+	encoded, _ := json.Marshal(metadata)
+	if !strings.Contains(string(encoded), `"materialPointer":"/material"`) {
+		t.Fatalf("encoded = %s, want the material pointer on the wire", encoded)
+	}
+	metadata.MaterialPointer = ""
+	encoded, _ = json.Marshal(metadata)
+	if strings.Contains(string(encoded), "materialPointer") {
+		t.Fatalf("encoded = %s, want no materialPointer member when undeclared", encoded)
 	}
 }

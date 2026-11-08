@@ -99,6 +99,7 @@ func Registration(ports Ports) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Review image",
 			Description:   "Review a generated image asset against its original photo and a style requirement, with the Agent's review model or the mock review policy",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),
@@ -123,6 +124,11 @@ func Registration(ports Ports) registry.ToolRegistration {
 			}},
 			UsesReviewModel:       true,
 			ReviewModelCapability: domain.ModelCapabilityVisionInput,
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/styleRequirement", Title: "Style requirement"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/reasons", Title: "Reasons"},
+			},
 		},
 		Executor: Executor{ports: ports},
 	}

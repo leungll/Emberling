@@ -27,6 +27,8 @@ describe('CompletionCard', () => {
     ['DEPLOYED_CHECK_FAILED', 'Deployed, health check failed'],
     ['RELEASE_UNKNOWN', 'Release outcome unknown'],
     ['INCOMPLETE', 'Not complete'],
+    ['CLIP_DELIVERED', 'Clip delivered'],
+    ['CANNOT_SATISFY', 'Request cannot be satisfied'],
   ])('renders the %s outcome with its own title and description', (outcome, title) => {
     render(<CompletionCard completion={completion(outcome)} />);
     const card = screen.getByRole('group', { name: 'Task result' });
@@ -38,7 +40,7 @@ describe('CompletionCard', () => {
     expect(paragraphs[1]?.textContent?.length ?? 0).toBeGreaterThan(20);
   });
 
-  it('lists what an incomplete task still misses, by description and code', () => {
+  it('lists what an incomplete task still misses, in words and without the code', () => {
     render(
       <CompletionCard
         completion={completion('INCOMPLETE', {
@@ -60,8 +62,26 @@ describe('CompletionCard', () => {
     const items = within(card).getAllByRole('listitem');
     expect(items).toHaveLength(1);
     expect(items[0]).toHaveTextContent('No change request names the latest patch.');
-    expect(items[0]).toHaveTextContent('CHANGE_REQUEST_MISSING');
+    expect(items[0]).not.toHaveTextContent('CHANGE_REQUEST_MISSING');
     expect(within(card).getByText('1 of 2 passed')).toBeInTheDocument();
+  });
+
+  it('says in plain words when the agent handed back no final report', () => {
+    render(
+      <CompletionCard
+        completion={completion('INCOMPLETE', {
+          missing: [
+            {
+              code: 'FINAL_RESPONSE_MISSING',
+              description: 'The agent did not declare completion; it ended with INVALID_ACTION.',
+            },
+          ],
+        })}
+      />,
+    );
+    const item = screen.getByRole('listitem');
+    expect(item).toHaveTextContent('The agent didn’t hand back a final report.');
+    expect(item).not.toHaveTextContent('INVALID_ACTION');
   });
 
   it('shows no missing list when nothing is missing', () => {

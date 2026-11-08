@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "batch-manifest/v1",
+  "batchId": "pilot-2026-11-07",
+  "type": "showcase",
+  "description": "Pilot: one real-model pair on sample 01 to measure cost and verify the live flow before the evaluation batch. Outside the statistics.",
+  "datasetVersion": "v1",
+  "definitions": {
+    "basic": {
+      "workflowId": "wf_7bb425aa0b644106ab1981331189ec7a",
+      "version": 1
+    },
+    "reviewed": {
+      "workflowId": "wf_b069f8b3277746bb8e7593d297108b0e",
+      "version": 1
+    }
+  },
+  "models": {
+    "decision": "opus-5.5",
+    "review": "text-review",
+    "judge": "opus-5.5"
+  },
+  "promptVersion": "video-edit/v1",
+  "toolSchemaDigest": "sha256:00de915d4a79f56f45faad9ef7ffd032480a1945c982341817555aa1cddbf103",
+  "ruleVersion": "v1",
+  "randomSeed": 20261107
+}

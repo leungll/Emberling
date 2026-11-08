@@ -97,9 +97,9 @@ describe('failed steps, as recorded', () => {
 describe('a completed delivery run, as recorded', () => {
   const m = recorded('run_d9c23ab668c54acf9ec83c59c55ce742');
 
-  it('lists the fields of a JSON object output, without a clamp', () => {
+  it('shows a JSON object output as a plain status, never its keys', () => {
     const c = info(m, 'node_task');
-    expect(c.line.text).toMatch(/^JSON with baseCommit, patch and /);
+    expect(c.line.text).toBe('Succeeded');
     expect(c.clamp).toBe(false);
   });
 
@@ -574,5 +574,28 @@ describe('a tool call’s arguments and result in the details pane', () => {
     const t2 = s2?.trace?.turns[0];
     if (!s2 || !t2) throw new Error('no turn');
     expect(turnResult(img, s2, t2)).toBeNull();
+  });
+});
+
+describe('the members a tool declares for its run card', () => {
+  it('never become the step card’s line; the card keeps the step’s outcome', () => {
+    const m = model({
+      snapshot: snapshot('COMPLETED', [nodeRun('agent', 'agent', { output: { text: 'Done.' } })]),
+      definition: FLOW,
+      traces: {
+        nr_agent: agentTrace([
+          turn(1, 'deploy', 1, {
+            attempts: [
+              toolAttempt('ta_1', 'deploy', {
+                shown: [{ title: 'Version', source: 'RESULT', pointer: '/version', value: 'v53' }],
+              }),
+            ],
+          }),
+        ]),
+      },
+    });
+    const c = info(m, 'agent');
+    expect(c.line.text).not.toContain('Version');
+    expect(c.line.text).toBe('Finished with an answer');
   });
 });

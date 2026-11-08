@@ -10,6 +10,7 @@ import {
   validateDefinition,
 } from '@/api/client';
 import type { Definition, JsonObject, ValidationError } from '@/api/types';
+import { MediaSourceContext, mediaOfRun } from '@/components/media/media-source';
 import { ListShell } from '@/components/shell/ListShell';
 import { NotFoundView } from '@/components/shell/NotFoundView';
 import { StateBlock } from '@/components/state/StateBlock';
@@ -104,6 +105,14 @@ export function EditPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [reloadKey, setReloadKey] = useState(0);
   const { registry, load, setLoad, lastRun } = useEditorData(workflowId, reloadKey);
+  // The last run's media, so a media-typed value its Agent wrote shows in the side panel.
+  const lastRunMedia = useMemo(
+    () => ({
+      media: mediaOfRun(lastRun.snapshot?.media, lastRun.traces.values()),
+      runInput: lastRun.snapshot?.run.input ?? null,
+    }),
+    [lastRun.traces, lastRun.snapshot],
+  );
   const staging = useStaging(workflowId);
 
   // The draft is loaded once per version; a save keeps the draft and its history.
@@ -158,7 +167,14 @@ export function EditPage() {
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const [paletteChoice, setPaletteChoice] = useState(() => readString('local', PALETTE_KEY));
   const [paletteAuto, setPaletteAuto] = useState(() => window.innerWidth < 1280);
-  const [panelHidden, setPanelHidden] = useState(() => readString('local', PANEL_KEY) === '1');
+  // The side panel hides itself once the canvas has not fit with it open and nothing is
+  // selected; a choice to hide or show it wins, and selecting a step always shows it.
+  const [panelChoice, setPanelChoice] = useState(() => readString('local', PANEL_KEY));
+  const [panelAuto, setPanelAuto] = useState(false);
+  const hasSelection = useEditorStore(
+    (s) => s.selection.ids.length > 0 || s.selection.edge !== null,
+  );
+  const panelHidden = panelChoice === '1' || (panelChoice === null && panelAuto && !hasSelection);
   const geometry = useRef<Geometry>(NO_GEOMETRY);
   const onGeometry = useCallback((g: Geometry) => {
     geometry.current = g;
@@ -190,7 +206,7 @@ export function EditPage() {
 
   const openSettings = useCallback((nodeId: string, field: string | null = null) => {
     useEditorStore.getState().select([nodeId]);
-    setPanelHidden(false);
+    setPanelChoice((c) => (c === '1' ? '0' : c));
     setIssuesOpen(false);
     setFocusRequest((r) => ({ nodeId, field, seq: (r?.seq ?? 0) + 1 }));
     requestAnimationFrame(() => geometry.current.reveal(nodeId));
@@ -397,97 +413,102 @@ export function EditPage() {
 
   return (
     <EditorContext.Provider value={ctx}>
-      <div className="flex h-screen flex-col bg-bg text-fg">
-        <EditorHeader
-          workflowId={workflowId}
-          name={doc.name}
-          onName={(v) => {
-            const s = useEditorStore.getState();
-            s.begin('workflow.name');
-            s.setName(v);
-          }}
-          onNameCommit={() => useEditorStore.setState({ editingKey: null })}
-          version={version}
-          dirty={dirty}
-          saving={saving}
-          issues={issues}
-          nodes={doc.nodes}
-          catalog={registry.catalog}
-          issuesOpen={issuesOpen}
-          onIssuesOpen={setIssuesOpen}
-          onShowIssue={showIssue}
-          onSave={() => void save()}
-          onRun={openRun}
-          runReason={runReason}
-          onValidate={() => void validateNow()}
-          loading={!ready}
-        />
-        {ready ? (
-          <>
-            <div className="flex min-h-0 flex-1">
-              <StepsSidebar
-                collapsed={paletteCollapsed}
-                onCollapsed={(v) => {
-                  setPaletteChoice(v ? '1' : '0');
-                  writeString('local', PALETTE_KEY, v ? '1' : '0');
-                }}
-                onQuickAdd={() => setQuick({})}
-              />
-              <main aria-label={t.canvas.label} className="relative flex min-w-0 flex-1 flex-col">
-                <EditorCanvas
-                  inserting={quick?.link?.kind === 'insert' ? quick.link.edgeId : null}
-                  onOverflow={() => setPaletteAuto(true)}
-                  onGeometry={onGeometry}
-                />
-              </main>
-              <SidePanel
-                hidden={panelHidden}
-                onHidden={(v) => {
-                  setPanelHidden(v);
-                  writeString('local', PANEL_KEY, v ? '1' : null);
-                }}
-              />
-            </div>
-            <LastRunStrip savedNodes={definition?.nodes ?? []} version={version} />
-          </>
-        ) : (
-          <div className="flex min-h-0 flex-1 items-center justify-center">
-            <p role="status" className="m-0 text-sm text-fg-muted">
-              {t.loading}
-            </p>
-          </div>
-        )}
-        {quick ? <QuickAdd request={quick} onClose={() => setQuick(null)} /> : null}
-        <LeaveGuardDialog
-          blocker={blocker}
-          issues={issues.length}
-          version={version}
-          onSaveAndLeave={() => save(true)}
-        />
-        {definition ? (
-          <RunInputDialog
-            open={runOpen}
-            onClose={() => setRunOpen(false)}
-            workflowName={definition.name}
-            definitionVersion={definition.version}
-            runInputSchema={definition.runInputSchema}
-            inputLabels={runLabels}
-            lastRun={
-              lastRun.snapshot
-                ? {
-                    runId: lastRun.snapshot.run.id,
-                    startedAt: lastRun.snapshot.run.startedAt,
-                    input: lastRun.snapshot.run.input,
-                  }
-                : undefined
-            }
-            prefill={stagedInput(definition.nodes, staging.staged)}
-            submitting={runBusy}
-            submitError={runError}
-            onSubmit={(input) => void startRun(input)}
+      <MediaSourceContext.Provider value={lastRunMedia}>
+        <div className="flex h-screen flex-col bg-bg text-fg">
+          <EditorHeader
+            workflowId={workflowId}
+            name={doc.name}
+            onName={(v) => {
+              const s = useEditorStore.getState();
+              s.begin('workflow.name');
+              s.setName(v);
+            }}
+            onNameCommit={() => useEditorStore.setState({ editingKey: null })}
+            version={version}
+            dirty={dirty}
+            saving={saving}
+            issues={issues}
+            nodes={doc.nodes}
+            catalog={registry.catalog}
+            issuesOpen={issuesOpen}
+            onIssuesOpen={setIssuesOpen}
+            onShowIssue={showIssue}
+            onSave={() => void save()}
+            onRun={openRun}
+            runReason={runReason}
+            onValidate={() => void validateNow()}
+            loading={!ready}
           />
-        ) : null}
-      </div>
+          {ready ? (
+            <>
+              <div className="flex min-h-0 flex-1">
+                <StepsSidebar
+                  collapsed={paletteCollapsed}
+                  onCollapsed={(v) => {
+                    setPaletteChoice(v ? '1' : '0');
+                    writeString('local', PALETTE_KEY, v ? '1' : '0');
+                  }}
+                  onQuickAdd={() => setQuick({})}
+                />
+                <main aria-label={t.canvas.label} className="relative flex min-w-0 flex-1 flex-col">
+                  <EditorCanvas
+                    inserting={quick?.link?.kind === 'insert' ? quick.link.edgeId : null}
+                    onOverflow={() => {
+                      setPaletteAuto(true);
+                      setPanelAuto(true);
+                    }}
+                    onGeometry={onGeometry}
+                  />
+                </main>
+                <SidePanel
+                  hidden={panelHidden}
+                  onHidden={(v) => {
+                    setPanelChoice(v ? '1' : '0');
+                    writeString('local', PANEL_KEY, v ? '1' : null);
+                  }}
+                />
+              </div>
+              <LastRunStrip savedNodes={definition?.nodes ?? []} version={version} />
+            </>
+          ) : (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <p role="status" className="m-0 text-sm text-fg-muted">
+                {t.loading}
+              </p>
+            </div>
+          )}
+          {quick ? <QuickAdd request={quick} onClose={() => setQuick(null)} /> : null}
+          <LeaveGuardDialog
+            blocker={blocker}
+            issues={issues.length}
+            version={version}
+            onSaveAndLeave={() => save(true)}
+          />
+          {definition ? (
+            <RunInputDialog
+              open={runOpen}
+              onClose={() => setRunOpen(false)}
+              workflowName={definition.name}
+              definitionVersion={definition.version}
+              runInputSchema={definition.runInputSchema}
+              inputLabels={runLabels}
+              lastRun={
+                lastRun.snapshot
+                  ? {
+                      runId: lastRun.snapshot.run.id,
+                      startedAt: lastRun.snapshot.run.startedAt,
+                      input: lastRun.snapshot.run.input,
+                    }
+                  : undefined
+              }
+              prefill={stagedInput(definition.nodes, staging.staged)}
+              submitting={runBusy}
+              submitError={runError}
+              onSubmit={(input) => void startRun(input)}
+            />
+          ) : null}
+        </div>
+      </MediaSourceContext.Provider>
     </EditorContext.Provider>
   );
 }

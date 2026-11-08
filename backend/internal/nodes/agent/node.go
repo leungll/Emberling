@@ -16,7 +16,8 @@ const nodeType = "agent"
 
 // configSchema is the fixed `agent` Node config shape:
 // modelId, maxTurns and timeoutMs are mandatory; instructions, modelConfig, allowedTools,
-// the three frozen Schemas, the generation limit maxGenerationCalls, the image model
+// the three frozen Schemas, the generation limit maxGenerationCalls, the revision limits
+// maxFailedFacts, the image model
 // imageModelId, the review model reviewModelId, the workspace binding, the goal pointer
 // and the human and release wait bounds are optional. It matches runtime.AgentNodeConfig
 // field for field so the ConfigSchema stage and the Semantics stage
@@ -36,6 +37,7 @@ const configSchema = `{
     "maxTurns": {"type": "integer", "minimum": 1},
     "timeoutMs": {"type": "integer", "minimum": 1},
     "maxGenerationCalls": {"type": "integer", "minimum": 1},
+    "maxFailedFacts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
     "imageModelId": {"type": "string", "minLength": 1, "title": "Image model"},
     "reviewModelId": {"type": "string", "minLength": 1, "title": "Review model"},
     "workspace": {
@@ -76,13 +78,20 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Agent",
+			Description:   "Works toward a goal by calling tools, one turn at a time.",
 			Category:      domain.NodeCategoryAgent,
 			ExecutionKind: domain.NodeExecutionManagedAgent,
 			// The input port accepts any value: a Text Input's string or a Task Input's object.
 			// The Agent Runtime hands it to the model unchanged as the first user message and
 			// resolves the goal pointer inside it.
-			Inputs:       []domain.PortMetadata{{Name: "input", DataType: domain.PortTypeAny, Required: true}},
-			Outputs:      []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
+			Inputs: []domain.PortMetadata{{
+				Name: "input", DataType: domain.PortTypeAny, Required: true,
+				Description: "What the agent starts from.",
+			}},
+			Outputs: []domain.PortMetadata{{
+				Name: "text", DataType: domain.PortTypeText, Required: true,
+				Description: "The report the agent hands back when it finishes.",
+			}},
 			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "modelId", Order: 10, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityStructuredDecision},

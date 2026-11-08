@@ -13,7 +13,7 @@ export function fold(s: string): string {
 export function matchesStep(meta: NodeMetadata, query: string): boolean {
   const words = fold(query).split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  const hay = fold(`${meta.displayName} ${purposeOf(meta.type)} ${meta.type.replace(/_/g, ' ')}`);
+  const hay = fold(`${meta.displayName} ${purposeOf(meta)} ${meta.type.replace(/_/g, ' ')}`);
   return words.every((w) => hay.includes(w));
 }
 

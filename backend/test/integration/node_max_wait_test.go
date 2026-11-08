@@ -561,7 +561,17 @@ func TestMigrations_NodeAttemptRunner_SchedulesOccupationsOfEndedRuns(t *testing
 
 	uow := postgres.NewUnitOfWork(pool)
 	f := seedLegacyRun(ctx, t, pool, uow)
-	seedDecidedTurn(ctx, t, uow, f, "ar_occ", "turn_occ", "dec_occ", "act_occ")
+	// Raw SQL as for the Run: the Store maps agent_runs columns a later migration adds,
+	// which do not exist on the schema the backfill runs against.
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO agent_runs (id, node_run_id, instructions, model_id, model_config, allowed_tools,
+			context_schema, state_schema, output_schema, max_turns, current_turn_no,
+			current_context_version, current_state_version, started_at, deadline)
+		VALUES ('ar_occ', $1, 'seed', 'mock/deterministic-1', '{}', '[]', '{}', '{}', '{}', 4, 1, 0, 0, $2, $2)`,
+		f.nodeRunID, fixtureTime); err != nil {
+		t.Fatalf("seed legacy agent run: %v", err)
+	}
+	seedDecidedTurnOnAgentRun(ctx, t, uow, "ar_occ", "turn_occ", "dec_occ", "act_occ")
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO runs (id, workflow_id, definition_version, status, input, last_seq, started_at, updated_at)
 		VALUES ('run_completed', $1, 1, 'COMPLETED', '{}', 0, $2, $2),

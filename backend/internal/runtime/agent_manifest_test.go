@@ -281,3 +281,135 @@ func TestDeriveTurnManifest_ToolMessageWithoutAttempt_RefersToAction(t *testing.
 		t.Errorf("tool message without Attempt: %+v, want TOOL_RESULT ref act_9 and no version", got)
 	}
 }
+
+// TestDeriveTurnManifest_TaskInputReferencesArtifact_ListedAsOmittedReference: a task
+// input that hands the Agent material by reference, as the transcript node does, yields
+// an omitted ARTIFACT item beside the included TASK_INPUT, carrying the declared digest
+// and size and nothing of the input's other members.
+func TestDeriveTurnManifest_TaskInputReferencesArtifact_ListedAsOmittedReference(t *testing.T) {
+	in := ManifestInput{
+		AgentRunID: "ar_1", NodeRunID: "nr_agent", Instructions: "Cut a clip.",
+		Messages: []ManifestMessage{{Role: AgentRoleUser, Content: json.RawMessage(
+			`{"transcript":{"artifactId":"art_material","sha256":"abcd","sizeBytes":1234,"lineCount":3},"task":{"requirement":"a short clip"}}`)}},
+		StateVersionID: "asv_0", State: json.RawMessage(`{}`),
+	}
+	items := DeriveTurnManifest(in)
+
+	var artifacts []domain.ManifestItem
+	for _, item := range items {
+		if item.Kind == domain.ManifestArtifact {
+			artifacts = append(artifacts, item)
+		}
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("ARTIFACT items = %+v, want exactly one", artifacts)
+	}
+	got := artifacts[0]
+	if got.Ref != "art_material" || got.SHA256 != "abcd" || got.Length != 1234 || got.Included ||
+		got.OmittedReason == nil || *got.OmittedReason != domain.ManifestReferenceOnly {
+		t.Fatalf("ARTIFACT item = %+v, want an omitted reference to art_material", got)
+	}
+	for _, item := range items {
+		encoded, _ := json.Marshal(item)
+		if strings.Contains(string(encoded), "a short clip") {
+			t.Fatalf("manifest item copies task input content: %s", encoded)
+		}
+	}
+}
+
+// materialMessage is a tool message of a Tool that declares its material at /material:
+// the lines it read, the text that entered the request and the truncation flag.
+func materialMessage(text string) ManifestMessage {
+	encoded, _ := json.Marshal(map[string]any{
+		"material": map[string]any{"artifactId": "art_material", "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			"startLine": 2, "lineCount": 2, "totalLines": 5},
+		"text": text, "truncated": false,
+	})
+	return ManifestMessage{Role: AgentRoleTool, Content: encoded, ToolName: strPtr("read_material"),
+		ToolActionID: strPtr("act_3"), ToolMaterialPointer: "/material", AttemptID: "ta_3", AttemptNo: 1}
+}
+
+// TestDeriveTurnManifest_MaterialMessage_RecordsRangeWithDigestOfTheText: a tool message
+// of a Tool that declares a material pointer yields, beside its TOOL_RESULT, one included
+// MATERIAL_RANGE item that names the artifact, versions it by its content digest prefix,
+// carries the line range, and digests exactly the text that entered the request.
+func TestDeriveTurnManifest_MaterialMessage_RecordsRangeWithDigestOfTheText(t *testing.T) {
+	const text = "S2\t2.500\t6.000\tToday we talk about embers.\nS3\t6.000\t9.000\tThank you.\n"
+	in := manifestFixture()
+	in.Messages = append(in.Messages, materialMessage(text))
+	items := DeriveTurnManifest(in)
+
+	ranges := itemsOfKind(items, domain.ManifestMaterialRange)
+	if len(ranges) != 1 {
+		t.Fatalf("MATERIAL_RANGE items = %+v, want exactly one", ranges)
+	}
+	got := ranges[0]
+	if got.Ref != "art_material" || got.Version != "0123456789ab" || !got.Included || got.OmittedReason != nil {
+		t.Errorf("item = %+v, want an included item for art_material versioned by the digest prefix", got)
+	}
+	if got.SHA256 != digestOf(text) || got.Length != len(text) {
+		t.Errorf("sha256/length = %s/%d, want those of the text that entered the request %s/%d", got.SHA256, got.Length, digestOf(text), len(text))
+	}
+	if got.Range == nil || *got.Range != (domain.ManifestRange{StartLine: 2, LineCount: 2, TotalLines: 5}) {
+		t.Errorf("range = %+v, want lines 2..3 of 5", got.Range)
+	}
+	if results := itemsOfKind(items, domain.ManifestToolResult); len(results) != 2 {
+		t.Errorf("TOOL_RESULT items = %d, want the lookup result and the material result", len(results))
+	}
+	// The tool message's own reference to the artifact is the range item, not also an
+	// omitted reference: the content it names did enter the request. A task input that
+	// hands the same artifact by reference still lists its own omitted item.
+	for _, item := range itemsOfKind(items, domain.ManifestArtifact) {
+		if item.Ref == "art_material" {
+			t.Errorf("material artifact also listed as an omitted reference: %+v", item)
+		}
+	}
+	for _, item := range items {
+		encoded, _ := json.Marshal(item)
+		if strings.Contains(string(encoded), "embers") {
+			t.Errorf("manifest item copies the material text: %s", encoded)
+		}
+	}
+}
+
+// TestDeriveTurnManifest_MaterialMessage_SameInputTwice_IdenticalItems: the derivation
+// is pure, so replaying the Turn's request yields the same items byte for byte.
+func TestDeriveTurnManifest_MaterialMessage_SameInputTwice_IdenticalItems(t *testing.T) {
+	in := manifestFixture()
+	in.Messages = append(in.Messages, materialMessage("line two\nline three\n"))
+	first, _ := json.Marshal(DeriveTurnManifest(in))
+	second, _ := json.Marshal(DeriveTurnManifest(in))
+	if string(first) != string(second) {
+		t.Fatalf("replayed derivation differs:\n%s\n%s", first, second)
+	}
+}
+
+// TestDeriveTurnManifest_MaterialPointer_WithoutMaterialObject_PlainToolResult: a NOT_FOUND
+// result of a material Tool, or a result whose material object lacks the artifact id,
+// names no material and is recorded as a plain tool result; a Tool without the
+// declaration is never recorded as material however its result looks.
+func TestDeriveTurnManifest_MaterialPointer_WithoutMaterialObject_PlainToolResult(t *testing.T) {
+	cases := map[string]ManifestMessage{
+		"not found": {Role: AgentRoleTool, Content: json.RawMessage(`{"status":"NOT_FOUND"}`),
+			ToolName: strPtr("read_material"), ToolActionID: strPtr("act_3"), ToolMaterialPointer: "/material", AttemptID: "ta_3", AttemptNo: 1},
+		"material without artifact": {Role: AgentRoleTool, Content: json.RawMessage(`{"material":{"startLine":1,"lineCount":1,"totalLines":1},"text":"x\n"}`),
+			ToolName: strPtr("read_material"), ToolActionID: strPtr("act_3"), ToolMaterialPointer: "/material", AttemptID: "ta_3", AttemptNo: 1},
+		"text not a string": {Role: AgentRoleTool, Content: json.RawMessage(`{"material":{"artifactId":"art_x","sha256":"ab","startLine":1,"lineCount":1,"totalLines":1},"text":7}`),
+			ToolName: strPtr("read_material"), ToolActionID: strPtr("act_3"), ToolMaterialPointer: "/material", AttemptID: "ta_3", AttemptNo: 1},
+		"undeclared tool": {Role: AgentRoleTool, Content: json.RawMessage(`{"material":{"artifactId":"art_x","sha256":"ab","startLine":1,"lineCount":1,"totalLines":1},"text":"x\n"}`),
+			ToolName: strPtr("other"), ToolActionID: strPtr("act_3"), AttemptID: "ta_3", AttemptNo: 1},
+	}
+	for name, message := range cases {
+		t.Run(name, func(t *testing.T) {
+			in := ManifestInput{AgentRunID: "ar_1", NodeRunID: "nr", Instructions: "i", Messages: []ManifestMessage{message},
+				StateVersionID: "asv_0", State: json.RawMessage(`{}`)}
+			items := DeriveTurnManifest(in)
+			if got := itemsOfKind(items, domain.ManifestMaterialRange); len(got) != 0 {
+				t.Fatalf("MATERIAL_RANGE items = %+v, want none", got)
+			}
+			if got := itemsOfKind(items, domain.ManifestToolResult); len(got) != 1 || got[0].Ref != "ta_3" {
+				t.Fatalf("TOOL_RESULT items = %+v, want one for ta_3", got)
+			}
+		})
+	}
+}

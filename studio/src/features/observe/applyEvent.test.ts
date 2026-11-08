@@ -35,6 +35,7 @@ function snapshot(runStatus: RunStatus, nodeRuns: NodeRun[], lastSeq = 0): RunSn
       tokenUsage: null,
     },
     nodeRuns,
+    media: { items: [], truncated: false },
     lastSeq,
   };
 }

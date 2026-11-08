@@ -1,6 +1,15 @@
 import { ApiRequestError } from '@/api/client';
 import type { AssetRef, JsonObject, JsonSchema, JsonValue, RunInputSchema } from '@/api/types';
 import { copy } from '@/lib/copy';
+import {
+  hasFieldList,
+  humanKey,
+  schemaFields,
+  startValue,
+  type SchemaField,
+} from '@/lib/schema-fields';
+
+export { humanKey };
 
 /**
  * The Run dialog's form as pure functions: fields read from the bound version's frozen
@@ -8,7 +17,7 @@ import { copy } from '@/lib/copy';
  * they make. The checks are for responsiveness only; the Backend validates the input and
  * is the final authority.
  */
-export type FieldKind = 'text' | 'number' | 'bool' | 'json' | 'asset' | 'photos';
+export type FieldKind = 'text' | 'number' | 'bool' | 'json' | 'object' | 'asset' | 'photos';
 
 export interface RunField {
   key: string;
@@ -21,23 +30,28 @@ export interface RunField {
   maxBytes?: number;
   minItems?: number;
   maxItems?: number;
+  /** The sub-fields of an object field, in the order the form shows them. */
+  fields?: SchemaField[];
 }
 
-/** Text, number and JSON fields hold their text; images hold completed uploads only. */
-export type FieldValue = string | boolean | AssetRef | AssetRef[] | null;
+/**
+ * An object field shown as sub-fields: each sub-field's text or checkbox state, and the keys
+ * a prior run's value had that the schema doesn't list, which are sent back unchanged.
+ */
+export interface ObjectDraft {
+  values: Record<string, string | boolean>;
+  extra: Record<string, JsonValue>;
+}
+
+/**
+ * Text, number and JSON fields hold their text; images hold completed uploads only. An
+ * object field holds an ObjectDraft while it shows sub-fields and its JSON text while it
+ * shows JSON.
+ */
+export type FieldValue = string | boolean | AssetRef | AssetRef[] | ObjectDraft | null;
 export type FormValues = Record<string, FieldValue>;
 
 const r = copy.runDialog;
-
-/** "diff_text" reads "Diff text", "maxRetries" reads "Max retries". */
-export function humanKey(key: string): string {
-  const t = key
-    .replace(/[_-]+/g, ' ')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .trim();
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
 
 function isAssetRefSchema(schema: JsonSchema | undefined): boolean {
   return schema?.type === 'object' && schema.properties?.assetId !== undefined;
@@ -64,6 +78,7 @@ function kindOf(schema: JsonSchema): FieldKind {
   if (schema.type === 'string') return 'text';
   if (schema.type === 'number' || schema.type === 'integer') return 'number';
   if (schema.type === 'boolean') return 'bool';
+  if (schema.type === 'object' && hasFieldList(schema)) return 'object';
   // An object or array of values, or a property with no declared type.
   return schema.type === undefined ? 'text' : 'json';
 }
@@ -89,6 +104,7 @@ export function runFields(
     if (types && types.length > 0) field.types = types;
     const maxBytes = item?.properties?.sizeBytes?.maximum;
     if (typeof maxBytes === 'number') field.maxBytes = maxBytes;
+    if (kind === 'object') field.fields = schemaFields(s);
     if (kind === 'photos') {
       if (s.minItems !== undefined) field.minItems = s.minItems;
       if (s.maxItems !== undefined) field.maxItems = s.maxItems;
@@ -114,6 +130,9 @@ export function seedValues(fields: readonly RunField[], input?: JsonObject | nul
         break;
       case 'number':
         values[f.key] = typeof v === 'number' ? String(v) : '';
+        break;
+      case 'object':
+        values[f.key] = seedObject(f.fields ?? [], isPlainObject(v) ? v : null);
         break;
       case 'json':
         values[f.key] = v === undefined || v === null ? '' : JSON.stringify(v, null, 2);
@@ -189,8 +208,154 @@ export function setAtPath(
   return { ...obj, [head]: setAtPath(inner, rest, value) };
 }
 
+function isPlainObject(v: unknown): v is Record<string, JsonValue> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** Whether an object field's value is its sub-fields rather than its JSON text. */
+export function isObjectDraft(v: FieldValue | undefined): v is ObjectDraft {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+  const d = v as Partial<ObjectDraft>;
+  return isPlainObject(d.values) && isPlainObject(d.extra);
+}
+
+/** Sub-field values from an object (a prior run's), or empty ones; a one-value choice starts chosen. */
+export function seedObject(
+  fields: readonly SchemaField[],
+  obj: Record<string, JsonValue> | null,
+): ObjectDraft {
+  const values: Record<string, string | boolean> = {};
+  const extra: Record<string, JsonValue> = {};
+  for (const sf of fields) {
+    const x = obj?.[sf.key];
+    if (sf.control === 'bool') {
+      values[sf.key] = x === true;
+    } else if (x === undefined) {
+      values[sf.key] = startValue(sf);
+    } else if (typeof x === 'string' && sf.control !== 'json') {
+      values[sf.key] = x;
+    } else if (typeof x === 'number' && sf.control === 'number') {
+      values[sf.key] = String(x);
+    } else {
+      values[sf.key] = JSON.stringify(x, null, sf.control === 'json' ? 2 : undefined);
+    }
+  }
+  for (const [k, x] of Object.entries(obj ?? {})) {
+    if (!fields.some((sf) => sf.key === k)) extra[k] = x;
+  }
+  return { values, extra };
+}
+
+/** Nothing typed or ticked: a one-value choice that starts chosen doesn't count. */
+function draftIsEmpty(fields: readonly SchemaField[], d: ObjectDraft): boolean {
+  if (Object.keys(d.extra).length > 0) return false;
+  return fields.every((sf) => {
+    const v = d.values[sf.key];
+    if (sf.control === 'bool') return v !== true;
+    if (sf.control === 'choice' && sf.options.length === 1) return true;
+    return typeof v !== 'string' || v.trim() === '';
+  });
+}
+
+/**
+ * The object the sub-fields make: numbers as numbers, JSON parsed, empty optional sub-fields
+ * left out. A value that doesn't read as its type stays text, so the JSON view shows it.
+ */
+function buildObject(fields: readonly SchemaField[], d: ObjectDraft): Record<string, JsonValue> {
+  const out: Record<string, JsonValue> = { ...d.extra };
+  for (const sf of fields) {
+    const v = d.values[sf.key];
+    if (sf.control === 'bool') {
+      if (v === true || sf.required) out[sf.key] = v === true;
+      continue;
+    }
+    const s = typeof v === 'string' ? v : '';
+    if (s.trim() === '') continue;
+    if (sf.control === 'number') {
+      const n = Number(s.trim());
+      out[sf.key] = Number.isFinite(n) ? n : s;
+    } else if (sf.control === 'json') {
+      try {
+        out[sf.key] = JSON.parse(s) as JsonValue;
+      } catch {
+        out[sf.key] = s;
+      }
+    } else {
+      out[sf.key] = s;
+    }
+  }
+  return out;
+}
+
+function checkSubField(sf: SchemaField, v: string | boolean | undefined): string | null {
+  if (sf.control === 'bool') return null;
+  const raw = typeof v === 'string' ? v : '';
+  const s = raw.trim();
+  if (!s) return sf.required ? r.isRequired(sf.label) : null;
+  switch (sf.control) {
+    case 'number': {
+      const n = Number(s);
+      if (!Number.isFinite(n)) return r.isNumber(sf.label);
+      return sf.integer && !Number.isInteger(n) ? r.isWhole(sf.label) : null;
+    }
+    case 'choice':
+      return sf.options.includes(raw) ? null : r.isOneOf(sf.label, sf.options);
+    case 'json': {
+      const p = jsonProblem(s);
+      return p ? r.jsonAt(p.line, p.col, p.msg) : null;
+    }
+    case 'text':
+    case 'longtext': {
+      const n = Array.from(raw).length;
+      const { minLength: lo, maxLength: hi } = sf.schema;
+      if (lo !== undefined && lo === hi && n !== lo) return r.lengthExactly(sf.label, lo);
+      if (lo !== undefined && n < lo) return r.lengthAtLeast(sf.label, lo);
+      if (hi !== undefined && n > hi) return r.lengthAtMost(sf.label, hi);
+      return null;
+    }
+  }
+}
+
+/** The client-side checks of an object field's sub-fields, keyed by sub-field; empty when all pass. */
+export function subFieldErrors(f: RunField, d: ObjectDraft): Record<string, string> {
+  const out: Record<string, string> = {};
+  const fields = f.fields ?? [];
+  if (!f.required && draftIsEmpty(fields, d)) return out;
+  for (const sf of fields) {
+    const m = checkSubField(sf, d.values[sf.key]);
+    if (m) out[sf.key] = m;
+  }
+  return out;
+}
+
+/**
+ * An object field's value in the other view: its JSON text, or its sub-fields from that
+ * text. Null when the text isn't a JSON object, so it can't be shown as sub-fields.
+ */
+export function switchObjectView(
+  f: RunField,
+  v: FieldValue | undefined,
+  to: 'fields' | 'json',
+): FieldValue | null {
+  const fields = f.fields ?? [];
+  if (to === 'json') {
+    if (!isObjectDraft(v)) return typeof v === 'string' ? v : '';
+    return !f.required && draftIsEmpty(fields, v)
+      ? ''
+      : JSON.stringify(buildObject(fields, v), null, 2);
+  }
+  if (isObjectDraft(v)) return v;
+  const text = typeof v === 'string' ? v : '';
+  if (text.trim() === '') return seedObject(fields, null);
+  const obj = parseObject(text);
+  return obj ? seedObject(fields, obj) : null;
+}
+
 /** The client-side check of one field; null when it passes. */
 export function checkField(f: RunField, v: FieldValue): string | null {
+  if (f.kind === 'object' && isObjectDraft(v)) {
+    return Object.values(subFieldErrors(f, v))[0] ?? null;
+  }
   if (f.kind === 'photos') {
     const n = Array.isArray(v) ? v.length : 0;
     return f.minItems !== undefined && n < f.minItems ? r.photos.shortfall(f.minItems) : null;
@@ -200,10 +365,11 @@ export function checkField(f: RunField, v: FieldValue): string | null {
   const s = typeof v === 'string' ? v.trim() : '';
   if (!s) return f.required ? r.isRequired(f.label) : null;
   if (f.kind === 'number') return Number.isFinite(Number(s)) ? null : r.isNumber(f.label);
-  if (f.kind === 'json' || s.startsWith('{') || s.startsWith('[')) {
+  if (f.kind === 'json' || f.kind === 'object' || s.startsWith('{') || s.startsWith('[')) {
     const p = jsonProblem(s);
     if (p) return r.jsonAt(p.line, p.col, p.msg);
   }
+  if (f.kind === 'object' && !parseObject(s)) return r.isObject(f.label);
   return null;
 }
 
@@ -219,11 +385,14 @@ export function buildInput(fields: readonly RunField[], values: FormValues): Jso
       if (isAssetRef(v)) input[f.key] = v as unknown as JsonObject;
     } else if (f.kind === 'bool') {
       if (v === true || f.required) input[f.key] = v === true;
+    } else if (f.kind === 'object' && isObjectDraft(v)) {
+      const fields = f.fields ?? [];
+      if (f.required || !draftIsEmpty(fields, v)) input[f.key] = buildObject(fields, v);
     } else {
       const s = typeof v === 'string' ? v : '';
       if (s.trim() === '') continue;
       if (f.kind === 'number') input[f.key] = Number(s);
-      else if (f.kind === 'json') input[f.key] = JSON.parse(s) as JsonValue;
+      else if (f.kind === 'json' || f.kind === 'object') input[f.key] = JSON.parse(s) as JsonValue;
       else input[f.key] = s;
     }
   }

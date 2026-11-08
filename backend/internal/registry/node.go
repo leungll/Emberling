@@ -164,6 +164,12 @@ type NodeResult struct {
 // copies that object into Run.output.
 type NodeOutput struct {
 	Ports map[string]json.RawMessage
+	// Artifacts declares the Execution Artifacts whose content the node already wrote to
+	// content storage, with the same meaning as ToolResult.Artifacts: the Runtime commits
+	// their metadata and their link to the Node Attempt in the transaction that commits
+	// the output, so an output that never commits leaves only unreferenced content
+	// behind. A node that produces no artifact leaves it nil.
+	Artifacts []domain.ArtifactRef
 	// Cost is the charge the Provider reported for the external call that produced this
 	// output, or nil when it reported none. The completion transaction records it on the
 	// Attempt beside the result; it takes no part in any execution decision.
@@ -189,14 +195,18 @@ type ExternalTask struct {
 
 // NodeAsyncState is what the Runtime restores from committed facts before asking an
 // Executor to interpret a callback or poll an external task. It carries identity, the
-// frozen node config and the external task; it never carries the plaintext callback
-// token.
+// frozen node config, the input ports the Attempt was dispatched with and the external
+// task; it never carries the plaintext callback token.
 type NodeAsyncState struct {
 	RunID        string
 	NodeRunID    string
 	AttemptNo    int
 	ExternalTask ExternalTask
 	Config       map[string]any
+	// Ports are the input port values the Attempt was dispatched with, restored from the
+	// Attempt's immutable input, so an Executor can check a Provider's result against
+	// what it asked for without reading anything itself.
+	Ports map[string]json.RawMessage
 }
 
 // PollStatus is the normalised result of one optional Provider status query.

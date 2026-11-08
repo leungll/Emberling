@@ -12,12 +12,21 @@ import {
   savedImageOf,
 } from './run-media';
 import type { RunModel, Step } from './run-model';
+import { ShownFacts } from './ShownFacts';
 import { Words } from './Words';
 import type { JsonValue, ToolReviewTrace, ToolSettingsTrace, WithheldToolField } from '@/api/types';
 import { FactList, TechnicalDetails } from '@/components/facts/FactList';
 import { JsonViewer } from '@/components/json/JsonViewer';
-import type { MediaRef } from '@/components/media/media-ref';
+import { MediaRow } from '@/components/media/MediaValue';
+import { mediaTypeOf, type MediaField } from '@/components/media/media-field';
+import {
+  resolveMediaUrl,
+  type MediaRef,
+  type MediaResolutionContext,
+} from '@/components/media/media-ref';
+import { useMediaSource } from '@/components/media/media-source';
 import { Gallery, ThumbSet } from '@/components/media/Thumbs';
+import { humanize } from '@/lib/value-reading';
 import { copy as words, useCopy } from '@/lib/copy';
 
 function Sub({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
@@ -78,10 +87,32 @@ function ReviewBlock({ model, value }: { model: RunModel; value: JsonValue }) {
   );
 }
 
+/** How deep a value is searched for served media: a task object inside the run input. */
+const SERVED_DEPTH = 2;
+
 /**
- * A returned value: its images first, as thumbnails with captions, then the review a media
- * result reported, with the JSON one click away. A value without images keeps the JSON
- * viewer as its main view.
+ * The string members of a value that the served media lists or a schema would place as
+ * media, each titled by its key; a nested object is searched one level down.
+ */
+function servedMedia(value: JsonValue | null, source: MediaResolutionContext): MediaField[] {
+  const out: MediaField[] = [];
+  const walk = (v: JsonValue | null, depth: number) => {
+    if (typeof v !== 'object' || v === null || Array.isArray(v) || depth > SERVED_DEPTH) return;
+    for (const [key, member] of Object.entries(v)) {
+      const mediaType = mediaTypeOf(member, undefined, source);
+      if (mediaType && typeof member === 'string' && resolveMediaUrl(member, mediaType, source)) {
+        out.push({ key, title: humanize(key), value: member, mediaType });
+      } else walk(member, depth + 1);
+    }
+  };
+  walk(value, 0);
+  return out;
+}
+
+/**
+ * A returned value: its images first, as thumbnails with captions, the media the run serves
+ * for its values, then the review a media result reported, with the JSON one click away. A
+ * value without media keeps the JSON viewer as its main view.
  */
 export function ValueView({
   ctx,
@@ -96,10 +127,16 @@ export function ValueView({
 }) {
   const copy = useCopy();
   const refs = imagesIn(ctx.model, value);
-  if (!refs.length || value === null) return <JsonViewer value={value} root={root} />;
+  const served = servedMedia(value, useMediaSource());
+  if ((!refs.length && !served.length) || value === null) {
+    return <JsonViewer value={value} root={root} />;
+  }
   return (
     <>
       <Gallery items={mediaItems(ctx.model, refs)} />
+      {served.map((f) => (
+        <MediaRow key={f.key} media={f} />
+      ))}
       <ReviewBlock model={ctx.model} value={value} />
       <TechnicalDetails storageKey={`json-${storageKey}`} label={copy.media.json}>
         <JsonViewer value={value} root={root} />
@@ -199,14 +236,18 @@ function ReviewVerdict({ review }: { review: ToolReviewTrace }) {
 }
 
 /**
- * A tool call's Arguments tab, from the arguments the trace projects: the photo a
- * generate_image call works on (placed by the position the trace returns) and the
+ * A tool call's Arguments tab. The members the Tool declares for its run card come first,
+ * for any Tool; without a declaration the arguments the trace projects by name: the photo
+ * a generate_image call works on (placed by the position the trace returns) and the
  * settings it asked for, and a deploy's target.
  */
 export function CallArgumentsView({ ctx, args }: { ctx: DetailContext; args: CallArguments }) {
   const copy = useCopy();
   const m = copy.runs.media;
-  const { photo, settings, target, withheld } = args;
+  const { photo, settings, target, withheld, shown, media } = args;
+  if (shown.length) {
+    return <ShownFacts fields={shown} media={media} runInput={ctx.model.snapshot.run.input} />;
+  }
   const ref = photo ? photoList(ctx.model).find((p) => p.id === photo.photoAssetId) : undefined;
   const json: Record<string, JsonValue> = {};
   if (photo) json.photoAssetId = photo.photoAssetId;
@@ -244,15 +285,16 @@ export function CallArgumentsView({ ctx, args }: { ctx: DetailContext; args: Cal
 }
 
 /**
- * A tool call's Result tab: the result facts the trace projects (a test summary, a deploy's
- * version, a video, a review's verdict and reasons) and what the call saved (the image it
- * generated, a review or test verdict).
+ * A tool call's Result tab: the result members the Tool declares for its run card, else the
+ * result facts the trace projects by name (a video, a review's verdict and reasons), and
+ * what the call saved (the image it generated, a review or test verdict).
  */
 export function CallResultView({ ctx, saved }: { ctx: DetailContext; saved: CallSaved }) {
   const copy = useCopy();
   const m = copy.runs.media;
   const f = copy.runs.details.facts2;
-  const { facts, result, review, videoUrl, withheld } = saved;
+  const { facts, result, review, videoUrl, withheld, shown, media } = saved;
+  const declared = shown.length > 0;
   const images = facts.flatMap((x) => {
     const r = factImage(x);
     return r ? [r] : [];
@@ -265,7 +307,10 @@ export function CallResultView({ ctx, saved }: { ctx: DetailContext; saved: Call
           <Words text={m.callResult(result.text)} tools={result.tools} />
         </p>
       ) : null}
-      {videoUrl ? (
+      {declared ? (
+        <ShownFacts fields={shown} media={media} runInput={ctx.model.snapshot.run.input} />
+      ) : null}
+      {videoUrl && !declared ? (
         <Sub title={m.video}>
           <video
             controls
@@ -275,8 +320,8 @@ export function CallResultView({ ctx, saved }: { ctx: DetailContext; saved: Call
           />
         </Sub>
       ) : null}
-      {review ? <ReviewVerdict review={review} /> : null}
-      <WithheldNotes withheld={withheld} />
+      {review && !declared ? <ReviewVerdict review={review} /> : null}
+      {declared ? null : <WithheldNotes withheld={withheld} />}
       <Gallery items={mediaItems(ctx.model, images)} />
       {rest.length ? (
         <Sub title={m.savedResults}>

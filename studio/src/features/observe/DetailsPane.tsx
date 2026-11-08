@@ -1,16 +1,15 @@
 import { Activity, ChevronRight, X } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 
-import { ElementOverview } from './ElementOverview';
-import { RunOffset } from './RunFacts';
+import { ElementOverview, RunIds, StepData } from './ElementOverview';
 import { TurnsTab } from './TurnsTab';
+import { ElementTime } from './RunFacts';
 import { CallArgumentsView, CallResultView, ValueView } from './ValueView';
 import { callArguments, callSaved } from './card-info';
 import { imageLabel, mediaItems, savedImageOf } from './run-media';
 import { Words } from './Words';
 import type { DetailContext } from './detail-context';
 import { crumbLabel, kindOf, tabsFor, type DetailTab } from './detail-tabs';
-import { elementOfEvent, eventLabel, eventSummary, eventsFor } from './run-events';
 import { ancestors, attemptWord, type TraceElement } from './run-model';
 import type { JsonValue } from '@/api/types';
 import { IdChip } from '@/components/id/IdChip';
@@ -20,7 +19,6 @@ import { StateBlock } from '@/components/state/StateBlock';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { IconButton } from '@/components/ui/button';
 import { Tabs } from '@/components/ui/tabs';
-import { Tooltip } from '@/components/ui/tooltip';
 import { copy as words, useCopy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
@@ -100,8 +98,16 @@ function Path({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   );
 }
 
+/** Inside the Data tab a section is already padded, so its parts render bare. */
+const Bare = createContext(false);
+
 function Pad({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-4 px-4 pt-4 pb-16">{children}</div>;
+  const bare = useContext(Bare);
+  return (
+    <div className={bare ? 'flex flex-col gap-4' : 'flex flex-col gap-4 px-4 pt-4 pb-16'}>
+      {children}
+    </div>
+  );
 }
 
 function isEmpty(v: JsonValue | null | undefined): boolean {
@@ -257,45 +263,6 @@ function RawTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   );
 }
 
-function EventsTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
-  const copy = useCopy();
-  const list = eventsFor(ctx.model, el);
-  return (
-    <ul
-      aria-label={copy.runs.events.forElement}
-      className="m-0 flex min-w-fit list-none flex-col p-0 pt-1 pb-16"
-    >
-      {list.map((e) => {
-        const target = elementOfEvent(ctx.model, e);
-        const summary = eventSummary(ctx.model, e);
-        return (
-          <li key={e.seq}>
-            <button
-              type="button"
-              onClick={() => {
-                ctx.onSelect(target.id);
-              }}
-              style={{ gridTemplateColumns: '32px 72px minmax(7rem, 1fr) minmax(7rem, 1fr)' }}
-              className="grid min-h-row-dense w-full items-start gap-3 px-4 py-1.5 text-left text-sm hover:bg-surface-hover"
-            >
-              <span className="text-right font-mono text-fg-muted tabular-nums">{e.seq}</span>
-              <span className="text-fg-secondary tabular-nums">
-                <RunOffset model={ctx.model} iso={e.timestamp} />
-              </span>
-              <Tooltip content={e.type}>
-                <span className="min-w-0 wrap-anywhere text-fg">
-                  <Words {...eventLabel(e)} />
-                </span>
-              </Tooltip>
-              <span className="min-w-0 wrap-anywhere text-fg-muted">{summary}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 function FactsTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   const copy = useCopy();
   const f = copy.runs.details.facts2;
@@ -357,6 +324,46 @@ function FactsTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
   );
 }
 
+/** One tab for the element's data: input, output, saved results and raw records. */
+function DataTab({ el, ctx }: { el: TraceElement; ctx: DetailContext }) {
+  const d = useCopy().runs.details.data;
+  const io =
+    el.kind === 'run' || el.kind === 'step' || el.kind === 'attempt' || el.kind === 'action';
+  const final = el.kind === 'action' && el.turn?.decision?.kind === 'FINAL';
+  const call = el.kind === 'action' && !final;
+  const facts = el.kind === 'step' ? (el.step?.trace?.facts.items.length ?? 0) : 0;
+  const part = (title: string, body: ReactNode) => (
+    <section className="flex min-w-0 flex-col gap-2">
+      <h3 className="m-0 text-sm font-semibold text-fg">{title}</h3>
+      {body}
+    </section>
+  );
+  return (
+    <div className="flex flex-col gap-6 px-4 pt-4 pb-16">
+      <Bare.Provider value>
+        {io && !final
+          ? part(call ? d.arguments : d.input, <IoTab el={el} ctx={ctx} which="input" />)
+          : null}
+        {io
+          ? part(
+              call || el.kind === 'attempt' ? d.result : d.output,
+              <IoTab el={el} ctx={ctx} which="output" />,
+            )
+          : null}
+        {facts ? part(`${d.savedResults} ${String(facts)}`, <FactsTab el={el} ctx={ctx} />) : null}
+        {el.kind === 'run' ? part(d.runFacts, <RunIds ctx={ctx} />) : null}
+        {el.kind === 'step' ? part(d.details, <StepData el={el} ctx={ctx} />) : null}
+        <details className="flex flex-col gap-2">
+          <summary className="cursor-pointer text-sm font-semibold text-fg">{d.rawRecords}</summary>
+          <div className="pt-2">
+            <RawTab el={el} ctx={ctx} />
+          </div>
+        </details>
+      </Bare.Provider>
+    </div>
+  );
+}
+
 interface DetailsPaneProps {
   el: TraceElement;
   ctx: DetailContext;
@@ -372,19 +379,21 @@ interface DetailsPaneProps {
 export function DetailsPane({ el, ctx, tab, onTab, drawer, onClose, focusKey }: DetailsPaneProps) {
   const copy = useCopy();
   const tabs = tabsFor(el, ctx);
-  const current = tabs.some((t) => t.value === tab) ? tab : 'overview';
+  // Links from before the Data tab existed name its parts; they open the Data tab.
+  const legacy: readonly DetailTab[] = ['input', 'output', 'facts', 'raw'];
+  const asked: DetailTab = legacy.includes(tab) ? 'data' : tab;
+  const current = tabs.some((t) => t.value === asked) ? asked : 'overview';
   const kind = kindOf(el);
+  const about = el.step
+    ? ctx.nodeTypes.find((m) => m.type === el.step?.node.type)?.description
+    : undefined;
   const titleRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (focusKey > 0) titleRef.current?.focus({ preventScroll: true });
   }, [focusKey]);
 
   let body: ReactNode;
-  if (current === 'input' || current === 'output')
-    body = <IoTab el={el} ctx={ctx} which={current} />;
-  else if (current === 'events') body = <EventsTab el={el} ctx={ctx} />;
-  else if (current === 'raw') body = <RawTab el={el} ctx={ctx} />;
-  else if (current === 'facts') body = <FactsTab el={el} ctx={ctx} />;
+  if (current === 'data') body = <DataTab el={el} ctx={ctx} />;
   else if (current === 'turns') body = <TurnsTab el={el} ctx={ctx} />;
   else body = <ElementOverview el={el} ctx={ctx} />;
 
@@ -416,7 +425,11 @@ export function DetailsPane({ el, ctx, tab, onTab, drawer, onClose, focusKey }: 
             >
               <Title el={el} ctx={ctx} />
             </h2>
-            <span>
+            {/* A step says what it does, from its registered description. */}
+            {el.kind === 'step' && about ? (
+              <span className="text-sm text-fg-muted">{about}</span>
+            ) : null}
+            <span className="inline-flex flex-wrap items-baseline gap-1 text-sm">
               {el.kind === 'run' ? (
                 <StatusIndicator
                   status={{ kind: 'runLong', value: ctx.model.snapshot.run.status }}
@@ -424,6 +437,11 @@ export function DetailsPane({ el, ctx, tab, onTab, drawer, onClose, focusKey }: 
               ) : (
                 <ElementStatus el={el} />
               )}
+              {el.kind === 'step' && el.step?.nodeRun?.completedAt ? (
+                <span className="text-fg-muted">
+                  {copy.runs.details.inTime} <ElementTime model={ctx.model} el={el} />
+                </span>
+              ) : null}
             </span>
           </div>
         </div>

@@ -88,6 +88,7 @@ export function snapshot(
       ...extra,
     },
     nodeRuns,
+    media: { items: [], truncated: false },
     lastSeq: 0,
   };
 }
@@ -206,9 +207,11 @@ export function agentTrace(
       pausedAt: null,
       pauseReason: null,
       goal: null,
+      maxFailedFacts: null,
       terminatedAt: null,
       error: null,
       completion: null,
+      latestState: { version: 1, value: {} },
       ...extra,
     },
     turns,
@@ -216,6 +219,7 @@ export function agentTrace(
     generationBudget: { maxGenerationCalls: null, generationCallsUsed: 0 },
     workspace: null,
     changeRequests: { items: [], truncated: false },
+    media: { items: [], truncated: false },
   };
 }
 

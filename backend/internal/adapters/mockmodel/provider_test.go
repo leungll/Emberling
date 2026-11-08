@@ -35,8 +35,8 @@ func TestProvider_Models_RegistersTextModelV1WithBothCapabilities(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Models() error = %v, want nil", err)
 	}
-	if len(models) != 2 {
-		t.Fatalf("len(Models()) = %d, want 2 (text-model-v1 and image-model-v1)", len(models))
+	if len(models) != 3 {
+		t.Fatalf("len(Models()) = %d, want 3 (text-model-v1, image-model-v1 and text-review-v1)", len(models))
 	}
 	got := models[0]
 	if got.ID != ModelID {

@@ -59,7 +59,7 @@ describe('the run view’s details tabs', () => {
         }}
       />,
     );
-    const output = await screen.findByRole('tab', { name: 'Output' });
+    const dataTab = await screen.findByRole('tab', { name: 'Data' });
 
     // What the panel shows at each moment the address changes. A tab rendered only in a
     // later transition leaves a window where the address and the panel disagree.
@@ -68,14 +68,14 @@ describe('the run view’s details tabs', () => {
       const selected = screen.getByRole('tab', { selected: true }).textContent;
       seen.push(`${state.location.search} ${selected}`);
     });
-    fireEvent.mouseDown(output);
+    fireEvent.mouseDown(dataTab);
     await waitFor(() => {
-      expect(router.state.location.search).toBe('?tab=output');
+      expect(router.state.location.search).toBe('?tab=data');
     });
     unsubscribe();
 
     expect(seen).not.toHaveLength(0);
-    expect(seen.filter((s) => s !== '?tab=output Output')).toEqual([]);
+    expect(seen.filter((s) => s !== '?tab=data Data')).toEqual([]);
     expect(screen.getByRole('tabpanel')).toHaveTextContent('Done');
   });
 });

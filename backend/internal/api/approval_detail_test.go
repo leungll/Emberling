@@ -69,8 +69,8 @@ func TestApprovalDetailDTO_ChangeRequest_CarriesContentBasisAndPatchText(t *test
 	wantChangeRequest := `"changeRequest":{"id":"cr_1","patchDigest":"` + strings.Repeat("b", 64) + `","verificationFactId":"fact_1",` +
 		`"contentArtifactId":"artifact_1","contentDigest":"` + strings.Repeat("c", 64) + `","toolAttemptId":"ta_1","createdAt":"2026-11-02T09:59:00Z",` +
 		`"content":"# Change request\n\n## Summary\n\nUpgrade.\n","decisionBasis":[` +
-		`{"statement":"The rules allow it.","turnNo":2,"turnId":"turn_2","manifestRef":"RULES.md","item":{"kind":"WORKSPACE_FILE","label":"RULES.md","ref":"RULES.md","version":"0","sha256":"` + strings.Repeat("d", 64) + `","length":12,"included":true,"omittedReason":null}},` +
-		`{"statement":"Verified.","turnNo":9,"turnId":"","manifestRef":"ta_gone","item":{"kind":"TOOL_RESULT","label":"verify_patch result","ref":"ta_gone","version":"","sha256":"","length":0,"included":false,"omittedReason":"REFERENCE_ONLY"}},` +
+		`{"statement":"The rules allow it.","turnNo":2,"turnId":"turn_2","manifestRef":"RULES.md","item":{"kind":"WORKSPACE_FILE","label":"RULES.md","ref":"RULES.md","version":"0","sha256":"` + strings.Repeat("d", 64) + `","length":12,"included":true,"omittedReason":null,"range":null}},` +
+		`{"statement":"Verified.","turnNo":9,"turnId":"","manifestRef":"ta_gone","item":{"kind":"TOOL_RESULT","label":"verify_patch result","ref":"ta_gone","version":"","sha256":"","length":0,"included":false,"omittedReason":"REFERENCE_ONLY","range":null}},` +
 		`{"statement":"Unresolved.","turnNo":10,"turnId":"","manifestRef":"nothing","item":null}]}`
 	wantPatch := `"patch":{"seq":3,"patchDigest":"` + strings.Repeat("b", 64) + `","touchedPaths":["go.mod"],"toolAttemptId":"ta_write","createdAt":"2026-11-02T09:58:00Z","patch":"diff --git a/go.mod b/go.mod\n"}`
 	for _, want := range []string{wantChangeRequest, wantPatch} {
@@ -80,5 +80,21 @@ func TestApprovalDetailDTO_ChangeRequest_CarriesContentBasisAndPatchText(t *test
 	}
 	if strings.Contains(string(body), "wp_3") {
 		t.Errorf("detail %s exposes the patch row id, which the trace never shows either", body)
+	}
+}
+
+// TestManifestItemDTO_MaterialRange_ProjectsTheRange: a MATERIAL_RANGE item carries its
+// line range on the wire, and every other item carries null, so Studio's type is one shape.
+func TestManifestItemDTO_MaterialRange_ProjectsTheRange(t *testing.T) {
+	item := domain.ManifestItem{Kind: domain.ManifestMaterialRange, Label: "art_1", Ref: "art_1", Version: "0123456789ab",
+		SHA256: strings.Repeat("e", 64), Length: 80, Included: true, Range: &domain.ManifestRange{StartLine: 2, LineCount: 3, TotalLines: 40}}
+	encoded, err := json.Marshal(toManifestItemDTO(item))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"kind":"MATERIAL_RANGE","label":"art_1","ref":"art_1","version":"0123456789ab","sha256":"` + strings.Repeat("e", 64) +
+		`","length":80,"included":true,"omittedReason":null,"range":{"startLine":2,"lineCount":3,"totalLines":40}}`
+	if string(encoded) != want {
+		t.Fatalf("encoded = %s\nwant    = %s", encoded, want)
 	}
 }

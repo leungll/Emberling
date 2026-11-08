@@ -37,10 +37,14 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Text Input",
+			Description:   "Asks for a piece of text each time a run starts.",
 			Category:      domain.NodeCategoryInput,
 			ExecutionKind: domain.NodeExecutionSync,
-			Outputs:       []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
-			ConfigSchema:  json.RawMessage(configSchema),
+			Outputs: []domain.PortMetadata{{
+				Name: "text", DataType: domain.PortTypeText, Required: true,
+				Description: "The text entered when the run started.",
+			}},
+			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "inputKey", Order: 10, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},
 				{Path: "label", Order: 20, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},

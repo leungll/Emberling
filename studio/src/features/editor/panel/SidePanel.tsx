@@ -1,13 +1,16 @@
 import { ArrowLeft, Copy, Ellipsis, PanelRight, Trash2, Workflow } from 'lucide-react';
-import { useSyncExternalStore, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type PointerEvent, type ReactNode } from 'react';
 
 import { Button, IconButton } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
 import { useCopy } from '@/lib/copy';
+import { readString, writeString } from '@/lib/storage';
+import { Splitter } from '@/components/ui/splitter';
 import { useEditor } from '@/features/editor/editor-context';
 import { useEditorStore } from '@/features/editor/editor-store';
 import { groupOf, purposeOf } from '@/features/editor/model/steps';
+import { reportSource } from '@/lib/port-content';
 import { StepIcon } from '@/features/editor/StepIcon';
 import { StepNameInput } from './BasicFields';
 import { Section } from './Section';
@@ -20,6 +23,9 @@ function subscribeResize(cb: () => void) {
 }
 
 /** The panel narrows with the window so the canvas keeps room: 440, then 360, then 320. */
+const WIDTH_KEY = 'emb.editor.panelW';
+const WIDTH_MIN = 320;
+
 function usePanelWidth(): number {
   const w = useSyncExternalStore(
     subscribeResize,
@@ -79,10 +85,44 @@ export function SidePanel({
 }) {
   const copy = useCopy();
   const t = copy.editor.panel;
-  const width = usePanelWidth();
+  const auto = usePanelWidth();
+  // The panel's left edge drags to set its width; double-click returns to the
+  // width that follows the window.
+  const [chosen, setChosen] = useState<number | null>(() => {
+    const n = Number.parseInt(readString('local', WIDTH_KEY) ?? '', 10);
+    return Number.isFinite(n) ? n : null;
+  });
+  const maxW = Math.max(WIDTH_MIN, Math.round(window.innerWidth * 0.6));
+  const width = Math.max(WIDTH_MIN, Math.min(maxW, chosen ?? auto));
+  const setWidth = (w: number, save: boolean) => {
+    const v = Math.max(WIDTH_MIN, Math.min(maxW, Math.round(w)));
+    setChosen(v);
+    if (save) writeString('local', WIDTH_KEY, String(v));
+  };
+  const drag = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const x0 = e.clientX;
+    const w0 = width;
+    let last = w0;
+    const move = (ev: globalThis.PointerEvent) => {
+      last = w0 - (ev.clientX - x0);
+      setWidth(last, false);
+    };
+    const up = () => {
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', up);
+      setWidth(last, true);
+    };
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', up);
+  };
   const { registry, ops, geometry, openSettings } = useEditor();
   const ids = useEditorStore((s) => s.selection.ids);
   const nodes = useEditorStore((s) => s.doc.nodes);
+  const edges = useEditorStore((s) => s.doc.edges);
   const name = useEditorStore((s) => s.doc.name);
   const node = ids.length === 1 ? nodes.find((n) => n.id === ids[0]) : undefined;
   const meta = node ? registry.catalog.get(node.type) : undefined;
@@ -225,7 +265,12 @@ export function SidePanel({
           }
           eyebrow={t.stepEyebrow(meta.displayName)}
           title={<StepNameInput node={node} />}
-          purpose={purposeOf(node.type)}
+          purpose={
+            // An output fed by an Agent's report says so.
+            meta?.category === 'Output' && reportSource(nodes, edges, node.id)
+              ? copy.editor.panel.outputShowsReport(reportSource(nodes, edges, node.id)?.name ?? '')
+              : purposeOf(meta ?? { type: node.type })
+          }
         />
       </>
     );
@@ -253,8 +298,26 @@ export function SidePanel({
       aria-label={t.label}
       data-side-panel
       style={{ width }}
-      className="flex min-h-0 shrink-0 flex-col border-l border-border-subtle bg-surface"
+      className="relative flex min-h-0 shrink-0 flex-col border-l border-border-subtle bg-surface"
     >
+      <Splitter
+        orientation="vertical"
+        label={t.resize}
+        value={width}
+        min={WIDTH_MIN}
+        max={maxW}
+        onDrag={drag}
+        onReset={() => {
+          setChosen(null);
+          writeString('local', WIDTH_KEY, null);
+        }}
+        onKey={(e) => {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          setWidth(width + (e.key === 'ArrowLeft' ? 24 : -24), true);
+        }}
+        className="absolute inset-y-0 -left-0.5"
+      />
       <div className="shrink-0 border-b border-border-subtle">{top}</div>
       <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
     </aside>

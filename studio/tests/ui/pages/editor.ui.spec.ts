@@ -41,7 +41,7 @@ const states: ReviewState[] = [
     ready: canvasReady,
     act: async (page) => {
       await selectStep('Delivery Agent')(page);
-      await page.getByRole('button', { name: /Data formats/ }).click();
+      await page.getByRole('button', { name: /Input, notes and report/ }).click();
       await page.getByRole('button', { name: /Model behavior/ }).click();
       await expect(page.locator('[data-field="modelConfig"]')).toBeVisible();
     },
@@ -73,6 +73,7 @@ const states: ReviewState[] = [
     ready: canvasReady,
     act: async (page) => {
       await selectStep('Delivery Agent')(page);
+      await page.getByRole('button', { name: /Tool details/ }).click();
       await page.getByRole('button', { name: 'Add tool' }).click();
       await expect(page.getByRole('dialog', { name: 'Add tools' })).toBeVisible();
     },

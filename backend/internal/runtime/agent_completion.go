@@ -102,6 +102,19 @@ type CompletionInput struct {
 	// completion; HUMAN_STOPPED means a person stopped a release wait; anything else ended
 	// the Agent before it declared completion.
 	Termination domain.AgentTermination
+	// FinalOutput is the Agent's validated FINAL output when it declared completion, nil
+	// otherwise. A DELIVER_CLIP check reads its declaration from it; the declaration only
+	// selects which facts are checked.
+	FinalOutput json.RawMessage
+	// The facts a DELIVER_CLIP check reads, each in recorded order: ClipRenders are the
+	// clip_rendered facts, MediaChecks the media_checked facts and ContentReviews the
+	// content_reviewed facts of the Agent Run. ContentReviewRequired is whether the Agent
+	// could call a Tool that produces content_reviewed, in which case a passed review of
+	// the delivered clip's timeline is part of delivery.
+	ClipRenders           []CompletionFact
+	MediaChecks           []CompletionFact
+	ContentReviews        []CompletionFact
+	ContentReviewRequired bool
 }
 
 // CompletionResult is the verdict: the outcome, the checks it went through, what an
@@ -130,7 +143,13 @@ type CompletionResult struct {
 // health check failed. A human stop is RELEASE_UNKNOWN regardless of the facts. Every other
 // combination is INCOMPLETE and Missing names each lacking fact, including the fact that
 // the Agent never declared completion when it ended for another reason.
+//
+// A DELIVER_CLIP task has its own check, evaluateClipDelivery, which reads the Agent's
+// declaration and the media facts instead of the repair material.
 func EvaluateCompletion(in CompletionInput) CompletionResult {
+	if in.Goal == domain.AgentGoalDeliverClip {
+		return evaluateClipDelivery(in)
+	}
 	e := &completionEvaluator{allPassed: true}
 
 	if in.Termination != domain.TerminationFinalResponse && in.Termination != domain.TerminationHumanStopped {

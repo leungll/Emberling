@@ -1,0 +1,107 @@
+{
+  "turns": [
+    {
+      "toolCall": {
+        "toolName": "read_material",
+        "arguments": {"artifactId": "{{task:/transcript/artifactId}}", "startLine": 1, "lineCount": 200}
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "run_checks",
+        "arguments": {
+          "kind": "TIMELINE",
+          "timeline": {
+            "sourceId": "{{task:/sourceId}}",
+            "transcriptSha256": "{{task:/transcript/sha256}}",
+            "segments": [
+              {"from": "S7", "to": "S10"},
+              {"from": "S22", "to": "S23"},
+              {"from": "S24", "to": "S24"}
+            ]
+          }
+        },
+        "statePatch": {
+          "plan": {
+            "goal": "A short vertical clip with her advice to women starting out in engineering.",
+            "opening": "Go to school; you do not have to be the best at math, dedication is what counts (S7-S10).",
+            "mainSegments": [
+              "Find a senior female engineer to guide you; it is hard to have your voice heard (S22-S23).",
+              "Engineers are introverted and avoid the spotlight (S24)."
+            ]
+          }
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "review_artifact",
+        "arguments": {
+          "timelineArtifactId": "{{tool:1:/timelineArtifactId}}",
+          "transcriptArtifactId": "{{task:/transcript/artifactId}}",
+          "requirement": "{{task:/requirement}}"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "review_artifact",
+        "arguments": {
+          "timelineArtifactId": "{{latest:/timelineArtifactId}}",
+          "transcriptArtifactId": "{{task:/transcript/artifactId}}",
+          "requirement": "{{task:/requirement}}"
+        }
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "render_timeline",
+        "arguments": {"timelineSha256": "{{latest:/timelineSha256}}"}
+      }
+    },
+    {
+      "toolCall": {
+        "toolName": "run_checks",
+        "arguments": {"kind": "CLIP", "clipSha256": "{{tool:4:/clipSha256}}"}
+      }
+    },
+    {
+      "final": {
+        "output": {
+          "outcome": "DELIVERED",
+          "clipSha256": "{{tool:4:/clipSha256}}",
+          "selectionReason": "S7-S10 carry her advice to go to school and that dedication matters more than being best at math, S22-S23 the advice to find a senior female engineer as a guide, and S24-S25 the closing thought; the review found S24 alone cut off the sentence it continues in S25, so S25 was added. The clip runs 46.7 seconds.",
+          "cannotSatisfyReason": null
+        }
+      }
+    }
+  ],
+  "onToolResult": [
+    {
+      "when": {"tool": 2, "pointer": "/passed", "equals": false},
+      "toolCall": {
+        "toolName": "run_checks",
+        "arguments": {
+          "kind": "TIMELINE",
+          "timeline": {
+            "sourceId": "{{task:/sourceId}}",
+            "transcriptSha256": "{{task:/transcript/sha256}}",
+            "segments": [
+              {"from": "S7", "to": "S10"},
+              {"from": "S22", "to": "S23"},
+              {"from": "S24", "to": "S25"}
+            ]
+          }
+        },
+        "statePatch": {
+          "plan": {
+            "mainSegments": [
+              "Find a senior female engineer to guide you; it is hard to have your voice heard (S22-S23).",
+              "Engineers are introverted and avoid the spotlight, but like to know they are helping someone (S24-S25)."
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

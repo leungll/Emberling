@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "batch-manifest/v1",
+  "batchId": "pilot-2026-11-07b",
+  "type": "showcase",
+  "description": "Pilot 2 after the plan-schema prompt fix (video-edit/v2): one real-model pair on sample 01 to measure cost. Outside the statistics.",
+  "datasetVersion": "v1",
+  "definitions": {
+    "basic": {
+      "workflowId": "wf_eddaad6c4276442cb0e1edd25116e4ef",
+      "version": 1
+    },
+    "reviewed": {
+      "workflowId": "wf_13727de1dfab42ad8ba5f5c66df944f2",
+      "version": 1
+    }
+  },
+  "models": {
+    "decision": "opus-5.5",
+    "review": "text-review",
+    "judge": "opus-5.5"
+  },
+  "promptVersion": "video-edit/v2",
+  "toolSchemaDigest": "sha256:00de915d4a79f56f45faad9ef7ffd032480a1945c982341817555aa1cddbf103",
+  "ruleVersion": "v1",
+  "randomSeed": 20261107
+}

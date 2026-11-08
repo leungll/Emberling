@@ -189,6 +189,26 @@ services:
       # host side of the published port above.
       EMBERLING_TASK_GATEWAY_PUBLIC_URL: ${EMBERLING_TASK_GATEWAY_PUBLIC_URL:-http://localhost:9104}
 
+  # Media service for the video-editing workload: source upload, transcription,
+  # timeline checks, rendering and clip checks over the external task protocol (submit,
+  # callback, poll). It keeps its own content-addressed data and the downloaded
+  # transcription model on one volume, so a restart neither re-transcribes nor
+  # re-downloads. Start it with `--profile media`. Clip URLs in its results start with
+  # MEDIA_PUBLIC_URL, which must match the host side of the published port for a browser
+  # to open them. The callback token it receives stays in memory and is never written.
+  media:
+    profiles: ["media"]
+    build:
+      context: ../services/media
+      dockerfile: ../../deploy/Dockerfile.media
+    ports:
+      - "9201:9201"
+    environment:
+      MEDIA_WHISPER_MODEL: ${MEDIA_WHISPER_MODEL:-small.en}
+      MEDIA_PUBLIC_URL: ${MEDIA_PUBLIC_URL:-http://localhost:9201}
+    volumes:
+      - emberling-media-data:/var/lib/emberling/media
+
   backend:
     build:
       context: ../backend
@@ -230,7 +250,10 @@ services:
       # array of {"id","model","displayName"} entries, each with an optional one-line
       # "description" of at most 280 characters that Studio shows with the model and an
       # optional "visionInput": true for a model that can review images; the key
-      # is a Secret from the developer's own environment, never committed.
+      # is a Secret from the developer's own environment, never committed. The video
+      # Definitions select a text-only review model beside the decision model, for example
+      #   {"id":"text-review","model":"anthropic/claude-sonnet-5.5","displayName":"Text Review"}
+      # with no visionInput: it reads transcript excerpts, never images.
       EMBERLING_MODELS: ${EMBERLING_MODELS:-}
       EMBERLING_MODEL_BASE_URL: ${EMBERLING_MODEL_BASE_URL:-}
       EMBERLING_MODEL_API_KEY: ${EMBERLING_MODEL_API_KEY:-}
@@ -293,6 +316,12 @@ services:
       # no Provider is limited. Read once at startup; the serving-capacity demo variant
       # recreates the backend with it set and then without it again.
       EMBERLING_PROVIDER_CAPACITY: ${EMBERLING_PROVIDER_CAPACITY:-}
+      # Registers the media transcript node and the video Tools (run_checks,
+      # render_timeline) against a media task service. Empty by default: nothing is
+      # registered. With the media profile the service answers at http://media:9201; a
+      # media service on the host is reached as http://host.docker.internal:9201, and then
+      # EMBERLING_CALLBACK_BASE_URL must name an address that host can reach.
+      EMBERLING_MEDIA_SERVICE_URL: ${EMBERLING_MEDIA_SERVICE_URL:-}
       EMBERLING_RECONCILE_INTERVAL: 5s
       EMBERLING_RECONCILE_BATCH_SIZE: "100"
       EMBERLING_PENDING_CALLBACK_TTL: 24h
@@ -326,3 +355,4 @@ volumes:
   emberling-mockprovider-record:
   emberling-mockproduction-record:
   emberling-sandboxrunner-record:
+  emberling-media-data:

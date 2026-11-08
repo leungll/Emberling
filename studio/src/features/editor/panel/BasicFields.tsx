@@ -8,7 +8,13 @@ import { GrowArea, TextArea, TextInput, controlClasses } from '@/components/ui/f
 import { useCopy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/features/editor/editor-store';
-import { FORMAT_TYPES, MB, specFor, genericLabel } from '@/features/editor/model/fields';
+import {
+  FORMAT_TYPES,
+  MB,
+  genericLabel,
+  inputExample,
+  specFor,
+} from '@/features/editor/model/fields';
 import { labelFollowsName } from '@/features/editor/model/steps';
 import { configEdit, readNumber } from './config-edit';
 import { FieldBlock, Sentence } from './Section';
@@ -416,21 +422,6 @@ export function FormatsField({ node, field, errors }: FieldProps) {
   );
 }
 
-function keyExample(node: Node): string {
-  const k =
-    typeof node.config.inputKey === 'string' && node.config.inputKey ? node.config.inputKey : 'key';
-  const ref = { assetId: 'asset_…', mediaType: 'image/png' };
-  const v: JsonValue =
-    node.type === 'image_input'
-      ? ref
-      : node.type === 'media_brief'
-        ? [ref]
-        : node.type === 'task_input'
-          ? { goal: '…' }
-          : '…';
-  return JSON.stringify({ [k]: v }, null, 2);
-}
-
 export function KeyField({ node, field, errors }: FieldProps) {
   const copy = useCopy();
   const f = copy.editor.fields;
@@ -452,9 +443,15 @@ export function KeyField({ node, field, errors }: FieldProps) {
       </FieldBlock>
       <div className="mt-3 flex flex-col gap-1">
         <span className="text-sm font-medium text-fg-secondary">{f.example}</span>
-        <pre className="m-0 rounded-md bg-surface-inset p-2 font-mono text-xs wrap-anywhere whitespace-pre-wrap text-fg-secondary">
-          {keyExample(node)}
+        <pre
+          data-input-example
+          className="m-0 rounded-md bg-surface-inset p-2 font-mono text-xs wrap-anywhere whitespace-pre-wrap text-fg-secondary"
+        >
+          {JSON.stringify(inputExample(node), null, 2)}
         </pre>
+        {node.type === 'image_input' || node.type === 'media_brief' ? (
+          <p className="m-0 text-sm text-fg-muted">{f.exampleAssetHint}</p>
+        ) : null}
       </div>
     </>
   );

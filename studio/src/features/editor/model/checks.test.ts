@@ -28,7 +28,7 @@ describe('validate', () => {
     );
     expect(issues.map((i) => [i.text, i.section, i.label])).toEqual([
       ['Choose a model.', 'model', 'Model'],
-      ['Connect something to the Input input of Agent.', 'connections', 'Connections'],
+      ['Connect something to the Input input of Agent.', 'connections', 'Data flow'],
     ]);
   });
 

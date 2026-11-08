@@ -112,8 +112,11 @@ export interface AgentWorkspaceConfig {
   deployTarget?: AgentDeployTarget;
 }
 
-/** How far an Agent Run may take a repair: prepare the patch only, or also deploy it. */
-export type AgentGoal = 'PREPARE_ONLY' | 'FIX_AND_DEPLOY';
+/**
+ * The task an Agent Run is frozen to: prepare the patch only, also deploy it, or deliver
+ * one rendered clip.
+ */
+export type AgentGoal = 'PREPARE_ONLY' | 'FIX_AND_DEPLOY' | 'DELIVER_CLIP';
 
 /**
  * The agent node config keys Studio knows about. Studio stores a node's config as a
@@ -132,6 +135,11 @@ export interface AgentNodeConfig {
   workspace?: AgentWorkspaceConfig;
   /** JSON Pointer into the node input that selects the AgentGoal. */
   goalPointer?: string;
+  /**
+   * Per fact type, how many failed verdicts the Agent may collect before a tool bounded by
+   * that type is refused; a type absent here is unbounded.
+   */
+  maxFailedFacts?: Record<string, number>;
   approvalTimeoutMs?: number;
   releaseConfirmTimeoutMs?: number;
   voidGraceMs?: number;
@@ -201,6 +209,10 @@ export interface PortMetadata {
   name: string;
   dataType: PortDataType;
   required: boolean;
+  /** Optional display name of the handle; omitted when the registration declares none. */
+  title?: string;
+  /** Optional one-line English note on what the handle carries; omitted when none. */
+  description?: string;
 }
 
 export type ExecutionKind = 'SYNC' | 'ASYNC' | 'MANAGED_AGENT';
@@ -278,6 +290,8 @@ export interface FactRequirement {
 export interface NodeMetadata {
   type: string;
   displayName: string;
+  /** Optional plain sentence saying what the step does; omitted when the registration declares none. */
+  description?: string;
   category: string;
   executionKind: ExecutionKind;
   inputs: PortMetadata[];
@@ -288,6 +302,13 @@ export interface NodeMetadata {
   poll?: PollPolicy | null;
   /** Execution fact types of the current Run this Node Type reads. */
   factInputs: string[];
+  /**
+   * Which output port values are media references and where the URL that serves each and
+   * its media type are read from. The Run Snapshot `media` list is built from these; Studio
+   * resolves a reference to a URL only through that list, never by building one. Absent
+   * when the Node Type produces none.
+   */
+  mediaLinks?: NodeMediaLink[];
 }
 
 export interface ModelMetadata {
@@ -303,6 +324,8 @@ export interface ModelMetadata {
 
 export interface ToolMetadata {
   name: string;
+  /** Optional short display name for Studio; omitted when none. `description` stays model-facing. */
+  title?: string;
   description: string;
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;
@@ -359,10 +382,61 @@ export interface ToolMetadata {
   /** True when an uncertain asynchronous result of this Tool is reconciled by polling. */
   reconcilable: boolean;
   /**
+   * JSON Pointer into a successful result naming the material object a Tool that reads
+   * text by range returns; the Backend records such a result in the Turn's Context
+   * Manifest as a `MATERIAL_RANGE` item. Absent when the Tool returns no material.
+   */
+  materialPointer?: string;
+  /**
    * True when an unmet fact requirement is returned to the Agent as a REJECTED tool message
    * instead of ending the Agent Run.
    */
   returnUnmetRequirement: boolean;
+  /**
+   * Fact types whose failed verdicts bound this Tool's calls: once the Agent Run has
+   * collected more failed facts of one of them than its configuration allows, further
+   * calls are refused before any Attempt exists. Empty when the Tool is never bounded.
+   */
+  countedFailedFacts: string[];
+  /**
+   * Where a successful result carries each media reference and the URL that serves it.
+   * The Agent Trace `media` list is built from these; Studio resolves a reference to a URL
+   * only through that list, never by building one. Absent when the Tool produces none.
+   */
+  mediaLinks?: ToolMediaLink[];
+  /**
+   * The members of a call's arguments and result shown on its run card, each under a
+   * title; the Agent Trace `shown` member of a Tool Attempt is built from these. Absent
+   * when the Tool declares none.
+   */
+  display?: ToolDisplayField[];
+}
+
+/**
+ * One media link of a Tool result. `refPointer` and `urlPointer` are JSON Pointers into the
+ * result; exactly one of `mediaTypePointer` (a result member) or `mediaType` (a literal) is
+ * present.
+ */
+export interface ToolMediaLink {
+  refPointer: string;
+  urlPointer: string;
+  mediaTypePointer?: string;
+  mediaType?: string;
+}
+
+/**
+ * One media link of a Node output: the output `port` whose value the pointers read, and the
+ * same pointer members a Tool link has.
+ */
+export interface NodeMediaLink extends ToolMediaLink {
+  port: string;
+}
+
+/** One declared run-card member: which document, which member, and the title shown. */
+export interface ToolDisplayField {
+  source: FactPointerSource;
+  pointer: string;
+  title: string;
 }
 
 export type ToolAuthorizationRisk = 'LOW' | 'PRODUCTION';
@@ -653,7 +727,33 @@ export interface NodeAttempt {
 export interface RunSnapshot {
   run: Run;
   nodeRuns: NodeRun[];
+  /** The media the Run's SUCCEEDED steps produced, by the media links their Node Types declare. */
+  media: RunMedia;
   lastSeq: number;
+}
+
+/**
+ * The bounded media list of a Run. `truncated` means the Run produced more media than
+ * `items` shows; the stored outputs are never cut.
+ */
+export interface RunMedia {
+  items: RunMediaItem[];
+  truncated: boolean;
+}
+
+/**
+ * One media reference with the URL that serves it and its media type, and the NodeRun whose
+ * output carried it. The members are withheld by the same rules as an Agent Trace media
+ * item: `UNSAFE_URL` keeps `ref` and nulls `url`; `TOO_LARGE` on `ref` or `mediaType`
+ * withholds the whole item. Studio resolves a value to a URL only through an exact `ref`
+ * match, never by building one.
+ */
+export interface RunMediaItem {
+  ref: string | null;
+  url: string | null;
+  mediaType: string | null;
+  nodeRunId: string;
+  withheld?: 'TOO_LARGE' | 'UNSAFE_URL';
 }
 
 /** NodeRun plus its Attempts, ordered by `attemptNo`. MANAGED_AGENT NodeRuns have none. */

@@ -2,17 +2,21 @@ package domain
 
 import "time"
 
-// AgentGoal is the task goal an Agent Run is frozen to: prepare the change only, or fix
-// and deploy it. The goal decides whether a production-risk Tool may be called at all.
+// AgentGoal is the task goal an Agent Run is frozen to: prepare the change only, fix and
+// deploy it, or deliver a clip. The goal decides whether a production-risk Tool may be
+// called at all and which completion check the Agent Run ends with.
 type AgentGoal string
 
 const (
 	AgentGoalPrepareOnly  AgentGoal = "PREPARE_ONLY"
 	AgentGoalFixAndDeploy AgentGoal = "FIX_AND_DEPLOY"
+	// AgentGoalDeliverClip: the Agent delivers one rendered clip that passed its checks,
+	// or declares with a reason that the request cannot be satisfied.
+	AgentGoalDeliverClip AgentGoal = "DELIVER_CLIP"
 )
 
 func (g AgentGoal) IsValid() bool {
-	return g == AgentGoalPrepareOnly || g == AgentGoalFixAndDeploy
+	return g == AgentGoalPrepareOnly || g == AgentGoalFixAndDeploy || g == AgentGoalDeliverClip
 }
 
 // AuthorizationDecision is what the claim decided for one Action before any Attempt

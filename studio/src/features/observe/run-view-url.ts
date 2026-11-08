@@ -40,7 +40,8 @@ export function parseRunView(search: string): RunViewState {
     fails: q.get('fails') === '1',
     group: (EVENT_GROUPS as readonly string[]).includes(group) ? (group as EventGroup) : 'all',
     q: q.get('q') ?? '',
-    only: q.get('only') === '1',
+    // Events follow the selection unless the viewer asks for all of them.
+    only: q.get('only') !== '0',
     status: statusParam(q.get('status')),
     range: rangeParam(q.get('range')),
   };
@@ -53,13 +54,13 @@ export function runViewSearch(state: RunViewState, current: string): string {
   if (from) q.set('from', from);
   if (state.status) q.set('status', state.status);
   if (state.range) q.set('range', state.range);
-  if (state.view === 'events') q.set('view', 'events');
+  if (state.view) q.set('view', state.view);
   if (state.el) q.set('el', state.el);
   if (state.tab && state.tab !== 'overview') q.set('tab', state.tab);
   if (state.view === 'events') {
     if (state.group !== 'all') q.set('group', state.group);
     if (state.q) q.set('q', state.q);
-    if (state.only) q.set('only', '1');
+    if (!state.only) q.set('only', '0');
   } else {
     if (state.tq) q.set('tq', state.tq);
     if (state.fails) q.set('fails', '1');
@@ -102,7 +103,9 @@ export function clearPercent(key: string): void {
 
 /** The Logs panel's height in percent of the run view: 25 to 80, 52 by default. */
 export const LOGS = { key: 'emb.obs.logs', min: 25, max: 80, fallback: 52 } as const;
-/** The trace or events pane's width in percent of the Logs panel: 35 to 78, 60 by default. */
-export const SPLIT = { key: 'emb.obs.split', min: 35, max: 78, fallback: 60 } as const;
-/** Below this width of the Logs panel the details pane is a drawer over the trace. */
-export const NARROW_LOGS = 760;
+/** The details pane's width in pixels, resized from its left edge. */
+export const PANE = { key: 'emb.obs.paneW', min: 360, fallback: 460 } as const;
+/** Whether the Trace and Events drawer is open. */
+export const DEBUG_KEY = 'emb.obs.debug';
+/** Below this width of the page body the details pane is a drawer over the graph. */
+export const NARROW_PAGE = 900;

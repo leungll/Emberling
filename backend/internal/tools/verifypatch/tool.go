@@ -151,6 +151,7 @@ func Registration(baseURL string, client *http.Client, artifacts ArtifactTextSto
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Verify patch",
 			Description:   "Verify the workspace's current patch in an isolated sandbox: run the base commit's tests, scan for known vulnerabilities and check every dependency version",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),
@@ -171,6 +172,15 @@ func Registration(baseURL string, client *http.Client, artifacts ArtifactTextSto
 			CountsTowardGenerationLimit: false,
 			UsesWorkspace:               true,
 			WorkspacePatchDigestPath:    "/patchDigest",
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/patchDigest", Title: "Patch digest"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/testsPassed", Title: "Tests passed"},
+				{Source: domain.FactPointerResult, Pointer: "/scanClean", Title: "Scan clean"},
+				{Source: domain.FactPointerResult, Pointer: "/dependenciesClean", Title: "Dependencies clean"},
+				{Source: domain.FactPointerResult, Pointer: "/summary/tests/total", Title: "Tests run"},
+				{Source: domain.FactPointerResult, Pointer: "/summary/tests/failed", Title: "Tests failed"},
+			},
 		},
 		Executor: New(baseURL, client, artifacts),
 	}
