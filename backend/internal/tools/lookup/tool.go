@@ -55,6 +55,7 @@ func Registration() registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Look up",
 			Description:   "Read a deterministic record",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),

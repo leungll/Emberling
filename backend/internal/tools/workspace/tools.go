@@ -140,6 +140,7 @@ func ReadFileRegistration(repos Repositories) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ReadFileToolName,
+			Title:         "Read file",
 			Description:   "Read one file of the workspace as it is after the current patch; long files are truncated",
 			InputSchema:   json.RawMessage(readFileInputSchema),
 			OutputSchema:  json.RawMessage(readFileOutputSchema),
@@ -159,6 +160,7 @@ func ListFilesRegistration(repos Repositories) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ListFilesToolName,
+			Title:         "List files",
 			Description:   "List the entries of one workspace directory as it is after the current patch",
 			InputSchema:   json.RawMessage(listFilesInputSchema),
 			OutputSchema:  json.RawMessage(listFilesOutputSchema),
@@ -180,6 +182,7 @@ func WriteFileRegistration(repos Repositories) registry.ToolRegistration {
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:               WriteFileToolName,
+			Title:              "Write file",
 			Description:        "Write one file of the workspace inside the allowed paths; the result is the new cumulative patch",
 			InputSchema:        json.RawMessage(writeFileInputSchema),
 			OutputSchema:       json.RawMessage(writeFileOutputSchema),

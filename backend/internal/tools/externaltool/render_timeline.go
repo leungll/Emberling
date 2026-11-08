@@ -50,6 +50,7 @@ func RenderTimelineSpec() Spec {
 	return Spec{
 		Metadata: domain.ToolMetadata{
 			Name:         RenderTimelineToolName,
+			Title:        "Render timeline",
 			Description:  "Render the clip of a timeline that passed its checks, named by the timeline digest a check returned",
 			InputSchema:  json.RawMessage(renderTimelineInputSchema),
 			OutputSchema: json.RawMessage(renderTimelineOutputSchema),

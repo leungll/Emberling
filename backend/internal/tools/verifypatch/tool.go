@@ -151,6 +151,7 @@ func Registration(baseURL string, client *http.Client, artifacts ArtifactTextSto
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Verify patch",
 			Description:   "Verify the workspace's current patch in an isolated sandbox: run the base commit's tests, scan for known vulnerabilities and check every dependency version",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),

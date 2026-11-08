@@ -105,6 +105,7 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 	return registry.ToolRegistration{
 		Metadata: domain.ToolMetadata{
 			Name:          ToolName,
+			Title:         "Test in sandbox",
 			Description:   "Apply a patch to a base commit and run its tests in an isolated sandbox",
 			InputSchema:   json.RawMessage(inputSchema),
 			OutputSchema:  json.RawMessage(outputSchema),

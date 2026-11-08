@@ -138,7 +138,8 @@ const runChecksOutputSchema = `{
 func RunChecksSpec(artifacts ArtifactTextStore) Spec {
 	return Spec{
 		Metadata: domain.ToolMetadata{
-			Name: RunChecksToolName,
+			Name:  RunChecksToolName,
+			Title: "Run checks",
 			Description: "Run the technical checks on a timeline (sentence ranges over the transcript) or on a rendered clip; " +
 				"a timeline check returns the timeline digest that a render must name",
 			InputSchema:  json.RawMessage(runChecksInputSchema),
