@@ -138,13 +138,23 @@ func Registration(resolver ModelResolver, providers ...TaskProvider) registry.No
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Image Generation",
+			Description:   "Creates an image from a prompt with a model.",
 			Category:      domain.NodeCategoryPromptAndModel,
 			ExecutionKind: domain.NodeExecutionAsync,
 			Inputs: []domain.PortMetadata{
-				{Name: promptPort, DataType: domain.PortTypeText, Required: true},
-				{Name: referencePort, DataType: domain.PortTypeImage, Required: false},
+				{
+					Name: promptPort, DataType: domain.PortTypeText, Required: true,
+					Description: "The prompt sent to the model.",
+				},
+				{
+					Name: referencePort, DataType: domain.PortTypeImage, Required: false,
+					Title: "Reference image", Description: "An optional image the model follows.",
+				},
 			},
-			Outputs:      []domain.PortMetadata{{Name: imagePort, DataType: domain.PortTypeImage, Required: true}},
+			Outputs: []domain.PortMetadata{{
+				Name: imagePort, DataType: domain.PortTypeImage, Required: true,
+				Description: "The generated image.",
+			}},
 			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "modelId", Order: 10, Group: domain.UIGroupModel, Widget: domain.UIWidgetModelSelector, Capability: domain.ModelCapabilityImageGeneration},

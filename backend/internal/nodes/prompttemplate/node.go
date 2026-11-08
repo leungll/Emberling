@@ -43,11 +43,18 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Prompt Template",
+			Description:   "Inserts incoming text into a fixed prompt.",
 			Category:      domain.NodeCategoryPromptAndModel,
 			ExecutionKind: domain.NodeExecutionSync,
-			Inputs:        []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
-			Outputs:       []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
-			ConfigSchema:  json.RawMessage(configSchema),
+			Inputs: []domain.PortMetadata{{
+				Name: "text", DataType: domain.PortTypeText, Required: true,
+				Description: "The text placed into the template.",
+			}},
+			Outputs: []domain.PortMetadata{{
+				Name: "text", DataType: domain.PortTypeText, Required: true,
+				Description: "The finished prompt.",
+			}},
+			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "template", Order: 10, Group: domain.UIGroupBasic, Widget: domain.UIWidgetPromptEditor},
 			}},

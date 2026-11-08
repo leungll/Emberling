@@ -38,10 +38,14 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Task Input",
+			Description:   "Each run starts with this task. You fill in its fields when you start the run.",
 			Category:      domain.NodeCategoryInput,
 			ExecutionKind: domain.NodeExecutionSync,
-			Outputs:       []domain.PortMetadata{{Name: "task", DataType: domain.PortTypeJSON, Required: true}},
-			ConfigSchema:  json.RawMessage(configSchema),
+			Outputs: []domain.PortMetadata{{
+				Name: "task", DataType: domain.PortTypeJSON, Required: true,
+				Description: "The task fields entered when the run started.",
+			}},
+			ConfigSchema: json.RawMessage(configSchema),
 			UISchema: domain.NodeUISchema{Fields: []domain.UIField{
 				{Path: "inputKey", Order: 10, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},
 				{Path: "label", Order: 20, Group: domain.UIGroupBasic, Widget: domain.UIWidgetDefault},

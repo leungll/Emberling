@@ -28,11 +28,15 @@ func Registration() registry.NodeRegistration {
 		Metadata: domain.NodeMetadata{
 			Type:          nodeType,
 			DisplayName:   "Text Output",
+			Description:   "Shows text as the run’s result.",
 			Category:      domain.NodeCategoryOutput,
 			ExecutionKind: domain.NodeExecutionSync,
-			Inputs:        []domain.PortMetadata{{Name: "text", DataType: domain.PortTypeText, Required: true}},
-			ConfigSchema:  json.RawMessage(configSchema),
-			SideEffect:    domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
+			Inputs: []domain.PortMetadata{{
+				Name: "text", DataType: domain.PortTypeText, Required: true,
+				Description: "The text shown as the result.",
+			}},
+			ConfigSchema: json.RawMessage(configSchema),
+			SideEffect:   domain.SideEffectPolicy{Kind: domain.SideEffectNone, Idempotency: domain.IdempotencySafe},
 		},
 		Binding: registry.ExecutorBinding{Executor: Executor{}},
 	}
