@@ -37,8 +37,8 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "photoAssetId": {"title": "Photo", "type": "string"},
-                  "assetRef": {"title": "Generated image", "type": "string"}
+                  "photoAssetId": {"title": "Photo", "contentMediaType": "image/*", "type": "string"},
+                  "assetRef": {"title": "Generated image", "contentMediaType": "image/*", "type": "string"}
                 },
                 "required": ["photoAssetId", "assetRef"],
                 "additionalProperties": false

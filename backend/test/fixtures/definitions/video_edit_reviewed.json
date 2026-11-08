@@ -26,6 +26,7 @@
             },
             "sourceId": {
               "title": "Source video",
+              "contentMediaType": "video/webm",
               "description": "The media service's id of the talk to cut.",
               "type": "string",
               "minLength": 1
@@ -151,6 +152,7 @@
             },
             "clipSha256": {
               "title": "Clip",
+              "contentMediaType": "video/mp4",
               "type": [
                 "string",
                 "null"
