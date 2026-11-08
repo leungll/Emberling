@@ -103,11 +103,12 @@ func (d Deps) createRun(w http.ResponseWriter, r *http.Request) {
 }
 
 // runSnapshotResponse mirrors Studio's RunSnapshot. domain.Run and domain.NodeRun already
-// carry wire-matching JSON tags, so only the envelope and the Run's read-time fields are
-// defined here.
+// carry wire-matching JSON tags, so only the envelope, the Run's read-time fields and the
+// media list are defined here.
 type runSnapshotResponse struct {
 	Run      runSnapshotRunDTO `json:"run"`
 	NodeRuns []domain.NodeRun  `json:"nodeRuns"`
+	Media    runMediaDTO       `json:"media"`
 	LastSeq  int64             `json:"lastSeq"`
 }
 
@@ -134,6 +135,7 @@ func (d Deps) getRunSnapshot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, runSnapshotResponse{
 		Run:      runSnapshotRunDTO{Run: snap.Run, TokenUsage: snap.TokenUsage},
 		NodeRuns: nodeRuns,
+		Media:    toRunMediaDTO(snap.Media, d.TraceMaxFieldBytes),
 		LastSeq:  snap.LastSeq,
 	})
 }

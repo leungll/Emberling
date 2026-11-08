@@ -38,11 +38,16 @@ func NewQueryService(deps Deps) *QueryService {
 // same read, nil when none carries usage. It is never persisted and never feeds the Run
 // status, which stays derived from NodeRun state alone. An Agent's Turns reach it once,
 // through the Agent NodeRun's own sum.
+//
+// Media is the read-time list of the media the SUCCEEDED NodeRuns of this same read
+// produced, by the media links their Node Types declare; it is a projection, never
+// persisted.
 type RunSnapshot struct {
 	Run        domain.Run
 	NodeRuns   []domain.NodeRun
 	LastSeq    int64
 	TokenUsage *domain.TokenUsage
+	Media      RunMedia
 }
 
 // NodeRunDetail is one NodeRun together with its Attempts, ordered by AttemptNo.
@@ -97,6 +102,7 @@ func (s *QueryService) Snapshot(ctx context.Context, runID string) (RunSnapshot,
 			NodeRuns:   nodeRuns,
 			LastSeq:    run.LastSeq,
 			TokenUsage: runtime.SumTokenUsage(usages...),
+			Media:      runMedia(nodeRuns, s.deps.Nodes),
 		}
 		return nil
 	})

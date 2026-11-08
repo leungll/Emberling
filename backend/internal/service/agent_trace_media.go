@@ -55,7 +55,7 @@ func agentTraceMedia(rounds []AgentTraceTurn, tools *registry.ToolRegistry) Agen
 				continue
 			}
 			for _, link := range reg.Metadata.MediaLinks {
-				item, ok := mediaItemOf(result, link)
+				value, ok := mediaLinkValueOf(result, link)
 				if !ok {
 					continue
 				}
@@ -63,33 +63,43 @@ func agentTraceMedia(rounds []AgentTraceTurn, tools *registry.ToolRegistry) Agen
 					media.Truncated = true
 					return media
 				}
-				item.ToolAttemptID = attempt.ID
-				media.Items = append(media.Items, item)
+				media.Items = append(media.Items, AgentTraceMediaItem{
+					Ref: value.Ref, URL: value.URL, MediaType: value.MediaType, ToolAttemptID: attempt.ID,
+				})
 			}
 		}
 	}
 	return media
 }
 
-// mediaItemOf reads one declared media link out of a decoded Tool result. Every pointer
-// must select a non-empty string; the media type comes from the result when the link
-// points at it and from the declaration otherwise.
-func mediaItemOf(result any, link domain.MediaLink) (AgentTraceMediaItem, bool) {
-	ref, ok := stringAtPointer(result, link.RefPointer)
+// mediaLinkValue is what one media link selects out of a committed document: the
+// reference, the URL that serves the media and its media type.
+type mediaLinkValue struct {
+	Ref       string
+	URL       string
+	MediaType string
+}
+
+// mediaLinkValueOf reads one declared media link out of a decoded document (a Tool result
+// or a Node output port value). Every pointer must select a non-empty string; the media
+// type comes from the document when the link points at it and from the declaration
+// otherwise.
+func mediaLinkValueOf(document any, link domain.MediaLink) (mediaLinkValue, bool) {
+	ref, ok := stringAtPointer(document, link.RefPointer)
 	if !ok {
-		return AgentTraceMediaItem{}, false
+		return mediaLinkValue{}, false
 	}
-	url, ok := stringAtPointer(result, link.URLPointer)
+	url, ok := stringAtPointer(document, link.URLPointer)
 	if !ok {
-		return AgentTraceMediaItem{}, false
+		return mediaLinkValue{}, false
 	}
 	mediaType := link.MediaType
 	if link.MediaTypePointer != "" {
-		if mediaType, ok = stringAtPointer(result, link.MediaTypePointer); !ok {
-			return AgentTraceMediaItem{}, false
+		if mediaType, ok = stringAtPointer(document, link.MediaTypePointer); !ok {
+			return mediaLinkValue{}, false
 		}
 	}
-	return AgentTraceMediaItem{Ref: ref, URL: url, MediaType: mediaType}, true
+	return mediaLinkValue{Ref: ref, URL: url, MediaType: mediaType}, true
 }
 
 func stringAtPointer(document any, pointer string) (string, bool) {

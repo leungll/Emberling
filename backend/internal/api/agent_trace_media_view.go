@@ -25,17 +25,23 @@ type agentTraceMediaDTO struct {
 }
 
 // agentTraceMediaItemDTO is one media reference with the URL that serves it and its media
-// type. A member that may not be served is null and Withheld says why: a URL carrying
-// userinfo, a query or a fragment, or one outside the Backend's own API routes, is UNSAFE_URL
-// while the reference stays visible as text; a member over the field bound is TOO_LARGE
-// and never cut, and a cut reference would name nothing, so an oversized reference or
-// media type withholds the whole item.
+// type, and the Tool Attempt whose result carried it.
 type agentTraceMediaItemDTO struct {
-	Ref           *string `json:"ref"`
-	URL           *string `json:"url"`
-	MediaType     *string `json:"mediaType"`
-	ToolAttemptID string  `json:"toolAttemptId"`
-	Withheld      string  `json:"withheld,omitempty"`
+	mediaMembersDTO
+	ToolAttemptID string `json:"toolAttemptId"`
+	Withheld      string `json:"withheld,omitempty"`
+}
+
+// mediaMembersDTO is the served form of one media reference, shared by the Agent Trace
+// list and the Run Snapshot list. A member that may not be served is null and the item's
+// Withheld says why: a URL carrying userinfo, a query or a fragment, or one outside the
+// Backend's own API routes, is UNSAFE_URL while the reference stays visible as text; a
+// member over the field bound is TOO_LARGE and never cut, and a cut reference would name
+// nothing, so an oversized reference or media type withholds the whole item.
+type mediaMembersDTO struct {
+	Ref       *string `json:"ref"`
+	URL       *string `json:"url"`
+	MediaType *string `json:"mediaType"`
 }
 
 func toAgentTraceMediaDTO(media service.AgentTraceMedia, maxFieldBytes int) agentTraceMediaDTO {
@@ -47,23 +53,27 @@ func toAgentTraceMediaDTO(media service.AgentTraceMedia, maxFieldBytes int) agen
 }
 
 func toAgentTraceMediaItemDTO(item service.AgentTraceMediaItem, maxFieldBytes int) agentTraceMediaItemDTO {
-	dto := agentTraceMediaItemDTO{ToolAttemptID: item.ToolAttemptID}
-	if !withinFieldBound(item.Ref, maxFieldBytes) || !withinFieldBound(item.MediaType, maxFieldBytes) {
-		dto.Withheld = withheldTooLarge
-		return dto
+	members, withheld := projectMediaMembers(item.Ref, item.URL, item.MediaType, maxFieldBytes)
+	return agentTraceMediaItemDTO{mediaMembersDTO: members, ToolAttemptID: item.ToolAttemptID, Withheld: withheld}
+}
+
+// projectMediaMembers applies the field bound and the credential rule to one media
+// reference and returns what may be served, with the reason anything is withheld.
+func projectMediaMembers(ref, mediaURL, mediaType string, maxFieldBytes int) (mediaMembersDTO, string) {
+	var dto mediaMembersDTO
+	if !withinFieldBound(ref, maxFieldBytes) || !withinFieldBound(mediaType, maxFieldBytes) {
+		return dto, withheldTooLarge
 	}
-	ref, mediaType := item.Ref, item.MediaType
 	dto.Ref, dto.MediaType = &ref, &mediaType
 	switch {
-	case !withinFieldBound(item.URL, maxFieldBytes):
-		dto.Withheld = withheldTooLarge
-	case !servableMediaURL(item.URL):
-		dto.Withheld = withheldUnsafeURL
+	case !withinFieldBound(mediaURL, maxFieldBytes):
+		return dto, withheldTooLarge
+	case !servableMediaURL(mediaURL):
+		return dto, withheldUnsafeURL
 	default:
-		mediaURL := item.URL
 		dto.URL = &mediaURL
+		return dto, ""
 	}
-	return dto
 }
 
 // withinFieldBound reports whether the JSON encoding of value fits the Trace field bound.

@@ -727,7 +727,33 @@ export interface NodeAttempt {
 export interface RunSnapshot {
   run: Run;
   nodeRuns: NodeRun[];
+  /** The media the Run's SUCCEEDED steps produced, by the media links their Node Types declare. */
+  media: RunMedia;
   lastSeq: number;
+}
+
+/**
+ * The bounded media list of a Run. `truncated` means the Run produced more media than
+ * `items` shows; the stored outputs are never cut.
+ */
+export interface RunMedia {
+  items: RunMediaItem[];
+  truncated: boolean;
+}
+
+/**
+ * One media reference with the URL that serves it and its media type, and the NodeRun whose
+ * output carried it. The members are withheld by the same rules as an Agent Trace media
+ * item: `UNSAFE_URL` keeps `ref` and nulls `url`; `TOO_LARGE` on `ref` or `mediaType`
+ * withholds the whole item. Studio resolves a value to a URL only through an exact `ref`
+ * match, never by building one.
+ */
+export interface RunMediaItem {
+  ref: string | null;
+  url: string | null;
+  mediaType: string | null;
+  nodeRunId: string;
+  withheld?: 'TOO_LARGE' | 'UNSAFE_URL';
 }
 
 /** NodeRun plus its Attempts, ordered by `attemptNo`. MANAGED_AGENT NodeRuns have none. */
