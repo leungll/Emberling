@@ -141,6 +141,7 @@
           "type": "object",
           "properties": {
             "outcome": {
+              "title": "Outcome",
               "type": "string",
               "enum": [
                 "DELIVERED",
@@ -149,6 +150,7 @@
               "description": "DELIVERED when a checked clip is handed over; CANNOT_SATISFY when the material cannot meet the requirement without distorting it."
             },
             "clipSha256": {
+              "title": "Clip",
               "type": [
                 "string",
                 "null"
@@ -156,6 +158,7 @@
               "description": "The digest render_timeline returned for the delivered clip; null when nothing is delivered."
             },
             "selectionReason": {
+              "title": "Why these sentences",
               "type": [
                 "string",
                 "null"
@@ -163,6 +166,7 @@
               "description": "Which sentences were chosen and why; null when nothing is delivered."
             },
             "cannotSatisfyReason": {
+              "title": "Why it can't be done",
               "type": [
                 "string",
                 "null"
