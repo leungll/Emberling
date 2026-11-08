@@ -73,6 +73,7 @@ const states: ReviewState[] = [
     ready: canvasReady,
     act: async (page) => {
       await selectStep('Delivery Agent')(page);
+      await page.getByRole('button', { name: /Tool details/ }).click();
       await page.getByRole('button', { name: 'Add tool' }).click();
       await expect(page.getByRole('dialog', { name: 'Add tools' })).toBeVisible();
     },

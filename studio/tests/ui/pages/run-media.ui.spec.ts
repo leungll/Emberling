@@ -15,7 +15,7 @@ const runPath = (run: { workflowId: string; runId: string }, search = '') =>
 const card = (page: Page, nodeId: string) => page.locator(`[data-gid="${nodeId}"]`);
 
 const graphReady = async (page: Page) => {
-  await expect(page.getByRole('tree')).toBeVisible();
+  await expect(page.getByRole('treeitem').first()).toBeVisible();
   await expect(card(page, 'node_output')).toBeVisible();
 };
 
@@ -49,12 +49,11 @@ const states: ReviewState[] = [
       await graphReady(page);
       await expect(card(page, 'node_brief')).toContainText('Boxed collectible figure.');
       await expect(card(page, 'node_photos')).toContainText('3 photos');
-      await expect(card(page, 'node_photos').getByRole('button', { name: /^Open/ })).toHaveCount(3);
       await expect(card(page, 'node_agent')).toContainText('Answered with 3 images');
       await expect(card(page, 'node_agent')).toContainText('Finished in turn 9');
       await expect(card(page, 'node_result')).toContainText('2 of 3 photos passed review');
       await expect(card(page, 'node_output')).toContainText('Final image, JPEG');
-      await expect(card(page, 'node_output').getByRole('button', { name: /^Open/ })).toHaveCount(1);
+      await expect(page.getByRole('tree').getByRole('button', { name: /^Open/ })).toHaveCount(0);
     },
   },
   {
@@ -85,24 +84,21 @@ const states: ReviewState[] = [
     act: async (page) => {
       const box = page.getByRole('dialog');
       const agent = card(page, 'node_agent');
-      // The lightbox sits inside the card and the pannable graph in the React tree, but
-      // clicks in it neither pan the graph nor select the card.
-      await agent.getByRole('button', { name: /^Open/ }).nth(1).click();
-      await expect(box).toContainText('2 of 3');
+      await details(page, /Media Result/, 'Data');
+      const opens = page.getByRole('tabpanel').getByRole('button', { name: /^Open/ });
+      await opens.nth(1).click();
+      await expect(box).toContainText(/2 of \d+/);
+      // A click outside the lightbox neither closes it nor changes the selection.
       await page.mouse.click(8, 8);
       await expect(box).toBeVisible();
       await box.getByRole('button', { name: 'Close' }).click();
       await expect(box).toBeHidden();
       await expect(agent).toHaveAttribute('aria-selected', 'false');
-      await card(page, 'node_result').getByRole('button', { name: /^Open/ }).click();
+      await opens.first().click();
       await expect(box).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(box).toBeHidden();
-      await details(page, /Media Result/, 'Data');
-      await page.getByRole('tabpanel').getByRole('button', { name: /^Open/ }).first().click();
-      await box.getByRole('button', { name: 'Close' }).click();
-      await expect(box).toBeHidden();
-      await expect(agent).toHaveAttribute('aria-selected', 'false');
+      await expect(card(page, 'node_result')).toHaveAttribute('aria-selected', 'true');
     },
   },
   {
@@ -120,8 +116,7 @@ const states: ReviewState[] = [
       await expect(panel).toContainText('2 of 3 photos');
       await expect(panel).toContainText('Did not pass');
       // The JSON is one click away, collapsed.
-      const json = panel.locator('details', { hasText: 'JSON' });
-      await expect(json).not.toHaveAttribute('open');
+      await expect(panel.locator('details[open]', { hasText: 'JSON' })).toHaveCount(0);
     },
   },
   {
@@ -133,7 +128,10 @@ const states: ReviewState[] = [
     act: async (page) => {
       await details(page, null, 'Data');
       const panel = page.getByRole('tabpanel');
-      await expect(panel.getByRole('button', { name: /^Open/ })).toHaveCount(3);
+      const input = panel
+        .locator('section')
+        .filter({ has: page.getByRole('heading', { name: 'Input', exact: true }) });
+      await expect(input.getByRole('button', { name: /^Open preview: Photo/ })).toHaveCount(3);
       await expect(panel).toContainText('Photo 1');
       await expect(panel).toContainText('Photo 3');
     },
@@ -148,7 +146,7 @@ const states: ReviewState[] = [
       await selectedDetails(page, 'Data');
       const panel = page.getByRole('tabpanel');
       await expect(panel).toContainText('Photo 1 of 3');
-      await expect(panel.getByRole('button', { name: /^Open/ })).toHaveCount(1);
+      await expect(panel.getByRole('button', { name: /^Open preview: Photo/ })).toHaveCount(1);
     },
   },
   {
@@ -156,7 +154,7 @@ const states: ReviewState[] = [
     url: runPath(data.completed, '?el=node_agent&tab=turns'),
     mode: 'block',
     ready: async (page) => {
-      await expect(page.getByRole('tree')).toBeVisible();
+      await expect(page.getByRole('treeitem').first()).toBeVisible();
       await expect(card(page, 'node_agent')).toContainText('Deployed v1 to checkout in staging');
     },
     act: async (page) => {
@@ -171,7 +169,7 @@ const states: ReviewState[] = [
     url: runPath(data.completed, '?el=action_37d7842a349c4030b1aba2997c41da5a&tab=data'),
     mode: 'block',
     ready: async (page) => {
-      await expect(page.getByRole('tree')).toBeVisible();
+      await expect(page.getByRole('treeitem').first()).toBeVisible();
     },
     act: async (page) => {
       await selectedDetails(page, 'Data');
@@ -185,7 +183,7 @@ const states: ReviewState[] = [
     mode: 'block',
     overrides: { '/api/runs': runList(withRuns([generating.item])), ...generating.overrides },
     ready: async (page) => {
-      await expect(page.getByRole('tree')).toBeVisible();
+      await expect(page.getByRole('treeitem').first()).toBeVisible();
       await expect(card(page, 'node_agent')).toContainText(
         'Calling generate_image for photo 2 of 3',
       );

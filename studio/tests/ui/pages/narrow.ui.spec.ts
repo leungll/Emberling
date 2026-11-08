@@ -65,7 +65,7 @@ test('the trace keeps step names on a few lines beside the details', async ({ pa
     page,
     `/workflows/${data.photos.workflowId}/runs/${data.photos.runId}`,
     { width: 1024, height: 800 },
-    { 'emb.runs.list': 'closed', 'emb.obs.split': '35' },
+    { 'emb.runs.list': 'closed', 'emb.obs.split': '35', 'emb.obs.debug': '1' },
   );
   const rows = page.locator('[role="treegrid"] [role="row"][data-id]');
   await expect(rows.first()).toBeVisible();

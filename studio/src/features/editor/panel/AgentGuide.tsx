@@ -26,7 +26,7 @@ export function HowItWorks({ steps }: { steps: ToolStep[] }) {
             style={{ gridTemplateColumns: '20px minmax(0, 1fr)' }}
             className="grid gap-x-2"
           >
-            <span className="mt-px flex size-5 items-center justify-center rounded-full bg-surface-inset text-sm text-fg-secondary tabular-nums">
+            <span className="flex size-5 items-center justify-center rounded-full bg-surface-inset text-sm text-fg-secondary tabular-nums">
               {i + 1}
             </span>
             <div className="flex flex-col gap-0.5">

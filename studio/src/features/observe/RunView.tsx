@@ -130,7 +130,10 @@ export function RunView({
     const n = Number.parseInt(readString('local', PANE.key) ?? '', 10);
     return Number.isFinite(n) ? n : null;
   });
-  const [debugOpen, setDebugOpen] = useState(() => readString('local', DEBUG_KEY) === '1');
+  // An address that names a logs view opens the drawer; otherwise the last choice holds.
+  const [debugOpen, setDebugOpen] = useState(
+    () => ui.view !== null || readString('local', DEBUG_KEY) === '1',
+  );
   const showDebug = (on: boolean) => {
     setDebugOpen(on);
     writeString('local', DEBUG_KEY, on ? '1' : null);

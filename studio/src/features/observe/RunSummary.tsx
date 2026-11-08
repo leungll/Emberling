@@ -139,7 +139,7 @@ function StepRows({ ctx }: { ctx: DetailContext }) {
               className="group/row flex min-h-row-dense w-full cursor-pointer items-center gap-2 rounded-sm px-1 text-left text-sm hover:bg-surface-hover"
             >
               {el ? <StatusIndicator status={el.status} size="icon" /> : null}
-              <span className="min-w-0 flex-1 truncate text-fg">{s.node.name}</span>
+              <span className="min-w-0 flex-1 wrap-anywhere text-fg">{s.node.name}</span>
               <span className="text-fg-muted tabular-nums">
                 {typeof ms === 'number' ? duration(ms) : ''}
               </span>
