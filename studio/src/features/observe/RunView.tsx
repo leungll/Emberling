@@ -119,7 +119,8 @@ export function RunView({
   };
 
   const [bars, setBars] = useState(storedBars);
-  // Trace rows start open; `closed` holds the rows the reader shut on this page.
+  // The rows the reader opened below the default depth, and the ones they shut, this page.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [logsPct, setLogsPct] = useState(() =>
@@ -172,7 +173,7 @@ export function RunView({
     [model, registry.tools],
   );
   const wait = useMemo(() => (model ? waitInfo(model) : null), [model]);
-  const isOpen = openState(closed);
+  const isOpen = openState(opened, closed);
 
   const select = (id: string, opts: { tab?: DetailTab; drawer?: boolean } = {}) => {
     if (!model?.byId.has(id)) return;
@@ -181,6 +182,7 @@ export function RunView({
     update({ el: id, tab: opts.tab ?? (changed ? null : ui.tab) });
     if (el) {
       const path = new Set(ancestors(el).map((a) => a.id));
+      setOpened((o) => new Set([...o, ...path]));
       setClosed((c) => new Set([...c].filter((x) => !path.has(x))));
     }
     if (opts.drawer !== false && narrow) {
@@ -600,6 +602,12 @@ export function RunView({
                     selectedId={selectedId}
                     isOpen={isOpen}
                     onToggle={(id, open) => {
+                      setOpened((o) => {
+                        const n = new Set(o);
+                        if (open) n.add(id);
+                        else n.delete(id);
+                        return n;
+                      });
                       setClosed((c) => {
                         const n = new Set(c);
                         if (open) n.delete(id);
@@ -608,9 +616,17 @@ export function RunView({
                       });
                     }}
                     onExpandAll={() => {
+                      setOpened(
+                        new Set(
+                          [...model.byId.values()]
+                            .filter((x) => x.children.length)
+                            .map((x) => x.id),
+                        ),
+                      );
                       setClosed(new Set());
                     }}
                     onCollapseAll={() => {
+                      setOpened(new Set());
                       setClosed(
                         new Set(
                           [...model.byId.values()]

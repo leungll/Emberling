@@ -58,11 +58,20 @@ export function visibleRows(
   return { rows, hits: keep };
 }
 
+/** The row kinds that start open: the run, its steps and a folded group of turns. */
+const OPEN_BY_DEFAULT: ReadonlySet<TraceElement['kind']> = new Set(['run', 'step', 'group']);
+
 /**
- * Open rows: every row starts open, including one that arrives later (an Agent's turns load
- * after its step's records), so the viewer never meets a collapsed row they did not close.
- * Only the rows the viewer closed are shut; the run itself cannot be.
+ * Open rows, decided by kind so a row that arrives later (an Agent's turns load after its
+ * step's records) follows the same rule: the run, its steps and groups start open, which
+ * shows every turn row; a turn row and anything below it start closed. The viewer's own
+ * choices override the default, the run itself cannot be closed.
  */
-export function openState(closed: ReadonlySet<string>): (el: TraceElement) => boolean {
-  return (el) => el.kind === 'run' || !closed.has(el.id);
+export function openState(
+  opened: ReadonlySet<string>,
+  closed: ReadonlySet<string>,
+): (el: TraceElement) => boolean {
+  return (el) =>
+    el.kind === 'run' ||
+    (!closed.has(el.id) && (opened.has(el.id) || OPEN_BY_DEFAULT.has(el.kind)));
 }
