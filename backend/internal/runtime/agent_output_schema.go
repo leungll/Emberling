@@ -30,9 +30,15 @@ const (
 )
 
 // strictOutputKeywords are the only keywords an object-form Schema may use.
+// contentMediaType is admitted as a display annotation only: it tells Studio a string
+// member holds media, is stripped by the Adapter before the Provider sees the Schema, and
+// is never enforced against a FINAL value. contentEncoding stays outside the subset.
 var strictOutputKeywords = []string{
-	"additionalProperties", "description", "enum", "items", "properties", "required", "title", "type",
+	"additionalProperties", "contentMediaType", "description", "enum", "items", "properties", "required", "title", "type",
 }
+
+// maxContentMediaTypeLength bounds the contentMediaType annotation, in runes.
+const maxContentMediaTypeLength = 128
 
 // strictOutputTypes are the base types a Schema may declare, alone or in a union with
 // "null".
@@ -161,6 +167,11 @@ func (w *strictOutputWalker) schema(node any, pointer string, depth int) *output
 			return violation
 		}
 	}
+	if value, present := schema["contentMediaType"]; present {
+		if violation := strictOutputContentMediaType(value, baseType, pointerTo(pointer, "contentMediaType")); violation != nil {
+			return violation
+		}
+	}
 
 	if baseType != "object" {
 		for _, keyword := range []string{"additionalProperties", "properties", "required"} {
@@ -282,6 +293,46 @@ func strictOutputEnum(values any, pointer string) *outputSchemaViolation {
 		}
 	}
 	return nil
+}
+
+// strictOutputContentMediaType accepts the display annotation on a string member only,
+// with a value of the form type/subtype: each side a run of letters, digits, `.`, `-` or
+// `+`, the subtype alone may be `*`, no parameters or whitespace, and the whole value at
+// most 128 runes. The value is never repeated in a violation.
+func strictOutputContentMediaType(value any, baseType string, pointer string) *outputSchemaViolation {
+	if baseType != "string" {
+		return &outputSchemaViolation{pointer, `contentMediaType applies only to a Schema of type "string"`}
+	}
+	const rule = "contentMediaType must be a media type of the form type/subtype; the subtype alone may be *"
+	mediaType, isString := value.(string)
+	if !isString {
+		return &outputSchemaViolation{pointer, rule}
+	}
+	if len([]rune(mediaType)) > maxContentMediaTypeLength {
+		return &outputSchemaViolation{pointer, fmt.Sprintf(
+			"contentMediaType must be at most %d characters", maxContentMediaTypeLength)}
+	}
+	primary, subtype, found := strings.Cut(mediaType, "/")
+	if !found || !mediaTypeToken(primary) || (subtype != "*" && !mediaTypeToken(subtype)) {
+		return &outputSchemaViolation{pointer, rule}
+	}
+	return nil
+}
+
+// mediaTypeToken reports whether token is a non-empty run of ASCII letters, digits, `.`,
+// `-` or `+`.
+func mediaTypeToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	for _, r := range token {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '+':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // pointerTo appends one reference token to a JSON Pointer, escaping it as RFC 6901 does.
