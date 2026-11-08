@@ -125,14 +125,15 @@ export function RunView({
     storedPercent(LOGS.key, LOGS.min, LOGS.max, LOGS.fallback),
   );
   // The details pane is the reading area, resized from its left edge like the
-  // Editor's side panel; Trace and Events sit in a debug drawer that starts closed.
+  // Editor's side panel; Trace and Events sit in a drawer under the step map.
   const [paneW, setPaneW] = useState<number | null>(() => {
     const n = Number.parseInt(readString('local', PANE.key) ?? '', 10);
     return Number.isFinite(n) ? n : null;
   });
   // An address that names a logs view opens the drawer; otherwise the last choice holds.
+  // The trace and events drawer starts open; a closed drawer is the reader's remembered choice.
   const [debugOpen, setDebugOpen] = useState(
-    () => ui.view !== null || readString('local', DEBUG_KEY) === '1',
+    () => ui.view !== null || readString('local', DEBUG_KEY) !== '0',
   );
   const showDebug = (on: boolean) => {
     setDebugOpen(on);
