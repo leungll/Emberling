@@ -157,6 +157,12 @@ func RunChecksSpec(artifacts ArtifactTextStore) Spec {
 			Requires:           []domain.FactRequirement{},
 			Records:            []domain.ToolRecordKind{},
 			CountedFailedFacts: mediaCountedFailedFacts(),
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/kind", Title: "Kind"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/ruleVersion", Title: "Rule version"},
+				{Source: domain.FactPointerResult, Pointer: "/durationMs", Title: "Duration (ms)"},
+			},
 		},
 		TaskTypeFor: runChecksTaskType,
 		MapInput:    runChecksInput,

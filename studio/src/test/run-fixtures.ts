@@ -218,6 +218,7 @@ export function agentTrace(
     generationBudget: { maxGenerationCalls: null, generationCallsUsed: 0 },
     workspace: null,
     changeRequests: { items: [], truncated: false },
+    media: { items: [], truncated: false },
   };
 }
 

@@ -402,6 +402,16 @@ type ToolMetadata struct {
 	// never by Tool Name. Empty means the Tool returns no material. Omitted on the wire
 	// when undeclared.
 	MaterialPointer string `json:"materialPointer,omitempty"`
+	// MediaLinks says where a successful result carries each media reference and the URL
+	// that serves it, so the Agent Trace can list the media a call produced and Studio can
+	// match a reference to its URL instead of building one from a value. Empty means the
+	// Tool produces no addressable media. Omitted on the wire when empty.
+	MediaLinks []ToolMediaLink `json:"mediaLinks,omitempty"`
+	// Display lists the members of a call's arguments and result that Studio shows on a run
+	// card, each under a title. Only these members are projected into the Agent Trace; the
+	// whole arguments and result never are. Empty means the call shows no member. Omitted
+	// on the wire when empty.
+	Display []ToolDisplayField `json:"display,omitempty"`
 }
 
 // ToolAuthorizationRisk is the declared risk class of a Tool's calls.
@@ -522,6 +532,8 @@ func (m ToolMetadata) Validate() error {
 			errs = append(errs, errors.New("materialPointer must be a JSON Pointer starting with \"/\""))
 		}
 	}
+	errs = append(errs, validateToolMediaLinks(m.MediaLinks)...)
+	errs = append(errs, validateToolDisplay(m.Display)...)
 
 	if len(errs) == 0 {
 		return nil

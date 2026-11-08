@@ -122,6 +122,14 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 			},
 			Requires:                    []domain.FactRequirement{},
 			CountsTowardGenerationLimit: false,
+			// The patch text is never a run-card member; the card shows what was tested
+			// and how it went.
+			Display: []domain.ToolDisplayField{
+				{Source: domain.FactPointerArguments, Pointer: "/baseCommit", Title: "Base commit"},
+				{Source: domain.FactPointerResult, Pointer: "/passed", Title: "Passed"},
+				{Source: domain.FactPointerResult, Pointer: "/summary/total", Title: "Tests run"},
+				{Source: domain.FactPointerResult, Pointer: "/summary/failed", Title: "Tests failed"},
+			},
 		},
 		Executor: New(baseURL, client),
 	}

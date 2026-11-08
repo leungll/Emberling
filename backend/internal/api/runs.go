@@ -257,8 +257,11 @@ func (d Deps) getNodeRunDetail(w http.ResponseWriter, r *http.Request) {
 // and the Tool Attempt's callback token hash is a Secret: none of them is a field here, so
 // no future change to a domain struct can leak one through this response. The only Tool
 // input and result members shown are the named, type-checked ones
-// agent_trace_tool_view.go selects, and the only State content shown is the Agent Run's
-// latest State value, bounded by the Trace field bound and withheld above it.
+// agent_trace_tool_view.go selects and the ones a Tool's registration declares for
+// display (agent_trace_display_view.go), each bounded and credential-checked; the media
+// list carries only the references and URLs registered media links name in SUCCEEDED
+// results; and the only State content shown is the Agent Run's latest State value,
+// bounded by the Trace field bound and withheld above it.
 
 // agentTraceResponse is the whole projection: the Agent Run, its Turns in persisted
 // order, the execution facts it recorded, and its generation budget.
@@ -274,6 +277,10 @@ type agentTraceResponse struct {
 	// by their identifiers, digests and content Artifact; the rendered content is read
 	// through the Artifact content route, never carried here.
 	ChangeRequests agentTraceChangeRequestsDTO `json:"changeRequests"`
+	// Media lists the media the SUCCEEDED Tool calls produced, by reference, URL and media
+	// type, as the Tools' registered media links declare them; Studio resolves a reference
+	// to a URL only through this list or the Run input's assets, never by building one.
+	Media agentTraceMediaDTO `json:"media"`
 }
 
 // agentTraceChangeRequestsDTO is the bounded change request list. Truncated reports that
@@ -557,6 +564,10 @@ type toolAttemptDTO struct {
 	Deployment   *toolDeploymentDTO   `json:"deployment,omitempty"`
 	Video        *toolVideoDTO        `json:"video,omitempty"`
 	Withheld     []withheldFieldDTO   `json:"withheld,omitempty"`
+	// Shown is the members the Tool's registration declares for display, in declaration
+	// order, each bounded and credential-checked (agent_trace_display_view.go). Absent when
+	// the Tool declares none or none of them is present on this Attempt.
+	Shown []shownFieldDTO `json:"shown,omitempty"`
 }
 
 // agentCallbackBindingDTO is the Tool Attempt's Binding summary: the same three
@@ -594,6 +605,7 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 			projected.Photo, projected.Settings, projected.Review = view.Photo, view.Settings, view.Review
 			projected.Test, projected.Verification, projected.Deployment, projected.Video, projected.Withheld =
 				view.Test, view.Verification, view.Deployment, view.Video, view.Withheld
+			projected.Shown = projectShownFields(attempt, trace.ToolDisplay[attempt.ToolName], maxFieldBytes)
 		}
 	}
 	return agentTraceResponse{
@@ -622,6 +634,7 @@ func toAgentTraceResponse(trace service.AgentTrace, maxFieldBytes int) agentTrac
 		},
 		Workspace:      toAgentWorkspaceDTO(trace.Workspace),
 		ChangeRequests: toAgentTraceChangeRequestsDTO(trace.ChangeRequests),
+		Media:          toAgentTraceMediaDTO(trace.Media, maxFieldBytes),
 	}
 }
 

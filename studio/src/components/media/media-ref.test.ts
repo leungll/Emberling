@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectMedia, mediaMeta, mediaRefOf, mediaSrc, mediaWord } from './media-ref';
+import {
+  collectMedia,
+  mediaMeta,
+  mediaRefOf,
+  mediaSrc,
+  mediaWord,
+  resolveMediaUrl,
+} from './media-ref';
 
 const ARTIFACT_ID = `artifact_${'a'.repeat(32)}`;
 const external = { source: 'EXTERNAL', uri: 'https://images.example/a.png' } as const;
@@ -94,5 +101,78 @@ describe('words', () => {
     expect(mediaWord(mediaRefOf(external)!)).toBe('Linked image');
     expect(mediaMeta(mediaRefOf(artifact)!)).toBe('PNG, 2 KB');
     expect(mediaMeta(mediaRefOf(external)!)).toBe('');
+  });
+});
+
+describe('resolveMediaUrl', () => {
+  const media = {
+    items: [
+      {
+        ref: ARTIFACT_ID,
+        url: '/api/runs/run_1/artifacts/' + ARTIFACT_ID + '/content',
+        mediaType: 'image/png',
+        toolAttemptId: 'ta_1',
+      },
+      {
+        ref: 'https://media.example/v1/videos/vid_1.mp4',
+        url: 'https://media.example/v1/videos/vid_1.mp4',
+        mediaType: 'video/mp4',
+        toolAttemptId: 'ta_2',
+      },
+      {
+        ref: 'sha256:withheld',
+        url: null,
+        mediaType: 'video/mp4',
+        toolAttemptId: 'ta_3',
+        withheld: 'UNSAFE_URL' as const,
+      },
+    ],
+    truncated: false,
+  };
+  const runInput = {
+    brief: 'one warm look',
+    photos: [
+      { assetId: 'asset_1', mediaType: 'image/jpeg', sizeBytes: 10, sha256: 'y' },
+      { assetId: 'sha256:withheld', mediaType: 'image/jpeg', sizeBytes: 10, sha256: 'z' },
+    ],
+  };
+
+  it('resolves a value through the trace media item whose ref equals it', () => {
+    expect(resolveMediaUrl(ARTIFACT_ID, 'image/*', { media, runInput })).toEqual({
+      url: '/api/runs/run_1/artifacts/' + ARTIFACT_ID + '/content',
+      mediaType: 'image/png',
+    });
+    expect(resolveMediaUrl('https://media.example/v1/videos/vid_1.mp4', null, { media })).toEqual({
+      url: 'https://media.example/v1/videos/vid_1.mp4',
+      mediaType: 'video/mp4',
+    });
+  });
+
+  it('falls back to a Run input asset served by the asset content route', () => {
+    expect(resolveMediaUrl('asset_1', 'image/*', { media, runInput })).toEqual({
+      url: '/api/assets/asset_1/content',
+      mediaType: 'image/jpeg',
+    });
+    // The asset's own media type is unknown: the caller's hint stands.
+    expect(
+      resolveMediaUrl('asset_9', 'image/*', { runInput: { photo: { assetId: 'asset_9' } } }),
+    ).toEqual({ url: '/api/assets/asset_9/content', mediaType: 'image/*' });
+    // A JSON text holding the input is read like the input itself.
+    expect(resolveMediaUrl('asset_1', null, { runInput: JSON.stringify(runInput) })).toMatchObject({
+      url: '/api/assets/asset_1/content',
+    });
+  });
+
+  it('resolves nothing for a value no served fact links, and never builds a URL from it', () => {
+    expect(
+      resolveMediaUrl('sha256:' + 'c'.repeat(64), 'video/mp4', { media, runInput }),
+    ).toBeNull();
+    expect(resolveMediaUrl(ARTIFACT_ID, 'image/png', {})).toBeNull();
+    expect(resolveMediaUrl('', 'image/png', { media, runInput })).toBeNull();
+    expect(resolveMediaUrl('/api/assets/asset_1/content', null, { media, runInput })).toBeNull();
+  });
+
+  it('treats a trace item whose url was withheld as unresolved rather than falling back', () => {
+    expect(resolveMediaUrl('sha256:withheld', 'video/mp4', { media, runInput })).toBeNull();
   });
 });

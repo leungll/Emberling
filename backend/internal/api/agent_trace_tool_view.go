@@ -13,11 +13,13 @@ import (
 // ---- Agent Trace: Tool-call facts ----
 //
 // A Tool Attempt's input and result stay out of the Agent Trace as whole documents. The
-// projection below shows only the few members Studio names on a run card, for five Tools,
-// keyed by their stable Tool Name. The Tool registration contract carries no display
-// declaration to drive this generically, so the table is fixed here; it only selects what
-// to show and never feeds a Runtime decision. Every member is type-checked: a Tool
-// registered under one of these names with another schema yields nothing, not a guess.
+// projection below shows the few members Studio's existing cards address by name, for the
+// Tools listed here, keyed by their stable Tool Name. The generic path is the Tool
+// registration's display declaration, projected by agent_trace_display_view.go for any
+// Tool; this table remains for the named card shapes those Tools already have. It only
+// selects what to show and never feeds a Runtime decision. Every member is type-checked: a
+// Tool registered under one of these names with another schema yields nothing, not a
+// guess.
 //
 // Argument members come from the Attempt's input, written once when the Attempt was
 // created. Result members are read only from a SUCCEEDED Attempt, the one status whose

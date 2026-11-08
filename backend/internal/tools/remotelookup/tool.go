@@ -102,6 +102,7 @@ func Registration(baseURL string, client *http.Client) registry.ToolRegistration
 			OutputSchema:  json.RawMessage(outputSchema),
 			SideEffect:    domain.SideEffectPolicy{Kind: domain.SideEffectExternal, Idempotency: domain.IdempotencyUnknown},
 			ExecutionKind: domain.ToolExecutionAsync,
+			Display:       []domain.ToolDisplayField{{Source: domain.FactPointerArguments, Pointer: "/key", Title: "Key"}},
 		},
 		Executor: New(baseURL, client),
 	}
