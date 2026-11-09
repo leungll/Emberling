@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="774" viewBox="0 0 1320 774" role="img" aria-labelledby="title"><title id="title">Vulnerability repair and release Agent: code repair and verification</title><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}</style><defs><marker id="line-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="loop-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><filter id="lift" x="-5%" y="-15%" width="110%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#334155" flood-opacity=".12"/></filter></defs><rect width="1320" height="774" fill="#fff"/>
+<rect x="24" y="14" width="1272" height="120" rx="8" fill="#f1f8fa" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="36" font-size="14" font-weight="700" fill="#0e7490" text-anchor="start">1 Task goal</text>
+<text x="140" y="36" font-size="14" font-weight="650" fill="#1e293b" text-anchor="start">Repair a dependency vulnerability within the authorized scope and deliver a verified change request for approval</text>
+<rect x="44" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="58.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Task input</text>
+<text x="58.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Vulnerability, service, release in scope</text>
+<rect x="356" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="370.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Authorized scope</text>
+<text x="370.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Repository, writable paths, release target</text>
+<rect x="668" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="682.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Deliverable</text>
+<text x="682.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Verified patch and change request</text>
+<rect x="980" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="994.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Acceptance</text>
+<text x="994.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Verification matches the latest patch</text>
+<rect x="24" y="148" width="1272" height="434" rx="8" fill="#eef3fb" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="170" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">2 Scenario design: repair and verification</text>
+<rect x="44" y="188" width="184" height="252" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="60" y="214" font-size="14" font-weight="700" fill="#0f766e" text-anchor="start">Task boundary</text>
+<rect x="238" y="188" width="844" height="252" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="254" y="214" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">Agent Harness</text>
+<rect x="1092" y="188" width="184" height="252" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="1108" y="214" font-size="14" font-weight="700" fill="#7c3aed" text-anchor="start">Runtime</text>
+<text x="366" y="214" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Repair Agent</text>
+<rect x="949.2" y="199" width="118.80000000000001" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="1008.6" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Self-Correction</text>
+<rect x="822.4000000000001" y="199" width="118.80000000000001" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="881.8000000000001" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Least Privilege</text>
+<rect x="729.2" y="199" width="85.2" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="771.8000000000001" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Sandboxing</text>
+<text x="254" y="276" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Execute</text>
+<text x="254" y="380" font-size="13" font-weight="700" fill="#be3455" text-anchor="start">Refuse</text>
+<rect x="314.0" y="242" width="178.0" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="328.0" y="267" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Read context</text>
+<text x="328.0" y="288" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Rules, advisory, code</text>
+<rect x="506.0" y="242" width="178.0" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="520.0" y="267" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Edit code</text>
+<text x="520.0" y="288" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Upgrade and adapt calls</text>
+<rect x="698.0" y="242" width="178.0" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="712.0" y="267" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Verify patch</text>
+<text x="712.0" y="288" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Isolated tests and scan</text>
+<rect x="890.0" y="242" width="178.0" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="904.0" y="267" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Create change request</text>
+<text x="904.0" y="288" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Impact and rollback plan</text>
+<path d="M492.0 271.0H506.0" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<path d="M684.0 271.0H698.0" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<path d="M876.0 271.0H890.0" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<rect x="506.0" y="346" width="178.0" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="520.0" y="371" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Out-of-scope write</text>
+<text x="520.0" y="392" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Refused before execution</text>
+<rect x="698.0" y="346" width="178.0" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="712.0" y="371" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Verification failed</text>
+<text x="712.0" y="392" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Failed test or stale patch</text>
+<rect x="890.0" y="346" width="178.0" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="904.0" y="371" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">No valid verification</text>
+<text x="904.0" y="392" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Change request refused</text>
+<path d="M979.0 346V323H595.0M787.0 346V323M595.0 346V301" fill="none" stroke="#2563eb" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#loop-head)"/>
+<rect x="794.5" y="314" width="177.00000000000003" height="18" rx="4" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="883.0" y="327.5" font-size="12.5" font-weight="500" fill="#536479" text-anchor="middle">Reason returns to Agent</text>
+<text x="254" y="429" font-size="12.5" font-weight="700" fill="#2563eb" text-anchor="start">Context</text>
+<text x="328.0" y="429" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Materials read and decisions recorded each turn</text>
+<rect x="52" y="242" width="168" height="58" rx="6" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="66" y="267" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Repair Task</text>
+<text x="66" y="288" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Vulnerability, service</text>
+<rect x="52" y="346" width="168" height="58" rx="6" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="66" y="371" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Authorized scope</text>
+<text x="66" y="392" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Set before the task</text>
+<rect x="1100" y="242" width="168" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="1114" y="267" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Action authorization</text>
+<text x="1114" y="288" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Pre-execution check</text>
+<rect x="1100" y="346" width="168" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="1114" y="371" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Evidence binding</text>
+<text x="1114" y="392" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Tied to current patch</text>
+<text x="44" y="480" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Difficulties</text>
+<text x="44" y="509" font-size="13" font-weight="700" fill="#2563eb" text-anchor="start">Design</text>
+<text x="128.0" y="480" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Out-of-scope writes</text>
+<text x="128.0" y="509" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Check paths before writes</text>
+<text x="324.0" y="480" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Decision basis is lost</text>
+<text x="324.0" y="509" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Save materials per turn</text>
+<text x="520.0" y="480" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Passing tests is not a fix</text>
+<text x="520.0" y="509" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Tests, scan, dependency list</text>
+<text x="716.0" y="480" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Code may change afterward</text>
+<text x="716.0" y="509" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">New patch version per write</text>
+<text x="912.0" y="480" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Approval may see old patch</text>
+<text x="912.0" y="509" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Evidence bound to one patch</text>
+<text x="1108.0" y="480" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Refusal must not end task</text>
+<text x="1108.0" y="509" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Reason returns to Agent</text>
+<rect x="44" y="526" width="1232" height="40" rx="6" fill="#fceef2" stroke="#fceef2" stroke-width="1"/>
+<text x="58" y="551" font-size="13" font-weight="700" fill="#be3455" text-anchor="start">Open problems</text>
+<text x="172.0" y="551" font-size="12.5" font-weight="500" fill="#be3455" text-anchor="start">Disposable verification environment; no long-running Sandbox</text>
+<text x="717.0" y="551" font-size="12.5" font-weight="500" fill="#be3455" text-anchor="start">Scope set before the task; Agent cannot request more</text>
+<rect x="24" y="596" width="1272" height="164" rx="8" fill="#e9edf4" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="618" font-size="14" font-weight="700" fill="#2f3b52" text-anchor="start">3 Emberling execution foundation: addressing each difficulty</text>
+<text x="44" y="672" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Capability</text>
+<rect x="116" y="636" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="128.0" y="661" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Action authorization</text>
+<text x="128.0" y="682" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Refused if out of scope</text>
+<rect x="312" y="636" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="324.0" y="661" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Context Manifest</text>
+<text x="324.0" y="682" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Queryable turn by turn</text>
+<rect x="508" y="636" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="520.0" y="661" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Isolated verification</text>
+<text x="520.0" y="682" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Container; Run suspends</text>
+<rect x="704" y="636" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="716.0" y="661" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Patch versions</text>
+<text x="716.0" y="682" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Digest per version</text>
+<rect x="900" y="636" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="912.0" y="661" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Evidence binding</text>
+<text x="912.0" y="682" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Void after code change</text>
+<rect x="1096" y="636" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="1108.0" y="661" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Definite refusal</text>
+<text x="1108.0" y="682" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Not executed; can revise</text>
+<rect x="44" y="708" width="1232" height="38" rx="6" fill="#d9e0ea" stroke="#d9e0ea" stroke-width="1"/>
+<text x="58" y="732" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Durable Execution Runtime</text>
+<text x="408.8333333333333" y="732" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Durable state</text>
+<text x="566.5" y="732" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Unified scheduling</text>
+<text x="724.1666666666666" y="732" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Async waits</text>
+<text x="881.8333333333333" y="732" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Crash recovery</text>
+<text x="1039.5" y="732" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Result confirmation</text>
+<text x="1197.1666666666665" y="732" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Transactional commit</text>
+</svg>

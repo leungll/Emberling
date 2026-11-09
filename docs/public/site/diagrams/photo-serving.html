@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI image generation service</title>
+<style>
+:root{--page:#f3f5f8;--bar:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;--hover:#eef2f7;--dot:#d5dce6;--sheet-edge:#dbe2ec}
+:root[data-theme=dark]{--page:#10141b;--bar:#171c24;--ink:#e6edf3;--muted:#8b98a9;--line:#2a323d;--hover:#232a35;--dot:#262e39;--sheet-edge:#2a323d}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--page);color:var(--ink);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+.heading{min-width:0;flex:1}
+h1{margin:0;font-size:15px;font-weight:650}
+.heading p{margin:1px 0 0;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tools{display:flex;align-items:center;gap:2px;flex:none}
+button{height:30px;min-width:30px;padding:0 8px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;font-weight:550;cursor:pointer}
+button:hover{background:var(--hover)}
+button:focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+#zoom-level{min-width:52px;font-variant-numeric:tabular-nums}
+.sep{width:1px;height:18px;margin:0 6px;background:var(--line)}
+#canvas{position:relative;flex:1;min-height:0;overflow:hidden;cursor:grab;touch-action:none;background-color:var(--page);background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:18px 18px}
+#canvas.dragging{cursor:grabbing}
+footer{padding:6px 16px;background:var(--bar);border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+@media (max-width:640px){.heading p,.wide{display:none}header{gap:8px;padding:8px}}
+</style>
+<script>
+(function(){var saved=null,asked=new URLSearchParams(location.search).get('theme');
+try{saved=localStorage.getItem('diagram-theme')}catch(e){}
+var dark=matchMedia('(prefers-color-scheme: dark)').matches;
+var theme=asked==='light'||asked==='dark'?asked:saved==='light'||saved==='dark'?saved:dark?'dark':'light';
+document.documentElement.dataset.theme=theme})();
+</script>
+</head>
+<body>
+<header>
+  <div class="heading"><h1>AI image generation service</h1><p>Request handling in production</p></div>
+  <div class="tools">
+    <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (-)">−</button>
+    <button id="zoom-level" type="button" aria-label="Reset to 100%" title="Reset to 100%">100%</button>
+    <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (+)">+</button>
+    <button id="fit" type="button" title="Fit to window (0)">Fit</button>
+    <span class="sep"></span>
+    <button id="theme" type="button" class="wide">Theme</button>
+    <button id="fullscreen" type="button" title="Fullscreen (F)">Fullscreen</button>
+  </div>
+</header>
+<main id="canvas"></main>
+<template id="figure"><style>svg{display:block;width:100%;height:100%;user-select:none;-webkit-user-select:none}.viewer-sheet{fill:#fff;stroke:#dbe2ec}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 708" role="img" aria-labelledby="title"><rect width="1320" height="708" rx="10" class="viewer-sheet"/><title id="title">AI image service in production: requests across waits and failures</title><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}</style><defs><marker id="line-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="loop-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><filter id="lift" x="-5%" y="-15%" width="110%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#334155" flood-opacity=".12"/></filter></defs><rect width="1320" height="708" fill="#fff"/>
+<rect x="24" y="14" width="1272" height="120" rx="8" fill="#f1f8fa" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="36" font-size="14" font-weight="700" fill="#0e7490" text-anchor="start">1 Task goal</text>
+<text x="140" y="36" font-size="14" font-weight="650" fill="#1e293b" text-anchor="start">Publish the tuned template as an online service that processes user photos and can be updated at any time</text>
+<rect x="44" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="58.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">User request</text>
+<text x="58.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Upload a photo, fetch result by task ID</text>
+<rect x="356" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="370.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Operating conditions</text>
+<text x="370.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">1–2 minutes per image, each one billed</text>
+<rect x="668" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="682.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Resource limits</text>
+<text x="682.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Limited concurrency, bursty requests</text>
+<rect x="980" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="994.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Acceptance</text>
+<text x="994.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">No lost requests, no repeat generation</text>
+<rect x="24" y="148" width="1272" height="368" rx="8" fill="#eef3fb" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="170" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">2 Scenario design: production service</text>
+<rect x="44" y="188" width="1232" height="240" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="60" y="214" font-size="14" font-weight="700" fill="#0f766e" text-anchor="start">Serving Workflow</text>
+<text x="192" y="214" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">One Run per request: suspends after submit, resumes on result</text>
+<text x="1150.0" y="215" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">External service</text>
+<rect x="1130.0" y="204" width="14" height="12" rx="3" fill="#e6e9ee" stroke="#a3adba" stroke-width="1"/>
+<text x="1063.0" y="215" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Runtime</text>
+<rect x="1043.0" y="204" width="14" height="12" rx="3" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="934.0" y="215" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Workflow node</text>
+<rect x="914.0" y="204" width="14" height="12" rx="3" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="60" y="274" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Submit</text>
+<text x="60" y="384" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Return</text>
+<rect x="116.0" y="240" width="176.0" height="58" rx="6" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="130.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">User request</text>
+<text x="130.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Concurrent submits</text>
+<rect x="310.0" y="240" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="324.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Bind version</text>
+<text x="324.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Old and new coexist</text>
+<rect x="504.0" y="240" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="518.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Queue</text>
+<text x="518.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Waits above the limit</text>
+<rect x="698.0" y="240" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="712.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Provider Concurrency</text>
+<text x="712.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Accurate after crashes</text>
+<rect x="892.0" y="240" width="176.0" height="58" rx="6" fill="#e6e9ee" stroke="#a3adba" stroke-width="1"/>
+<text x="906.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Task Gateway</text>
+<text x="906.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Converts to async task</text>
+<rect x="1086.0" y="240" width="176.0" height="58" rx="6" fill="#e6e9ee" stroke="#a3adba" stroke-width="1"/>
+<text x="1100.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Image model</text>
+<text x="1100.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">1–2 minutes per image</text>
+<path d="M292.0 269.0H310.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M486.0 269.0H504.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M680.0 269.0H698.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M874.0 269.0H892.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M1068.0 269.0H1086.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<rect x="116.0" y="350" width="564.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="130.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Callback</text>
+<text x="130.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Notifies on completion</text>
+<text x="324.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Polling</text>
+<text x="324.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Queries task status</text>
+<path d="M301.0 360V398" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<text x="518.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Reconciliation</text>
+<text x="518.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Recovers tasks on restart</text>
+<path d="M495.0 360V398" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<rect x="698.0" y="350" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="712.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Unified Resume</text>
+<text x="712.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Only one result applies</text>
+<rect x="892.0" y="350" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="906.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Write result</text>
+<text x="906.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Frees slot, records cost</text>
+<rect x="1086.0" y="350" width="176.0" height="58" rx="6" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="1100.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Return image</text>
+<text x="1100.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Media Output</text>
+<path d="M680.0 379.0H698.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M874.0 379.0H892.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M1068.0 379.0H1085.0" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<path d="M1174.0 298V316Q1174.0 324 1166.0 324H406.0Q398.0 324 398.0 332V349" fill="none" stroke="#2563eb" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#loop-head)"/>
+<rect x="648.5" y="315" width="275.00000000000006" height="18" rx="4" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="786.0" y="328.5" font-size="12.5" font-weight="500" fill="#536479" text-anchor="middle">Run suspends until the result returns</text>
+<text x="44" y="468" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Difficulties</text>
+<text x="44" y="497" font-size="13" font-weight="700" fill="#2563eb" text-anchor="start">Design</text>
+<text x="128.0" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Duplicate user submissions</text>
+<text x="128.0" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Idempotency Key detects repeats</text>
+<text x="363.2" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Crash or lost response on submit</text>
+<text x="363.2" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Takes over tasks after restart</text>
+<text x="598.4" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Lost or duplicate Callback</text>
+<text x="598.4" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Three paths, unified resume path</text>
+<text x="833.5999999999999" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Slots miscounted on crash</text>
+<text x="833.5999999999999" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Slot use commits with state</text>
+<text x="1068.8" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Template updated mid-run</text>
+<text x="1068.8" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Bind version at Run creation</text>
+<rect x="24" y="530" width="1272" height="164" rx="8" fill="#e9edf4" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="552" font-size="14" font-weight="700" fill="#2f3b52" text-anchor="start">3 Emberling execution foundation: addressing each difficulty</text>
+<text x="44" y="606" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Capability</text>
+<rect x="116" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="128.0" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Idempotent submission</text>
+<text x="128.0" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Returns the original Run</text>
+<rect x="351.2" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="363.2" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">External task recovery</text>
+<text x="363.2" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">No duplicate external calls</text>
+<rect x="586.4" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="598.4" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Unified Resume</text>
+<text x="598.4" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Only one result applies</text>
+<rect x="821.6" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="833.5999999999999" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Capacity Scheduling</text>
+<text x="833.5999999999999" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">No leaks, no over-admission</text>
+<rect x="1056.8" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="1068.8" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Version binding</text>
+<text x="1068.8" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Finishes on submitted version</text>
+<rect x="44" y="642" width="1232" height="38" rx="6" fill="#d9e0ea" stroke="#d9e0ea" stroke-width="1"/>
+<text x="58" y="666" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Durable Execution Runtime</text>
+<text x="408.8333333333333" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Durable state</text>
+<text x="566.5" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Unified scheduling</text>
+<text x="724.1666666666666" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Async waits</text>
+<text x="881.8333333333333" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Crash recovery</text>
+<text x="1039.5" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Result confirmation</text>
+<text x="1197.1666666666665" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Transactional commit</text>
+</svg></template>
+<footer>Drag to pan. Pinch or Ctrl + scroll to zoom</footer>
+<script>
+(function(){
+var canvas=document.getElementById('canvas'),level=document.getElementById('zoom-level');
+// The shadow root keeps a figure's embedded page styles from restyling this page, and the reverse.
+var shadow=canvas.attachShadow({mode:'open'});
+shadow.appendChild(document.getElementById('figure').content);
+var svg=shadow.querySelector('svg');
+// Only the sheet is the figure's background; some figures also paint their root element.
+svg.style.setProperty('background','transparent','important');
+var content=svg.viewBox.baseVal,W=content.width,H=content.height;
+var MIN=0.15,MAX=5,scale=1,cx=W/2,cy=H/2,pointers=new Map(),pinch=null;
+
+function apply(){
+  var cw=canvas.clientWidth,ch=canvas.clientHeight,vw=cw/scale,vh=ch/scale;
+  // Keep the sheet reachable: its centre may not leave the visible area by more than half a sheet.
+  var rx=Math.max(W/2,vw/2),ry=Math.max(H/2,vh/2);
+  cx=Math.min(W/2+rx,Math.max(W/2-rx,cx));
+  cy=Math.min(H/2+ry,Math.max(H/2-ry,cy));
+  svg.setAttribute('viewBox',(cx-vw/2)+' '+(cy-vh/2)+' '+vw+' '+vh);
+  level.textContent=Math.round(scale*100)+'%';
+}
+function point(x,y){var r=canvas.getBoundingClientRect();return{x:x-r.left,y:y-r.top}}
+function zoomAt(next,p){
+  next=Math.min(MAX,Math.max(MIN,next));
+  var cw=canvas.clientWidth,ch=canvas.clientHeight;
+  var ux=cx+(p.x-cw/2)/scale,uy=cy+(p.y-ch/2)/scale;
+  cx=ux-(p.x-cw/2)/next;cy=uy-(p.y-ch/2)/next;scale=next;apply();
+}
+function middle(){return{x:canvas.clientWidth/2,y:canvas.clientHeight/2}}
+function fit(){
+  var pad=28;
+  scale=Math.min(MAX,Math.max(MIN,Math.min((canvas.clientWidth-2*pad)/W,(canvas.clientHeight-2*pad)/H)));
+  cx=W/2;cy=H/2;apply();
+}
+function pinchState(){var v=[...pointers.values()];return{d:Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y),x:(v[0].x+v[1].x)/2,y:(v[0].y+v[1].y)/2}}
+
+canvas.addEventListener('wheel',function(e){
+  e.preventDefault();
+  if(e.ctrlKey||e.metaKey){zoomAt(scale*Math.exp(-e.deltaY*0.01),point(e.clientX,e.clientY));return}
+  cx+=e.deltaX/scale;cy+=e.deltaY/scale;apply();
+},{passive:false});
+canvas.addEventListener('pointerdown',function(e){
+  canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,point(e.clientX,e.clientY));
+  canvas.classList.add('dragging');pinch=pointers.size===2?pinchState():null;
+});
+canvas.addEventListener('pointermove',function(e){
+  var last=pointers.get(e.pointerId);if(!last)return;
+  var now=point(e.clientX,e.clientY);pointers.set(e.pointerId,now);
+  if(pointers.size===2){
+    var state=pinchState();
+    if(pinch&&pinch.d>0){cx-=(state.x-pinch.x)/scale;cy-=(state.y-pinch.y)/scale;zoomAt(scale*state.d/pinch.d,state)}
+    pinch=state;return;
+  }
+  if(pointers.size===1){cx-=(now.x-last.x)/scale;cy-=(now.y-last.y)/scale;apply()}
+});
+function release(e){pointers.delete(e.pointerId);pinch=pointers.size===2?pinchState():null;if(!pointers.size)canvas.classList.remove('dragging')}
+canvas.addEventListener('pointerup',release);
+canvas.addEventListener('pointercancel',release);
+
+document.getElementById('zoom-in').onclick=function(){zoomAt(scale*1.25,middle())};
+document.getElementById('zoom-out').onclick=function(){zoomAt(scale/1.25,middle())};
+level.onclick=function(){zoomAt(1,middle())};
+document.getElementById('fit').onclick=fit;
+document.getElementById('theme').onclick=function(){
+  var next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('diagram-theme',next)}catch(e){}
+};
+function toggleFullscreen(){
+  if(document.fullscreenElement){document.exitFullscreen();return}
+  if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();
+}
+document.getElementById('fullscreen').onclick=toggleFullscreen;
+document.addEventListener('keydown',function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.key==='+'||e.key==='=')zoomAt(scale*1.25,middle());
+  else if(e.key==='-')zoomAt(scale/1.25,middle());
+  else if(e.key==='0')fit();
+  else if(e.key==='f'||e.key==='F')toggleFullscreen();
+});
+new ResizeObserver(apply).observe(canvas);
+fit();
+})();
+</script>
+</body>
+</html>

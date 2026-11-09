@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="84" viewBox="0 0 760 84" role="img" aria-label="AI-Native Runtime / Durable Orchestration / Long-Horizon Agents / Human–Agent Collaboration / Verifiable Delivery / Full-Stack Agent Infra">
+<rect x="95.5" y="4.5" width="167" height="33" rx="16.5" fill="none" stroke="#d5dbe4"/>
+<circle cx="113.0" cy="21.0" r="3.5" fill="#c8602f"/>
+<text x="125.0" y="26" fill="#36445a" font-family="-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Arial,sans-serif" font-size="13" font-weight="500">AI-Native Runtime</text>
+<rect x="275.5" y="4.5" width="195" height="33" rx="16.5" fill="none" stroke="#d5dbe4"/>
+<circle cx="293.0" cy="21.0" r="3.5" fill="#c8602f"/>
+<text x="305.0" y="26" fill="#36445a" font-family="-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Arial,sans-serif" font-size="13" font-weight="500">Durable Orchestration</text>
+<rect x="483.5" y="4.5" width="181" height="33" rx="16.5" fill="none" stroke="#d5dbe4"/>
+<circle cx="501.0" cy="21.0" r="3.5" fill="#c8602f"/>
+<text x="513.0" y="26" fill="#36445a" font-family="-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Arial,sans-serif" font-size="13" font-weight="500">Long-Horizon Agents</text>
+<rect x="63.5" y="46.5" width="224" height="33" rx="16.5" fill="none" stroke="#d5dbe4"/>
+<circle cx="81.0" cy="63.0" r="3.5" fill="#c8602f"/>
+<text x="93.0" y="68" fill="#36445a" font-family="-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Arial,sans-serif" font-size="13" font-weight="500">Human–Agent Collaboration</text>
+<rect x="300.5" y="46.5" width="181" height="33" rx="16.5" fill="none" stroke="#d5dbe4"/>
+<circle cx="318.0" cy="63.0" r="3.5" fill="#c8602f"/>
+<text x="330.0" y="68" fill="#36445a" font-family="-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Arial,sans-serif" font-size="13" font-weight="500">Verifiable Delivery</text>
+<rect x="494.5" y="46.5" width="202" height="33" rx="16.5" fill="none" stroke="#d5dbe4"/>
+<circle cx="512.0" cy="63.0" r="3.5" fill="#c8602f"/>
+<text x="524.0" y="68" fill="#36445a" font-family="-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Arial,sans-serif" font-size="13" font-weight="500">Full-Stack Agent Infra</text>
+</svg>
