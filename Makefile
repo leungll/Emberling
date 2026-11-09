@@ -203,13 +203,14 @@ lint-go:
 # comment. CLAUDE.md and README files are excluded because they describe the rule and the
 # docs/private/ directory. The initial migration is excluded because shared migrations are
 # immutable: the historical comments it already shipped with are grandfathered, and any
-# new migration is checked like every other file.
+# new migration is checked like every other file. Binary files are skipped: a citation is
+# text, and the bytes of an image or video can match the pattern by chance.
 DOC_REF_PATTERN := (^|[^[:alnum:]_])[0-9]{2} §|§[0-9]|(^|[^[:alnum:]_])[0-9]{2}-[a-z-]+\.md([^[:alnum:]_]|$$)|(^|[^[:alnum:]_])ENGINEERIN[G](\.md)?([^[:alnum:]_]|$$)|docs/(private/)?AGENTS\.md|(^|[^[:alnum:]_])([Ii]nvariants?|[Rr]ules?) \#?[0-9]|(^|[^[:alnum:]_])M[0-9]+ slice
 
 check-doc-refs:
 	@echo "==> source: design document citations"
 	@status=0; \
-	git grep -nE '$(DOC_REF_PATTERN)' -- . \
+	git grep -InE '$(DOC_REF_PATTERN)' -- . \
 		':(exclude)docs/private' ':(exclude)CLAUDE.md' ':(exclude,glob)**/README*.md' \
 		':(exclude)backend/migrations/00001_initial.sql' \
 		|| status=$$?; \
