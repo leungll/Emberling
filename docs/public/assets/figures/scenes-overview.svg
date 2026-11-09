@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="280" viewBox="0 0 880 280" role="img" aria-labelledby="title"><title id="title">Focus and capabilities of three scenarios: AI image generation service, short-video editing Agent, vulnerability repair and release</title><style>
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}
+.card{fill:#fff;stroke:#e4e7ec}
+.rule{stroke:#eceff3}
+.arrow{stroke:#a3adba;fill:none}
+.name{fill:#1f2937;font-size:15px;font-weight:650}
+.label{fill:#8590a0;font-size:11.5px;font-weight:500}
+.focus{fill:#1f2937;font-size:13px;font-weight:600}
+.item{fill:#55606f;font-size:12.5px;font-weight:450}
+.gold{fill:#b7791f}.violet{fill:#7c3aed}.rose{fill:#be3455}
+@media (prefers-color-scheme:dark){
+.card{fill:#161b22;stroke:#30363d}
+.rule{stroke:#262c35}
+.arrow{stroke:#6e7681}
+.name,.focus{fill:#e6edf3}
+.label{fill:#7d8590}
+.item{fill:#aab3bd}
+.gold{fill:#d9a94f}.violet{fill:#a78bfa}.rose{fill:#f0708f}
+}
+</style>
+<rect x="1" y="1" width="275.333" height="278" rx="10" class="card"/>
+<circle cx="24.5" cy="29" r="3.5" class="gold"/>
+<text x="36" y="34.5" class="name">AI image generation service</text>
+<text x="21" y="64" class="label">Focus</text>
+<text x="21" y="86" class="focus">Long-running async tasks</text>
+<text x="21" y="108" class="focus">Capacity and concurrency control</text>
+<text x="21" y="130" class="focus">Failure recovery</text>
+<path d="M21 147.5H256.333" class="rule"/>
+<text x="21" y="171" class="label">Capabilities</text>
+<circle cx="23" cy="188.5" r="2" class="gold"/>
+<text x="33" y="193" class="item">Agent and Workflow together</text>
+<circle cx="23" cy="209.5" r="2" class="gold"/>
+<text x="33" y="214" class="item">Template release, version split</text>
+<circle cx="23" cy="230.5" r="2" class="gold"/>
+<text x="33" y="235" class="item">Capacity-aware scheduling</text>
+<circle cx="23" cy="251.5" r="2" class="gold"/>
+<text x="33" y="256" class="item">Resume after a crash</text>
+<path d="M283.333 29.5H295.333M291.333 25.5 295.333 29.5 291.333 33.5" class="arrow"/>
+<rect x="302.333" y="1" width="275.333" height="278" rx="10" class="card"/>
+<circle cx="325.833" cy="29" r="3.5" class="violet"/>
+<text x="337.333" y="34.5" class="name">Short-video editing Agent</text>
+<text x="322.333" y="64" class="label">Focus</text>
+<text x="322.333" y="86" class="focus">Agentic Workflow</text>
+<text x="322.333" y="108" class="focus">Quality evaluation</text>
+<text x="322.333" y="130" class="focus">Continuous improvement</text>
+<path d="M322.333 147.5H557.667" class="rule"/>
+<text x="322.333" y="171" class="label">Capabilities</text>
+<circle cx="324.333" cy="188.5" r="2" class="violet"/>
+<text x="334.333" y="193" class="item">Multi-step Agent orchestration</text>
+<circle cx="324.333" cy="209.5" r="2" class="violet"/>
+<text x="334.333" y="214" class="item">Context management</text>
+<circle cx="324.333" cy="230.5" r="2" class="violet"/>
+<text x="334.333" y="235" class="item">System checks and content review</text>
+<circle cx="324.333" cy="251.5" r="2" class="violet"/>
+<text x="334.333" y="256" class="item">Offline evaluation and LLM Judge</text>
+<path d="M584.667 29.5H596.667M592.667 25.5 596.667 29.5 592.667 33.5" class="arrow"/>
+<rect x="603.667" y="1" width="275.333" height="278" rx="10" class="card"/>
+<circle cx="627.167" cy="29" r="3.5" class="rose"/>
+<text x="638.667" y="34.5" class="name">Vulnerability repair and release</text>
+<text x="623.667" y="64" class="label">Focus</text>
+<text x="623.667" y="86" class="focus">Controlled change through release</text>
+<text x="623.667" y="108" class="focus">Consistent delivery evidence</text>
+<text x="623.667" y="130" class="focus">Verifiable release results</text>
+<path d="M623.667 147.5H859" class="rule"/>
+<text x="623.667" y="171" class="label">Capabilities</text>
+<circle cx="625.667" cy="188.5" r="2" class="rose"/>
+<text x="635.667" y="193" class="item">Isolated execution environment</text>
+<circle cx="625.667" cy="209.5" r="2" class="rose"/>
+<text x="635.667" y="214" class="item">Action authorization, human approval</text>
+<circle cx="625.667" cy="230.5" r="2" class="rose"/>
+<text x="635.667" y="235" class="item">Release result reconciliation</text>
+<circle cx="625.667" cy="251.5" r="2" class="rose"/>
+<text x="635.667" y="256" class="item">Goal-based completion check</text>
+</svg>

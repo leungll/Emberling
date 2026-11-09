@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="708" viewBox="0 0 1320 708" role="img" aria-labelledby="title"><title id="title">AI image service in production: requests across waits and failures</title><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}</style><defs><marker id="line-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="loop-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><filter id="lift" x="-5%" y="-15%" width="110%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#334155" flood-opacity=".12"/></filter></defs><rect width="1320" height="708" fill="#fff"/>
+<rect x="24" y="14" width="1272" height="120" rx="8" fill="#f1f8fa" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="36" font-size="14" font-weight="700" fill="#0e7490" text-anchor="start">1 Task goal</text>
+<text x="140" y="36" font-size="14" font-weight="650" fill="#1e293b" text-anchor="start">Publish the tuned template as an online service that processes user photos and can be updated at any time</text>
+<rect x="44" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="58.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">User request</text>
+<text x="58.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Upload a photo, fetch result by task ID</text>
+<rect x="356" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="370.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Operating conditions</text>
+<text x="370.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">1–2 minutes per image, each one billed</text>
+<rect x="668" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="682.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Resource limits</text>
+<text x="682.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Limited concurrency, bursty requests</text>
+<rect x="980" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="994.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Acceptance</text>
+<text x="994.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">No lost requests, no repeat generation</text>
+<rect x="24" y="148" width="1272" height="368" rx="8" fill="#eef3fb" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="170" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">2 Scenario design: production service</text>
+<rect x="44" y="188" width="1232" height="240" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="60" y="214" font-size="14" font-weight="700" fill="#0f766e" text-anchor="start">Serving Workflow</text>
+<text x="192" y="214" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">One Run per request: suspends after submit, resumes on result</text>
+<text x="1150.0" y="215" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">External service</text>
+<rect x="1130.0" y="204" width="14" height="12" rx="3" fill="#e6e9ee" stroke="#a3adba" stroke-width="1"/>
+<text x="1063.0" y="215" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Runtime</text>
+<rect x="1043.0" y="204" width="14" height="12" rx="3" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="934.0" y="215" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Workflow node</text>
+<rect x="914.0" y="204" width="14" height="12" rx="3" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="60" y="274" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Submit</text>
+<text x="60" y="384" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Return</text>
+<rect x="116.0" y="240" width="176.0" height="58" rx="6" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="130.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">User request</text>
+<text x="130.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Concurrent submits</text>
+<rect x="310.0" y="240" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="324.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Bind version</text>
+<text x="324.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Old and new coexist</text>
+<rect x="504.0" y="240" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="518.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Queue</text>
+<text x="518.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Waits above the limit</text>
+<rect x="698.0" y="240" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="712.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Provider Concurrency</text>
+<text x="712.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Accurate after crashes</text>
+<rect x="892.0" y="240" width="176.0" height="58" rx="6" fill="#e6e9ee" stroke="#a3adba" stroke-width="1"/>
+<text x="906.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Task Gateway</text>
+<text x="906.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Converts to async task</text>
+<rect x="1086.0" y="240" width="176.0" height="58" rx="6" fill="#e6e9ee" stroke="#a3adba" stroke-width="1"/>
+<text x="1100.0" y="265" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Image model</text>
+<text x="1100.0" y="286" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">1–2 minutes per image</text>
+<path d="M292.0 269.0H310.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M486.0 269.0H504.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M680.0 269.0H698.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M874.0 269.0H892.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M1068.0 269.0H1086.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<rect x="116.0" y="350" width="564.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="130.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Callback</text>
+<text x="130.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Notifies on completion</text>
+<text x="324.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Polling</text>
+<text x="324.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Queries task status</text>
+<path d="M301.0 360V398" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<text x="518.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Reconciliation</text>
+<text x="518.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Recovers tasks on restart</text>
+<path d="M495.0 360V398" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<rect x="698.0" y="350" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="712.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Unified Resume</text>
+<text x="712.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Only one result applies</text>
+<rect x="892.0" y="350" width="176.0" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="906.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Write result</text>
+<text x="906.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Frees slot, records cost</text>
+<rect x="1086.0" y="350" width="176.0" height="58" rx="6" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="1100.0" y="375" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Return image</text>
+<text x="1100.0" y="396" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Media Output</text>
+<path d="M680.0 379.0H698.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M874.0 379.0H892.0" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M1068.0 379.0H1085.0" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<path d="M1174.0 298V316Q1174.0 324 1166.0 324H406.0Q398.0 324 398.0 332V349" fill="none" stroke="#2563eb" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#loop-head)"/>
+<rect x="648.5" y="315" width="275.00000000000006" height="18" rx="4" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="786.0" y="328.5" font-size="12.5" font-weight="500" fill="#536479" text-anchor="middle">Run suspends until the result returns</text>
+<text x="44" y="468" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Difficulties</text>
+<text x="44" y="497" font-size="13" font-weight="700" fill="#2563eb" text-anchor="start">Design</text>
+<text x="128.0" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Duplicate user submissions</text>
+<text x="128.0" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Idempotency Key detects repeats</text>
+<text x="363.2" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Crash or lost response on submit</text>
+<text x="363.2" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Takes over tasks after restart</text>
+<text x="598.4" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Lost or duplicate Callback</text>
+<text x="598.4" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Three paths, unified resume path</text>
+<text x="833.5999999999999" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Slots miscounted on crash</text>
+<text x="833.5999999999999" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Slot use commits with state</text>
+<text x="1068.8" y="468" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Template updated mid-run</text>
+<text x="1068.8" y="497" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Bind version at Run creation</text>
+<rect x="24" y="530" width="1272" height="164" rx="8" fill="#e9edf4" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="552" font-size="14" font-weight="700" fill="#2f3b52" text-anchor="start">3 Emberling execution foundation: addressing each difficulty</text>
+<text x="44" y="606" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Capability</text>
+<rect x="116" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="128.0" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Idempotent submission</text>
+<text x="128.0" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Returns the original Run</text>
+<rect x="351.2" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="363.2" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">External task recovery</text>
+<text x="363.2" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">No duplicate external calls</text>
+<rect x="586.4" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="598.4" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Unified Resume</text>
+<text x="598.4" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Only one result applies</text>
+<rect x="821.6" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="833.5999999999999" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Capacity Scheduling</text>
+<text x="833.5999999999999" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">No leaks, no over-admission</text>
+<rect x="1056.8" y="570" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="1068.8" y="595" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Version binding</text>
+<text x="1068.8" y="616" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Finishes on submitted version</text>
+<rect x="44" y="642" width="1232" height="38" rx="6" fill="#d9e0ea" stroke="#d9e0ea" stroke-width="1"/>
+<text x="58" y="666" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Durable Execution Runtime</text>
+<text x="408.8333333333333" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Durable state</text>
+<text x="566.5" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Unified scheduling</text>
+<text x="724.1666666666666" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Async waits</text>
+<text x="881.8333333333333" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Crash recovery</text>
+<text x="1039.5" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Result confirmation</text>
+<text x="1197.1666666666665" y="666" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Transactional commit</text>
+</svg>

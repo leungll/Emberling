@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Video editing Agent</title>
+<style>
+:root{--page:#f3f5f8;--bar:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;--hover:#eef2f7;--dot:#d5dce6;--sheet-edge:#dbe2ec}
+:root[data-theme=dark]{--page:#10141b;--bar:#171c24;--ink:#e6edf3;--muted:#8b98a9;--line:#2a323d;--hover:#232a35;--dot:#262e39;--sheet-edge:#2a323d}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--page);color:var(--ink);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+.heading{min-width:0;flex:1}
+h1{margin:0;font-size:15px;font-weight:650}
+.heading p{margin:1px 0 0;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tools{display:flex;align-items:center;gap:2px;flex:none}
+button{height:30px;min-width:30px;padding:0 8px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;font-weight:550;cursor:pointer}
+button:hover{background:var(--hover)}
+button:focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+#zoom-level{min-width:52px;font-variant-numeric:tabular-nums}
+.sep{width:1px;height:18px;margin:0 6px;background:var(--line)}
+#canvas{position:relative;flex:1;min-height:0;overflow:hidden;cursor:grab;touch-action:none;background-color:var(--page);background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:18px 18px}
+#canvas.dragging{cursor:grabbing}
+footer{padding:6px 16px;background:var(--bar);border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+@media (max-width:640px){.heading p,.wide{display:none}header{gap:8px;padding:8px}}
+</style>
+<script>
+(function(){var saved=null,asked=new URLSearchParams(location.search).get('theme');
+try{saved=localStorage.getItem('diagram-theme')}catch(e){}
+var dark=matchMedia('(prefers-color-scheme: dark)').matches;
+var theme=asked==='light'||asked==='dark'?asked:saved==='light'||saved==='dark'?saved:dark?'dark':'light';
+document.documentElement.dataset.theme=theme})();
+</script>
+</head>
+<body>
+<header>
+  <div class="heading"><h1>Video editing Agent</h1><p>Quality evaluation</p></div>
+  <div class="tools">
+    <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (-)">−</button>
+    <button id="zoom-level" type="button" aria-label="Reset to 100%" title="Reset to 100%">100%</button>
+    <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (+)">+</button>
+    <button id="fit" type="button" title="Fit to window (0)">Fit</button>
+    <span class="sep"></span>
+    <button id="theme" type="button" class="wide">Theme</button>
+    <button id="fullscreen" type="button" title="Fullscreen (F)">Fullscreen</button>
+  </div>
+</header>
+<main id="canvas"></main>
+<template id="figure"><style>svg{display:block;width:100%;height:100%;user-select:none;-webkit-user-select:none}.viewer-sheet{fill:#fff;stroke:#dbe2ec}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 940" role="img" aria-labelledby="title"><rect width="1320" height="940" rx="10" class="viewer-sheet"/><title id="title">Video editing Agent: batch evaluation design</title><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}</style><defs><marker id="line-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="loop-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><filter id="lift" x="-5%" y="-15%" width="110%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#334155" flood-opacity=".12"/></filter></defs><rect width="1320" height="940" fill="#fff"/>
+<rect x="24" y="14" width="1272" height="120" rx="8" fill="#f1f8fa" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="36" font-size="14" font-weight="700" fill="#0e7490" text-anchor="start">1 Task goal</text>
+<text x="140" y="36" font-size="14" font-weight="650" fill="#1e293b" text-anchor="start">Find Agent failure patterns through batch runs, calibrate the LLM Judge and verify targeted changes</text>
+<rect x="44" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="58.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Evaluation target</text>
+<text x="58.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Baseline and reviewed Agent</text>
+<rect x="356" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="370.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Evaluation set</text>
+<text x="370.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">6 videos, some with unmeetable briefs</text>
+<rect x="668" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="682.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Evaluators</text>
+<text x="682.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Checks, blind human review, LLM Judge</text>
+<rect x="980" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="994.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Output</text>
+<text x="994.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Failure types, Judge calibration, report</text>
+<rect x="24" y="148" width="1272" height="600" rx="8" fill="#eef3fb" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="170" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">2 Scenario design: quality evaluation</text>
+<rect x="44" y="188" width="1232" height="472" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="60" y="214" font-size="14" font-weight="700" fill="#0f766e" text-anchor="start">Evaluation Scripts</text>
+<text x="192" y="214" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Runs outside the Runtime; public API only</text>
+<text x="60" y="288" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Batch</text>
+<rect x="116.0" y="254" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="130.0" y="279" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Evaluation set</text>
+<text x="130.0" y="300" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">6 videos, briefs pre-labeled</text>
+<rect x="348.8" y="254" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="362.8" y="279" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Fixed configuration</text>
+<text x="362.8" y="300" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Model, Prompt, rules locked</text>
+<rect x="581.6" y="254" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="595.6" y="279" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Batch run</text>
+<text x="595.6" y="300" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Each version once, 12 runs</text>
+<rect x="814.4000000000001" y="254" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="828.4000000000001" y="279" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Run records</text>
+<text x="828.4000000000001" y="300" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Clip, cost, failure reason</text>
+<rect x="1047.2" y="254" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="1061.2" y="279" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Random order</text>
+<text x="1061.2" y="300" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Versions hidden for blind review</text>
+<path d="M330.8 283.0H348.8" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M563.6 283.0H581.6" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M796.4000000000001 283.0H814.4000000000001" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M1029.2 283.0H1047.2" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<text x="60" y="408.0" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Review</text>
+<rect x="528" y="342" width="168" height="122" rx="6" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="130" y="363" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Evaluator</text>
+<text x="270" y="363" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Input</text>
+<text x="452" y="363" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Technical</text>
+<text x="538" y="363" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Brief fit</text>
+<text x="624" y="363" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Content</text>
+<text x="710" y="363" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Presentation</text>
+<text x="130" y="393" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Technical checks</text>
+<text x="270" y="393" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Clip file</text>
+<circle cx="458" cy="388.5" r="4.5" fill="#2563eb"/>
+<text x="544" y="393" font-size="12.5" font-weight="500" fill="#94a3b8" text-anchor="middle">—</text>
+<text x="630" y="393" font-size="12.5" font-weight="500" fill="#94a3b8" text-anchor="middle">—</text>
+<text x="716" y="393" font-size="12.5" font-weight="500" fill="#94a3b8" text-anchor="middle">—</text>
+<text x="130" y="423" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Blind human review</text>
+<text x="270" y="423" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Clip and source video</text>
+<circle cx="458" cy="418.5" r="4.5" fill="#2563eb"/>
+<circle cx="544" cy="418.5" r="4.5" fill="#2563eb"/>
+<circle cx="630" cy="418.5" r="4.5" fill="#2563eb"/>
+<circle cx="716" cy="418.5" r="4.5" fill="#2563eb"/>
+<text x="130" y="453" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">LLM Judge</text>
+<text x="270" y="453" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Brief, transcript, selection</text>
+<text x="458" y="453" font-size="12.5" font-weight="500" fill="#94a3b8" text-anchor="middle">—</text>
+<circle cx="544" cy="448.5" r="4.5" fill="#2563eb"/>
+<circle cx="630" cy="448.5" r="4.5" fill="#2563eb"/>
+<text x="716" y="453" font-size="12.5" font-weight="500" fill="#94a3b8" text-anchor="middle">—</text>
+<text x="612" y="484" font-size="12.5" font-weight="600" fill="#2563eb" text-anchor="middle">Calibrate the LLM Judge on shared dimensions</text>
+<path d="M793 352H800V454H793M800 403.0H814.4000000000001" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<rect x="814.4000000000001" y="374.0" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="828.4000000000001" y="399.0" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Score summary</text>
+<text x="828.4000000000001" y="420.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Versions revealed after scoring</text>
+<path d="M1029.2 403.0H1047.2" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<rect x="1047.2" y="374.0" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="1061.2" y="399.0" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Failure attribution</text>
+<text x="1061.2" y="420.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Failure types and root causes</text>
+<path d="M1154.6000000000001 432.0V492Q1154.6000000000001 500 1146.6000000000001 500H138Q130 500 130 508V524" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<text x="60" y="584.0" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Improve</text>
+<text x="130" y="539" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Finding</text>
+<text x="362.8" y="539" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Change target</text>
+<text x="595.6" y="539" font-size="12.5" font-weight="650" fill="#536479" text-anchor="start">Effect on the next run</text>
+<text x="130" y="569" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Repeated failures of one type</text>
+<text x="362.8" y="569" font-size="12.5" font-weight="650" fill="#2563eb" text-anchor="start">Agent Prompt or tools</text>
+<text x="595.6" y="569" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Agent decides with new instructions and tools</text>
+<text x="130" y="599" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Technical checks miss issues</text>
+<text x="362.8" y="599" font-size="12.5" font-weight="650" fill="#2563eb" text-anchor="start">Check rules</text>
+<text x="595.6" y="599" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Failing plans refused; reason returns to Agent</text>
+<text x="130" y="629" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Judge disagrees with humans</text>
+<text x="362.8" y="629" font-size="12.5" font-weight="650" fill="#2563eb" text-anchor="start">Judge Prompt</text>
+<text x="595.6" y="629" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Agent runs unchanged; later scores more reliable</text>
+<path d="M918.6 528H925.6V630H918.6M925.6 579.0H1047.2" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<rect x="1047.2" y="550.0" width="190.8" height="58" rx="6" fill="#dff3e6" stroke="#0f766e" stroke-width="1"/>
+<text x="1061.2" y="575.0" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Re-evaluate</text>
+<text x="1061.2" y="596.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Failed and normal samples</text>
+<path d="M1238.0 579.0H1262Q1270 579.0 1270 571.0V242Q1270 234 1262 234H464.20000000000005Q456.20000000000005 234 456.20000000000005 242V253" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#loop-head)"/>
+<rect x="780.8000000000001" y="225" width="282.00000000000006" height="18" rx="4" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="921.8000000000001" y="238.5" font-size="12.5" font-weight="500" fill="#536479" text-anchor="middle">Improved version enters the next batch</text>
+<text x="44" y="700" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Difficulties</text>
+<text x="44" y="729" font-size="13" font-weight="700" fill="#2563eb" text-anchor="start">Design</text>
+<text x="128.0" y="700" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Selective samples skew results</text>
+<text x="128.0" y="729" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Fixed batch; failures counted</text>
+<text x="363.2" y="700" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Known versions bias reviewers</text>
+<text x="363.2" y="729" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Random order, versions hidden</text>
+<text x="598.4" y="700" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">LLM Judge may be unreliable</text>
+<text x="598.4" y="729" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Human calibration, case analysis</text>
+<text x="833.5999999999999" y="700" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Passing checks is not quality</text>
+<text x="833.5999999999999" y="729" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Human findings refine check rules</text>
+<text x="1068.8" y="700" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">A change may fit only one case</text>
+<text x="1068.8" y="729" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Normal samples re-tested too</text>
+<rect x="24" y="762" width="1272" height="164" rx="8" fill="#e9edf4" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="784" font-size="14" font-weight="700" fill="#2f3b52" text-anchor="start">3 Emberling execution foundation: capabilities evaluation relies on</text>
+<text x="44" y="838" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Capability</text>
+<rect x="116" y="802" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="128.0" y="827" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Version binding</text>
+<text x="128.0" y="848" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Run bound to immutable version</text>
+<rect x="351.2" y="802" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="363.2" y="827" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Public API</text>
+<text x="363.2" y="848" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Creates Runs, reads artifacts</text>
+<rect x="586.4" y="802" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="598.4" y="827" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Artifact traceability</text>
+<text x="598.4" y="848" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Judge input from run artifacts</text>
+<rect x="821.6" y="802" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="833.5999999999999" y="827" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Check records</text>
+<text x="833.5999999999999" y="848" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Saved per timeline version</text>
+<rect x="1056.8" y="802" width="219.2" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="1068.8" y="827" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Trace</text>
+<text x="1068.8" y="848" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Traces to decision and context</text>
+<rect x="44" y="874" width="1232" height="38" rx="6" fill="#d9e0ea" stroke="#d9e0ea" stroke-width="1"/>
+<text x="58" y="898" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Run boundary</text>
+<text x="172" y="898" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="start">Scripts submit Runs and read Trace and artifacts through the public API; no new Runtime tables or endpoints</text>
+</svg></template>
+<footer>Drag to pan. Pinch or Ctrl + scroll to zoom</footer>
+<script>
+(function(){
+var canvas=document.getElementById('canvas'),level=document.getElementById('zoom-level');
+// The shadow root keeps a figure's embedded page styles from restyling this page, and the reverse.
+var shadow=canvas.attachShadow({mode:'open'});
+shadow.appendChild(document.getElementById('figure').content);
+var svg=shadow.querySelector('svg');
+// Only the sheet is the figure's background; some figures also paint their root element.
+svg.style.setProperty('background','transparent','important');
+var content=svg.viewBox.baseVal,W=content.width,H=content.height;
+var MIN=0.15,MAX=5,scale=1,cx=W/2,cy=H/2,pointers=new Map(),pinch=null;
+
+function apply(){
+  var cw=canvas.clientWidth,ch=canvas.clientHeight,vw=cw/scale,vh=ch/scale;
+  // Keep the sheet reachable: its centre may not leave the visible area by more than half a sheet.
+  var rx=Math.max(W/2,vw/2),ry=Math.max(H/2,vh/2);
+  cx=Math.min(W/2+rx,Math.max(W/2-rx,cx));
+  cy=Math.min(H/2+ry,Math.max(H/2-ry,cy));
+  svg.setAttribute('viewBox',(cx-vw/2)+' '+(cy-vh/2)+' '+vw+' '+vh);
+  level.textContent=Math.round(scale*100)+'%';
+}
+function point(x,y){var r=canvas.getBoundingClientRect();return{x:x-r.left,y:y-r.top}}
+function zoomAt(next,p){
+  next=Math.min(MAX,Math.max(MIN,next));
+  var cw=canvas.clientWidth,ch=canvas.clientHeight;
+  var ux=cx+(p.x-cw/2)/scale,uy=cy+(p.y-ch/2)/scale;
+  cx=ux-(p.x-cw/2)/next;cy=uy-(p.y-ch/2)/next;scale=next;apply();
+}
+function middle(){return{x:canvas.clientWidth/2,y:canvas.clientHeight/2}}
+function fit(){
+  var pad=28;
+  scale=Math.min(MAX,Math.max(MIN,Math.min((canvas.clientWidth-2*pad)/W,(canvas.clientHeight-2*pad)/H)));
+  cx=W/2;cy=H/2;apply();
+}
+function pinchState(){var v=[...pointers.values()];return{d:Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y),x:(v[0].x+v[1].x)/2,y:(v[0].y+v[1].y)/2}}
+
+canvas.addEventListener('wheel',function(e){
+  e.preventDefault();
+  if(e.ctrlKey||e.metaKey){zoomAt(scale*Math.exp(-e.deltaY*0.01),point(e.clientX,e.clientY));return}
+  cx+=e.deltaX/scale;cy+=e.deltaY/scale;apply();
+},{passive:false});
+canvas.addEventListener('pointerdown',function(e){
+  canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,point(e.clientX,e.clientY));
+  canvas.classList.add('dragging');pinch=pointers.size===2?pinchState():null;
+});
+canvas.addEventListener('pointermove',function(e){
+  var last=pointers.get(e.pointerId);if(!last)return;
+  var now=point(e.clientX,e.clientY);pointers.set(e.pointerId,now);
+  if(pointers.size===2){
+    var state=pinchState();
+    if(pinch&&pinch.d>0){cx-=(state.x-pinch.x)/scale;cy-=(state.y-pinch.y)/scale;zoomAt(scale*state.d/pinch.d,state)}
+    pinch=state;return;
+  }
+  if(pointers.size===1){cx-=(now.x-last.x)/scale;cy-=(now.y-last.y)/scale;apply()}
+});
+function release(e){pointers.delete(e.pointerId);pinch=pointers.size===2?pinchState():null;if(!pointers.size)canvas.classList.remove('dragging')}
+canvas.addEventListener('pointerup',release);
+canvas.addEventListener('pointercancel',release);
+
+document.getElementById('zoom-in').onclick=function(){zoomAt(scale*1.25,middle())};
+document.getElementById('zoom-out').onclick=function(){zoomAt(scale/1.25,middle())};
+level.onclick=function(){zoomAt(1,middle())};
+document.getElementById('fit').onclick=fit;
+document.getElementById('theme').onclick=function(){
+  var next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('diagram-theme',next)}catch(e){}
+};
+function toggleFullscreen(){
+  if(document.fullscreenElement){document.exitFullscreen();return}
+  if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();
+}
+document.getElementById('fullscreen').onclick=toggleFullscreen;
+document.addEventListener('keydown',function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.key==='+'||e.key==='=')zoomAt(scale*1.25,middle());
+  else if(e.key==='-')zoomAt(scale/1.25,middle());
+  else if(e.key==='0')fit();
+  else if(e.key==='f'||e.key==='F')toggleFullscreen();
+});
+new ResizeObserver(apply).observe(canvas);
+fit();
+})();
+</script>
+</body>
+</html>

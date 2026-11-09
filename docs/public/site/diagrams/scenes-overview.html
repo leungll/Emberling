@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Three scenarios</title>
+<style>
+:root{--page:#f3f5f8;--bar:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;--hover:#eef2f7;--dot:#d5dce6;--sheet-edge:#dbe2ec}
+:root[data-theme=dark]{--page:#10141b;--bar:#171c24;--ink:#e6edf3;--muted:#8b98a9;--line:#2a323d;--hover:#232a35;--dot:#262e39;--sheet-edge:#2a323d}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--page);color:var(--ink);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+.heading{min-width:0;flex:1}
+h1{margin:0;font-size:15px;font-weight:650}
+.heading p{margin:1px 0 0;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tools{display:flex;align-items:center;gap:2px;flex:none}
+button{height:30px;min-width:30px;padding:0 8px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;font-weight:550;cursor:pointer}
+button:hover{background:var(--hover)}
+button:focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+#zoom-level{min-width:52px;font-variant-numeric:tabular-nums}
+.sep{width:1px;height:18px;margin:0 6px;background:var(--line)}
+#canvas{position:relative;flex:1;min-height:0;overflow:hidden;cursor:grab;touch-action:none;background-color:var(--page);background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:18px 18px}
+#canvas.dragging{cursor:grabbing}
+footer{padding:6px 16px;background:var(--bar);border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+@media (max-width:640px){.heading p,.wide{display:none}header{gap:8px;padding:8px}}
+</style>
+<script>
+(function(){var saved=null,asked=new URLSearchParams(location.search).get('theme');
+try{saved=localStorage.getItem('diagram-theme')}catch(e){}
+var dark=matchMedia('(prefers-color-scheme: dark)').matches;
+var theme=asked==='light'||asked==='dark'?asked:saved==='light'||saved==='dark'?saved:dark?'dark':'light';
+document.documentElement.dataset.theme=theme})();
+</script>
+</head>
+<body>
+<header>
+  <div class="heading"><h1>Three scenarios</h1><p>Focus and coverage of each scenario</p></div>
+  <div class="tools">
+    <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (-)">−</button>
+    <button id="zoom-level" type="button" aria-label="Reset to 100%" title="Reset to 100%">100%</button>
+    <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (+)">+</button>
+    <button id="fit" type="button" title="Fit to window (0)">Fit</button>
+    <span class="sep"></span>
+    <button id="theme" type="button" class="wide">Theme</button>
+    <button id="fullscreen" type="button" title="Fullscreen (F)">Fullscreen</button>
+  </div>
+</header>
+<main id="canvas"></main>
+<template id="figure"><style>svg{display:block;width:100%;height:100%;user-select:none;-webkit-user-select:none}.viewer-sheet{fill:#fff;stroke:#dbe2ec}@media (prefers-color-scheme:dark){.viewer-sheet{fill:#0d1117;stroke:#30363d}}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 280" role="img" aria-labelledby="title"><rect width="880" height="280" rx="10" class="viewer-sheet"/><title id="title">Focus and capabilities of three scenarios: AI image generation service, short-video editing Agent, vulnerability repair and release</title><style>
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}
+.card{fill:#fff;stroke:#e4e7ec}
+.rule{stroke:#eceff3}
+.arrow{stroke:#a3adba;fill:none}
+.name{fill:#1f2937;font-size:15px;font-weight:650}
+.label{fill:#8590a0;font-size:11.5px;font-weight:500}
+.focus{fill:#1f2937;font-size:13px;font-weight:600}
+.item{fill:#55606f;font-size:12.5px;font-weight:450}
+.gold{fill:#b7791f}.violet{fill:#7c3aed}.rose{fill:#be3455}
+@media (prefers-color-scheme:dark){
+.card{fill:#161b22;stroke:#30363d}
+.rule{stroke:#262c35}
+.arrow{stroke:#6e7681}
+.name,.focus{fill:#e6edf3}
+.label{fill:#7d8590}
+.item{fill:#aab3bd}
+.gold{fill:#d9a94f}.violet{fill:#a78bfa}.rose{fill:#f0708f}
+}
+</style>
+<rect x="1" y="1" width="275.333" height="278" rx="10" class="card"/>
+<circle cx="24.5" cy="29" r="3.5" class="gold"/>
+<text x="36" y="34.5" class="name">AI image generation service</text>
+<text x="21" y="64" class="label">Focus</text>
+<text x="21" y="86" class="focus">Long-running async tasks</text>
+<text x="21" y="108" class="focus">Capacity and concurrency control</text>
+<text x="21" y="130" class="focus">Failure recovery</text>
+<path d="M21 147.5H256.333" class="rule"/>
+<text x="21" y="171" class="label">Capabilities</text>
+<circle cx="23" cy="188.5" r="2" class="gold"/>
+<text x="33" y="193" class="item">Agent and Workflow together</text>
+<circle cx="23" cy="209.5" r="2" class="gold"/>
+<text x="33" y="214" class="item">Template release, version split</text>
+<circle cx="23" cy="230.5" r="2" class="gold"/>
+<text x="33" y="235" class="item">Capacity-aware scheduling</text>
+<circle cx="23" cy="251.5" r="2" class="gold"/>
+<text x="33" y="256" class="item">Resume after a crash</text>
+<path d="M283.333 29.5H295.333M291.333 25.5 295.333 29.5 291.333 33.5" class="arrow"/>
+<rect x="302.333" y="1" width="275.333" height="278" rx="10" class="card"/>
+<circle cx="325.833" cy="29" r="3.5" class="violet"/>
+<text x="337.333" y="34.5" class="name">Short-video editing Agent</text>
+<text x="322.333" y="64" class="label">Focus</text>
+<text x="322.333" y="86" class="focus">Agentic Workflow</text>
+<text x="322.333" y="108" class="focus">Quality evaluation</text>
+<text x="322.333" y="130" class="focus">Continuous improvement</text>
+<path d="M322.333 147.5H557.667" class="rule"/>
+<text x="322.333" y="171" class="label">Capabilities</text>
+<circle cx="324.333" cy="188.5" r="2" class="violet"/>
+<text x="334.333" y="193" class="item">Multi-step Agent orchestration</text>
+<circle cx="324.333" cy="209.5" r="2" class="violet"/>
+<text x="334.333" y="214" class="item">Context management</text>
+<circle cx="324.333" cy="230.5" r="2" class="violet"/>
+<text x="334.333" y="235" class="item">System checks and content review</text>
+<circle cx="324.333" cy="251.5" r="2" class="violet"/>
+<text x="334.333" y="256" class="item">Offline evaluation and LLM Judge</text>
+<path d="M584.667 29.5H596.667M592.667 25.5 596.667 29.5 592.667 33.5" class="arrow"/>
+<rect x="603.667" y="1" width="275.333" height="278" rx="10" class="card"/>
+<circle cx="627.167" cy="29" r="3.5" class="rose"/>
+<text x="638.667" y="34.5" class="name">Vulnerability repair and release</text>
+<text x="623.667" y="64" class="label">Focus</text>
+<text x="623.667" y="86" class="focus">Controlled change through release</text>
+<text x="623.667" y="108" class="focus">Consistent delivery evidence</text>
+<text x="623.667" y="130" class="focus">Verifiable release results</text>
+<path d="M623.667 147.5H859" class="rule"/>
+<text x="623.667" y="171" class="label">Capabilities</text>
+<circle cx="625.667" cy="188.5" r="2" class="rose"/>
+<text x="635.667" y="193" class="item">Isolated execution environment</text>
+<circle cx="625.667" cy="209.5" r="2" class="rose"/>
+<text x="635.667" y="214" class="item">Action authorization, human approval</text>
+<circle cx="625.667" cy="230.5" r="2" class="rose"/>
+<text x="635.667" y="235" class="item">Release result reconciliation</text>
+<circle cx="625.667" cy="251.5" r="2" class="rose"/>
+<text x="635.667" y="256" class="item">Goal-based completion check</text>
+</svg></template>
+<footer>Drag to pan. Pinch or Ctrl + scroll to zoom</footer>
+<script>
+(function(){
+var canvas=document.getElementById('canvas'),level=document.getElementById('zoom-level');
+// The shadow root keeps a figure's embedded page styles from restyling this page, and the reverse.
+var shadow=canvas.attachShadow({mode:'open'});
+shadow.appendChild(document.getElementById('figure').content);
+var svg=shadow.querySelector('svg');
+// Only the sheet is the figure's background; some figures also paint their root element.
+svg.style.setProperty('background','transparent','important');
+var content=svg.viewBox.baseVal,W=content.width,H=content.height;
+var MIN=0.15,MAX=5,scale=1,cx=W/2,cy=H/2,pointers=new Map(),pinch=null;
+
+function apply(){
+  var cw=canvas.clientWidth,ch=canvas.clientHeight,vw=cw/scale,vh=ch/scale;
+  // Keep the sheet reachable: its centre may not leave the visible area by more than half a sheet.
+  var rx=Math.max(W/2,vw/2),ry=Math.max(H/2,vh/2);
+  cx=Math.min(W/2+rx,Math.max(W/2-rx,cx));
+  cy=Math.min(H/2+ry,Math.max(H/2-ry,cy));
+  svg.setAttribute('viewBox',(cx-vw/2)+' '+(cy-vh/2)+' '+vw+' '+vh);
+  level.textContent=Math.round(scale*100)+'%';
+}
+function point(x,y){var r=canvas.getBoundingClientRect();return{x:x-r.left,y:y-r.top}}
+function zoomAt(next,p){
+  next=Math.min(MAX,Math.max(MIN,next));
+  var cw=canvas.clientWidth,ch=canvas.clientHeight;
+  var ux=cx+(p.x-cw/2)/scale,uy=cy+(p.y-ch/2)/scale;
+  cx=ux-(p.x-cw/2)/next;cy=uy-(p.y-ch/2)/next;scale=next;apply();
+}
+function middle(){return{x:canvas.clientWidth/2,y:canvas.clientHeight/2}}
+function fit(){
+  var pad=28;
+  scale=Math.min(MAX,Math.max(MIN,Math.min((canvas.clientWidth-2*pad)/W,(canvas.clientHeight-2*pad)/H)));
+  cx=W/2;cy=H/2;apply();
+}
+function pinchState(){var v=[...pointers.values()];return{d:Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y),x:(v[0].x+v[1].x)/2,y:(v[0].y+v[1].y)/2}}
+
+canvas.addEventListener('wheel',function(e){
+  e.preventDefault();
+  if(e.ctrlKey||e.metaKey){zoomAt(scale*Math.exp(-e.deltaY*0.01),point(e.clientX,e.clientY));return}
+  cx+=e.deltaX/scale;cy+=e.deltaY/scale;apply();
+},{passive:false});
+canvas.addEventListener('pointerdown',function(e){
+  canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,point(e.clientX,e.clientY));
+  canvas.classList.add('dragging');pinch=pointers.size===2?pinchState():null;
+});
+canvas.addEventListener('pointermove',function(e){
+  var last=pointers.get(e.pointerId);if(!last)return;
+  var now=point(e.clientX,e.clientY);pointers.set(e.pointerId,now);
+  if(pointers.size===2){
+    var state=pinchState();
+    if(pinch&&pinch.d>0){cx-=(state.x-pinch.x)/scale;cy-=(state.y-pinch.y)/scale;zoomAt(scale*state.d/pinch.d,state)}
+    pinch=state;return;
+  }
+  if(pointers.size===1){cx-=(now.x-last.x)/scale;cy-=(now.y-last.y)/scale;apply()}
+});
+function release(e){pointers.delete(e.pointerId);pinch=pointers.size===2?pinchState():null;if(!pointers.size)canvas.classList.remove('dragging')}
+canvas.addEventListener('pointerup',release);
+canvas.addEventListener('pointercancel',release);
+
+document.getElementById('zoom-in').onclick=function(){zoomAt(scale*1.25,middle())};
+document.getElementById('zoom-out').onclick=function(){zoomAt(scale/1.25,middle())};
+level.onclick=function(){zoomAt(1,middle())};
+document.getElementById('fit').onclick=fit;
+document.getElementById('theme').onclick=function(){
+  var next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('diagram-theme',next)}catch(e){}
+};
+function toggleFullscreen(){
+  if(document.fullscreenElement){document.exitFullscreen();return}
+  if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();
+}
+document.getElementById('fullscreen').onclick=toggleFullscreen;
+document.addEventListener('keydown',function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.key==='+'||e.key==='=')zoomAt(scale*1.25,middle());
+  else if(e.key==='-')zoomAt(scale/1.25,middle());
+  else if(e.key==='0')fit();
+  else if(e.key==='f'||e.key==='F')toggleFullscreen();
+});
+new ResizeObserver(apply).observe(canvas);
+fit();
+})();
+</script>
+</body>
+</html>

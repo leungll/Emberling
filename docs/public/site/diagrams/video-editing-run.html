@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Video editing Agent</title>
+<style>
+:root{--page:#f3f5f8;--bar:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;--hover:#eef2f7;--dot:#d5dce6;--sheet-edge:#dbe2ec}
+:root[data-theme=dark]{--page:#10141b;--bar:#171c24;--ink:#e6edf3;--muted:#8b98a9;--line:#2a323d;--hover:#232a35;--dot:#262e39;--sheet-edge:#2a323d}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--page);color:var(--ink);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 16px;background:var(--bar);border-bottom:1px solid var(--line)}
+.heading{min-width:0;flex:1}
+h1{margin:0;font-size:15px;font-weight:650}
+.heading p{margin:1px 0 0;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tools{display:flex;align-items:center;gap:2px;flex:none}
+button{height:30px;min-width:30px;padding:0 8px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;font-weight:550;cursor:pointer}
+button:hover{background:var(--hover)}
+button:focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+#zoom-level{min-width:52px;font-variant-numeric:tabular-nums}
+.sep{width:1px;height:18px;margin:0 6px;background:var(--line)}
+#canvas{position:relative;flex:1;min-height:0;overflow:hidden;cursor:grab;touch-action:none;background-color:var(--page);background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:18px 18px}
+#canvas.dragging{cursor:grabbing}
+footer{padding:6px 16px;background:var(--bar);border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+@media (max-width:640px){.heading p,.wide{display:none}header{gap:8px;padding:8px}}
+</style>
+<script>
+(function(){var saved=null,asked=new URLSearchParams(location.search).get('theme');
+try{saved=localStorage.getItem('diagram-theme')}catch(e){}
+var dark=matchMedia('(prefers-color-scheme: dark)').matches;
+var theme=asked==='light'||asked==='dark'?asked:saved==='light'||saved==='dark'?saved:dark?'dark':'light';
+document.documentElement.dataset.theme=theme})();
+</script>
+</head>
+<body>
+<header>
+  <div class="heading"><h1>Video editing Agent</h1><p>Execution of an editing task</p></div>
+  <div class="tools">
+    <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (-)">−</button>
+    <button id="zoom-level" type="button" aria-label="Reset to 100%" title="Reset to 100%">100%</button>
+    <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (+)">+</button>
+    <button id="fit" type="button" title="Fit to window (0)">Fit</button>
+    <span class="sep"></span>
+    <button id="theme" type="button" class="wide">Theme</button>
+    <button id="fullscreen" type="button" title="Fullscreen (F)">Fullscreen</button>
+  </div>
+</header>
+<main id="canvas"></main>
+<template id="figure"><style>svg{display:block;width:100%;height:100%;user-select:none;-webkit-user-select:none}.viewer-sheet{fill:#fff;stroke:#dbe2ec}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 812" role="img" aria-labelledby="title"><rect width="1320" height="812" rx="10" class="viewer-sheet"/><title id="title">Video editing Agent: from two cuts to a deliverable clip</title><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}</style><defs><marker id="line-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="loop-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><filter id="lift" x="-5%" y="-15%" width="110%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#334155" flood-opacity=".12"/></filter></defs><rect width="1320" height="812" fill="#fff"/>
+<rect x="24" y="14" width="1272" height="120" rx="8" fill="#f1f8fa" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="36" font-size="14" font-weight="700" fill="#0e7490" text-anchor="start">1 Task goal</text>
+<text x="140" y="36" font-size="14" font-weight="650" fill="#1e293b" text-anchor="start">Cut a 4–8 minute single-speaker video into a subtitled vertical clip per the brief, with verifiable delivery evidence</text>
+<rect x="44" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="58.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Source material</text>
+<text x="58.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">4–8 minute single-speaker video</text>
+<rect x="356" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="370.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Creative brief</text>
+<text x="370.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Target length, aspect ratio, content focus</text>
+<rect x="668" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="682.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Deliverable</text>
+<text x="682.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Subtitled candidate clip and check records</text>
+<rect x="980" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="994.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Acceptance</text>
+<text x="994.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Separate checks, content and human review</text>
+<rect x="24" y="148" width="1272" height="472" rx="8" fill="#eef3fb" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="170" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">2 Scenario design: editing task</text>
+<rect x="44" y="188" width="176" height="290" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="60" y="214" font-size="14" font-weight="700" fill="#0f766e" text-anchor="start">Workflow nodes</text>
+<rect x="230" y="188" width="860" height="290" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="246" y="214" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">Agent Harness</text>
+<rect x="1100" y="188" width="176" height="290" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="1116" y="214" font-size="14" font-weight="700" fill="#7c3aed" text-anchor="start">Runtime</text>
+<text x="358" y="214" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Video Editing Agent</text>
+<rect x="990.8" y="199" width="85.2" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="1033.3999999999999" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Guardrails</text>
+<rect x="897.5999999999999" y="199" width="85.2" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="940.1999999999999" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Reflection</text>
+<rect x="743.9199999999998" y="199" width="145.68" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="816.7599999999999" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Context Engineering</text>
+<rect x="664.1599999999999" y="199" width="71.76" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="700.0399999999998" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Planning</text>
+<text x="304.0" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Claude Opus</text>
+<text x="463.6" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">run_checks</text>
+<text x="623.2" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">review_artifact</text>
+<text x="782.8" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">render_timeline</text>
+<text x="942.4" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">run_checks</text>
+<text x="246" y="296" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Cut 1</text>
+<text x="246" y="398" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Cut 2</text>
+<rect x="290.0" y="262" width="147.6" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="304.0" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Select sentences</text>
+<text x="304.0" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Career and qualities</text>
+<rect x="449.6" y="262" width="147.6" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="463.6" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Timeline check</text>
+<text x="463.6" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">46.6 s, passed</text>
+<rect x="609.2" y="262" width="147.6" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="623.2" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Review: rejected</text>
+<text x="623.2" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Actual work unclear</text>
+<path d="M437.6 291.0H449.6" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M597.2 291.0H609.2" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<rect x="290.0" y="364" width="147.6" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="304.0" y="389" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Replace selection</text>
+<text x="304.0" y="410" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Adds sleep study</text>
+<rect x="449.6" y="364" width="147.6" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="463.6" y="389" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Timeline check</text>
+<text x="463.6" y="410" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">47.6 s, passed</text>
+<rect x="609.2" y="364" width="147.6" height="58" rx="6" fill="#dff3e6" stroke="#0f766e" stroke-width="1"/>
+<text x="623.2" y="389" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Review: passed</text>
+<text x="623.2" y="410" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Complete, faithful</text>
+<rect x="768.8" y="364" width="147.6" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="782.8" y="389" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Render clip</text>
+<text x="782.8" y="410" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">FFmpeg, subtitles</text>
+<rect x="928.4" y="364" width="147.6" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="942.4" y="389" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Clip check</text>
+<text x="942.4" y="410" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Format and subtitles</text>
+<path d="M437.6 393.0H449.6" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M597.2 393.0H609.2" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M756.8000000000001 393.0H768.8" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<path d="M916.4 393.0H928.4" fill="none" stroke="#94a3b8" stroke-width="1.1"/>
+<text x="782.8" y="295.0" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Content review failed; no render</text>
+<path d="M683.0 320V334Q683.0 342 675.0 342H371.8Q363.8 342 363.8 350V363" fill="none" stroke="#2563eb" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#loop-head)"/>
+<rect x="403.4" y="333" width="240.00000000000003" height="18" rx="4" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="523.4" y="346.5" font-size="12.5" font-weight="500" fill="#536479" text-anchor="middle">Review reasons feed the next cut</text>
+<text x="246" y="456" font-size="12.5" font-weight="700" fill="#2563eb" text-anchor="start">Context</text>
+<text x="304.0" y="456" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Transcript read by sentence; earlier cuts and verdicts kept</text>
+<rect x="52" y="262" width="160" height="58" rx="6" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="66" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Editing Task</text>
+<text x="66" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Source and brief</text>
+<rect x="52" y="364" width="160" height="58" rx="6" fill="#e0f2ee" stroke="#0f766e" stroke-width="1"/>
+<text x="66" y="389" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Transcript</text>
+<text x="66" y="410" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Timed sentences</text>
+<rect x="1108" y="262" width="160" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="1122" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Action Precondition</text>
+<text x="1122" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Checks before render</text>
+<rect x="1108" y="364" width="160" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="1122" y="389" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Completion Check</text>
+<text x="1122" y="410" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Verifies clip, records</text>
+<path d="M1076.0 393.0H1107" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<text x="44" y="518" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Difficulties</text>
+<text x="44" y="547" font-size="13" font-weight="700" fill="#2563eb" text-anchor="start">Design</text>
+<text x="128.0" y="518" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Slow transcription, render</text>
+<text x="128.0" y="547" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Suspend, recover on restart</text>
+<text x="324.0" y="518" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Transcript fills context</text>
+<text x="324.0" y="547" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Agent reads by sentence</text>
+<text x="520.0" y="518" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Model cuts mid-sentence</text>
+<text x="520.0" y="547" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Tools derive timecodes</text>
+<text x="716.0" y="518" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Rules miss distortion</text>
+<text x="716.0" y="547" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Second model checks meaning</text>
+<text x="912.0" y="518" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Invalid cuts must not render</text>
+<text x="912.0" y="547" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Render after check, review</text>
+<text x="1108.0" y="518" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Agent claims may be false</text>
+<text x="1108.0" y="547" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Verify clip and all records</text>
+<rect x="44" y="564" width="1232" height="40" rx="6" fill="#fceef2" stroke="#fceef2" stroke-width="1"/>
+<text x="58" y="589" font-size="13" font-weight="700" fill="#be3455" text-anchor="start">Open problems</text>
+<text x="172.0" y="589" font-size="12.5" font-weight="500" fill="#be3455" text-anchor="start">Text only: model may pick shots with no person</text>
+<text x="535.3333333333333" y="589" font-size="12.5" font-weight="500" fill="#be3455" text-anchor="start">Fixed center crop can lose the subject</text>
+<text x="898.6666666666666" y="589" font-size="12.5" font-weight="500" fill="#be3455" text-anchor="start">A pass does not cover framing or sharpness</text>
+<rect x="24" y="634" width="1272" height="164" rx="8" fill="#e9edf4" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="656" font-size="14" font-weight="700" fill="#2f3b52" text-anchor="start">3 Emberling execution foundation: addressing each difficulty</text>
+<text x="44" y="710" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Capability</text>
+<rect x="116" y="674" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="128.0" y="699" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">External task recovery</text>
+<text x="128.0" y="720" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">No duplicate dispatch</text>
+<rect x="312" y="674" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="324.0" y="699" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Context Management</text>
+<text x="324.0" y="720" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Read by range</text>
+<rect x="508" y="674" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="520.0" y="699" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Deterministic tools</text>
+<text x="520.0" y="720" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Cuts and encoding by tool</text>
+<rect x="704" y="674" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="716.0" y="699" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Artifact traceability</text>
+<text x="716.0" y="720" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Verdict saved per version</text>
+<rect x="900" y="674" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="912.0" y="699" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Action Precondition</text>
+<text x="912.0" y="720" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Refused until passed</text>
+<rect x="1096" y="674" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="1108.0" y="699" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Completion Check</text>
+<text x="1108.0" y="720" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Decided by the system</text>
+<rect x="44" y="746" width="1232" height="38" rx="6" fill="#d9e0ea" stroke="#d9e0ea" stroke-width="1"/>
+<text x="58" y="770" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Durable Execution Runtime</text>
+<text x="408.8333333333333" y="770" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Durable state</text>
+<text x="566.5" y="770" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Unified scheduling</text>
+<text x="724.1666666666666" y="770" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Async waits</text>
+<text x="881.8333333333333" y="770" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Crash recovery</text>
+<text x="1039.5" y="770" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Result confirmation</text>
+<text x="1197.1666666666665" y="770" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Transactional commit</text>
+</svg></template>
+<footer>Drag to pan. Pinch or Ctrl + scroll to zoom</footer>
+<script>
+(function(){
+var canvas=document.getElementById('canvas'),level=document.getElementById('zoom-level');
+// The shadow root keeps a figure's embedded page styles from restyling this page, and the reverse.
+var shadow=canvas.attachShadow({mode:'open'});
+shadow.appendChild(document.getElementById('figure').content);
+var svg=shadow.querySelector('svg');
+// Only the sheet is the figure's background; some figures also paint their root element.
+svg.style.setProperty('background','transparent','important');
+var content=svg.viewBox.baseVal,W=content.width,H=content.height;
+var MIN=0.15,MAX=5,scale=1,cx=W/2,cy=H/2,pointers=new Map(),pinch=null;
+
+function apply(){
+  var cw=canvas.clientWidth,ch=canvas.clientHeight,vw=cw/scale,vh=ch/scale;
+  // Keep the sheet reachable: its centre may not leave the visible area by more than half a sheet.
+  var rx=Math.max(W/2,vw/2),ry=Math.max(H/2,vh/2);
+  cx=Math.min(W/2+rx,Math.max(W/2-rx,cx));
+  cy=Math.min(H/2+ry,Math.max(H/2-ry,cy));
+  svg.setAttribute('viewBox',(cx-vw/2)+' '+(cy-vh/2)+' '+vw+' '+vh);
+  level.textContent=Math.round(scale*100)+'%';
+}
+function point(x,y){var r=canvas.getBoundingClientRect();return{x:x-r.left,y:y-r.top}}
+function zoomAt(next,p){
+  next=Math.min(MAX,Math.max(MIN,next));
+  var cw=canvas.clientWidth,ch=canvas.clientHeight;
+  var ux=cx+(p.x-cw/2)/scale,uy=cy+(p.y-ch/2)/scale;
+  cx=ux-(p.x-cw/2)/next;cy=uy-(p.y-ch/2)/next;scale=next;apply();
+}
+function middle(){return{x:canvas.clientWidth/2,y:canvas.clientHeight/2}}
+function fit(){
+  var pad=28;
+  scale=Math.min(MAX,Math.max(MIN,Math.min((canvas.clientWidth-2*pad)/W,(canvas.clientHeight-2*pad)/H)));
+  cx=W/2;cy=H/2;apply();
+}
+function pinchState(){var v=[...pointers.values()];return{d:Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y),x:(v[0].x+v[1].x)/2,y:(v[0].y+v[1].y)/2}}
+
+canvas.addEventListener('wheel',function(e){
+  e.preventDefault();
+  if(e.ctrlKey||e.metaKey){zoomAt(scale*Math.exp(-e.deltaY*0.01),point(e.clientX,e.clientY));return}
+  cx+=e.deltaX/scale;cy+=e.deltaY/scale;apply();
+},{passive:false});
+canvas.addEventListener('pointerdown',function(e){
+  canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,point(e.clientX,e.clientY));
+  canvas.classList.add('dragging');pinch=pointers.size===2?pinchState():null;
+});
+canvas.addEventListener('pointermove',function(e){
+  var last=pointers.get(e.pointerId);if(!last)return;
+  var now=point(e.clientX,e.clientY);pointers.set(e.pointerId,now);
+  if(pointers.size===2){
+    var state=pinchState();
+    if(pinch&&pinch.d>0){cx-=(state.x-pinch.x)/scale;cy-=(state.y-pinch.y)/scale;zoomAt(scale*state.d/pinch.d,state)}
+    pinch=state;return;
+  }
+  if(pointers.size===1){cx-=(now.x-last.x)/scale;cy-=(now.y-last.y)/scale;apply()}
+});
+function release(e){pointers.delete(e.pointerId);pinch=pointers.size===2?pinchState():null;if(!pointers.size)canvas.classList.remove('dragging')}
+canvas.addEventListener('pointerup',release);
+canvas.addEventListener('pointercancel',release);
+
+document.getElementById('zoom-in').onclick=function(){zoomAt(scale*1.25,middle())};
+document.getElementById('zoom-out').onclick=function(){zoomAt(scale/1.25,middle())};
+level.onclick=function(){zoomAt(1,middle())};
+document.getElementById('fit').onclick=fit;
+document.getElementById('theme').onclick=function(){
+  var next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('diagram-theme',next)}catch(e){}
+};
+function toggleFullscreen(){
+  if(document.fullscreenElement){document.exitFullscreen();return}
+  if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();
+}
+document.getElementById('fullscreen').onclick=toggleFullscreen;
+document.addEventListener('keydown',function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.key==='+'||e.key==='=')zoomAt(scale*1.25,middle());
+  else if(e.key==='-')zoomAt(scale/1.25,middle());
+  else if(e.key==='0')fit();
+  else if(e.key==='f'||e.key==='F')toggleFullscreen();
+});
+new ResizeObserver(apply).observe(canvas);
+fit();
+})();
+</script>
+</body>
+</html>

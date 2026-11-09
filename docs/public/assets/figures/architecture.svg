@@ -1,0 +1,360 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="1350" viewBox="0 0 1320 1350" role="img" aria-labelledby="title"><title id="title">Emberling module architecture: modules, package names and call relationships</title><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}</style><defs><marker id="line-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="loop-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><filter id="lift" x="-5%" y="-15%" width="110%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#334155" flood-opacity=".12"/></filter></defs><rect width="1320" height="1350" fill="#fff"/>
+<rect x="24" y="12" width="1028" height="134" rx="8" fill="#fbfcfe" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="40" y="37" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Clients and tools</text>
+<rect x="24" y="184" width="1028" height="990" rx="8" fill="#fbfcfe" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="40" y="209" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Emberling Backend</text>
+<text x="1040" y="208" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">backend/internal/</text>
+<rect x="24" y="1208" width="1028" height="130" rx="8" fill="#fbfcfe" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="40" y="1233" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">State and artifact storage</text>
+<rect x="40" y="48" width="620" height="84" rx="6" fill="#e6f6fb" stroke="#1496b8" stroke-width="1.2"/>
+<text x="54" y="75" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Studio</text>
+<text x="648" y="74" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">studio/</text>
+<rect x="54.0" y="88" width="142.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="125.0" y="107.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Workflow editor</text>
+<rect x="204.0" y="88" width="142.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="275.0" y="107.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Runs and details</text>
+<rect x="354.0" y="88" width="142.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="425.0" y="107.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Trace view</text>
+<rect x="504.0" y="88" width="142.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="575.0" y="107.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Human approval</text>
+<rect x="674" y="48" width="366" height="84" rx="6" fill="#e6f6fb" stroke="#1496b8" stroke-width="1.2"/>
+<text x="688" y="75" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Scripts and evaluation</text>
+<text x="1028" y="74" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">scripts/  evals/</text>
+<rect x="688.0" y="88" width="165.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="770.5" y="107.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Demo scripts</text>
+<rect x="861.0" y="88" width="165.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="943.5" y="107.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Batch evaluation</text>
+<path d="M350.0 132L350.0 211" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M350.0 220L355.5 211.0L344.5 211.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="362.0" y="170" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">REST requests and SSE subscriptions</text>
+<path d="M857.0 132L857.0 211" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M857.0 220L862.5 211.0L851.5 211.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="869.0" y="170" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Calls the public API</text>
+<rect x="40" y="222" width="1000" height="84" rx="6" fill="#fff9db" stroke="#e3b008" stroke-width="1.2"/>
+<text x="54" y="249" font-size="15" font-weight="700" fill="#1e293b" text-anchor="start">API</text>
+<text x="91.2" y="249" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Parses requests and returns results, makes no execution decisions</text>
+<text x="1028" y="248" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">api/</text>
+<rect x="54" y="262" width="87.0625" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="97.53125" y="281.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Workflows</text>
+<rect x="149.0625" y="262" width="54.3125" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="176.21875" y="281.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Runs</text>
+<rect x="211.375" y="262" width="184.8125" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="303.78125" y="281.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Approval and human input</text>
+<rect x="404.1875" y="262" width="108.8125" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="458.59375" y="281.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Callback auth</text>
+<rect x="521.0" y="262" width="95.8125" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="568.90625" y="281.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">SSE events</text>
+<rect x="624.8125" y="262" width="108.8125" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="679.21875" y="281.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Trace queries</text>
+<rect x="741.625" y="262" width="148.3125" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="815.78125" y="281.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Assets and artifacts</text>
+<rect x="897.9375" y="262" width="128.0625" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="961.96875" y="281.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Catalog and cost</text>
+<rect x="40" y="346.0" width="208" height="129.0" rx="6" fill="#fff9db" stroke="#e3b008" stroke-width="1.2"/>
+<text x="54" y="373.0" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Work</text>
+<text x="236" y="372.0" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">work/</text>
+<text x="54" y="396.0" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Consumes persisted work</text>
+<text x="54" y="416.0" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Queue is a low-latency wakeup</text>
+<rect x="54" y="432.0" width="62.75" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="85.375" y="450.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Workers</text>
+<rect x="124.75" y="432.0" width="109.25" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="179.375" y="450.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Bounded queue</text>
+<path d="M248 410.5L297 410.5" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M306 410.5L297.0 416.0L297.0 405.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="278.0" y="400.5" font-size="12.5" font-weight="550" fill="#536479" text-anchor="middle">Drives</text>
+<rect x="40" y="489.0" width="208" height="129.0" rx="6" fill="#fff9db" stroke="#e3b008" stroke-width="1.2"/>
+<text x="54" y="516.0" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Reconciler</text>
+<text x="236" y="515.0" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">reconciler/</text>
+<text x="54" y="539.0" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Recovers from persisted state</text>
+<text x="54" y="559.0" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">No separate execution path</text>
+<rect x="54" y="575.0" width="96.25" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="102.125" y="593.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Periodic scan</text>
+<rect x="158.25" y="575.0" width="75.75" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="196.125" y="593.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">TTL purge</text>
+<path d="M248 553.5L297 553.5" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M306 553.5L297.0 559.0L297.0 548.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="278.0" y="543.5" font-size="12.5" font-weight="550" fill="#536479" text-anchor="middle">Recovers</text>
+<rect x="308" y="346" width="732" height="272" rx="6" fill="#e8f0fd" stroke="#2563eb" stroke-width="2"/>
+<text x="322" y="373" font-size="16" font-weight="700" fill="#1e293b" text-anchor="start">Service</text>
+<text x="396.72" y="373" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Use cases and transaction orchestration: decisions and state commit before external calls</text>
+<text x="1028" y="372" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">service/</text>
+<rect x="322" y="388" width="540" height="216" rx="6" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="334" y="411" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">ExecutionService</text>
+<rect x="876" y="388" width="150" height="216" rx="6" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="888" y="411" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Other services</text>
+<rect x="334" y="422" width="146" height="36" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="407.0" y="444.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Unified resume path</text>
+<rect x="488" y="422" width="164" height="36" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="570.0" y="444.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Tool calls and results</text>
+<rect x="660" y="422" width="190" height="36" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="755.0" y="444.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Create and advance Runs</text>
+<rect x="334" y="466" width="146" height="36" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="407.0" y="488.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Provider concurrency</text>
+<rect x="488" y="466" width="164" height="36" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="570.0" y="488.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Agent completion check</text>
+<rect x="660" y="466" width="190" height="36" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="755.0" y="488.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Node execution, timeouts</text>
+<rect x="334" y="510" width="146" height="36" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="407.0" y="532.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Cost accounting</text>
+<rect x="488" y="510" width="164" height="36" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="570.0" y="532.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Agent pause and timeout</text>
+<rect x="660" y="510" width="190" height="36" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="755.0" y="532.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Approval and human input</text>
+<rect x="334" y="554" width="146" height="36" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="407.0" y="576.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Agent loop</text>
+<rect x="488" y="554" width="164" height="36" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="570.0" y="576.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Release, reconciliation</text>
+<rect x="660" y="554" width="190" height="36" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="755.0" y="576.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Workspace, change requests</text>
+<rect x="888.0" y="422.0" width="126.0" height="27" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="951.0" y="440.0" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">DefinitionService</text>
+<rect x="888.0" y="455.25" width="126.0" height="27" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="951.0" y="473.25" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">QueryService</text>
+<rect x="888.0" y="488.5" width="126.0" height="27" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="951.0" y="506.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">AssetService</text>
+<rect x="888.0" y="521.75" width="126.0" height="27" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="951.0" y="539.75" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">ArtifactService</text>
+<rect x="888.0" y="555.0" width="126.0" height="27" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="951.0" y="573.0" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">CatalogService</text>
+<path d="M674.0 306L674.0 335" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M674.0 344L679.5 335.0L668.5 335.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="687.0" y="330.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Calls use cases</text>
+<path d="M394.0 618L394.0 651" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M394.0 660L399.5 651.0L388.5 651.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="407.0" y="644.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Gets execution decisions</text>
+<path d="M629.0 618L629.0 651" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M629.0 660L634.5 651.0L623.5 651.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="642.0" y="644.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Commits decisions and state</text>
+<path d="M838 618L838 651" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M838 660L843.5 651.0L832.5 651.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="851" y="644.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Resolves after commit</text>
+<rect x="40" y="662" width="440" height="194" rx="6" fill="#fff0f0" stroke="#e5484d" stroke-width="1.4"/>
+<text x="54" y="689" font-size="15" font-weight="700" fill="#1e293b" text-anchor="start">Runtime</text>
+<text x="124.80000000000001" y="689" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Decisions only, no database or external I/O</text>
+<text x="468" y="688" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">runtime/</text>
+<rect x="126" y="706" width="80.875" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="166.4375" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Compiler</text>
+<rect x="214.875" y="706" width="88.375" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="259.0625" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Scheduler</text>
+<rect x="311.25" y="706" width="88.375" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="355.4375" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Aggregate</text>
+<rect x="407.625" y="706" width="58.375" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="436.8125" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Retry</text>
+<rect x="126" y="742" width="167.625" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="209.8125" y="761.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Decision parsing</text>
+<rect x="301.625" y="742" width="164.375" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="383.8125" y="761.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Context building</text>
+<rect x="126" y="778" width="151.625" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="201.8125" y="797.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Context Manifest</text>
+<rect x="285.625" y="778" width="180.375" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="375.8125" y="797.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Pre-call authorization</text>
+<rect x="126" y="814" width="163.375" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="207.6875" y="833.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Completion check</text>
+<rect x="297.375" y="814" width="168.625" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="381.6875" y="833.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Final output check</text>
+<text x="54" y="726" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Workflow</text>
+<text x="54" y="762" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Agent</text>
+<rect x="494" y="662" width="270" height="194" rx="6" fill="#fff0f0" stroke="#e5484d" stroke-width="1.4"/>
+<text x="508" y="689" font-size="15" font-weight="700" fill="#1e293b" text-anchor="start">Store</text>
+<text x="562.0" y="689" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Conditional updates</text>
+<text x="752" y="688" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">store/</text>
+<rect x="508" y="706" width="91.875" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="553.9375" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Unit of Work</text>
+<rect x="607.875" y="706" width="142.125" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="678.9375" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Runs and NodeRuns</text>
+<rect x="508" y="742" width="95.625" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="555.8125" y="761.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Events</text>
+<rect x="611.625" y="742" width="138.375" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="680.8125" y="761.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Agent records</text>
+<rect x="508" y="778" width="242.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="629.0" y="797.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Callback correlation</text>
+<rect x="508" y="814" width="99.875" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="557.9375" y="833.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Provider slots</text>
+<rect x="615.875" y="814" width="134.125" height="30" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="682.9375" y="833.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Release target lock</text>
+<rect x="778" y="662" width="262" height="194" rx="6" fill="#fff0f0" stroke="#e5484d" stroke-width="1.4"/>
+<text x="792" y="689" font-size="15" font-weight="700" fill="#1e293b" text-anchor="start">Registry</text>
+<text x="871.2" y="689" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Name lookup</text>
+<text x="1028" y="688" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">registry/</text>
+<rect x="792" y="706" width="71.75" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="827.875" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Node</text>
+<rect x="871.75" y="706" width="77.75" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="910.625" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Model</text>
+<rect x="957.5" y="706" width="68.5" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="991.75" y="725.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Tool</text>
+<rect x="792" y="742" width="234.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="909.0" y="761.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">SideEffectPolicy</text>
+<rect x="792" y="778" width="234.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="909.0" y="797.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Sync and async executors</text>
+<rect x="792" y="814" width="234.0" height="30" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="909.0" y="833.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Polling and reconciliation APIs</text>
+<rect x="40.0" y="900" width="213.0" height="258" rx="6" fill="#ebfaf0" stroke="#2fa35f" stroke-width="1.2"/>
+<text x="54.0" y="927" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Domain</text>
+<text x="241.0" y="926" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">domain/</text>
+<rect x="50.0" y="942" width="104.75" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="102.375" y="960.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Definition</text>
+<rect x="162.75" y="942" width="80.25" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="202.875" y="960.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Event</text>
+<rect x="50.0" y="977" width="97.375" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="98.6875" y="995.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">State enums</text>
+<rect x="155.375" y="977" width="87.625" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="199.1875" y="995.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Error types</text>
+<rect x="50.0" y="1012" width="193.0" height="28" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="146.5" y="1030.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Agent records</text>
+<rect x="50.0" y="1047" width="193.0" height="28" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="146.5" y="1065.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Approval and release</text>
+<rect x="50.0" y="1082" width="193.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="146.5" y="1100.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Artifacts and assets</text>
+<rect x="50.0" y="1117" width="193.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="146.5" y="1135.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Extension metadata</text>
+<rect x="267.0" y="900" width="213.0" height="258" rx="6" fill="#ebfaf0" stroke="#2fa35f" stroke-width="1.2"/>
+<text x="281.0" y="927" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Config</text>
+<text x="468.0" y="926" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">config/</text>
+<rect x="277.0" y="942" width="193.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="373.5" y="960.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Service config</text>
+<rect x="277.0" y="977" width="193.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="373.5" y="995.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Model list</text>
+<rect x="277.0" y="1012" width="193.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="373.5" y="1030.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Concurrency limits</text>
+<rect x="277.0" y="1047" width="193.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="373.5" y="1065.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">External service URLs</text>
+<rect x="277.0" y="1082" width="108.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="331.0" y="1100.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Repositories</text>
+<rect x="393.0" y="1082" width="77.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="431.5" y="1100.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Secrets</text>
+<rect x="277.0" y="1117" width="193.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="373.5" y="1135.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Readiness checks</text>
+<path d="M146.5 856L146.5 889" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M146.5 898L152.0 889.0L141.0 889.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="159.5" y="882.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Uses domain model</text>
+<path d="M629.0 856L629.0 1233" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M629.0 1242L634.5 1233.0L623.5 1233.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="617.0" y="1008" font-size="12.5" font-weight="550" fill="#536479" text-anchor="end">State and Event</text>
+<text x="617.0" y="1028" font-size="12.5" font-weight="550" fill="#536479" text-anchor="end">commit in one</text>
+<text x="617.0" y="1048" font-size="12.5" font-weight="550" fill="#536479" text-anchor="end">transaction</text>
+<path d="M838 856L838 889" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M838 898L843.5 889.0L832.5 889.0Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="851" y="882.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Routes to implementations</text>
+<rect x="647.0" y="900" width="393.0" height="258" rx="6" fill="#ebfaf0" stroke="#2fa35f" stroke-width="1.2"/>
+<text x="661.0" y="927" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Extensions</text>
+<text x="751.4" y="927" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">One operation each</text>
+<text x="1028.0" y="926" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">nodes/  tools/  adapters/</text>
+<text x="661.0" y="961" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Nodes</text>
+<rect x="731.0" y="942" width="112.5" height="28" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="787.25" y="960.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Agent</text>
+<rect x="851.5" y="942" width="174.5" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="938.75" y="960.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Text generation</text>
+<text x="661.0" y="996" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start"></text>
+<rect x="731.0" y="977" width="137.125" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="799.5625" y="995.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Image generation</text>
+<rect x="876.125" y="977" width="149.875" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="951.0625" y="995.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Media transcription</text>
+<text x="661.0" y="1031" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Tools</text>
+<rect x="731.0" y="1012" width="79.91666666666667" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="770.9583333333334" y="1030.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Workspace</text>
+<rect x="818.9166666666666" y="1012" width="101.66666666666667" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="869.75" y="1030.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Sandbox tests</text>
+<rect x="928.5833333333333" y="1012" width="97.41666666666667" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="977.2916666666666" y="1030.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Patch checks</text>
+<text x="661.0" y="1066" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start"></text>
+<rect x="731.0" y="1047" width="117.66666666666667" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="789.8333333333334" y="1065.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Change requests</text>
+<rect x="856.6666666666666" y="1047" width="56.666666666666664" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="885.0" y="1065.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Deploy</text>
+<rect x="921.3333333333333" y="1047" width="104.66666666666667" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="973.6666666666666" y="1065.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Artifact review</text>
+<text x="661.0" y="1101" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Adapters</text>
+<rect x="731.0" y="1082" width="295.0" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="878.5" y="1100.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">OpenAI-compatible models</text>
+<text x="661.0" y="1136" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start"></text>
+<rect x="731.0" y="1117" width="149.25" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="805.625" y="1135.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">OpenRouter images</text>
+<rect x="888.25" y="1117" width="137.75" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="957.125" y="1135.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">External task API</text>
+<rect x="40" y="1244" width="724" height="80" rx="6" fill="#fff2e6" stroke="#ee8a2a" stroke-width="1.2"/>
+<text x="54" y="1271" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">PostgreSQL</text>
+<text x="144.4" y="1271" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Authority for execution state</text>
+<rect x="54" y="1284" width="56.5625" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="82.28125" y="1302.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Run</text>
+<rect x="118.5625" y="1284" width="88.0625" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="162.59375" y="1302.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">NodeRun</text>
+<rect x="214.625" y="1284" width="80.0625" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="254.65625" y="1302.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Attempt</text>
+<rect x="302.6875" y="1284" width="68.3125" height="28" rx="5" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text x="336.84375" y="1302.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Event</text>
+<rect x="379.0" y="1284" width="100.8125" height="28" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="429.40625" y="1302.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Agent Turn</text>
+<rect x="487.8125" y="1284" width="87.5625" height="28" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="531.59375" y="1302.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Decision</text>
+<rect x="583.375" y="1284" width="72.5625" height="28" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="619.65625" y="1302.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Action</text>
+<rect x="663.9375" y="1284" width="86.0625" height="28" rx="5" fill="#f1ecff" stroke="#f1ecff" stroke-width="1"/>
+<text x="706.96875" y="1302.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Manifest</text>
+<rect x="778" y="1244" width="262" height="80" rx="6" fill="#fff2e6" stroke="#ee8a2a" stroke-width="1.2"/>
+<text x="792" y="1271" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Artifact storage</text>
+<text x="1028" y="1270" font-size="10.5" font-weight="500" fill="#536479" text-anchor="end" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">via asset/</text>
+<text x="792" y="1300" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Content-addressed and immutable</text>
+<rect x="1112" y="184" width="196" height="990" rx="8" fill="#e9edf4" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="1124" y="209" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">External systems</text>
+<text x="1124" y="231" font-size="12.5" font-weight="600" fill="#536479" text-anchor="start">Callback results enter</text>
+<text x="1124" y="250" font-size="12.5" font-weight="600" fill="#536479" text-anchor="start">the unified resume path</text>
+<text x="1124" y="269" font-size="12.5" font-weight="600" fill="#536479" text-anchor="start">through the API</text>
+<rect x="1124" y="283.0" width="172" height="167.8" rx="6" fill="#fff" stroke="#c9d3e0" stroke-width="1.2"/>
+<text x="1136" y="309.0" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Model Provider</text>
+<text x="1136" y="351.0" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Agent decisions</text>
+<text x="1136" y="371.0" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Text generation</text>
+<text x="1136" y="391.0" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Content review</text>
+<rect x="1136" y="410.8" width="148" height="28" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="1210.0" y="429.3" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">OpenRouter</text>
+<rect x="1124" y="460.8" width="172" height="167.8" rx="6" fill="#fff" stroke="#c9d3e0" stroke-width="1.2"/>
+<text x="1136" y="486.8" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Task gateway</text>
+<text x="1136" y="504.8" font-size="10.5" font-weight="500" fill="#536479" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">taskgateway</text>
+<text x="1136" y="528.8" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Takes async image jobs</text>
+<text x="1136" y="548.8" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Sends to image models</text>
+<rect x="1136" y="588.6" width="148" height="28" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="1210.0" y="607.1" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Callback and polling</text>
+<rect x="1124" y="638.6" width="172" height="167.8" rx="6" fill="#fff" stroke="#c9d3e0" stroke-width="1.2"/>
+<text x="1136" y="664.6" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Media service</text>
+<text x="1136" y="682.6" font-size="10.5" font-weight="500" fill="#536479" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">services/media</text>
+<text x="1136" y="706.6" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Transcription</text>
+<text x="1136" y="726.6" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Timeline checks</text>
+<text x="1136" y="746.6" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Render, technical checks</text>
+<rect x="1136" y="766.4000000000001" width="148" height="28" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="1210.0" y="784.9000000000001" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">FFmpeg</text>
+<rect x="1124" y="816.4000000000001" width="172" height="167.8" rx="6" fill="#fff" stroke="#c9d3e0" stroke-width="1.2"/>
+<text x="1136" y="842.4000000000001" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Sandbox Runner</text>
+<text x="1136" y="860.4000000000001" font-size="10.5" font-weight="500" fill="#536479" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">sandboxrunner</text>
+<text x="1136" y="884.4000000000001" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Runs in isolation</text>
+<text x="1136" y="904.4000000000001" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Tests, patch verification</text>
+<rect x="1136" y="944.2" width="148" height="28" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="1210.0" y="962.7" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Docker</text>
+<rect x="1124" y="994.2" width="172" height="167.8" rx="6" fill="#fff" stroke="#c9d3e0" stroke-width="1.2"/>
+<text x="1136" y="1020.2" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Release target</text>
+<text x="1136" y="1038.2" font-size="10.5" font-weight="500" fill="#536479" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">mockproduction</text>
+<text x="1136" y="1062.2" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Deploy requests, status</text>
+<text x="1136" y="1082.2" font-size="12.5" font-weight="500" fill="#536479" text-anchor="start">Mock service in demos</text>
+<rect x="1136" y="1122.0" width="148" height="28" rx="5" fill="#f1f4f8" stroke="#f1f4f8" stroke-width="1"/>
+<text x="1210.0" y="1140.5" font-size="12.5" font-weight="600" fill="#1e293b" text-anchor="middle">Reconciliation</text>
+<path d="M1040 1029.0L1101 1029.0" fill="none" stroke="#a8b4c5" stroke-width="2.4"/>
+<path d="M1110 1029.0L1101.0 1034.5L1101.0 1023.5Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="1082.0" y="1019.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="middle">Calls</text>
+<path d="M1112 264.0L1051 264.0" fill="none" stroke="#a8b4c5" stroke-width="2.4" stroke-dasharray="7 6"/>
+<path d="M1042 264.0L1051.0 258.5L1051.0 269.5Z" fill="#a8b4c5" stroke="#a8b4c5" stroke-width="2" stroke-linejoin="round"/>
+<text x="1082.0" y="254.0" font-size="12.5" font-weight="550" fill="#536479" text-anchor="middle">Callback</text>
+<rect x="1124" y="18.0" width="16" height="11" rx="3" fill="#e6f6fb" stroke="#1496b8" stroke-width="1.1"/>
+<text x="1147" y="28.0" font-size="12" font-weight="550" fill="#536479" text-anchor="start">Clients and tools</text>
+<rect x="1124" y="37.5" width="16" height="11" rx="3" fill="#fff9db" stroke="#e3b008" stroke-width="1.1"/>
+<text x="1147" y="47.5" font-size="12" font-weight="550" fill="#536479" text-anchor="start">Entry and dispatch</text>
+<rect x="1124" y="57.0" width="16" height="11" rx="3" fill="#e8f0fd" stroke="#2563eb" stroke-width="1.1"/>
+<text x="1147" y="67.0" font-size="12" font-weight="550" fill="#536479" text-anchor="start">Orchestration</text>
+<rect x="1124" y="76.5" width="16" height="11" rx="3" fill="#fff0f0" stroke="#e5484d" stroke-width="1.1"/>
+<text x="1147" y="86.5" font-size="12" font-weight="550" fill="#536479" text-anchor="start">Execution core</text>
+<rect x="1124" y="96.0" width="16" height="11" rx="3" fill="#ebfaf0" stroke="#2fa35f" stroke-width="1.1"/>
+<text x="1147" y="106.0" font-size="12" font-weight="550" fill="#536479" text-anchor="start">Domain and extensions</text>
+<rect x="1124" y="115.5" width="16" height="11" rx="3" fill="#fff2e6" stroke="#ee8a2a" stroke-width="1.1"/>
+<text x="1147" y="125.5" font-size="12" font-weight="550" fill="#536479" text-anchor="start">State and artifacts</text>
+<rect x="1124" y="135.0" width="16" height="11" rx="3" fill="#e9edf4" stroke="#64748b" stroke-width="1.1"/>
+<text x="1147" y="145.0" font-size="12" font-weight="550" fill="#536479" text-anchor="start">External systems</text>
+<rect x="1124" y="154.5" width="16" height="11" rx="3" fill="#f1ecff" stroke="#b9a6ee" stroke-width="1.1"/>
+<text x="1147" y="164.5" font-size="12" font-weight="550" fill="#536479" text-anchor="start">Agent-native</text>
+</svg>

@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="754" viewBox="0 0 1320 754" role="img" aria-labelledby="title"><title id="title">Vulnerability repair and release Agent: human approval and release confirmation</title><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif}</style><defs><marker id="line-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="loop-head" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1.5 1 6 4 1.5 7" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></marker><filter id="lift" x="-5%" y="-15%" width="110%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#334155" flood-opacity=".12"/></filter></defs><rect width="1320" height="754" fill="#fff"/>
+<rect x="24" y="14" width="1272" height="120" rx="8" fill="#f1f8fa" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="36" font-size="14" font-weight="700" fill="#0e7490" text-anchor="start">1 Task goal</text>
+<text x="140" y="36" font-size="14" font-weight="650" fill="#1e293b" text-anchor="start">Release the verified patch after human approval, with the actual deployment confirmed by the production system</text>
+<rect x="44" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="58.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Task input</text>
+<text x="58.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Verified change request</text>
+<rect x="356" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="370.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Authorized scope</text>
+<text x="370.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Release target and approval deadline</text>
+<rect x="668" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="682.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Deliverable</text>
+<text x="682.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Deployed version or incomplete result</text>
+<rect x="980" y="54" width="296" height="66" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="994.0" y="79" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Acceptance</text>
+<text x="994.0" y="102" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">System checks facts against the goal</text>
+<rect x="24" y="148" width="1272" height="414" rx="8" fill="#eef3fb" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="170" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">2 Scenario design: approval and release</text>
+<rect x="44" y="188" width="1232" height="232" rx="8" fill="#fff" filter="url(#lift)"/>
+<text x="60" y="214" font-size="14" font-weight="700" fill="#2563eb" text-anchor="start">Release Flow</text>
+<rect x="1136.48" y="199" width="125.52000000000001" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="1199.24" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Completion Check</text>
+<rect x="1016.4" y="199" width="112.08000000000001" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="1072.44" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Reconciliation</text>
+<rect x="876.16" y="199" width="132.24" height="24" rx="4" fill="#eff6ff" stroke="#eff6ff" stroke-width="1"/>
+<text x="942.28" y="215.5" font-size="12" font-weight="650" fill="#2563eb" text-anchor="middle">Human-in-the-Loop</text>
+<text x="130.0" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Repair Agent</text>
+<text x="362.8" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Approver</text>
+<text x="595.6" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Emberling Runtime</text>
+<text x="828.4000000000001" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Production service (mock)</text>
+<text x="1061.2" y="250" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Completion Check</text>
+<text x="60" y="296" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Flow</text>
+<text x="60" y="378" font-size="13" font-weight="700" fill="#be3455" text-anchor="start">Fault</text>
+<rect x="116.0" y="262" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="130.0" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Request release</text>
+<text x="130.0" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Submit verified change request</text>
+<rect x="348.8" y="262" width="214.8" height="58" rx="6" fill="#f1ecff" stroke="#7c3aed" stroke-width="1"/>
+<text x="362.8" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Human approval</text>
+<text x="362.8" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Valid for this request only</text>
+<rect x="581.6" y="262" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="595.6" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Submit deployment</text>
+<text x="595.6" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Target reserved; operation ID</text>
+<rect x="814.4000000000001" y="262" width="214.8" height="58" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<text x="828.4000000000001" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Confirm result</text>
+<text x="828.4000000000001" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Query status by operation ID</text>
+<rect x="1047.2" y="262" width="214.8" height="58" rx="6" fill="#dff3e6" stroke="#0f766e" stroke-width="1"/>
+<text x="1061.2" y="287" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Completion verdict</text>
+<text x="1061.2" y="308" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Check against the task goal</text>
+<rect x="116.0" y="344" width="214.8" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="130.0" y="369" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Target already reserved</text>
+<text x="130.0" y="390" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Refused before approval</text>
+<path d="M223.4 320V344" fill="none" stroke="#94a3b8" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#line-head)"/>
+<rect x="348.8" y="344" width="214.8" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="362.8" y="369" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Approval rejected</text>
+<text x="362.8" y="390" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Revise, re-verify, re-approve</text>
+<path d="M456.20000000000005 320V344" fill="none" stroke="#94a3b8" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#line-head)"/>
+<rect x="581.6" y="344" width="214.8" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="595.6" y="369" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Lost response or crash</text>
+<text x="595.6" y="390" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Query on restart, no resend</text>
+<path d="M689.0 320V344" fill="none" stroke="#94a3b8" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#line-head)"/>
+<rect x="814.4000000000001" y="344" width="214.8" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="828.4000000000001" y="369" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">No result for a long time</text>
+<text x="828.4000000000001" y="390" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Can stop; target stays reserved</text>
+<path d="M921.8000000000001 320V344" fill="none" stroke="#94a3b8" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#line-head)"/>
+<rect x="1047.2" y="344" width="214.8" height="58" rx="6" fill="#fceef2" stroke="#be3455" stroke-width="1"/>
+<text x="1061.2" y="369" font-size="14" font-weight="700" fill="#1e293b" text-anchor="start">Unhealthy after deploy</text>
+<text x="1061.2" y="390" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Reported; a person rolls back</text>
+<path d="M1154.6000000000001 320V344" fill="none" stroke="#94a3b8" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#line-head)"/>
+<path d="M330.8 291.0H348.8" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<path d="M563.6 291.0H581.6" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<path d="M796.4000000000001 291.0H814.4000000000001" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<path d="M1029.2 291.0H1047.2" fill="none" stroke="#94a3b8" stroke-width="1.1" marker-end="url(#line-head)"/>
+<text x="44" y="460" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Difficulties</text>
+<text x="44" y="489" font-size="13" font-weight="700" fill="#2563eb" text-anchor="start">Design</text>
+<text x="128.0" y="460" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Change after approval</text>
+<text x="128.0" y="489" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Binds request and digest</text>
+<text x="324.0" y="460" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Human delay unpredictable</text>
+<text x="324.0" y="489" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">No Agent time consumed</text>
+<text x="520.0" y="460" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Repeats may release twice</text>
+<text x="520.0" y="489" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">One approval applies once</text>
+<text x="716.0" y="460" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Response lost, may be live</text>
+<text x="716.0" y="489" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Query production, no resend</text>
+<text x="912.0" y="460" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Concurrent releases collide</text>
+<text x="912.0" y="489" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Reserved until confirmed</text>
+<text x="1108.0" y="460" font-size="13" font-weight="650" fill="#1e293b" text-anchor="start">Agent claims may be false</text>
+<text x="1108.0" y="489" font-size="12.5" font-weight="550" fill="#2563eb" text-anchor="start">Check facts against goal</text>
+<rect x="44" y="506" width="1232" height="40" rx="6" fill="#fceef2" stroke="#fceef2" stroke-width="1"/>
+<text x="58" y="531" font-size="13" font-weight="700" fill="#be3455" text-anchor="start">Open problems</text>
+<text x="172.0" y="531" font-size="12.5" font-weight="500" fill="#be3455" text-anchor="start">Approver is a fixed identity; authentication is mocked</text>
+<text x="535.3333333333333" y="531" font-size="12.5" font-weight="500" fill="#be3455" text-anchor="start">Production service is mocked, not real-world behavior</text>
+<text x="898.6666666666666" y="531" font-size="12.5" font-weight="500" fill="#be3455" text-anchor="start">No automatic rollback; a person runs the plan</text>
+<rect x="24" y="576" width="1272" height="164" rx="8" fill="#e9edf4" stroke="#64748b" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="44" y="598" font-size="14" font-weight="700" fill="#2f3b52" text-anchor="start">3 Emberling execution foundation: addressing each difficulty</text>
+<text x="44" y="652" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Capability</text>
+<rect x="116" y="616" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="128.0" y="641" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Action authorization</text>
+<text x="128.0" y="662" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Allow, await or refuse</text>
+<rect x="312" y="616" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="324.0" y="641" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Human wait</text>
+<text x="324.0" y="662" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Own approval deadline</text>
+<rect x="508" y="616" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="520.0" y="641" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Idempotent approval</text>
+<text x="520.0" y="662" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">One decision recorded</text>
+<rect x="704" y="616" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="716.0" y="641" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Reconciliation</text>
+<text x="716.0" y="662" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Production result stands</text>
+<rect x="900" y="616" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="912.0" y="641" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Target reservation</text>
+<text x="912.0" y="662" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Other releases blocked</text>
+<rect x="1096" y="616" width="180" height="62" rx="6" fill="#fff" filter="url(#lift)"/>
+<text x="1108.0" y="641" font-size="13" font-weight="700" fill="#1e293b" text-anchor="start">Completion Check</text>
+<text x="1108.0" y="662" font-size="12.5" font-weight="550" fill="#536479" text-anchor="start">Lists missing facts</text>
+<rect x="44" y="688" width="1232" height="38" rx="6" fill="#d9e0ea" stroke="#d9e0ea" stroke-width="1"/>
+<text x="58" y="712" font-size="13.5" font-weight="700" fill="#1e293b" text-anchor="start">Durable Execution Runtime</text>
+<text x="408.8333333333333" y="712" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Durable state</text>
+<text x="566.5" y="712" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Unified scheduling</text>
+<text x="724.1666666666666" y="712" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Async waits</text>
+<text x="881.8333333333333" y="712" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Crash recovery</text>
+<text x="1039.5" y="712" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Result confirmation</text>
+<text x="1197.1666666666665" y="712" font-size="12.5" font-weight="600" fill="#2f3b52" text-anchor="middle">Transactional commit</text>
+</svg>

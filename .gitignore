@@ -1,7 +1,7 @@
 .DS_Store
 
 # Internal design and engineering contracts — do not publish to GitHub.
-docs/
+docs/private/
 .idea/
 .claude/
 

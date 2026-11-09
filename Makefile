@@ -196,21 +196,21 @@ lint-go:
 # Tracked files must state invariants in their own words instead of citing the unpublished
 # design documents by number, filename or section, referring to a rule by its number in a
 # list, or naming a planning milestone slice. git grep searches tracked files only, so the
-# guard works in a public checkout without docs/. The bracketed [G] matches the same text
+# guard works in a public checkout without docs/private/. The bracketed [G] matches the same text
 # as a plain G but keeps this line from matching itself; the rule-number and milestone
 # alternatives cannot match their own bracketed spelling. A rule number matches with or
 # without its hash, as in "invariant N" or "rule #N". \# keeps make from reading a
 # comment. CLAUDE.md and README files are excluded because they describe the rule and the
-# docs/ directory. The initial migration is excluded because shared migrations are
+# docs/private/ directory. The initial migration is excluded because shared migrations are
 # immutable: the historical comments it already shipped with are grandfathered, and any
 # new migration is checked like every other file.
-DOC_REF_PATTERN := (^|[^[:alnum:]_])[0-9]{2} §|§[0-9]|(^|[^[:alnum:]_])[0-9]{2}-[a-z-]+\.md([^[:alnum:]_]|$$)|(^|[^[:alnum:]_])ENGINEERIN[G](\.md)?([^[:alnum:]_]|$$)|docs/AGENTS\.md|(^|[^[:alnum:]_])([Ii]nvariants?|[Rr]ules?) \#?[0-9]|(^|[^[:alnum:]_])M[0-9]+ slice
+DOC_REF_PATTERN := (^|[^[:alnum:]_])[0-9]{2} §|§[0-9]|(^|[^[:alnum:]_])[0-9]{2}-[a-z-]+\.md([^[:alnum:]_]|$$)|(^|[^[:alnum:]_])ENGINEERIN[G](\.md)?([^[:alnum:]_]|$$)|docs/(private/)?AGENTS\.md|(^|[^[:alnum:]_])([Ii]nvariants?|[Rr]ules?) \#?[0-9]|(^|[^[:alnum:]_])M[0-9]+ slice
 
 check-doc-refs:
 	@echo "==> source: design document citations"
 	@status=0; \
 	git grep -nE '$(DOC_REF_PATTERN)' -- . \
-		':(exclude)docs' ':(exclude)CLAUDE.md' ':(exclude,glob)**/README*.md' \
+		':(exclude)docs/private' ':(exclude)CLAUDE.md' ':(exclude,glob)**/README*.md' \
 		':(exclude)backend/migrations/00001_initial.sql' \
 		|| status=$$?; \
 	if [ "$$status" -eq 0 ]; then \
