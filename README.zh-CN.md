@@ -21,7 +21,7 @@
 
 <a id="what-is-emberling"></a>
 
-# Emberling · Agent Runtime Platform
+## Emberling · Agent Runtime Platform
 
 **Emberling 是一个 Agent Runtime Platform，把 Agent 的自主决策接入一套从行动、验证到交付的完整执行体系。**
 
@@ -35,7 +35,7 @@ Emberling 为这样的工作建设运行底座，让模型的能力通过实际�
 
 <a id="features"></a>
 
-# 平台能力
+## 平台能力
 
 **以 durable、AI-native Execution Runtime 为核心，Emberling 让 Workflow 与 Agent 共享执行基础，将确定的流程与自主决策组织在同一项工作中。**
 
@@ -49,17 +49,17 @@ Workflow 预先定义步骤，Agent 则在运行中决定下一步。因此，Ru
 
 <a id="demos"></a>
 
-# 从创意到上线：Agent 进入真实工作
+## 从创意到上线：Agent 进入真实工作
 
 这些执行能力需要在真实的工作中检验。Emberling 选取了三项要求逐步提高的工作，从持续运行、反复修正，到对结果负责。AI 图片生成服务面向大量请求，生成耗时较长且依赖外部模型，异步执行、容量与并发控制和故障恢复决定了服务能否持续运行。任务可靠完成之后，短视频剪辑 Agent 还要根据审查意见反复修改选段，成片质量依靠持续评测来改进。线上漏洞修复与发布进一步把 Agent 的行动带进生产环境，修改到发布必须全程受控，交付证据保持一致，上线结果由生产系统核实。
 
 [![三个场景的侧重点与覆盖能力。AI 图片生成服务：长时任务与异步执行、容量与并发控制、故障恢复；覆盖 Agent 与 Workflow 协同、模板发布与版本分流、按容量调度、崩溃后接续执行。短视频剪辑 Agent：Agentic Workflow、质量评测、持续改进；覆盖多步 Agent 编排、上下文管理、系统检查与内容审查、离线评测与 LLM Judge。线上漏洞修复与发布：修改到发布全程受控、交付证据保持一致、上线结果可以核实；覆盖隔离执行环境、行动授权与人工审批、发布结果对账、按目标判定完成](./docs/public/assets/figures/scenes-overview.svg)](https://leungll.github.io/Emberling/diagrams/scenes-overview.html)
 
-## Agentic Creation：AI 内容创作
+### Agentic Creation：AI 内容创作
 
 AI 正在降低内容制作的门槛，人们开始把更完整的制作工作交给 Agent，从逐步操作工具，走向围绕创作意图与系统协作。创作既有确定的生产步骤，也有依赖判断的取舍，两者的比重随任务而变。图片生成的流程基本固定，Agent 主要用于上线前的效果调优，到了视频剪辑，选段和叙事都由 Agent 决定。**Emberling 正在探索这种新的创作方式，以及让它持续运转的运行基础。**
 
-### AI 图片生成服务：从 Agent 调优到 Workflow 上线
+#### AI 图片生成服务：从 Agent 调优到 Workflow 上线
 
 服务上线之前，要先确定特效的 Prompt 和参数。这一步依赖创作判断，由 Agent 根据视觉审查反复修改，直到整组照片达标。调好的设置发布为模板后，每个请求都走相同的固定步骤，由 Workflow 定义，重点转向大量请求下的等待、并发和故障恢复。
 
@@ -94,13 +94,13 @@ AI 正在降低内容制作的门槛，人们开始把更完整的制作工作�
 </tbody>
 </table>
 
-#### 效果调优
+##### 效果调优
 
 第一轮的设置没有同时适用于人像和动物，生成模型也难以发现自己的问题。因此 Effect Template Agent 负责决定如何修改，独立的审查模型对照原图逐张给出结论。调优要反复调用付费模型，中途可能崩溃或断开，Runtime 先保存每轮决策，恢复时不重新询问模型，结果未知的调用也不会自动重发。
 
 [![AI 图片生成服务的效果调优：任务层给出输入、风格要求、交付物和验收方式；场景层由 Workflow 节点提供风格要求和样例照片，Agent Harness 中 Claude Opus 决策、Seedream 生成、Claude Sonnet 审查，第 1 轮退回正面人像和橘猫，审查理由进入第 2 轮，全部通过后经 Completion Check 输出；下方逐列给出难点和设计，底座层给出对应的 Emberling 能力和 Durable Execution Runtime](./docs/public/assets/figures/photo-tuning.svg)](https://leungll.github.io/Emberling/diagrams/photo-tuning.html)
 
-#### 线上服务
+##### 线上服务
 
 Agent 调好的设置发布为模板后，开始承接大量用户的请求。单张图片要等待一到两分钟，生成按张付费，模型并发有限，服务在等待期间还可能发版或崩溃。Emberling 把任务提交和结果接收拆成两段：任务提交后 Run 挂起，超出 Provider 上限的请求排队等待；结果经 Callback、Polling 或重启后的 Reconciliation 进入同一恢复入口，只有一个结果生效，崩溃或响应丢失后也不会重复生成。模板更新时，在途请求仍按提交时的版本完成。
 
@@ -112,7 +112,7 @@ Agent 调好的设置发布为模板后，开始承接大量用户的请求。�
 
 <sub>原图来自 Unsplash，署名见完整过程。</sub>
 
-### 视频剪辑 Agent：让创作质量持续改进
+#### 视频剪辑 Agent：让创作质量持续改进
 
 图片的好坏可以对照原图判断。视频剪辑把整段创作交给 Agent，选取哪些内容、按什么顺序讲述都由它决定，时长和字幕全部合格的短片仍可能断章取义。质量因此无法只靠规则保证，单个任务需要独立的内容审查，跨任务的改进则依靠批量评测。
 
@@ -139,13 +139,13 @@ Agent 调好的设置发布为模板后，开始承接大量用户的请求。�
 </tbody>
 </table>
 
-#### 剪辑任务
+##### 剪辑任务
 
 模型擅长叙事和取舍，写时间码却容易切断句子，因此 Agent 只按句子选段，时间码和渲染交给工具完成。第一版的时长和切点都合格，审查模型仍指出内容没有讲清，Agent 据此重新选段。技术检查和内容审查都通过后才能发起渲染。转录和渲染需要等待媒体服务，Run 在此期间挂起，重启后接管原任务。
 
 [![视频剪辑任务：任务层给出素材、创作要求、交付物和验收方式；场景层由 Workflow 节点提供任务和转录，Agent Harness 中第 1 版选段通过时间线检查但内容审查退回，审查理由进入第 2 版，通过后渲染并检查成片，最后经 Completion Check 判定；下方逐列给出难点和设计，并列出待解决的问题：Agent 与审查模型看不到画面、固定居中裁切容易让人物出画、检查不判断构图与清晰度；底座层给出对应的 Emberling 能力和 Durable Execution Runtime](./docs/public/assets/figures/video-editing-run.svg)](https://leungll.github.io/Emberling/diagrams/video-editing-run.html)
 
-#### 质量评测
+##### 质量评测
 
 内容审查只能修正当前的短片，Agent 反复出现的问题要靠跨任务的比较才能发现。批量评测在 Runtime 之外运行，通过公开 API 让不带内容审查的基础版和审查版处理同一批样本。批次配置在运行前固定，失败的运行同样计入统计。
 
@@ -161,7 +161,7 @@ Agent 调好的设置发布为模板后，开始承接大量用户的请求。�
 
 <sub>原素材：NIOSH / Wikimedia Commons，公有领域。</sub>
 
-## 软件交付：Agent 的行动进入生产环境
+### 软件交付：Agent 的行动进入生产环境
 
 创作结果不理想可以重新生成，软件交付的操作却直接作用于线上服务。以依赖漏洞修复为例，Agent 先在隔离环境中修改代码并完成验证，发布要经人工批准，部署结果由生产系统确认。
 
@@ -206,13 +206,13 @@ Agent 调好的设置发布为模板后，开始承接大量用户的请求。�
 </tbody>
 </table>
 
-### 修复与验证
+#### 修复与验证
 
 测试通过或 Agent 声明修好，都不足以放行发布，代码在验证之后可能再次变化。Emberling 在执行前检查每个操作是否超出授权范围，每次写入都形成新的补丁版本，验证结论和变更请求绑定同一版补丁。被拒绝的操作不会执行，理由返回 Agent 继续修改。
 
 [![漏洞修复与验证：任务层给出漏洞、授权范围、交付物和验收方式；场景层由任务边界、Agent Harness 和 Runtime 组成，Agent 依次读取上下文、修改代码、验证补丁和创建变更请求，范围外写入、验证未通过和缺少有效验证时操作被拒绝，理由返回 Agent 继续修改；下方逐列给出难点和设计，并列出待解决的问题；底座层给出对应的 Emberling 能力](./docs/public/assets/figures/repair-verify.svg)](https://leungll.github.io/Emberling/diagrams/repair-verify.html)
 
-### 审批与发布
+#### 审批与发布
 
 发布必须等人批准，批准只对本次请求有效，等待期间不消耗 Agent 的执行时限。发布请求发出后可能得不到回应，此时部署可能已经发生，重发会造成重复发布。Emberling 按操作编号向生产系统查询，结果确认前保持对发布目标的占用。任务是否完成由系统按目标核对。
 
@@ -228,7 +228,7 @@ Agent 调好的设置发布为模板后，开始承接大量用户的请求。�
 
 <a id="how-it-works"></a>
 
-# 架构设计
+## 架构设计
 
 Agent 任务运行时间长，中途要等待模型、外部服务和人工审批，进程随时可能中断。Emberling 把执行状态持久化到 PostgreSQL，Workflow 与 Agent 共用同一套等待和恢复机制。
 
@@ -236,7 +236,7 @@ Agent 任务运行时间长，中途要等待模型、外部服务和人工审�
 
 [![Emberling 模块架构：Studio 与脚本通过公开 API 接入；Work、Reconciler 和 API 进入同一组 Service 业务流程；Service 由 Runtime 作执行决策，经 Store 把决策和状态提交到 PostgreSQL，提交之后才通过 Registry 和 Nodes、Tools、Adapters 调用外部系统；回调结果经 API 进入统一恢复入口](./docs/public/assets/figures/architecture.svg)](https://leungll.github.io/Emberling/diagrams/architecture.html)
 
-## 系统模块
+### 系统模块
 
 | 模块 | 职责 | 设计约束 |
 |---|---|---|
@@ -249,7 +249,7 @@ Agent 任务运行时间长，中途要等待模型、外部服务和人工审�
 | [Domain](./backend/internal/domain/) 与 [Config](./backend/internal/config/) | 共享领域类型、错误定义、服务配置和就绪检查 | 不包含业务流程和执行决策 |
 | [Studio](./studio/) | 定义 Workflow，查看 Run、Trace 与产物，处理审批 | 只展示后端状态，不复制执行规则 |
 
-## 恢复路线的选择
+### 恢复路线的选择
 
 长时任务中断后如何继续，业界主要有四条路线，各有取舍，也可以组合使用。
 
@@ -262,7 +262,7 @@ Agent 任务运行时间长，中途要等待模型、外部服务和人工审�
 
 Emberling 选择状态恢复，因为 Workflow 与 Agent 的进度、决策和等待都能直接查询，并由同一套规则管理。Trace 和质量评测也基于这些记录。代价是状态迁移、并发竞争和故障恢复都要显式设计，这部分复杂度由平台集中承担。
 
-## Agent 语义放在哪一层
+### Agent 语义放在哪一层
 
 确定恢复路线后，还要决定 Agent 的决策、行动和完成检查由哪一层负责。业界主要有三种做法，Emberling 选择放进 Runtime。
 
@@ -278,7 +278,7 @@ Emberling 选择状态恢复，因为 Workflow 与 Agent 的进度、决策和�
 
 <a id="roadmap"></a>
 
-# 愿景与路线
+## 愿景与路线
 
 模型已经能理解要求、使用工具，并根据反馈调整方法，人们开始把完整的创作、分析和软件维护工作交给 Agent。这类工作需要可靠的执行环境、明确的授权和可以核实的结果。
 
@@ -286,7 +286,7 @@ Emberling 从执行内核做起，逐步建设面向 Cloud Agent Workloads 的 A
 
 [![Emberling的Agent Infra建设方向：Core执行内核、Build平台能力、Integrate生态接入；底部注明已覆盖、部分覆盖和规划方向](./docs/public/assets/figures/infra-coverage.svg)](https://leungll.github.io/Emberling/diagrams/infra-coverage.html)
 
-## 演进路线
+### 演进路线
 
 从已完成的执行基础，逐步走向可靠运行、完整交付、验证评测与长期职责。
 
@@ -320,7 +320,7 @@ timeline
 
 <a id="quick-start"></a>
 
-# 快速开始
+## 快速开始
 
 准备 Go `1.27.1`、Node.js `24.20.0`、pnpm `11.25.0`、Docker Compose 和 OpenSSL。
 
@@ -341,6 +341,6 @@ EMBERLING_DEMO_VARIANT=serving-crash-waiting make demo-studio
 
 恢复演示需要 `curl` 和 `jq`。结束后使用 `make demo-down` 停止演示；该命令清除模拟服务的请求记录，保留 PostgreSQL 与产物卷。
 
-# 参与贡献
+## 参与贡献
 
 欢迎围绕执行可靠性、模型与工具接入、Studio 体验提交 Issue 或 PR。开发约定见[贡献指南](./CLAUDE.md)。
