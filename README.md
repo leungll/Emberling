@@ -21,7 +21,7 @@ Work moves from a single call to continuous execution, and from generated output
 
 <a id="what-is-emberling"></a>
 
-## Emberling · Agent Runtime Platform
+# Emberling · Agent Runtime Platform
 
 **Emberling is an Agent Runtime Platform. It connects Agent decisions to a complete execution system, from action through verification to delivery.**
 
@@ -35,7 +35,7 @@ Emberling is the runtime foundation for this work. Real execution, feedback and 
 
 <a id="features"></a>
 
-## Capabilities
+# Capabilities
 
 **Emberling is built around a durable, AI-native Execution Runtime. Workflow and Agent share one execution foundation, so fixed steps and autonomous decisions can be part of the same job.**
 
@@ -49,17 +49,17 @@ Long waits, failure recovery and result verification do not belong to any single
 
 <a id="demos"></a>
 
-## From Idea to Production: Agents in Real Work
+# From Idea to Production: Agents in Real Work
 
 These capabilities have to be tested on real work. Emberling uses three jobs with rising demands: running continuously, revising repeatedly, and answering for the result. An AI image generation service handles many slow requests that depend on external models, so async execution, capacity control and failure recovery decide whether it stays up. A short-video editing Agent must also revise its selection from review feedback, and clip quality improves through repeated evaluation. Vulnerability repair and release takes Agent actions into production. Every step from code change to release is controlled, the delivery evidence stays consistent, and the production system confirms the outcome.
 
 [![Focus and coverage of the three scenarios. AI image generation service: long-running async tasks, capacity and concurrency control, failure recovery. Short-video editing Agent: Agentic Workflow, quality evaluation, continuous improvement. Vulnerability repair and release: controlled change through release, consistent delivery evidence, verifiable release results](./docs/public/assets/figures/scenes-overview.svg)](https://leungll.github.io/Emberling/diagrams/scenes-overview.html)
 
-### Agentic Creation: AI Content Production
+## Agentic Creation: AI Content Production
 
 AI is lowering the barrier to content production. People now hand more of the production work to Agents and collaborate around creative intent instead of operating each tool. Creative work combines fixed production steps with judgment calls, and the balance changes by task. Image generation follows a mostly fixed process, with an Agent used for tuning before launch. In video editing, the Agent decides both the selection and the narrative. **Emberling is exploring this way of creating and the runtime that keeps it working.**
 
-#### AI Image Generation Service: From Agent Tuning to a Workflow in Production
+### AI Image Generation Service: From Agent Tuning to a Workflow in Production
 
 Before launch, the effect's Prompt and parameters have to be settled. This step depends on creative judgment. An Agent revises the settings from visual review until the whole photo set passes. The tuned settings are then published as a template. Every request follows the same fixed steps, defined by a Workflow, and the focus moves to waiting, concurrency and failure recovery under load.
 
@@ -94,13 +94,13 @@ Before launch, the effect's Prompt and parameters have to be settled. This step 
 </tbody>
 </table>
 
-##### Effect Tuning
+#### Effect Tuning
 
 The first settings did not work for both people and animals, and a generation model rarely catches its own mistakes. The Effect Template Agent decides how to revise, and a separate review model judges each image against its source. Tuning makes repeated paid calls and can crash or disconnect midway. The Runtime stores each decision first, so recovery does not ask the model again. A call with an unknown result is not resent automatically.
 
 [![Effect tuning for the image generation service. The task layer gives inputs, style requirements, deliverables and acceptance. In the scenario layer, Workflow nodes supply the brief and sample photos; inside the Agent Harness, Claude Opus decides, Seedream generates and Claude Sonnet reviews. Round 1 rejects the portrait and the cat, the reasons feed round 2, and a Completion Check gates the output. Below are the difficulties, designs and the matching Emberling capabilities on the Durable Execution Runtime](./docs/public/assets/figures/photo-tuning.svg)](https://leungll.github.io/Emberling/diagrams/photo-tuning.html)
 
-##### Production Service
+#### Production Service
 
 Once published as a template, the tuned settings serve many users. Each image takes one to two minutes, generation is billed per image, and model concurrency is limited. The service can also be redeployed or crash during the wait. Emberling splits submission from result handling. After submission the Run suspends, and requests beyond the Provider limit wait in a queue. Results arrive by Callback, Polling or Reconciliation after a restart. All three enter one resume path, and only one result takes effect, so a crash or lost response does not cause duplicate generation. When a template changes, in-flight requests finish on the version they were submitted with.
 
@@ -112,7 +112,7 @@ Once published as a template, the tuned settings serve many users. Each image ta
 
 <sub>Source photos are from Unsplash. Credits are in the full walkthrough.</sub>
 
-#### Video Editing Agent: Improving Creative Quality Over Time
+### Video Editing Agent: Improving Creative Quality Over Time
 
 An image can be judged against its source. Video editing gives the Agent the whole creative job, including what to select and in what order. A clip with correct length and subtitles can still take its speaker out of context. Rules alone cannot guarantee quality. Each task needs an independent content review, and improvement across tasks depends on batch evaluation.
 
@@ -139,13 +139,13 @@ An image can be judged against its source. Video editing gives the Agent the who
 </tbody>
 </table>
 
-##### Editing Task
+#### Editing Task
 
 Models are good at narrative and selection but tend to cut sentences when they write timecodes. The Agent therefore selects by sentence, and tools handle timecodes and rendering. The first cut had a valid length and valid cut points, but the review model found that the content fell short, and the Agent selected again. Rendering can start only after both the technical checks and the content review pass. Transcription and rendering wait on the media service. The Run suspends meanwhile and takes over the original task after a restart.
 
 [![Video editing task. Workflow nodes supply the task and transcript. Inside the Agent Harness, cut 1 passes the timeline check but fails content review, the reasons feed cut 2, and the approved cut is rendered and checked before a Completion Check. Open problems: the Agent and review model cannot see the picture, a fixed center crop can lose the subject, and checks do not judge framing or sharpness. The foundation layer lists the matching Emberling capabilities on the Durable Execution Runtime](./docs/public/assets/figures/video-editing-run.svg)](https://leungll.github.io/Emberling/diagrams/video-editing-run.html)
 
-##### Quality Evaluation
+#### Quality Evaluation
 
 Content review can only fix the current clip. Recurring Agent problems show up only when tasks are compared. Batch evaluation runs outside the Runtime and uses the public API to run a baseline without content review and a reviewed variant on the same samples. The batch configuration is fixed before the run, and failed runs count in the statistics.
 
@@ -161,7 +161,7 @@ The analysis decides what changes next. Repeated Agent failures are fixed in its
 
 <sub>Source footage: NIOSH / Wikimedia Commons, public domain.</sub>
 
-### Software Delivery: Agent Actions Reach Production
+## Software Delivery: Agent Actions Reach Production
 
 A weak creative result can be generated again. Software delivery acts directly on live services. In this dependency vulnerability repair, the Agent changes and verifies code in an isolated environment. Release requires human approval, and the production system confirms the deployment.
 
@@ -206,13 +206,13 @@ A weak creative result can be generated again. Software delivery acts directly o
 </tbody>
 </table>
 
-##### Repair and Verification
+### Repair and Verification
 
 Passing tests or an Agent's claim are not enough to approve a release, because code can change after verification. Emberling checks each action against the authorized scope before it runs. Every write creates a new patch version, and the verification result and change request are bound to the same version. A refused action does not run, and the reason goes back to the Agent so it can continue.
 
 [![Repair and verification. The scenario has task boundaries, the Agent Harness and the Runtime. The Agent reads context, changes code, verifies the patch and creates a change request. Out-of-scope writes, failed verification and missing valid verification are refused, and the reasons return to the Agent. Below are the difficulties, designs, open problems and matching Emberling capabilities](./docs/public/assets/figures/repair-verify.svg)](https://leungll.github.io/Emberling/diagrams/repair-verify.html)
 
-##### Approval and Release
+### Approval and Release
 
 A release waits for human approval. The approval covers this request only, and the wait does not consume the Agent's execution time limit. A release request may get no response even though the deployment happened, and resending it would release twice. Emberling queries the production system by operation ID and keeps the release target reserved until the result is confirmed. The system checks completion against the task goal.
 
@@ -228,7 +228,7 @@ These mechanisms are not specific to vulnerability repair. Any Agent operating a
 
 <a id="how-it-works"></a>
 
-## Architecture
+# Architecture
 
 Agent tasks run for a long time and wait on models, external services and human approval. A process can stop at any point. Emberling persists execution state in PostgreSQL, and Workflow and Agent share the same wait and recovery mechanisms.
 
@@ -236,7 +236,7 @@ All entry points use the same Service use cases. Decisions and state are committ
 
 [![Emberling module architecture: Studio and scripts connect through the public API. Work, Reconciler and API enter the same Service use cases. Service gets execution decisions from Runtime, commits decisions and state to PostgreSQL through Store, and only then calls external systems through Registry and Nodes, Tools and Adapters. Callback results enter the unified resume path through the API](./docs/public/assets/figures/architecture.svg)](https://leungll.github.io/Emberling/diagrams/architecture.html)
 
-### Modules
+## Modules
 
 | Module | Responsibility | Design constraint |
 |---|---|---|
@@ -249,7 +249,7 @@ All entry points use the same Service use cases. Decisions and state are committ
 | [Domain](./backend/internal/domain/) and [Config](./backend/internal/config/) | Shared domain types, errors, service configuration and readiness checks | No use cases or execution decisions |
 | [Studio](./studio/) | Defines Workflows, shows Runs, Traces and artifacts, and handles approvals | Displays backend state. Does not copy execution rules |
 
-### Choosing a Recovery Model
+## Choosing a Recovery Model
 
 The industry uses four main approaches to continue a long task after an interruption. Each has trade-offs, and they can be combined.
 
@@ -262,7 +262,7 @@ The industry uses four main approaches to continue a long task after an interrup
 
 Emberling uses state-based recovery because Workflow and Agent progress, decisions and waits can all be queried directly and governed by one set of rules. Trace and quality evaluation use the same records. The cost is explicit design of state transitions, races and recovery. The platform carries that complexity in one place.
 
-### Where Agent Semantics Live
+## Where Agent Semantics Live
 
 A recovery model does not settle which layer owns Agent decisions, actions and completion checks. The industry has three main approaches. Emberling puts them in the Runtime.
 
@@ -278,7 +278,7 @@ A recovery model does not settle which layer owns Agent decisions, actions and c
 
 <a id="roadmap"></a>
 
-## Vision and Roadmap
+# Vision and Roadmap
 
 Models can now understand requirements, use tools and adjust from feedback. People have started to hand complete creative, analytical and software maintenance work to Agents. This work needs a reliable execution environment, clear authorization and results that can be verified.
 
@@ -286,7 +286,7 @@ Emberling starts from the execution core and is building Agent Infra for Cloud A
 
 [![Emberling's Agent Infra direction: Core execution, Build platform capabilities and Integrate ecosystem connections, with notes on covered, partly covered and planned areas](./docs/public/assets/figures/infra-coverage.svg)](https://leungll.github.io/Emberling/diagrams/infra-coverage.html)
 
-### Roadmap
+## Roadmap
 
 From the completed execution foundation toward reliable operation, complete delivery, verification and evaluation, and ongoing responsibilities.
 
@@ -320,7 +320,7 @@ Phases can overlap. Some capabilities already run in the scenarios above.
 
 <a id="quick-start"></a>
 
-## Quick Start
+# Quick Start
 
 Install Go `1.27.1`, Node.js `24.20.0`, pnpm `11.25.0`, Docker Compose and OpenSSL.
 
@@ -341,6 +341,6 @@ EMBERLING_DEMO_VARIANT=serving-crash-waiting make demo-studio
 
 The recovery demo needs `curl` and `jq`. Use `make demo-down` to stop it. This clears the mock service's request records and keeps the PostgreSQL and artifact volumes.
 
-## Contributing
+# Contributing
 
 Issues and pull requests are welcome for execution reliability, model and tool integrations, and the Studio experience. See the [contributing guide](./CLAUDE.md) for development conventions.
